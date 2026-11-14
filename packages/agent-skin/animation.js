@@ -5,14 +5,18 @@
  *   preview adapter at the end of this file.
  *
  * Its only runtime inputs are the explicit PageController environment, SEND,
- * and frameSpec.assets = { avatar: PNG data URL, artwork: PNG data URL,
- * contours: [[[x, y], ...]], introTitle, introCaption, artworkSubtitle }.
+ * frameSpec.assets = { avatar: PNG data URL, artwork: PNG data URL,
+ * contours: [[[x, y], ...]], introTitle, introCaption, artworkSubtitle }, and
+ * an optional trusted readStartupSnapshot({ signal, runId }) dependency. Set
+ * frameSpec.settingsSnapshot to 'required' only in trusted startup assembly;
+ * that path waits for a complete validated snapshot and never reads IndexedDB.
  * It has no imports, ambient globals, host-page access, eval, or test switch.
  */
 function installAnimation(
   window, document, location, performance, indexedDB, Image, Path2D, URL,
   requestAnimationFrame, cancelAnimationFrame, setTimeout, clearTimeout,
   module, SEND, frameSpec, createImageSettingsFactory, createLocalizationFactory,
+  readStartupSnapshot,
 ) {
   'use strict';
 
@@ -30,6 +34,7 @@ function installAnimation(
     [0.66, 0.924], [0.72, 0.97], [0.77, 1], [1, 1],
   ];
   const FINAL_PROGRESS_PLATEAU_MS = DURATION * PROGRESS[PROGRESS.length - 2][0];
+  const startupSnapshotRequired = frameSpec?.settingsSnapshot === 'required';
   let assets = frameSpec && frameSpec.assets;
   const defaultAssets = assets;
   const rootAppearance = frameSpec?.appearance || {};
@@ -120,9 +125,10 @@ function installAnimation(
   const existingStage = document.querySelector('[data-agent-skin-stage]');
 
   let imageSettings = null;
+  let startupSnapshotAbortController = null;
   let settingsPreview = null;
   try {
-    if (typeof createImageSettingsFactory === 'function') {
+    if (!startupSnapshotRequired && typeof createImageSettingsFactory === 'function') {
       imageSettings = createImageSettingsFactory({
         document, Image, URL, indexedDB, performance, setTimeout, clearTimeout,
         localization, appearanceAvatar: frameSpec?.assets?.entryAvatar,
@@ -764,6 +770,7 @@ function installAnimation(
     if (disposed || complete) return false;
     seekRequestGeneration++;
     if (isSkipped && preparing && !loaded) {
+      cancelStartupSnapshotRead();
       generation++;
       preparing = false;
       startAfterPrepare = false;
@@ -1346,14 +1353,16 @@ function installAnimation(
     timeoutIds.clear();
   }
 
-  function applySettingsRecord(record, storedRecord) {
+  function applySettingsRecord(record, storedRecord, explicitTextOverride) {
     if (!record || typeof record !== 'object') return;
     assets = record;
     rawAvatar = typeof record.avatar === 'string' ? record.avatar : record.avatar?.dataURL;
     rawArtwork = typeof record.artwork === 'string' ? record.artwork : record.artwork?.dataURL;
     contours = record.contours || record.artwork?.contours;
-    const hasExplicitText = key => (settingsLoadReason === '' && typeof storedRecord?.[key] === 'string')
-      || typeof defaultAssets?.[key] === 'string';
+    const hasExplicitText = key => explicitTextOverride
+      ? explicitTextOverride[key] === true
+      : (settingsLoadReason === '' && typeof storedRecord?.[key] === 'string')
+        || typeof defaultAssets?.[key] === 'string';
     titleUsesDefault = !hasExplicitText('introTitle');
     captionUsesDefault = !hasExplicitText('introCaption');
     subtitleUsesDefault = !hasExplicitText('artworkSubtitle');
@@ -1362,6 +1371,103 @@ function installAnimation(
     subtitle = subtitleUsesDefault ? t('animation.subtitle.default') : record.artworkSubtitle;
     fitSubtitle(visibleLogicalWidth);
     STAGE_LABELS = createStageLabels();
+  }
+
+  function validateStartupSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object'
+      || !['missing', 'valid'].includes(snapshot.status)) throw new Error('snapshot-invalid');
+    const record = snapshot.settings;
+    const explicitText = snapshot.explicitText;
+    const snapshotAppearance = snapshot.appearance;
+    if (!snapshotAppearance || typeof snapshotAppearance !== 'object'
+      || Object.keys(snapshotAppearance).length !== 2
+      || !['en', 'zh-CN'].includes(snapshotAppearance.locale)
+      || !['light', 'dark'].includes(snapshotAppearance.theme)) throw new Error('snapshot-invalid');
+    if (!record || typeof record !== 'object' || Array.isArray(record)
+      || record.schemaVersion !== 1
+      || typeof record.avatar !== 'string' || record.avatar.length > 2 * 1024 * 1024
+      || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(record.avatar)
+      || typeof record.artwork !== 'string' || record.artwork.length > 12 * 1024 * 1024
+      || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(record.artwork)
+      || !Array.isArray(record.contours) || record.contours.length < 1 || record.contours.length > MAX_PATHS
+      || typeof record.introTitle !== 'string' || record.introTitle.length > 16
+      || typeof record.introCaption !== 'string' || record.introCaption.length > 48
+      || typeof record.artworkSubtitle !== 'string' || record.artworkSubtitle.length > 60
+      || !Number.isInteger(record.wallpaperStrength) || record.wallpaperStrength < 0 || record.wallpaperStrength > 75
+      || !explicitText || typeof explicitText !== 'object' || Array.isArray(explicitText)
+      || ['introTitle', 'introCaption', 'artworkSubtitle'].some(key =>
+        !Object.hasOwn(explicitText, key) || typeof explicitText[key] !== 'boolean')) {
+      throw new Error('snapshot-invalid');
+    }
+
+    let pointCount = 0;
+    let pathLength = 0;
+    const contours = record.contours.map(path => {
+      if (!Array.isArray(path) || path.length < 2) throw new Error('snapshot-invalid');
+      pointCount += path.length;
+      if (pointCount > MAX_POINTS) throw new Error('snapshot-invalid');
+      let previous = null;
+      return Object.freeze(path.map(point => {
+        if (!Array.isArray(point) || point.length !== 2
+          || !Number.isFinite(point[0]) || point[0] < 0 || point[0] > WIDTH
+          || !Number.isFinite(point[1]) || point[1] < 0 || point[1] > HEIGHT) {
+          throw new Error('snapshot-invalid');
+        }
+        const next = [point[0], point[1]];
+        if (previous) pathLength += Math.hypot(next[0] - previous[0], next[1] - previous[1]);
+        previous = next;
+        return Object.freeze(next);
+      }));
+    });
+    if (!(pathLength > 0)) throw new Error('snapshot-invalid');
+
+    return Object.freeze({
+      status: snapshot.status,
+      appearance: Object.freeze({ locale: snapshotAppearance.locale, theme: snapshotAppearance.theme }),
+      settings: Object.freeze({
+        schemaVersion: 1,
+        avatar: record.avatar,
+        artwork: record.artwork,
+        contours: Object.freeze(contours),
+        introTitle: record.introTitle,
+        introCaption: record.introCaption,
+        artworkSubtitle: record.artworkSubtitle,
+        wallpaperStrength: record.wallpaperStrength,
+      }),
+      explicitText: Object.freeze({
+        introTitle: explicitText.introTitle,
+        introCaption: explicitText.introCaption,
+        artworkSubtitle: explicitText.artworkSubtitle,
+      }),
+    });
+  }
+
+  function cancelStartupSnapshotRead() {
+    const controller = startupSnapshotAbortController;
+    startupSnapshotAbortController = null;
+    try { controller?.abort(); } catch {}
+  }
+
+  async function loadStartupSnapshot(currentGeneration) {
+    if (typeof readStartupSnapshot !== 'function') throw new Error('snapshot-unavailable');
+    if (typeof window.AbortController !== 'function') throw new Error('snapshot-unavailable');
+    const controller = new window.AbortController();
+    startupSnapshotAbortController = controller;
+    try {
+      const rawSnapshot = await readStartupSnapshot(Object.freeze({
+        signal: controller.signal,
+        runId: frameSpec?.runId,
+      }));
+      if (disposed || currentGeneration !== generation) return null;
+      return validateStartupSnapshot(rawSnapshot);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        try { controller.abort(); } catch {}
+      }
+      throw error;
+    } finally {
+      if (startupSnapshotAbortController === controller) startupSnapshotAbortController = null;
+    }
   }
 
   function showSettingsFallbackNotice() {
@@ -1528,7 +1634,13 @@ function installAnimation(
   async function prepare(currentGeneration) {
     if (disposed || currentGeneration !== generation) return;
     preparing = true;
-    if (imageSettings) {
+    if (startupSnapshotRequired) {
+      const snapshot = await loadStartupSnapshot(currentGeneration);
+      if (disposed || currentGeneration !== generation || !snapshot) return;
+      settingsLoadReason = '';
+      updateAppearance(snapshot.appearance);
+      applySettingsRecord(snapshot.settings, undefined, snapshot.explicitText);
+    } else if (imageSettings) {
       try {
         const loadedSettings = await imageSettings.load(defaultAssets);
         if (disposed || currentGeneration !== generation) return;
@@ -1615,7 +1727,8 @@ function installAnimation(
       } catch {}
     }
     if (frameSpec?.intent === 'settings') openSettingsPanel();
-    if (frameSpec?.intent === 'play' || startAfterPrepare || (isLocalPreview && !nativePreview)) startClock();
+    if ((frameSpec?.intent === 'play' && !frameSpec.nativeStartGate && !frameSpec.externalStartGate)
+        || startAfterPrepare || (isLocalPreview && !nativePreview)) startClock();
   }
 
   function beginPrepare() {
@@ -1893,6 +2006,7 @@ function installAnimation(
   function dispose() {
     if (disposed) return false;
     disposed = true;
+    cancelStartupSnapshotRead();
     finishSettingsPreview(settingsPreview, false, false);
     generation++;
     seekRequestGeneration++;
@@ -1975,6 +2089,198 @@ function installAnimation(
 }
 
 /* Local preview adapter. Ticket 05 extracts only installAnimation above. */
+const MAX_NATIVE_SNAPSHOT_BYTES = 24 * 1024 * 1024 + 4 * 1024;
+const NATIVE_SNAPSHOT_CHUNK_BYTES = 192 * 1024;
+
+function createNativeSnapshotBridge(environment, identity) {
+  // Uint8Array buffers can be zeroed. Decoded JS strings/objects and WebCrypto's
+  // internal copies are runtime-owned and cannot be reliably erased.
+  const runNonce = identity.runNonce;
+  let transfer = null;
+  let snapshot = null;
+  let pending = null;
+  let readerUsed = false;
+  let finishing = false;
+  let cancelled = false;
+
+  function clearTransfer() {
+    if (transfer) {
+      for (const chunk of transfer.chunks) chunk.fill(0);
+      transfer.chunks.length = 0;
+    }
+    transfer = null;
+  }
+
+  function rejectPending(reason) {
+    const current = pending;
+    pending = null;
+    if (!current) return;
+    current.signal.removeEventListener('abort', current.onAbort);
+    current.reject(new Error(reason));
+  }
+
+  function fail(reason) {
+    clearTransfer();
+    snapshot = null;
+    cancelled = true;
+    finishing = false;
+    rejectPending(reason);
+    return false;
+  }
+
+  function readStartupSnapshot(request) {
+    if (cancelled || readerUsed || !request || request.runId !== runNonce
+        || !request.signal || request.signal.aborted) return Promise.reject(new Error('snapshot-unavailable'));
+    readerUsed = true;
+    if (snapshot) return Promise.resolve(snapshot);
+    return new Promise((resolve, reject) => {
+      const onAbort = () => { fail('snapshot-cancelled'); };
+      pending = { resolve, reject, signal: request.signal, onAbort };
+      request.signal.addEventListener('abort', onAbort, { once: true });
+      if (request.signal.aborted) onAbort();
+    });
+  }
+
+  function beginSnapshotTransfer(descriptor) {
+    if (cancelled || transfer || finishing || snapshot || !descriptor
+        || descriptor.owner !== 'azhou-codex-startup' || descriptor.version !== 1
+        || descriptor.runNonce !== runNonce
+        || !Number.isSafeInteger(descriptor.runId) || descriptor.runId < 1
+        || descriptor.snapshotID !== `${descriptor.runId}:${runNonce}`
+        || !['missing', 'valid'].includes(descriptor.status)
+        || !Number.isSafeInteger(descriptor.byteLength) || descriptor.byteLength < 1
+        || descriptor.byteLength > MAX_NATIVE_SNAPSHOT_BYTES
+        || descriptor.chunkSize !== NATIVE_SNAPSHOT_CHUNK_BYTES
+        || !Number.isSafeInteger(descriptor.chunkCount) || descriptor.chunkCount < 1
+        || descriptor.chunkCount > Math.ceil(MAX_NATIVE_SNAPSHOT_BYTES / NATIVE_SNAPSHOT_CHUNK_BYTES)
+        || descriptor.chunkCount !== Math.ceil(descriptor.byteLength / NATIVE_SNAPSHOT_CHUNK_BYTES)
+        || typeof descriptor.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(descriptor.sha256)) return false;
+    transfer = {
+      descriptor: Object.freeze({
+        owner: descriptor.owner, version: descriptor.version, runId: descriptor.runId,
+        runNonce: descriptor.runNonce, snapshotID: descriptor.snapshotID, status: descriptor.status,
+        byteLength: descriptor.byteLength, chunkSize: descriptor.chunkSize,
+        chunkCount: descriptor.chunkCount, sha256: descriptor.sha256,
+      }),
+      chunks: [], byteLength: 0, nextIndex: 0,
+    };
+    return true;
+  }
+
+  function appendSnapshotChunk(token, index, dataBase64) {
+    if (cancelled || finishing || !transfer || token !== runNonce || index !== transfer.nextIndex
+        || !Number.isSafeInteger(index) || index < 0 || index >= transfer.descriptor.chunkCount
+        || typeof dataBase64 !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64)) return false;
+    let binary;
+    try { binary = environment.atob(dataBase64); } catch { return fail('snapshot-transfer-invalid'); }
+    const remaining = transfer.descriptor.byteLength - transfer.byteLength;
+    const expected = Math.min(NATIVE_SNAPSHOT_CHUNK_BYTES, remaining);
+    if (binary.length !== expected || environment.btoa(binary) !== dataBase64) return fail('snapshot-transfer-invalid');
+    const chunk = new Uint8Array(binary.length);
+    for (let offset = 0; offset < binary.length; offset++) chunk[offset] = binary.charCodeAt(offset);
+    transfer.chunks.push(chunk);
+    transfer.byteLength += chunk.length;
+    transfer.nextIndex++;
+    return true;
+  }
+
+  function finishSnapshotTransfer(token) {
+    if (cancelled || finishing || !transfer || token !== runNonce
+        || transfer.nextIndex !== transfer.descriptor.chunkCount
+        || transfer.byteLength !== transfer.descriptor.byteLength) return false;
+    finishing = true;
+    const current = transfer;
+    const bytes = new Uint8Array(current.byteLength);
+    let offset = 0;
+    for (const chunk of current.chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    clearTransfer();
+    if (!environment.crypto?.subtle || typeof environment.TextDecoder !== 'function') {
+      bytes.fill(0);
+      return fail('snapshot-transfer-unavailable');
+    }
+    environment.crypto.subtle.digest('SHA-256', bytes).then(digest => {
+      if (cancelled) { bytes.fill(0); finishing = false; return; }
+      const actual = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      if (actual !== current.descriptor.sha256) { bytes.fill(0); fail('snapshot-transfer-invalid'); return; }
+      let value;
+      try { value = JSON.parse(new environment.TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
+      catch { bytes.fill(0); fail('snapshot-transfer-invalid'); return; }
+      bytes.fill(0);
+      if (!value || Object.keys(value).length !== 4 || value.status !== current.descriptor.status
+          || !value.settings || !value.explicitText || !value.appearance) {
+        fail('snapshot-transfer-invalid'); return;
+      }
+      snapshot = value;
+      finishing = false;
+      const waiter = pending;
+      pending = null;
+      if (waiter) {
+        waiter.signal.removeEventListener('abort', waiter.onAbort);
+        waiter.resolve(snapshot);
+      }
+    }).catch(() => { bytes.fill(0); fail('snapshot-transfer-invalid'); });
+    return true;
+  }
+
+  function cancelSnapshotTransfer(token) {
+    if (token !== runNonce) return false;
+    return fail('snapshot-cancelled');
+  }
+
+  return Object.freeze({
+    readStartupSnapshot,
+    beginSnapshotTransfer,
+    appendSnapshotChunk,
+    finishSnapshotTransfer,
+    cancelSnapshotTransfer,
+  });
+}
+
+function localPreviewInput(environment, assets) {
+  const formalRequested = environment.__agentSkinNativeMode === 'launch';
+  if (!formalRequested) {
+    return {
+      frameSpec: Object.freeze({ runId: 'local-preview', intent: 'preview', protocolVersion: 1, assets }),
+      readStartupSnapshot: undefined,
+      nativeBridge: null,
+    };
+  }
+
+  const descriptor = Object.getOwnPropertyDescriptor(environment, '__agentSkinNativeStartup');
+  const bridge = descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : null;
+  const read = (object, key) => {
+    const property = object && Object.getOwnPropertyDescriptor(object, key);
+    return property && Object.hasOwn(property, 'value') ? property.value : undefined;
+  };
+  const owner = read(bridge, 'owner');
+  const version = read(bridge, 'version');
+  const runNonce = read(bridge, 'runNonce');
+  const validAppearance = appearance => Object.isFrozen(appearance) && Object.keys(appearance).length === 2
+    && ['en', 'zh-CN'].includes(appearance.locale) && ['light', 'dark'].includes(appearance.theme);
+  const nativeAppearance = read(bridge, 'appearance');
+  const completeIdentity = descriptor?.writable === false && descriptor?.configurable === false
+    && Object.isFrozen(bridge) && owner === 'azhou-agent-skin-native' && version === 1
+    && typeof runNonce === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(runNonce)
+    && typeof environment.webkit?.messageHandlers?.launcher?.postMessage === 'function'
+    && nativeAppearance && typeof nativeAppearance === 'object' && validAppearance(nativeAppearance);
+  const appearance = nativeAppearance;
+  const snapshotBridge = completeIdentity ? createNativeSnapshotBridge(environment, bridge) : null;
+  const frameSpec = Object.freeze({
+    runId: completeIdentity ? runNonce : 'invalid-native-run',
+    intent: 'play',
+    protocolVersion: 1,
+    assets,
+    appearance: appearance && typeof appearance === 'object' ? appearance : undefined,
+    settingsSnapshot: 'required',
+    nativeStartGate: true,
+  });
+  return {
+    frameSpec,
+    readStartupSnapshot: snapshotBridge?.readStartupSnapshot,
+    nativeBridge: snapshotBridge,
+  };
+}
+
 if (typeof window !== 'undefined' && typeof document !== 'undefined'
   && document.getElementById('preview-controls') && document.getElementById('timeline')) {
   const environment = window;
@@ -1983,15 +2289,34 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined'
     if (handler && typeof handler.postMessage === 'function') handler.postMessage(message);
   };
   const settings = environment.AGENT_SKIN_ASSETS || null;
+  const input = localPreviewInput(environment, settings);
   const localHandle = installAnimation(
     environment, document, environment.location, environment.performance, environment.indexedDB,
     environment.Image, environment.Path2D, environment.URL,
     environment.requestAnimationFrame.bind(environment), environment.cancelAnimationFrame.bind(environment),
     environment.setTimeout.bind(environment), environment.clearTimeout.bind(environment),
     undefined, sendPreview,
-    Object.freeze({ runId: 'local-preview', intent: 'preview', protocolVersion: 1, assets: settings }),
+    input.frameSpec,
     environment.createImageSettings, environment.createLocalization,
+    input.readStartupSnapshot,
   );
+  if (input.nativeBridge && localHandle?.preview) {
+    for (const [name, method] of Object.entries({
+      acceptNativeSnapshotDescriptor: input.nativeBridge.beginSnapshotTransfer,
+      acceptNativeSnapshotChunk: input.nativeBridge.appendSnapshotChunk,
+      finishNativeSnapshot: input.nativeBridge.finishSnapshotTransfer,
+      cancelNativeSnapshot: input.nativeBridge.cancelSnapshotTransfer,
+    })) {
+      Object.defineProperty(localHandle.preview, name, {
+        value: method, enumerable: false, writable: false, configurable: false,
+      });
+    }
+    Object.defineProperty(localHandle.preview, 'nativeStartupRunNonce', {
+      value: input.frameSpec.runId, enumerable: false, writable: false, configurable: false,
+    });
+  } else if (input.nativeBridge) {
+    input.nativeBridge.cancelSnapshotTransfer(input.frameSpec.runId);
+  }
   if (!environment.webkit?.messageHandlers?.launcher) {
     environment.launcherUI = Object.assign(localHandle.preview, { dispose: localHandle.dispose });
   }

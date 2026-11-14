@@ -231,9 +231,14 @@ def _validate_contours(contours) -> tuple[int, int]:
     return len(contours), point_count
 
 
-def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, host: str = 'codex') -> str:
+def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, host: str = 'codex',
+                  playback_owner: str = 'page') -> str:
     if host not in ('codex', 'dsh'):
         raise RuntimeError('Unsupported startup host.')
+    if (playback_owner not in ('page', 'native', 'dsh-gated')
+            or (playback_owner == 'native' and host != 'codex')
+            or (playback_owner == 'dsh-gated' and host != 'dsh')):
+        raise RuntimeError('Unsupported startup playback owner for this host.')
     adapter_name = {'dsh': 'createDSHPageAdapter'}.get(host, 'createCodexPageAdapter')
     adapter_path = {'dsh': 'extension/hosts/dsh.mjs'}.get(host, 'extension/codex-page-adapter.mjs')
     adapter_label = {'dsh': 'DSH page adapter'}.get(host, 'Codex page adapter')
@@ -283,6 +288,7 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, ho
         raise RuntimeError('Startup/controller, page adapter or wallpaper module has an unexpected entry count.')
     css_literal = json.dumps(wallpaper_css, ensure_ascii=True, separators=(',', ':'))
     version_literal = json.dumps(artifacts.VERSION)
+    playback_owner_argument = '' if playback_owner == 'page' else f"    playbackOwner: '{playback_owner}',\n"
     if host == 'dsh':
         # The DSH carrier opens appearance through the host settings modal
         # (the settings.section slot), so the sidebar entry stays off; the
@@ -324,8 +330,9 @@ def _build_script(root: Path, assets: dict, wallpaper_css: str, artifacts, *, ho
     assets: DEFAULT_ASSETS,
     host: globalThis,
     pageAdapter,
-  });
-'''.replace('ADAPTER_FACTORY', adapter_name).replace('ADAPTER_CONFIGURATION', adapter_configuration),
+PLAYBACK_OWNER_ARGUMENT  });
+'''.replace('ADAPTER_FACTORY', adapter_name).replace('ADAPTER_CONFIGURATION', adapter_configuration)
+        .replace('PLAYBACK_OWNER_ARGUMENT', playback_owner_argument),
         '})()',
         '',
     ))
@@ -476,11 +483,19 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
     )
     shutil.copyfile(entry_avatar_input, entry_avatar_path)
     wallpaper_css = (root / 'wallpaper/wallpaper.css').read_text(encoding='utf-8')
-    install_script = _build_script(root, assets, wallpaper_css, artifacts, host=host)
+    playback_owner = 'dsh-gated' if host == 'dsh' else 'page'
+    install_script = _build_script(root, assets, wallpaper_css, artifacts,
+                                   host=host, playback_owner=playback_owner)
     install_path = startup_dir / 'install.js'
     install_path.write_text(install_script, encoding='utf-8')
+    output_entrypoints = ['startup/install.js']
+    if host == 'codex':
+        prepare_script = _build_script(root, assets, wallpaper_css, artifacts,
+                                       host='codex', playback_owner='native')
+        (startup_dir / 'prepare.js').write_text(prepare_script, encoding='utf-8')
+        output_entrypoints.append('startup/prepare.js')
 
-    output_paths = ('startup/install.js', *(f'web/{name}' for name in PREVIEW_SOURCES),
+    output_paths = (*output_entrypoints, *(f'web/{name}' for name in PREVIEW_SOURCES),
                     'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png',
                     'web/assets/defaults/artwork.png',
                     'web/assets/defaults/contours.js')
@@ -509,6 +524,11 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
     }
     if host == 'dsh':
         manifest.update(targetHost='dsh')
+    else:
+        manifest['startupEntrypoints'] = {
+            'page': 'startup/install.js',
+            'native': 'startup/prepare.js',
+        }
     manifest_path = startup_dir / 'manifest.json'
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + '\n', encoding='utf-8')
     return manifest

@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { createHash, webcrypto } from 'node:crypto';
+import { runInNewContext } from 'node:vm';
 import { installStartup } from '../extension/renderer.mjs';
 import { createCodexPageAdapter } from '../extension/codex-page-adapter.mjs';
+import { createDSHPageAdapter } from '../extension/hosts/dsh.mjs';
+import { createWallpaperApplicator } from '../wallpaper/apply.js';
 const pageAdapter = createCodexPageAdapter(globalThis);
+const imageSettingsSource = readFileSync(new URL('../image-settings.js', import.meta.url), 'utf8');
+const imageSettingsContext = {};
+runInNewContext(`${imageSettingsSource}\nglobalThis.createImageSettings = createImageSettings;`, imageSettingsContext);
+const createImageSettings = imageSettingsContext.createImageSettings;
 
 const mainURL = 'app://-/index.html?initialRoute=%2F';
 
@@ -10,6 +19,8 @@ function controlledHost({ body = true } = {}) {
   const listeners = new Set();
   const keyListeners = new Set();
   const scrollListeners = new Set();
+  const pageHideListeners = new Set();
+  const pageShowListeners = new Set();
   const observers = [];
   const frames = [];
   const controls = [];
@@ -138,17 +149,23 @@ function controlledHost({ body = true } = {}) {
       if (type === 'message') listeners.add(listener);
       if (type === 'keydown') keyListeners.add(listener);
       if (type === 'scroll') scrollListeners.add(listener);
+      if (type === 'pagehide') pageHideListeners.add(listener);
+      if (type === 'pageshow') pageShowListeners.add(listener);
     },
     removeEventListener(type, listener) {
       if (type === 'message') listeners.delete(listener);
       if (type === 'keydown') keyListeners.delete(listener);
       if (type === 'scroll') scrollListeners.delete(listener);
+      if (type === 'pagehide') pageHideListeners.delete(listener);
+      if (type === 'pageshow') pageShowListeners.delete(listener);
     },
     send(data, source) {
       for (const listener of listeners) listener({ data, source });
     },
     keydown(event) { for (const listener of keyListeners) listener(event); },
     scroll() { for (const listener of scrollListeners) listener(); },
+    pagehide() { for (const listener of pageHideListeners) listener(); },
+    pageshow() { for (const listener of pageShowListeners) listener(); },
     setBody() {
       document.body = {};
       for (const observer of observers) observer.trigger();
@@ -162,6 +179,8 @@ function controlledHost({ body = true } = {}) {
   };
   return { host, frames, controls, timers, observers, setBody: () => host.setBody(), listenerCount: () => listeners.size,
     keyListenerCount: () => keyListeners.size, scrollListenerCount: () => scrollListeners.size,
+    pageHideListenerCount: () => pageHideListeners.size,
+    pageShowListenerCount: () => pageShowListeners.size,
     appRoot, hostControl, controlWrapper,
     setHostUIReady(value) { hostUIReady = value; } };
 }
@@ -258,6 +277,648 @@ function addAppearanceNavigation(fixture, { width = 220, count = 1, label = 'You
 function appearanceButton(fixture) {
   return fixture.controls.find(node => node.tagName === 'button');
 }
+
+function dshFixture({ body = true, gate = false, randomUUID = true } = {}) {
+  const fixture = controlledHost({ body });
+  const createElement = fixture.host.document.createElement;
+  fixture.host.document.createElement = tag => {
+    const element = createElement.call(fixture.host.document, tag);
+    if (tag === 'iframe') element.ownerDocument = fixture.host.document;
+    return element;
+  };
+  fixture.host.top = fixture.host;
+  fixture.host.__ModuleLoader__ = { load() {} };
+  fixture.host.__DSH_BOOT__ = { web: true };
+  fixture.host.crypto = randomUUID ? { randomUUID: () => 'dsh-startup-test-document' } : {};
+  fixture.host.getComputedStyle = () => ({ getPropertyValue: () => '' });
+  const pageAdapter = createDSHPageAdapter(fixture.host, { sidebarEntry: false });
+  let gatePhase = 'waiting';
+  const expiryListeners = new Set();
+  const expireGate = () => {
+    if (['released', 'expired'].includes(gatePhase)) return false;
+    gatePhase = 'expired';
+    for (const listener of [...expiryListeners]) listener();
+    expiryListeners.clear();
+    return true;
+  };
+  const calls = { claims: 0, readies: 0, releases: 0, launches: 0, specs: [] };
+  if (gate) {
+    const startupGate = Object.freeze({
+      owner: 'azhou-dsh-startup-gate-v1',
+      claim() { calls.claims += 1; if (gatePhase !== 'waiting') return false; gatePhase = 'claimed'; return true; },
+      ready() { calls.readies += 1; if (gatePhase !== 'claimed') return false; gatePhase = 'released'; expiryListeners.clear(); return true; },
+      release() { calls.releases += 1; return expireGate(); },
+      expire: expireGate,
+      onExpire(listener) {
+        if (typeof listener !== 'function') return () => false;
+        if (gatePhase === 'expired') { listener(); return () => false; }
+        if (gatePhase === 'released') return () => false;
+        expiryListeners.add(listener);
+        let active = true;
+        return () => {
+          if (!active) return false;
+          active = false;
+          return expiryListeners.delete(listener);
+        };
+      },
+      status() { return gatePhase; },
+    });
+    Object.defineProperty(fixture.host, '__azhouDshStartupGate', { value: startupGate });
+  }
+  const payload = (...args) => {
+    const send = args[13];
+    const frameSpec = args[14];
+    calls.specs.push(frameSpec);
+    return { preview: { beginLaunch() { calls.launches += 1; return true; } } };
+  };
+  payload.assets = {};
+  return {
+    ...fixture, pageAdapter, payload, calls,
+    gate: fixture.host.__azhouDshStartupGate,
+    gatePhase: () => gatePhase,
+    sendReady() {
+      fixture.host.send({ type: 'azhou-startup', action: 'ready', runId: fixture.host.__azhouStartup.status().runId },
+        fixture.frames.at(-1).contentWindow);
+    },
+  };
+}
+
+function dshSettingsStorage(record, { openFailure = false, holdFirstRead = false } = {}) {
+  const state = { opens: [], transactions: [], requests: [], aborts: 0, releaseFirst: null };
+  const database = {
+    objectStoreNames: { contains(name) { return name === 'settings'; } },
+    transaction(storeName, mode) {
+      const transaction = {
+        storeName, mode, aborted: false,
+        objectStore(name) {
+          assert.equal(name, 'settings');
+          return { get(key) {
+            const request = { result: record };
+            state.requests.push({ key, request, transaction });
+            let delivered = false;
+            const deliver = () => {
+              if (delivered) return;
+              delivered = true;
+              request.onsuccess?.();
+              transaction.oncomplete?.();
+            };
+            if (holdFirstRead && state.requests.length === 1) state.releaseFirst = deliver;
+            else queueMicrotask(deliver);
+            return request;
+          } };
+        },
+        abort() {
+          if (this.aborted) return;
+          this.aborted = true;
+          state.aborts += 1;
+          queueMicrotask(() => this.onabort?.());
+        },
+      };
+      state.transactions.push(transaction);
+      return transaction;
+    },
+    close() {},
+  };
+  const indexedDB = {
+    open(name, version) {
+      state.opens.push({ name, version });
+      const request = {};
+      queueMicrotask(() => {
+        if (openFailure) {
+          request.error = new Error('isolated storage failure');
+          request.onerror?.();
+        } else {
+          request.result = database;
+          request.onsuccess?.();
+        }
+      });
+      return request;
+    },
+  };
+  return { indexedDB, state };
+}
+
+const SAVED_DSH_IMAGE = 'data:image/png;base64,AA==';
+
+function realDSHWallpaperFixture(options = {}) {
+  const fixture = dshFixture({ gate: options.gate ?? false, randomUUID: false });
+  const saved = { schemaVersion: 1, avatar: SAVED_DSH_IMAGE, artwork: SAVED_DSH_IMAGE,
+    contours: [[[0, 0], [1, 1]]], introTitle: 'Saved title', introCaption: 'Saved caption',
+    artworkSubtitle: 'Saved background', wallpaperStrength: options.wallpaperStrength ?? 31 };
+  const storage = dshSettingsStorage(saved, options);
+  const { host } = fixture;
+  let imageIndex = 0;
+  host.indexedDB = storage.indexedDB;
+  host.crypto = { subtle: webcrypto.subtle };
+  host.atob = globalThis.atob;
+  host.URL = URL;
+  host.Image = class {
+    constructor() { this.index = imageIndex++; }
+    get naturalWidth() { return this.index % 2 === 0 ? 512 : 1536; }
+    get naturalHeight() { return this.index % 2 === 0 ? 512 : 1024; }
+    set src(value) {
+      this.value = value;
+      if (!value || value === 'data:,') return;
+      queueMicrotask(() => { if (this.value === value) this.onload?.(); });
+    }
+    removeAttribute(name) { if (name === 'src') this.src = 'data:,'; }
+  };
+  host.AbortController = AbortController;
+  host.performance = globalThis.performance;
+  const mainSurface = { isConnected: true, closest: () => null };
+  host.document.querySelectorAll = selector => selector === '[data-slot="main"]' ? [mainSurface] : [];
+  const rendererCalls = [];
+  const installRenderer = async offered => {
+    rendererCalls.push({ image: offered.image, strength: offered.strength });
+    const wallpaper = Object.freeze({ owner: 'azhou.dsh-startup-animation', version: '0.9.0',
+      status: () => ({ applied: true, imageDecoded: true }), dispose() {} });
+    Object.defineProperty(host, '__azhouWallpaper', { value: wallpaper,
+      configurable: true, enumerable: false, writable: false });
+    return { applied: true, imageDecoded: true };
+  };
+  fixture.payload.assets = { avatar: SAVED_DSH_IMAGE, artwork: SAVED_DSH_IMAGE,
+    contours: [[[0, 0], [1, 1]]], introTitle: 'Default title', introCaption: 'Default caption',
+    artworkSubtitle: 'Default background', wallpaperStrength: 42 };
+  fixture.payload.createImageSettings = createImageSettings;
+  fixture.payload.applyWallpaper = createWallpaperApplicator(installRenderer,
+    { version: '0.9.0', css: '', pageAdapter: fixture.pageAdapter }, host);
+  return { ...fixture, storage, rendererCalls, saved };
+}
+
+async function waitForCondition(predicate, message) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    if (predicate()) return;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.fail(message);
+}
+
+test('DSH without an early gate stays prepared, retains wallpaper and can open settings', () => {
+  const fixture = dshFixture({ gate: false });
+  Object.defineProperty(fixture.host, '__azhouWallpaper', { value: Object.freeze({
+    owner: 'azhou.dsh-startup-animation', version: '0.9.0',
+    status: () => ({ applied: true, imageDecoded: true }), dispose() {},
+  }) });
+  assert.deepEqual(installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated'),
+    { installed: true, alreadyActive: false });
+  const api = fixture.host.__azhouStartup;
+  assert.equal(api.status().phase, 'prepared');
+  assert.equal(api.status().overlay, false);
+  assert.equal(fixture.frames.length, 0, 'no bridge means no autoplay overlay');
+  assert.equal(api.status().wallpaper.applied, true, 'preexisting DSH wallpaper state survives preparation');
+  assert.equal(api.openSettings(), true, 'settings remain available after gate fail-open');
+  assert.equal(fixture.calls.specs.at(-1).externalStartGate, false, 'settings animation is not held behind startup gate');
+  fixture.sendReady();
+  assert.equal(api.status().phase, 'settings');
+  assert.equal(fixture.calls.launches, 0, 'settings route does not invoke startup playback');
+  api.dispose();
+});
+
+test('a DSH page without the gate reads its own saved wallpaper and applies it without autoplay', async () => {
+  const fixture = realDSHWallpaperFixture();
+  assert.equal(Object.hasOwn(fixture.host, '__azhouWallpaper'), false,
+    'a new document starts without a preinstalled wallpaper controller');
+  assert.deepEqual(installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated'),
+    { installed: true, alreadyActive: false });
+  const api = fixture.host.__azhouStartup;
+  await waitForCondition(() => fixture.rendererCalls.length === 1, 'saved DSH wallpaper was not applied');
+  assert.deepEqual(fixture.storage.state.opens, [{ name: 'azhou-dsh-startup', version: 1 }]);
+  assert.equal(fixture.storage.state.requests[0].key, 'images');
+  assert.equal(fixture.storage.state.transactions[0].mode, 'readonly');
+  assert.deepEqual(fixture.rendererCalls, [{ image: fixture.saved.artwork, strength: 31 }]);
+  assert.equal(api.status().phase, 'prepared');
+  assert.equal(api.status().wallpaper.applied, true);
+  assert.equal(api.status().overlay, false);
+  assert.equal(fixture.frames.length, 0, 'missing gate never starts the animation iframe');
+  assert.equal(typeof fixture.pageAdapter.identify(fixture.host).documentToken, 'object',
+    'the insecure HTTP path uses an in-memory document identity without randomUUID');
+  api.dispose();
+});
+
+test('a claimed DSH gate timeout restores saved wallpaper while preserving the failed run', async () => {
+  const fixture = realDSHWallpaperFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  const frame = fixture.frames[0];
+  assert.equal(fixture.calls.launches, 0);
+  assert.equal(fixture.gatePhase(), 'claimed');
+
+  assert.equal(fixture.gate.expire(), true);
+  assert.equal(api.status().phase, 'failed');
+  assert.equal(api.status().reason, 'startup-gate-expired');
+  assert.equal(frame.removed, true, 'the stalled startup frame is gone before restoration begins');
+  await waitForCondition(() => fixture.rendererCalls.length === 1,
+    'saved wallpaper did not restore after the gate timeout');
+
+  const status = api.status();
+  assert.equal(status.phase, 'failed', 'wallpaper restoration does not replace the failure terminal state');
+  assert.equal(status.reason, 'startup-gate-expired');
+  assert.equal(status.ready, false);
+  assert.equal(status.wallpaper.applied, true);
+  assert.deepEqual(fixture.rendererCalls, [{ image: fixture.saved.artwork, strength: 31 }]);
+  assert.equal(fixture.calls.launches, 0, 'restoration does not replay the animation');
+  api.dispose();
+});
+
+test('a DSH renderer timeout before ready restores saved wallpaper and keeps timeout terminal state', async () => {
+  const fixture = realDSHWallpaperFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  const frame = fixture.frames[0];
+  const watchdog = fixture.timers.find(timer => timer.delay === 25_000);
+  assert.ok(watchdog);
+  watchdog.callback();
+  assert.equal(api.status().phase, 'timeout');
+  assert.equal(api.status().reason, 'overlay-timeout');
+  assert.equal(frame.removed, true);
+
+  await waitForCondition(() => fixture.rendererCalls.length === 1,
+    'saved wallpaper did not restore after the pre-ready renderer timeout');
+  const status = api.status();
+  assert.equal(status.phase, 'timeout');
+  assert.equal(status.reason, 'overlay-timeout');
+  assert.equal(status.ready, false);
+  assert.equal(status.wallpaper.applied, true);
+  assert.equal(fixture.calls.launches, 0);
+  api.dispose();
+});
+
+test('a DSH asset error before ready restores saved wallpaper and preserves its failure reason', async () => {
+  const fixture = realDSHWallpaperFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  const frame = fixture.frames[0];
+  fixture.host.send({ type: 'azhou-startup', action: 'assetError', reason: 'asset-invalid',
+    runId: api.status().runId }, frame.contentWindow);
+
+  await waitForCondition(() => fixture.rendererCalls.length === 1,
+    'saved wallpaper did not restore after the pre-ready asset error');
+  const status = api.status();
+  assert.equal(status.phase, 'failed');
+  assert.equal(status.reason, 'asset-invalid');
+  assert.equal(status.ready, false);
+  assert.equal(status.wallpaper.applied, true);
+  assert.equal(frame.removed, true);
+  assert.equal(fixture.calls.launches, 0);
+  api.dispose();
+});
+
+test('a DSH skip before ready restores saved wallpaper without changing skip completion', async () => {
+  const fixture = realDSHWallpaperFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  const frame = fixture.frames[0];
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', skipped: true,
+    runId: api.status().runId }, frame.contentWindow);
+
+  await waitForCondition(() => fixture.rendererCalls.length === 1,
+    'saved wallpaper did not restore after the pre-ready skip');
+  const status = api.status();
+  assert.equal(status.phase, 'complete');
+  assert.equal(status.completion.cause, 'skip');
+  assert.equal(status.completion.beforeReady, true);
+  assert.equal(status.ready, false);
+  assert.equal(status.wallpaper.applied, true);
+  assert.equal(frame.removed, true);
+  assert.equal(fixture.calls.launches, 0);
+  api.dispose();
+});
+
+test('a DSH settings preview cancels pending recovery and wins over the late saved read', async () => {
+  const fixture = realDSHWallpaperFixture({ gate: true, holdFirstRead: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  const startupFrame = fixture.frames[0];
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', skipped: true,
+    runId: api.status().runId }, startupFrame.contentWindow);
+  await waitForCondition(() => typeof fixture.storage.state.releaseFirst === 'function',
+    'early skip did not start the saved wallpaper read');
+
+  const target = { children: [], appendChild(child) {
+    child.parentNode = this; this.children.push(child); return child;
+  }, removeChild(child) {
+    const index = this.children.indexOf(child);
+    if (index >= 0) this.children.splice(index, 1);
+    child.parentNode = null;
+  } };
+  const disposeSettings = api.mountSettings(target);
+  assert.equal(typeof disposeSettings, 'function');
+  assert.equal(fixture.storage.state.aborts, 1, 'opening settings cancels the pending saved-state read');
+  const settingsFrame = target.children[0];
+  const settingsRunId = fixture.calls.specs.at(-1).runId;
+  fixture.host.send({ type: 'azhou-startup', action: 'background', runId: settingsRunId,
+    image: fixture.saved.artwork, strength: 57 }, settingsFrame.contentWindow);
+  await waitForCondition(() => fixture.rendererCalls.length === 1,
+    'the settings preview did not apply');
+  fixture.storage.state.releaseFirst();
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(fixture.rendererCalls, [{ image: fixture.saved.artwork, strength: 57 }],
+    'the cancelled recovery cannot overwrite the user preview');
+  assert.equal(api.status().completion.cause, 'skip');
+  assert.equal(api.status().wallpaper.applied, true);
+  disposeSettings();
+  api.dispose();
+});
+
+test('pagehide cancels a pending pre-ready DSH recovery before its saved read can write', async () => {
+  const fixture = realDSHWallpaperFixture({ gate: true, holdFirstRead: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  const frame = fixture.frames[0];
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', skipped: true,
+    runId: api.status().runId }, frame.contentWindow);
+  await waitForCondition(() => typeof fixture.storage.state.releaseFirst === 'function',
+    'pre-ready skip did not start the wallpaper read');
+
+  fixture.host.pagehide();
+  assert.equal(fixture.storage.state.aborts, 1, 'pagehide aborts the recovery transaction');
+  fixture.storage.state.releaseFirst();
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(fixture.rendererCalls.length, 0, 'the late saved result cannot write after pagehide');
+  assert.equal(api.status().phase, 'complete');
+  assert.equal(api.status().completion.cause, 'skip');
+  api.dispose();
+});
+
+test('a disposed DSH recovery cannot overwrite the new page controller state', async () => {
+  const fixture = realDSHWallpaperFixture({ gate: true, holdFirstRead: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const oldApi = fixture.host.__azhouStartup;
+  const startupFrame = fixture.frames[0];
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', skipped: true,
+    runId: oldApi.status().runId }, startupFrame.contentWindow);
+  await waitForCondition(() => typeof fixture.storage.state.releaseFirst === 'function',
+    'old page recovery did not start its settings read');
+
+  oldApi.dispose();
+  fixture.host.location = new URL('https://chat.deepseek.com/conversation/next');
+  fixture.host.document = { ...fixture.host.document };
+  const nextSettings = dshSettingsStorage({ ...fixture.saved, artwork: 'data:image/png;base64,Ag==', wallpaperStrength: 49 });
+  fixture.host.indexedDB = nextSettings.indexedDB;
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const nextApi = fixture.host.__azhouStartup;
+  await waitForCondition(() => fixture.rendererCalls.length === 1,
+    'new page did not restore its own saved wallpaper');
+  fixture.storage.state.releaseFirst();
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.equal(nextApi.status().phase, 'prepared');
+  assert.equal(nextApi.status().wallpaper.applied, true);
+  assert.deepEqual(fixture.rendererCalls, [{ image: 'data:image/png;base64,Ag==', strength: 49 }],
+    'the old page read cannot overwrite the new page settings');
+  nextApi.dispose();
+});
+
+test('a saved disabled DSH wallpaper remains disabled without invoking the renderer', async () => {
+  const fixture = realDSHWallpaperFixture({ wallpaperStrength: 0 });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  await waitForCondition(() => api.status().wallpaper.reason === 'disabled',
+    'saved disabled wallpaper state was not restored');
+  assert.equal(fixture.rendererCalls.length, 0);
+  assert.equal(api.status().phase, 'prepared');
+  assert.equal(api.status().overlay, false);
+  assert.equal(fixture.frames.length, 0);
+  api.dispose();
+});
+
+test('DSH settings read failure is fail-open and leaves the host interactive', async () => {
+  const fixture = realDSHWallpaperFixture({ openFailure: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  await waitForCondition(() => api.status().wallpaper.reason === 'storage-unavailable',
+    'settings failure did not settle');
+  assert.equal(fixture.rendererCalls.length, 0);
+  assert.equal(api.status().phase, 'prepared');
+  assert.equal(api.status().overlay, false);
+  assert.equal(fixture.frames.length, 0);
+  api.dispose();
+});
+
+test('DSH wallpaper restore has one deadline and ignores a storage result arriving after timeout', async () => {
+  const fixture = realDSHWallpaperFixture({ holdFirstRead: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  await waitForCondition(() => typeof fixture.storage.state.releaseFirst === 'function',
+    'isolated DSH settings read did not become pending');
+  const deadline = fixture.timers.find(timer => timer.delay === 10_000 && !timer.cleared);
+  assert.ok(deadline, 'the DSH restore owns a bounded deadline');
+  deadline.callback();
+  assert.equal(api.status().wallpaper.failureCode, 'retry-timeout');
+  assert.equal(fixture.storage.state.aborts, 1, 'timeout disposes the outstanding DSH settings transaction');
+  fixture.storage.state.releaseFirst();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(fixture.rendererCalls.length, 0, 'late settings cannot start wallpaper application');
+  assert.equal(api.status().phase, 'prepared');
+  assert.equal(api.status().overlay, false);
+  assert.equal(fixture.frames.length, 0);
+  assert.equal(fixture.timers.some(timer => !timer.cleared && [5_000, 10_000].includes(timer.delay)), false,
+    'the read and owner deadlines are cleared');
+  api.dispose();
+});
+
+test('opening settings cancels the DSH restore so a newer settings wallpaper wins', async () => {
+  const fixture = realDSHWallpaperFixture({ holdFirstRead: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  await waitForCondition(() => typeof fixture.storage.state.releaseFirst === 'function',
+    'isolated DSH settings read did not become pending');
+  assert.equal(api.openSettings(), true);
+  assert.equal(fixture.storage.state.aborts, 1, 'opening settings cancels and disposes the old read');
+  const frame = fixture.frames.at(-1);
+  fixture.host.send({ type: 'azhou-startup', action: 'background', runId: api.status().runId,
+    image: SAVED_DSH_IMAGE, strength: 54 }, frame.contentWindow);
+  await waitForCondition(() => fixture.rendererCalls.length === 1, 'new settings wallpaper was not applied');
+  fixture.storage.state.releaseFirst();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(fixture.rendererCalls, [{ image: SAVED_DSH_IMAGE, strength: 54 }]);
+  assert.equal(api.status().wallpaper.applied, true, 'the cancelled read does not replace the settings result');
+  assert.equal(api.status().phase, 'loading', 'the settings frame remains available');
+  api.dispose();
+});
+
+test('DSH pagehide and HMR dispose cancel old reads and ignore late results', async () => {
+  const pagehide = realDSHWallpaperFixture({ holdFirstRead: true });
+  installStartup(pagehide.payload, pagehide.host, pagehide.pageAdapter, 'dsh-gated');
+  await waitForCondition(() => typeof pagehide.storage.state.releaseFirst === 'function',
+    'pagehide fixture read did not become pending');
+  pagehide.host.pagehide();
+  assert.equal(pagehide.storage.state.aborts, 1);
+  pagehide.storage.state.releaseFirst();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(pagehide.rendererCalls.length, 0);
+  pagehide.host.__azhouStartup.dispose();
+
+  const hmr = realDSHWallpaperFixture({ holdFirstRead: true });
+  installStartup(hmr.payload, hmr.host, hmr.pageAdapter, 'dsh-gated');
+  const oldApi = hmr.host.__azhouStartup;
+  await waitForCondition(() => typeof hmr.storage.state.releaseFirst === 'function',
+    'HMR fixture read did not become pending');
+  oldApi.dispose();
+  assert.equal(hmr.storage.state.aborts, 1, 'dispose closes the old page operation');
+  installStartup(hmr.payload, hmr.host, hmr.pageAdapter, 'dsh-gated');
+  const newApi = hmr.host.__azhouStartup;
+  await waitForCondition(() => hmr.rendererCalls.length === 1, 'replacement controller did not restore saved wallpaper');
+  hmr.storage.state.releaseFirst();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(hmr.rendererCalls, [{ image: hmr.saved.artwork, strength: 31 }]);
+  assert.equal(newApi.status().wallpaper.applied, true);
+  assert.equal(newApi.status().phase, 'prepared');
+  assert.equal(hmr.frames.length, 0, 'HMR replacement does not replay the animation');
+  newApi.dispose();
+});
+
+test('DSH gate claim precedes playback and releases only after the frame reports ready', () => {
+  const fixture = dshFixture({ gate: true });
+  assert.deepEqual(installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated'),
+    { installed: true, alreadyActive: false });
+  const api = fixture.host.__azhouStartup;
+  assert.equal(fixture.calls.claims, 1);
+  assert.equal(fixture.gatePhase(), 'claimed');
+  assert.equal(api.status().phase, 'loading');
+  assert.equal(fixture.calls.specs[0].externalStartGate, true);
+  assert.match(fixture.frames[0].style.cssText, /z-index:2147483646/,
+    'the gated DSH animation stays below the bridge cover');
+  assert.deepEqual(installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated'),
+    { installed: true, alreadyActive: true });
+  assert.equal(fixture.calls.claims, 1, 'duplicate installer does not claim or restart the document gate');
+  fixture.sendReady();
+  assert.equal(api.status().phase, 'playing');
+  assert.equal(fixture.calls.readies, 1);
+  assert.equal(fixture.calls.launches, 1);
+  assert.equal(fixture.gatePhase(), 'released');
+  api.dispose();
+});
+
+test('ordinary startup overlays keep the maximum layer while DSH gated overlays sit below the cover', () => {
+  const gated = dshFixture({ gate: true });
+  installStartup(gated.payload, gated.host, gated.pageAdapter, 'dsh-gated');
+  assert.match(gated.frames[0].style.cssText, /z-index:2147483646/);
+  gated.host.__azhouStartup.dispose();
+
+  const ordinary = controlledHost();
+  installStartup(() => ({}), ordinary.host, pageAdapter);
+  assert.match(ordinary.frames[0].style.cssText, /z-index:2147483647/,
+    'non-DSH entry points keep their existing top layer');
+  ordinary.host.__azhouStartup.dispose();
+});
+
+test('expired DSH claim fails closed and a late ready message cannot start playback', () => {
+  const fixture = dshFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const frame = fixture.frames[0];
+  const frameObserver = fixture.observers.at(-1);
+  const watchdog = fixture.timers.find(timer => timer.delay === 25_000);
+  assert.equal(frameObserver.observing, true);
+  assert.equal(watchdog.cleared, false);
+  assert.equal(fixture.gate.release(), true, 'simulate the early bridge watchdog expiring');
+  assert.equal(fixture.host.__azhouStartup.status().phase, 'failed');
+  assert.equal(fixture.host.__azhouStartup.status().reason, 'startup-gate-expired');
+  assert.equal(frame.removed, true, 'gate expiry immediately removes the never-ready player iframe');
+  assert.equal(frameObserver.disconnected, true, 'gate expiry disconnects the player frame observer');
+  assert.equal(watchdog.cleared, true, 'the gate event cancels the longer renderer fallback watchdog');
+  fixture.sendReady();
+  assert.equal(fixture.host.__azhouStartup.status().phase, 'failed');
+  assert.equal(fixture.host.__azhouStartup.status().reason, 'startup-gate-expired');
+  assert.equal(fixture.calls.launches, 0);
+  fixture.host.__azhouStartup.dispose();
+});
+
+test('normal DSH ready and gate release do not trigger expiry cleanup', () => {
+  const fixture = dshFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  const frame = fixture.frames[0];
+  const frameObserver = fixture.observers.at(-1);
+  fixture.sendReady();
+  assert.equal(api.status().phase, 'playing');
+  assert.equal(fixture.gatePhase(), 'released');
+  assert.equal(fixture.gate.expire(), false, 'a normally released gate cannot report an expiry');
+  assert.equal(api.status().phase, 'playing');
+  assert.equal(frame.removed, false, 'the ready player remains active');
+  assert.equal(frameObserver.disconnected, false, 'the active player observer remains connected');
+  api.dispose();
+  assert.equal(frame.removed, true);
+  assert.equal(frameObserver.disconnected, true);
+});
+
+test('DSH skip before player ready releases the gate instead of stranding its cover', () => {
+  const fixture = dshFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  const frame = fixture.frames[0];
+  assert.equal(fixture.gatePhase(), 'claimed');
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: api.status().runId,
+    skipped: true }, frame.contentWindow);
+  assert.equal(api.status().phase, 'complete');
+  assert.equal(api.status().completion.cause, 'skip');
+  assert.equal(fixture.gatePhase(), 'expired');
+  assert.equal(frame.removed, true);
+  assert.equal(fixture.calls.launches, 0, 'skip can terminate before launch without starting the animation');
+  api.dispose();
+});
+
+test('DSH player natural completion after the 12-second run leaves gate released', () => {
+  const fixture = dshFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  fixture.sendReady();
+  const frame = fixture.frames[0];
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: api.status().runId,
+    skipped: false }, frame.contentWindow);
+  assert.equal(api.status().phase, 'complete');
+  assert.equal(api.status().completion.cause, 'natural');
+  assert.equal(fixture.gatePhase(), 'released');
+  assert.equal(frame.removed, true);
+  assert.equal(fixture.calls.launches, 1);
+  api.dispose();
+});
+
+test('DSH payload failure and controller disposal release only the owned gate and frame', () => {
+  const broken = dshFixture({ gate: true });
+  const throws = () => { throw new Error('synthetic payload failure'); };
+  assert.equal(installStartup(throws, broken.host, broken.pageAdapter, 'dsh-gated').installed, true);
+  assert.equal(broken.host.__azhouStartup.status().phase, 'failed');
+  assert.equal(broken.gatePhase(), 'expired');
+  assert.equal(broken.frames[0].removed, true, 'startup failure removes its own animation iframe');
+  assert.equal(broken.calls.releases, 1);
+  broken.host.__azhouStartup.dispose();
+
+  const closed = dshFixture({ gate: true });
+  installStartup(closed.payload, closed.host, closed.pageAdapter, 'dsh-gated');
+  const frame = closed.frames[0];
+  assert.equal(closed.gatePhase(), 'claimed');
+  closed.host.__azhouStartup.dispose();
+  assert.equal(closed.gatePhase(), 'expired');
+  assert.equal(frame.removed, true, 'close removes the owned animation iframe');
+  assert.equal(closed.calls.launches, 0);
+});
+
+test('DSH renderer watchdog expires a never-ready frame and releases its early cover', () => {
+  const fixture = dshFixture({ gate: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const watchdog = fixture.timers.find(timer => !timer.cleared && timer.delay === 25_000);
+  assert.ok(watchdog);
+  watchdog.callback();
+  assert.equal(fixture.host.__azhouStartup.status().phase, 'timeout');
+  assert.equal(fixture.gatePhase(), 'expired');
+  assert.equal(fixture.frames[0].removed, true, 'never-ready animation iframe is removed at its own watchdog');
+  assert.equal(fixture.calls.launches, 0);
+  fixture.host.__azhouStartup.dispose();
+});
+
+test('DSH client without body cannot claim and the early cover remains watchdog-owned', () => {
+  const fixture = dshFixture({ body: false, gate: true });
+  assert.deepEqual(installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated'),
+    { installed: false, alreadyActive: false, reason: 'page-unsupported' });
+  assert.equal(fixture.calls.claims, 0);
+  assert.equal(fixture.frames.length, 0);
+  assert.equal(fixture.gate.status(), 'waiting');
+  fixture.gate.release();
+  assert.equal(fixture.gate.status(), 'expired', 'the bridge watchdog can reveal an unclaimed page');
+});
 
 test('hidden navigation falls back to a visible left entry and scroll repositions it', () => {
   const fixture = controlledHost();
@@ -1104,6 +1765,27 @@ test('install does not replace an existing controller or an unknown owner', () =
   });
   assert.equal(unknown.host.__azhouStartup, existing);
   assert.equal(unknown.frames.length, 0);
+});
+
+test('snapshot support stays additive to same-owner controllers from the prior API surface', () => {
+  const prior = controlledHost();
+  const oldAPI = Object.freeze({ owner: 'azhou-codex-startup', version: 1,
+    status() { return { phase: 'complete' }; }, openSettings() {}, dispose() {} });
+  Object.defineProperty(prior.host, '__azhouStartup', { value: oldAPI, configurable: true });
+  assert.deepEqual(installStartup(function () {}, prior.host, pageAdapter), {
+    installed: true, alreadyActive: true,
+  }, 'a same-owner/version controller remains recognized even without the new optional export methods');
+  assert.equal(typeof prior.host.__azhouStartup.beginSettingsSnapshot, 'undefined');
+  assert.equal(prior.frames.length, 0, 'the compatibility check does not install over the older live controller');
+
+  const foreign = controlledHost();
+  Object.defineProperty(foreign.host, '__azhouStartup', {
+    value: Object.freeze({ ...oldAPI, owner: 'foreign-startup' }), configurable: true,
+  });
+  assert.deepEqual(installStartup(function () {}, foreign.host, pageAdapter), {
+    installed: false, alreadyActive: false, reason: 'owner-conflict',
+  }, 'an unrelated owner still cannot adopt the controller global');
+  assert.equal(foreign.frames.length, 0);
 });
 
 test('dispose is idempotent and removes only its owned frame and listener', () => {
@@ -2038,8 +2720,10 @@ test('mountSettings joins the controller api additively and stays inert without 
   const controlled = controlledHost();
   installStartup(function () {}, controlled.host, pageAdapter);
   const api = controlled.host.__azhouStartup;
-  assert.deepEqual(Object.keys(api), ['owner', 'version', 'install', 'status', 'openSettings', 'mountSettings',
-    'retryWallpaper', 'dispose'], 'mountSettings is additive; the existing startup keys are untouched');
+  assert.deepEqual(Object.keys(api), ['owner', 'version', 'install', 'status',
+    'beginSettingsSnapshot', 'prepareWorkspace', 'cancelWorkspace', 'readSettingsSnapshotChunk', 'disposeSettingsSnapshot',
+    'openSettings', 'mountSettings', 'retryWallpaper', 'dispose'],
+  'controller APIs are additive and remain grouped on the single owner');
   const target = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
   assert.equal(api.mountSettings(target), null,
     'adapters without wallpaper ports keep the overlay as their only settings UX');
@@ -2210,4 +2894,617 @@ test('disposing the controller tears down live settings embeds and late frame ha
   await Promise.resolve();
   assert.equal(handleDisposed, 1, 'a handle resolving after disposal is still disposed, once');
   assert.equal(api.mountSettings(target), null, 'a disposed controller never mounts new embeds');
+});
+
+function snapshotSettings(overrides = {}) {
+  return Object.freeze({
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AA==',
+    artwork: 'data:image/png;base64,AA==',
+    contours: Object.freeze([Object.freeze([Object.freeze([0, 0]), Object.freeze([2, 2])])]),
+    introTitle: '阿舟 AI 实验室',
+    introCaption: 'AZHOU / AI LAB',
+    artworkSubtitle: '和阿舟一起做出来。',
+    wallpaperStrength: 42,
+    ...overrides,
+  });
+}
+
+function snapshotResult(status = 'valid', settings = snapshotSettings(), explicitText = {
+  introTitle: true, introCaption: true, artworkSubtitle: true,
+}) {
+  return Object.freeze({
+    status,
+    settings,
+    explicitText: Object.freeze(explicitText),
+    baseline: 'must-never-cross-the-controller-boundary',
+  });
+}
+
+function snapshotFixture(snapshotSource, { playbackOwner = 'page', observeAppearance, wallpaperApply, existingWallpaper } = {}) {
+  const controlled = controlledHost();
+  if (existingWallpaper) controlled.host.__azhouWallpaper = existingWallpaper;
+  controlled.host.crypto = webcrypto;
+  const indexedDB = { marker: 'host-settings-database' };
+  controlled.host.indexedDB = indexedDB;
+  const settingsNamespace = Object.freeze({ databaseName: 'test', databaseVersion: 1,
+    storeName: 'settings', settingsKey: 'images' });
+  const assets = Object.freeze({
+    avatar: 'data:image/png;base64,AA==',
+    artwork: 'data:image/png;base64,AA==',
+    contours: Object.freeze([Object.freeze([Object.freeze([0, 0]), Object.freeze([2, 2])])]),
+    wallpaperStrength: 42,
+    themeConfig: Object.freeze({}),
+  });
+  const factoryInputs = [];
+  const loadDefaults = [];
+  const frameSpecs = [];
+  let loadCalls = 0;
+  let disposeCalls = 0;
+  const payload = function (...args) { if (args[14]) frameSpecs.push(args[14]); };
+  Object.defineProperties(payload, {
+    assets: { value: assets },
+    ...(wallpaperApply ? { applyWallpaper: { value: (value, current) => wallpaperApply(value, current, controlled.host) } } : {}),
+    createLocalization: { value: () => ({ t: key => key, subscribe: () => () => {} }) },
+    createImageSettings: { value: input => {
+      factoryInputs.push(input);
+      return {
+        loadSnapshot(defaults) {
+          loadCalls += 1;
+          loadDefaults.push(defaults);
+          return typeof snapshotSource === 'function' ? snapshotSource(defaults) : snapshotSource;
+        },
+        dispose() { disposeCalls += 1; },
+      };
+    } },
+  });
+  const adapter = Object.freeze({ ...pageAdapter,
+    ...(observeAppearance ? { observeAppearance } : {}),
+    settingsEnvironment: source => ({ indexedDB: source.indexedDB, settingsNamespace }),
+  });
+  assert.equal(installStartup(payload, controlled.host, adapter, playbackOwner).installed, true);
+  return {
+    ...controlled,
+    api: controlled.host.__azhouStartup,
+    assets,
+    indexedDB,
+    settingsNamespace,
+    factoryInputs,
+    loadDefaults,
+    payload,
+    adapter,
+    frameSpecs,
+    loadCalls: () => loadCalls,
+    disposeCalls: () => disposeCalls,
+  };
+}
+
+function snapshotRequest(api, runNonce = 'native-run-01') {
+  return { owner: api.owner, runId: api.status().runId, runNonce };
+}
+
+function snapshotChunkRequest(request, descriptor, index, offset) {
+  return { ...request, snapshotID: descriptor.snapshotID, index, offset };
+}
+
+test('native-owned startup prepares a stable controller without page playback and exports one snapshot', async () => {
+  const settings = snapshotSettings();
+  const result = snapshotResult('valid', settings);
+  const fixture = snapshotFixture(result, { playbackOwner: 'native' });
+  const { api } = fixture;
+  const prepared = api.status();
+  assert.equal(prepared.playbackOwner, 'native');
+  assert.equal(prepared.phase, 'prepared');
+  assert.equal(prepared.prepared, true);
+  assert.equal(prepared.runId > 0, true);
+  assert.equal(prepared.ready, false, 'page ready stays false because no page player ran');
+  assert.equal(prepared.completed, false);
+  assert.equal(prepared.overlay, false);
+  assert.equal(prepared.wallpaperDisposition, 'pending');
+  assert.equal(prepared.wallpaper.applied, false, 'controller installation alone never claims wallpaper applied');
+  assert.equal(fixture.frames.length, 0, 'preparation mounts no iframe');
+  assert.equal(fixture.listenerCount(), 0, 'no page playback message bridge is installed');
+  assert.equal(appearanceButton(fixture).disabled, false, 'the existing manual settings entry remains available');
+
+  assert.deepEqual(installStartup(fixture.payload, fixture.host, fixture.adapter, 'native'), {
+    installed: true, alreadyActive: true,
+  }, 'repeated installation keeps the existing prepared controller');
+  assert.equal(api.status().runId, prepared.runId, 'the prepared run identity is stable');
+
+  const request = snapshotRequest(api, 'native-prepared-run');
+  const descriptor = await api.beginSettingsSnapshot(request);
+  assert.equal(descriptor.ok, true);
+  assert.equal(descriptor.runId, prepared.runId);
+  const chunk = api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0));
+  assert.equal(chunk.ok, true);
+  const bytes = Buffer.from(chunk.dataBase64, 'base64');
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), descriptor.sha256);
+  const snapshot = JSON.parse(bytes.toString('utf8'));
+  assert.equal(snapshot.status, 'valid');
+  assert.deepEqual(snapshot.settings, settings);
+  assert.equal(api.status().wallpaperDisposition, 'pending',
+    'a settings snapshot does not claim the host wallpaper was applied');
+
+  appearanceButton(fixture).click();
+  assert.equal(fixture.frames.length, 1, 'manual settings continues to use its owned frame');
+  assert.equal(fixture.frameSpecs[0].intent, 'settings', 'manual settings does not begin automatic playback');
+  assert.equal(api.status().overlay, true, 'only the explicit settings action covers the host page');
+  api.dispose();
+  assert.equal(fixture.frames[0].removed, true, 'controller disposal releases the manual settings frame');
+  assert.equal(fixture.pageHideListenerCount(), 0);
+  assert.equal(fixture.pageShowListenerCount(), 0);
+});
+
+test('native-owned preparation fails closed and cleans listeners when the entry cannot mount', () => {
+  const noBody = controlledHost({ body: false });
+  const failedBody = installStartup(function () {}, noBody.host, pageAdapter, 'native');
+  assert.equal(failedBody.installed, false);
+  assert.equal(Object.hasOwn(noBody.host, '__azhouStartup'), false);
+  assert.equal(noBody.frames.length, 0);
+  assert.equal(noBody.listenerCount(), 0);
+  assert.equal(noBody.pageHideListenerCount(), 0);
+  assert.equal(noBody.pageShowListenerCount(), 0);
+
+  const mountFailure = controlledHost();
+  const brokenAdapter = { ...pageAdapter, mountEntry() { throw new Error('entry unavailable'); } };
+  const failedEntry = installStartup(function () {}, mountFailure.host, brokenAdapter, 'native');
+  assert.equal(failedEntry.installed, false);
+  assert.equal(Object.hasOwn(mountFailure.host, '__azhouStartup'), false);
+  assert.equal(mountFailure.frames.length, 0);
+  assert.equal(mountFailure.listenerCount(), 0);
+  assert.equal(mountFailure.pageHideListenerCount(), 0);
+  assert.equal(mountFailure.pageShowListenerCount(), 0);
+});
+
+test('snapshot appearance is captured once from the bound host page and covered by the content digest', async () => {
+  let completeRead;
+  let currentAppearance = { locale: 'zh-CN', theme: 'dark' };
+  const fixture = snapshotFixture(() => new Promise(resolve => { completeRead = resolve; }), {
+    playbackOwner: 'native', observeAppearance: () => currentAppearance,
+  });
+  const request = snapshotRequest(fixture.api);
+  const pending = fixture.api.beginSettingsSnapshot(request);
+  currentAppearance = { locale: 'en', theme: 'light' };
+  completeRead(snapshotResult());
+  const descriptor = await pending;
+  const chunk = fixture.api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0));
+  const bytes = Buffer.from(chunk.dataBase64, 'base64');
+  assert.deepEqual(JSON.parse(bytes.toString('utf8')).appearance, { locale: 'zh-CN', theme: 'dark' });
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), descriptor.sha256);
+  fixture.api.dispose();
+});
+
+test('invalid host snapshot appearance fails without substituting local preferences', async () => {
+  for (const appearance of [{ locale: 'fr', theme: 'light' }, { locale: 'en', theme: 'auto' }]) {
+    const fixture = snapshotFixture(snapshotResult(), { observeAppearance: () => appearance });
+    const result = await fixture.api.beginSettingsSnapshot(snapshotRequest(fixture.api));
+    assert.deepEqual(result, { ok: false, reason: 'snapshot-invalid' });
+    assert.equal(fixture.loadCalls(), 0);
+    fixture.api.dispose();
+  }
+});
+
+test('missing settings export uses one host factory and survives natural frame teardown', async () => {
+  let finishRead;
+  const result = snapshotResult('missing', snapshotSettings(), {
+    introTitle: false, introCaption: false, artworkSubtitle: false,
+  });
+  const fixture = snapshotFixture(() => new Promise(resolve => { finishRead = resolve; }));
+  const { api } = fixture;
+  const request = snapshotRequest(api);
+  const pending = api.beginSettingsSnapshot(request);
+  const repeated = api.beginSettingsSnapshot(request);
+  assert.equal(fixture.loadCalls(), 1, 'a repeated begin for the same run returns the same single load');
+  assert.equal(fixture.factoryInputs.length, 1, 'the snapshot uses a separate host-side settings factory');
+  assert.equal(fixture.factoryInputs[0].indexedDB, fixture.indexedDB);
+  assert.equal(fixture.factoryInputs[0].document, fixture.host.document);
+  assert.equal(fixture.factoryInputs[0].settingsNamespace, fixture.settingsNamespace);
+
+  fixture.host.send({ type: 'azhou-startup', action: 'complete', runId: request.runId, skipped: true },
+    fixture.frames[0].contentWindow);
+  assert.equal(api.status().phase, 'complete');
+  finishRead(result);
+  const descriptor = await pending;
+  assert.deepEqual(await repeated, descriptor);
+  assert.equal(descriptor.status, 'missing', 'confirmed absence stays distinct from read failure');
+  assert.equal(descriptor.digestAlgorithm, 'sha-256');
+  assert.equal(descriptor.chunkSize, 64 * 1024);
+  assert.equal(descriptor.chunkCount, 1);
+  assert.equal(fixture.loadDefaults[0], fixture.assets, 'the loader receives the packaged defaults once');
+  assert.equal(fixture.disposeCalls(), 1, 'the independent settings API is disposed after the read');
+
+  const chunk = api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0));
+  const bytes = Buffer.from(chunk.dataBase64, 'base64');
+  assert.equal(chunk.ok, true);
+  assert.equal(chunk.status, 'missing');
+  assert.equal(chunk.offset, 0);
+  assert.equal(chunk.totalBytes, descriptor.byteLength);
+  assert.equal(chunk.dataBase64.length, 4 * Math.ceil(chunk.byteLength / 3));
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), descriptor.sha256);
+  const parsed = JSON.parse(bytes.toString('utf8'));
+  assert.equal(parsed.status, 'missing');
+  assert.equal(Object.hasOwn(parsed, 'baseline'), false, 'the raw loader baseline is never serialized');
+  assert.equal(Object.hasOwn(parsed.settings, 'baseline'), false);
+  assert.equal(api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0)).reason,
+    'snapshot-not-found', 'the final chunk releases its backing bytes');
+  assert.equal(fixture.pageHideListenerCount(), 1);
+  assert.equal(fixture.pageShowListenerCount(), 1);
+  api.dispose();
+  assert.equal(fixture.pageHideListenerCount(), 0, 'controller disposal unwires pagehide');
+  assert.equal(fixture.pageShowListenerCount(), 0, 'controller disposal unwires pageshow');
+});
+
+test('failed settings reads return no defaults or chunks and cannot be retried in the same run', async () => {
+  const fixture = snapshotFixture(Object.freeze({ status: 'failure', reason: 'settings-unavailable' }));
+  const request = snapshotRequest(fixture.api);
+  const result = await fixture.api.beginSettingsSnapshot(request);
+  assert.deepEqual(result, { ok: false, reason: 'settings-unavailable' });
+  assert.equal(Object.hasOwn(result, 'dataBase64'), false);
+  assert.equal(Object.hasOwn(result, 'settings'), false);
+  assert.equal(fixture.loadCalls(), 1);
+  assert.equal(fixture.disposeCalls(), 1);
+  assert.equal((await fixture.api.beginSettingsSnapshot(request)).reason, 'snapshot-already-used');
+  fixture.api.dispose();
+});
+
+test('valid snapshot chunks honor byte boundaries, integrity, strict order and owner binding', async () => {
+  let setting = snapshotSettings({ artwork: 'data:image/png;base64,' + 'A'.repeat(64 * 1024 + 80) });
+  let snapshot = snapshotResult('valid', setting);
+  let expected = Buffer.from(JSON.stringify({ status: 'valid', settings: setting,
+    explicitText: snapshot.explicitText, appearance: { locale: 'zh-CN', theme: 'light' } }), 'utf8');
+  while ((expected.length - 64 * 1024) % 3 === 0) {
+    setting = snapshotSettings({ artwork: setting.artwork + 'A' });
+    snapshot = snapshotResult('valid', setting);
+    expected = Buffer.from(JSON.stringify({ status: 'valid', settings: setting,
+      explicitText: snapshot.explicitText, appearance: { locale: 'zh-CN', theme: 'light' } }), 'utf8');
+  }
+  const fixture = snapshotFixture(snapshot);
+  const { api } = fixture;
+  const request = snapshotRequest(api, 'native-run-boundary');
+  const wrongOwner = await api.beginSettingsSnapshot({ ...request, owner: 'foreign-owner' });
+  assert.deepEqual(wrongOwner, { ok: false, reason: 'snapshot-request-invalid' });
+  assert.equal(fixture.loadCalls(), 0, 'owner mismatch is refused before reading settings');
+  const descriptor = await api.beginSettingsSnapshot(request);
+  assert.equal(descriptor.byteLength, expected.length);
+  assert.equal(descriptor.chunkCount, 2);
+  assert.equal(descriptor.byteLength <= 24 * 1024 * 1024 + 4 * 1024, true);
+
+  const first = api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0));
+  assert.equal(first.byteLength, 64 * 1024);
+  assert.equal(first.dataBase64.length, 87_384, '64 KiB base64 expansion stays below the 2 MiB CDP cap');
+  const second = api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 1, 64 * 1024));
+  assert.equal(second.offset, 64 * 1024);
+  assert.equal(second.byteLength, expected.length - 64 * 1024);
+  const joined = Buffer.concat([Buffer.from(first.dataBase64, 'base64'), Buffer.from(second.dataBase64, 'base64')]);
+  assert.deepEqual(joined, expected);
+  const encodedByChunk = 4 * Math.ceil(first.byteLength / 3) + 4 * Math.ceil(second.byteLength / 3);
+  assert.equal(descriptor.encodedByteLength, encodedByChunk);
+  assert.ok(descriptor.encodedByteLength > 4 * Math.ceil(expected.length / 3),
+    'separate chunk padding adds bytes beyond one-shot base64 length');
+  assert.equal(createHash('sha256').update(joined).digest('hex'), descriptor.sha256);
+
+  const outOfOrder = snapshotFixture(snapshot);
+  const outRequest = snapshotRequest(outOfOrder.api, 'native-run-order');
+  const outDescriptor = await outOfOrder.api.beginSettingsSnapshot(outRequest);
+  assert.deepEqual(outOfOrder.api.readSettingsSnapshotChunk(
+    snapshotChunkRequest(outRequest, outDescriptor, 1, 64 * 1024)),
+  { ok: false, reason: 'snapshot-order-invalid' });
+  assert.equal(outOfOrder.api.readSettingsSnapshotChunk(
+    snapshotChunkRequest(outRequest, outDescriptor, 0, 0)).reason, 'snapshot-not-found',
+  'a sequence error erases the active export');
+  api.dispose();
+  outOfOrder.api.dispose();
+});
+
+test('legal-size normalized settings plus envelope exceed 20 MiB and remain exportable', async () => {
+  const MiB = 1024 * 1024;
+  const prefix = 'data:image/png;base64,';
+  const point = index => [index % 2 ? 1.234567890123456 : 2.345678901234567, 1023.1234567890123];
+  const settings = snapshotSettings({
+    avatar: prefix + 'A'.repeat(2 * MiB - prefix.length),
+    artwork: prefix + 'A'.repeat(12 * MiB - prefix.length),
+    contours: [Array.from({ length: 161_310 }, (_, index) => point(index))],
+    artworkSubtitle: '舟'.repeat(60),
+  });
+  const snapshot = snapshotResult('valid', settings);
+  const normalizedBytes = Buffer.byteLength(JSON.stringify(settings), 'utf8');
+  const expectedBytes = Buffer.byteLength(JSON.stringify({ status: 'valid', settings,
+    explicitText: snapshot.explicitText, appearance: { locale: 'zh-CN', theme: 'light' } }), 'utf8');
+  assert.equal(normalizedBytes <= 20 * MiB, true, 'the normalized record stays within the existing loader cap');
+  assert.equal(expectedBytes > 20 * MiB, true, 'JSON status and text envelope must fit beyond the raw record cap');
+
+  const fixture = snapshotFixture(snapshot);
+  const request = snapshotRequest(fixture.api, 'native-run-large');
+  const descriptor = await fixture.api.beginSettingsSnapshot(request);
+  assert.equal(descriptor.byteLength, expectedBytes);
+  assert.equal(descriptor.byteLength <= 24 * MiB + 4 * 1024, true,
+    'the raw transfer cap includes the bundle-bounded default subset plus its envelope');
+  let chunkEncodedBytes = 0;
+  for (let offset = 0; offset < expectedBytes; offset += 64 * 1024) {
+    chunkEncodedBytes += 4 * Math.ceil(Math.min(64 * 1024, expectedBytes - offset) / 3);
+  }
+  assert.equal(descriptor.encodedByteLength, chunkEncodedBytes,
+    'base64 total sums the separately padded chunks, not a hypothetical one-shot stream');
+  assert.equal(descriptor.chunkCount, Math.ceil(expectedBytes / (64 * 1024)));
+  assert.equal(fixture.api.disposeSettingsSnapshot({ ...request, snapshotID: descriptor.snapshotID }).disposed, true);
+  assert.equal(fixture.api.readSettingsSnapshotChunk(
+    snapshotChunkRequest(request, descriptor, 0, 0)).reason, 'snapshot-not-found');
+  assert.equal(fixture.disposeCalls(), 1);
+  fixture.api.dispose();
+});
+
+test('pagehide and run replacement erase pending snapshots and reject late callbacks', async () => {
+  let finishRead;
+  const fixture = snapshotFixture(() => new Promise(resolve => { finishRead = resolve; }));
+  const { api } = fixture;
+  const request = snapshotRequest(api, 'native-run-cancel');
+  const pending = api.beginSettingsSnapshot(request);
+  fixture.host.pagehide();
+  assert.equal(fixture.disposeCalls(), 1, 'pagehide disposes the active host-side settings factory');
+  finishRead(snapshotResult('valid', snapshotSettings({ artwork: 'data:image/png;base64,SECRET' })));
+  const late = await pending;
+  assert.deepEqual(late, { ok: false, reason: 'snapshot-cancelled' });
+  assert.equal(JSON.stringify(late).includes('SECRET'), false);
+  assert.equal(api.readSettingsSnapshotChunk({ ...request, snapshotID: `${request.runId}:${request.runNonce}`,
+    index: 0, offset: 0 }).reason, 'snapshot-not-found');
+  fixture.host.pageshow();
+
+  const nextRun = snapshotFixture(snapshotResult('valid'));
+  const nextApi = nextRun.api;
+  const nextRequest = snapshotRequest(nextApi, 'native-run-replace');
+  nextRun.host.send({ type: 'azhou-startup', action: 'complete', runId: nextRequest.runId, skipped: true },
+    nextRun.frames[0].contentWindow);
+  const descriptor = await nextApi.beginSettingsSnapshot(nextRequest);
+  assert.equal(nextApi.openSettings(), true, 'opening a replacement run releases the export');
+  assert.equal(nextRun.disposeCalls(), 1);
+  assert.equal(nextApi.readSettingsSnapshotChunk(
+    snapshotChunkRequest(nextRequest, descriptor, 0, 0)).reason, 'snapshot-not-found');
+  const replacementRequest = snapshotRequest(nextApi, 'native-run-dispose');
+  const replacementDescriptor = await nextApi.beginSettingsSnapshot(replacementRequest);
+  nextApi.dispose();
+  assert.equal(nextApi.readSettingsSnapshotChunk(
+    snapshotChunkRequest(replacementRequest, replacementDescriptor, 0, 0)).reason, 'snapshot-not-found',
+  'controller disposal erases an active byte buffer');
+  nextApi.dispose();
+  api.dispose();
+});
+
+test('snapshot timeout clears digest input and ignores an uncancellable late digest', async () => {
+  const fixture = snapshotFixture(snapshotResult('valid'));
+  let finishDigest;
+  let digestInput;
+  let markDigestStarted;
+  const digestStarted = new Promise(resolve => { markDigestStarted = resolve; });
+  fixture.host.crypto = { subtle: { digest(_algorithm, bytes) {
+    digestInput = bytes;
+    markDigestStarted();
+    return new Promise(resolve => { finishDigest = resolve; });
+  } } };
+  const { api } = fixture;
+  const request = snapshotRequest(api, 'native-run-digest-timeout');
+  const pending = api.beginSettingsSnapshot(request);
+  await digestStarted;
+  assert.ok(digestInput.some(byte => byte !== 0), 'the digest receives the serialized settings bytes');
+  const timer = fixture.timers.find(candidate => candidate.delay === 30_000 && !candidate.cleared);
+  assert.ok(timer, 'the export has its own retention deadline after the page animation completes');
+  timer.callback();
+  assert.deepEqual(await pending, { ok: false, reason: 'snapshot-timeout' },
+    'the caller is released even while WebCrypto is still pending');
+  assert.ok(digestInput.every(byte => byte === 0), 'the controller-owned digest input is cleared immediately');
+  assert.equal(api.readSettingsSnapshotChunk({ ...request, snapshotID: `${request.runId}:${request.runNonce}`,
+    index: 0, offset: 0 }).reason, 'snapshot-not-found');
+
+  finishDigest(new Uint8Array(32).buffer);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(api.readSettingsSnapshotChunk({ ...request, snapshotID: `${request.runId}:${request.runNonce}`,
+    index: 0, offset: 0 }).reason, 'snapshot-not-found', 'a late digest cannot recreate the export');
+  api.dispose();
+});
+
+test('chunk reads wait for atomic descriptor commit while the digest is pending', async () => {
+  const snapshot = snapshotResult('valid');
+  const fixture = snapshotFixture(snapshot);
+  let finishDigest;
+  let digestInput;
+  let markDigestStarted;
+  const digestStarted = new Promise(resolve => { markDigestStarted = resolve; });
+  fixture.host.crypto = { subtle: { digest(_algorithm, bytes) {
+    digestInput = bytes;
+    markDigestStarted();
+    return new Promise(resolve => { finishDigest = resolve; });
+  } } };
+  const { api } = fixture;
+  const request = snapshotRequest(api, 'native-run-digest-gate');
+  const pending = api.beginSettingsSnapshot(request);
+  await digestStarted;
+
+  const snapshotID = `${request.runId}:${request.runNonce}`;
+  const early = api.readSettingsSnapshotChunk({ ...request, snapshotID, index: 0, offset: 0 });
+  assert.deepEqual(early, { ok: false, reason: 'snapshot-not-ready' },
+    'knowing the predicted handle cannot read bytes or consume sequence before digest completion');
+
+  const serialized = Buffer.from(digestInput);
+  const digestBuffer = createHash('sha256').update(serialized).digest();
+  const digestResult = digestBuffer.buffer.slice(digestBuffer.byteOffset,
+    digestBuffer.byteOffset + digestBuffer.byteLength);
+  finishDigest(digestResult);
+  const descriptor = await pending;
+  assert.equal(descriptor.sha256, digestBuffer.toString('hex'));
+  assert.equal(descriptor.snapshotID, snapshotID);
+
+  const chunk = api.readSettingsSnapshotChunk({ ...request, snapshotID, index: 0, offset: 0 });
+  assert.equal(chunk.ok, true, 'the first read succeeds after descriptor commit');
+  assert.deepEqual(Buffer.from(chunk.dataBase64, 'base64'), serialized);
+  assert.equal(chunk.sha256, descriptor.sha256);
+  api.dispose();
+});
+
+test('an unread descriptor expires and releases its retained chunk buffer', async () => {
+  const fixture = snapshotFixture(snapshotResult('valid'));
+  const { api } = fixture;
+  const request = snapshotRequest(api, 'native-run-transfer-timeout');
+  const descriptor = await api.beginSettingsSnapshot(request);
+  assert.equal(descriptor.ok, true);
+  const timer = fixture.timers.find(candidate => candidate.delay === 30_000 && !candidate.cleared);
+  assert.ok(timer);
+  timer.callback();
+  assert.equal(timer.cleared, true);
+  assert.equal(api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0)).reason,
+    'snapshot-not-found', 'an abandoned transfer cannot retain bytes indefinitely');
+  api.dispose();
+});
+
+
+test('native workspace preparation is explicit, bounded, and separate from page readiness', async () => {
+  const fixture = snapshotFixture(snapshotResult('valid', { ...snapshotSettings(), wallpaperStrength: 0 }),
+    { playbackOwner: 'native' });
+  const request = { ...snapshotRequest(fixture.api), expiresAt: 7000 };
+  assert.equal(fixture.loadCalls(), 0);
+  assert.deepEqual(fixture.api.prepareWorkspace(request), { ok: true, accepted: true });
+  assert.deepEqual(fixture.api.prepareWorkspace(request), { ok: true, accepted: true });
+  assert.equal(fixture.api.prepareWorkspace({ ...request, runNonce: 'another-run' }).ok, false);
+  await new Promise(resolve => setImmediate(resolve));
+  const status = fixture.api.status();
+  assert.equal(status.wallpaperDisposition, 'disabled');
+  assert.equal(status.ready, false);
+  assert.equal(status.completed, false);
+  assert.equal(status.phase, 'prepared');
+  assert.equal(fixture.loadCalls(), 1, 'duplicate requests cannot re-read or apply');
+  assert.equal(fixture.frames.length, 0);
+  const descriptor = await fixture.api.beginSettingsSnapshot(request);
+  assert.equal(descriptor.ok, true, 'independent read-only export remains available');
+  assert.equal(fixture.loadCalls(), 2, 'wallpaper and playback report separate effective reads');
+  fixture.api.dispose();
+});
+
+test('native wallpaper storage failure and missing apply capability report degradation without playing', async () => {
+  for (const result of [{ status: 'failure', reason: 'read-failed' }, snapshotResult()]) {
+    const fixture = snapshotFixture(result, { playbackOwner: 'native' });
+    fixture.api.prepareWorkspace({ ...snapshotRequest(fixture.api), expiresAt: 7000 });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(fixture.api.status().wallpaperDisposition, 'degraded');
+    assert.equal(fixture.api.status().ready, false);
+    assert.equal(fixture.frames.length, 0);
+    fixture.api.dispose();
+  }
+  const page = snapshotFixture(snapshotResult());
+  assert.equal(page.api.prepareWorkspace({ ...snapshotRequest(page.api), expiresAt: 7000 }).ok, false,
+    'legacy page playback cannot opt into native preparation');
+  page.api.dispose();
+});
+
+test('native workspace watchdog and disposal reject late settings without a wallpaper write', async () => {
+  let resolve;
+  const fixture = snapshotFixture(() => new Promise(done => { resolve = done; }), { playbackOwner: 'native' });
+  fixture.api.prepareWorkspace({ ...snapshotRequest(fixture.api), expiresAt: 7000 });
+  await Promise.resolve();
+  const timer = fixture.timers.find(timer => !timer.cleared);
+  assert.ok(timer);
+  timer.callback();
+  assert.equal(fixture.api.status().wallpaperDisposition, 'degraded');
+  resolve(snapshotResult('valid', { ...snapshotSettings(), wallpaperStrength: 0 }));
+  await new Promise(done => setImmediate(done));
+  assert.equal(fixture.api.status().wallpaperDisposition, 'degraded', 'late load cannot replace timeout');
+  fixture.api.dispose();
+});
+
+
+test('native preparation invokes the existing wallpaper engine with effective host settings', async () => {
+  const settings = snapshotSettings();
+  const calls = [];
+  const fixture = snapshotFixture(snapshotResult('valid', settings), { playbackOwner: 'native',
+    wallpaperApply: async (value, current, host) => {
+      assert.equal(current(), true);
+      calls.push(value);
+      host.__azhouWallpaper = {
+        owner: 'azhou.codex-startup-animation', version: '0.9.0',
+        status: () => ({ applied: true, imageDecoded: true, reason: '' }),
+        updateSurface() { return true; }, dispose() {},
+      };
+      return { applied: true };
+    } });
+  fixture.api.prepareWorkspace({ ...snapshotRequest(fixture.api), expiresAt: 7000 });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].image, settings.artwork);
+  assert.equal(calls[0].strength, settings.wallpaperStrength);
+  assert.equal(fixture.api.status().wallpaperDisposition, 'applied');
+  assert.equal(fixture.frames.length, 0);
+  assert.equal(fixture.api.status().ready, false);
+  fixture.api.dispose();
+});
+
+
+test('prepared status ignores prior applied wallpaper until this run reads and applies its own settings', async () => {
+  let resolve;
+  let oldDisposed = 0;
+  const existingWallpaper = {
+    owner: 'azhou.codex-startup-animation', version: '0.9.0',
+    status: () => ({ applied: true, imageDecoded: true, reason: '' }),
+    updateSurface() { return true; }, dispose() { oldDisposed += 1; },
+  };
+  const fixture = snapshotFixture(() => new Promise(done => { resolve = done; }),
+    { playbackOwner: 'native', existingWallpaper });
+  assert.equal(fixture.api.status().wallpaperDisposition, 'pending');
+  const request = { ...snapshotRequest(fixture.api), expiresAt: 6000 };
+  fixture.api.prepareWorkspace(request);
+  await Promise.resolve();
+  const pending = fixture.api.status();
+  assert.equal(pending.wallpaperDisposition, 'pending');
+  assert.equal(pending.wallpaper.applied, false);
+  assert.deepEqual(pending.workspace, { runId: request.runId, runNonce: request.runNonce, phase: 'pending' });
+  resolve(snapshotResult('valid', { ...snapshotSettings(), wallpaperStrength: 0 }));
+  await new Promise(done => setImmediate(done));
+  assert.equal(fixture.api.status().wallpaperDisposition, 'disabled');
+  assert.equal(fixture.api.status().workspace.phase, 'complete');
+  assert.equal(oldDisposed, 1, 'new disabled settings dispose the bound prior wallpaper');
+  fixture.api.dispose();
+});
+
+test('cancelWorkspace is nonce-bound and rejects late async reads without applying wallpaper', async () => {
+  let resolve;
+  let applies = 0;
+  const fixture = snapshotFixture(() => new Promise(done => { resolve = done; }), {
+    playbackOwner: 'native', wallpaperApply: async () => { applies += 1; return { applied: true }; },
+  });
+  const request = { ...snapshotRequest(fixture.api), expiresAt: 6000 };
+  fixture.api.prepareWorkspace(request);
+  await Promise.resolve();
+  assert.equal(fixture.api.cancelWorkspace({ ...request, runNonce: 'wrong-run' }).ok, false);
+  assert.equal(fixture.api.status().workspace.phase, 'pending');
+  assert.deepEqual(fixture.api.cancelWorkspace(request), { ok: true, cancelled: true });
+  resolve(snapshotResult());
+  await new Promise(done => setImmediate(done));
+  assert.equal(applies, 0);
+  assert.equal(fixture.api.status().workspace.phase, 'cancelled');
+  fixture.api.dispose();
+});
+
+test('page monotonic lease blocks delayed settings and apply even when watchdog has not fired', async () => {
+  for (const stage of ['load', 'apply']) {
+    let now = 1000;
+    let resolve;
+    let current;
+    let commits = 0;
+    const fixture = snapshotFixture(stage === 'load' ? () => new Promise(done => { resolve = done; }) : snapshotResult(), {
+      playbackOwner: 'native', wallpaperApply: async (_value, isCurrent) => {
+        current = isCurrent;
+        await new Promise(done => { resolve = done; });
+        if (isCurrent()) commits += 1;
+        return { applied: true };
+      },
+    });
+    fixture.host.performance = { now: () => now };
+    fixture.api.prepareWorkspace({ ...snapshotRequest(fixture.api), expiresAt: 1050 });
+    await new Promise(done => setImmediate(done));
+    const timer = fixture.timers.find(timer => !timer.cleared);
+    assert.equal(timer.delay, 50, 'native remaining lease shortens the independent page watchdog');
+    now = 1051;
+    if (current) assert.equal(current(), false, 'apply commit predicate checks lease directly');
+    resolve(snapshotResult());
+    await new Promise(done => setImmediate(done));
+    assert.equal(commits, 0);
+    assert.notEqual(fixture.api.status().wallpaperDisposition, 'applied');
+    fixture.api.dispose();
+  }
 });

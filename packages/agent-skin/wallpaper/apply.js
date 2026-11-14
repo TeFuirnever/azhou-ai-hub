@@ -41,8 +41,9 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
       ? 'ready' : null;
   }
 
-  function waitForWallpaperShell(isCurrent, binding) {
+  function waitForWallpaperShell(isCurrent, binding, signal) {
     const document = host.document;
+    if (signal?.aborted) return Promise.resolve('cancelled');
     const initial = wallpaperShellState(isCurrent, binding);
     if (initial) return Promise.resolve(initial);
     const Observer = host.MutationObserver;
@@ -51,12 +52,14 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
     return new Promise(resolve => {
       let observer;
       let timer;
+      let onAbort;
       let settled = false;
       const finish = state => {
         if (settled) return;
         settled = true;
         observer?.disconnect();
         if (timer !== undefined) host.clearTimeout(timer);
+        if (onAbort) signal.removeEventListener('abort', onAbort);
         resolve(state);
       };
       const check = () => {
@@ -64,6 +67,18 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         if (state) finish(state);
       };
       try {
+        if (signal) {
+          if (typeof signal.addEventListener !== 'function' || typeof signal.removeEventListener !== 'function') {
+            finish('unsupported');
+            return;
+          }
+          onAbort = () => finish('cancelled');
+          signal.addEventListener('abort', onAbort, { once: true });
+          if (signal.aborted) {
+            finish('cancelled');
+            return;
+          }
+        }
         observer = new Observer(check);
         observer.observe(document.documentElement, {
           childList: true, subtree: true, attributes: true,
@@ -74,30 +89,40 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         finish('unsupported');
         return;
       }
-      // Cold hosts can mount the workspace after the startup animation. Keep
-      // this wait bounded without extending or replaying the animation.
+      if (settled) return;
+      if (signal?.aborted) {
+        finish('cancelled');
+        return;
+      }
+      // Cold hosts can mount the workspace after startup. The startup owner can
+      // cancel this wait when a newer settings action replaces the run.
       timer = host.setTimeout(() => finish(wallpaperShellState(isCurrent, binding) || 'timeout'), 60000);
       check();
     });
   }
 
-  return async function applyWallpaper(value, isCurrent) {
+  return async function applyWallpaper(value, isCurrent, signal) {
     const image = value?.image;
     if (typeof image !== 'string'
         || typeof host.crypto?.subtle?.digest !== 'function' || typeof host.atob !== 'function') {
       return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'apply-unavailable', imageDecoded: false };
     }
-    if (typeof isCurrent === 'function' && !isCurrent()) return { applied: false, reason: 'operation-cancelled' };
+    if (signal?.aborted || (typeof isCurrent === 'function' && !isCurrent())) {
+      return { applied: false, reason: 'operation-cancelled' };
+    }
     const { strength, surface } = value;
     const binding = captureAdapter();
     const encoded = image.slice(image.indexOf(',') + 1);
     const bytes = Uint8Array.from(host.atob(encoded), character => character.charCodeAt(0));
     const digest = await host.crypto.subtle.digest('SHA-256', bytes);
     const imageSHA256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
-    if (typeof isCurrent === 'function' && !isCurrent()) return { applied: false, reason: 'operation-cancelled' };
+    if (signal?.aborted || (typeof isCurrent === 'function' && !isCurrent())) {
+      return { applied: false, reason: 'operation-cancelled' };
+    }
 
-    const shellState = await waitForWallpaperShell(isCurrent, binding);
-    if (shellState === 'cancelled' || (typeof isCurrent === 'function' && !isCurrent())) {
+    const shellState = await waitForWallpaperShell(isCurrent, binding, signal);
+    if (shellState === 'cancelled' || signal?.aborted
+      || (typeof isCurrent === 'function' && !isCurrent())) {
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
     }
     const adapterMatches = adapterUnchanged(binding);

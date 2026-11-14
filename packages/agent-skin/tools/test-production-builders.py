@@ -2063,8 +2063,10 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
         verifier = load_module(TOOLS / "verify-artifacts.py", "agent_skin_dsh_inputs_verifier")
         self.assertEqual(verifier.DSH_PLUGIN_REQUIRED_INPUTS,
                          (*verifier.STARTUP_REQUIRED_INPUTS,
-                          "extension/hosts/dsh.mjs", "tools/build-dsh-plugin.py"))
+                          "extension/hosts/dsh.mjs", "extension/hosts/dsh-startup-gate.js",
+                          "tools/build-dsh-plugin.py"))
         self.assertIn("extension/hosts/dsh.mjs", verifier.INPUT_FILES)
+        self.assertIn("extension/hosts/dsh-startup-gate.js", verifier.INPUT_FILES)
         self.assertIn("tools/build-dsh-plugin.py", verifier.INPUT_FILES)
         for name in ("PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS",
                      "PRE_IMAGE_METADATA_STARTUP_REQUIRED_INPUTS",
@@ -2074,6 +2076,7 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
             frozen = getattr(verifier, name)
             with self.subTest(input_set=name):
                 self.assertNotIn("extension/hosts/dsh.mjs", frozen)
+                self.assertNotIn("extension/hosts/dsh-startup-gate.js", frozen)
                 self.assertNotIn("tools/build-dsh-plugin.py", frozen)
 
     def test_script_builder_reports_missing_or_non_self_contained_sources_and_size_limit(self):

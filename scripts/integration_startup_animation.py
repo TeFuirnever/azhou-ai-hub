@@ -37,6 +37,7 @@ _VERSIONED_FAILURE_EVENTS = frozenset({"failure", "duplicate-entry", "lock-error
 _VERSIONED_LAUNCH_EVENTS = frozenset({
     "launcher-start", "target-opened", "startup-installed", "target-activated",
     "startup-ready", "startup-skipped", "startup-interrupted", "startup-failed",
+    "startup-native-result",
     "launcher-exit", *_VERSIONED_FAILURE_EVENTS,
 })
 _VERSIONED_SMOKE_EVENTS = frozenset({
@@ -56,6 +57,7 @@ _VERSIONED_DIAGNOSTIC_EVENTS = frozenset({
     "window-close-as-skip", "window-created", "wallpaper-helper-start",
     "wallpaper-helper-complete", "wallpaper-helper-failed", "wallpaper-result",
     "wallpaper-port-unavailable",
+    "native-presentation-result",
 })
 PRIVATE_FILES = ("working.png", "scene.js", "wallpaper-scene-q-v3.png", "app-icon/source.png")
 REGISTRY_IDS = ("local.azhou.codex-startup", "local.aemeath.startup", "local.aemeath.extension")
@@ -575,6 +577,9 @@ def _versioned_events(output: str, launcher_path: str,
         for key in ("targetPID", "runId"):
             if key in item:
                 value = item[key]
+                if (key == "targetPID" and value is None and
+                        (name == "startup-native-result" or name == "launcher-exit" and "runNonce" in item)):
+                    continue
                 if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
                     errors.append(f"line {line_number}: invalid event {key}")
 
@@ -637,6 +642,10 @@ def _versioned_launch_assessment(events: list[dict[str, Any]], errors: list[str]
             or names[0] != "launcher-start" or len(exits) != 1 or names[-1] != "launcher-exit"
             or exits[0].get("exitCode") != result.get("returncode")):
         return "behavior-not-proven", not_proven
+    if "startup-native-result" in names:
+        assess_native = runpy.run_path(str(ROOT / "packages/agent-skin/tools/startup_event_verdict.py"))["assess_native_launch"]
+        native = assess_native(events, returncode, consumed[0]["launcherPath"])
+        return native["status"], native["startup"]
     failure_event = next((item for item in consumed if item.get("event") in _VERSIONED_FAILURE_EVENTS), None)
     if failure_event is not None:
         reason = failure_event.get("reason")
@@ -792,7 +801,7 @@ def assess_execution(mode: str, result: dict[str, Any], bundle: Path, *,
         events, errors = _versioned_events(result.get("stdout", ""), launcher_path, consumed_names)
         if mode == "launch":
             status, startup = _versioned_launch_assessment(events, errors, result)
-            playback_completion = "unobserved"
+            playback_completion = ("completed" if status == "native-completed" else "unobserved")
             launcher_status = status
         elif mode == "smoke":
             passed = _versioned_smoke_passed(events, errors, result)

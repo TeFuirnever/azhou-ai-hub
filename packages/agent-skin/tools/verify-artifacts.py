@@ -206,7 +206,7 @@ INPUT_FILES = (
     'tools/build-dsh-plugin.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',
     'extension/renderer.mjs', 'extension/codex-page-adapter.mjs',
-    'extension/hosts/dsh.mjs', 'extension/bootstrap.mjs',
+    'extension/hosts/dsh.mjs', 'extension/hosts/dsh-startup-gate.js', 'extension/bootstrap.mjs',
     'image-settings.js', 'localization.js',
     'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE',
     'wallpaper/renderer.js', 'wallpaper/apply.js',
@@ -221,7 +221,8 @@ STARTUP_REQUIRED_INPUTS = (
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
 # A web plugin package, never a macOS bundle.
-DSH_PLUGIN_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/dsh.mjs', 'tools/build-dsh-plugin.py')
+DSH_PLUGIN_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/dsh.mjs',
+                             'extension/hosts/dsh-startup-gate.js', 'tools/build-dsh-plugin.py')
 DSH_PLUGIN_PACKAGE_NAME = 'azhou-agent-skin'
 DSH_PLUGIN_OUTPUTS = (
     'client.js', 'cordis.patch.yml', 'icon.png', 'index.js',
@@ -272,12 +273,24 @@ LEGACY_DEFAULT_APP_NAME = {'zh-CN': '阿舟 AI 实验室', 'en': 'Azhou AI Lab'}
 IMAGE_METADATA_STARTUP_FIRST_BUILD = 17
 STARTUP_OUTPUTS = (
     'startup/install.js',
+    'startup/prepare.js',
     'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
     'web/image-metadata-reader.js', 'web/vendor/dream-image-metadata.mjs',
     'web/vendor/dream-image-metadata.LICENSE',
     'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
     'web/assets/defaults/contours.js',
 )
+# Exact output set for current image-metadata payloads before the separate,
+# signed native-preparation entrypoint was introduced.
+LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS = (
+    'startup/install.js',
+    'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
+    'web/image-metadata-reader.js', 'web/vendor/dream-image-metadata.mjs',
+    'web/vendor/dream-image-metadata.LICENSE',
+    'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
+    'web/assets/defaults/contours.js',
+)
+DSH_STARTUP_OUTPUTS = LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS
 # Exact output set from the pre-image-metadata 0.9.0 payloads, including builds 10/11/12.
 PRE_IMAGE_METADATA_STARTUP_OUTPUTS = (
     'startup/install.js',
@@ -912,8 +925,8 @@ def verify_dsh_plugin(path):
         index_js = package_bytes('index.js').decode('utf-8')
     except UnicodeError as exc:
         raise RuntimeError('DSH 插件 index.js 必须是 UTF-8。') from exc
-    if index_js != '/** Host half of the Agent Skin bundle; the Client module owns the rendering. */\nexport function apply() {}\n':
-        raise RuntimeError('DSH 插件 index.js 必须保持官方模板的宿主侧 no-op 形态。')
+    if index_js != dsh_host_entry_source(ROOT):
+        raise RuntimeError('DSH 插件 index.js 未绑定当前结构化启动注入入口。')
 
     client_data = package_bytes('client.js')
     if not client_data or len(client_data) >= MAX_STARTUP_BYTES:
@@ -933,6 +946,7 @@ def verify_dsh_plugin(path):
         "name: 'settings.section', id: 'azhou-appearance', order: 40,",
         'module.exports = { apply, inject };', 'return module.exports;',
         "controllerOwner: 'azhou-dsh-startup'", "owner: 'azhou.dsh-startup-animation'",
+        "playbackOwner: 'dsh-gated'",
         'const DEFAULT_ASSETS = Object.freeze(',
     )
     for needle in bound_once:
@@ -973,6 +987,23 @@ def verify_dsh_plugin(path):
             or 'no install or host writes' not in manifest['scope']):
         raise RuntimeError('DSH 插件 manifest 未绑定当前构建输入与包内文件摘要。')
     return manifest
+
+
+def dsh_host_entry_source(root=ROOT):
+    gate = (Path(root) / 'extension/hosts/dsh-startup-gate.js').read_text(encoding='utf-8')
+    return (
+        'const startupGateScript = ' + json.dumps(gate, ensure_ascii=True) + ';\n'
+        'export function apply(ctx) {\n'
+        "  if (!ctx || typeof ctx.on !== 'function') return;\n"
+        "  ctx.on('webserver/index-inject', rows => {\n"
+        '    try {\n'
+        "      if (!Array.isArray(rows) || rows.some(row => row?.kind === 'script'\n"
+        '          && row.text === startupGateScript)) return;\n'
+        "      rows.push({ kind: 'script', placement: 'head', text: startupGateScript });\n"
+        '    } catch {}\n'
+        '  });\n'
+        '}\n'
+    )
 
 def png_details(data, label):
     """Validate a complete, non-interlaced 8-bit RGB/RGBA PNG without Pillow."""
@@ -1138,6 +1169,15 @@ def verify_startup(path, info, marker, *, current_source=True):
     target_host = manifest.get('targetHost', 'codex')
     if target_host != 'codex':
         raise RuntimeError('Startup manifest targetHost is invalid.')
+    startup_entrypoints = manifest.get('startupEntrypoints')
+    expected_startup_entrypoints = {
+        'page': 'startup/install.js',
+        'native': 'startup/prepare.js',
+    }
+    if (current_source and startup_entrypoints != expected_startup_entrypoints) or (
+            startup_entrypoints is not None and startup_entrypoints != expected_startup_entrypoints):
+        raise RuntimeError('startup manifest 的页面与原生入口映射无效。')
+    has_native_preparation = startup_entrypoints == expected_startup_entrypoints
     current_startup_inputs = frozenset(STARTUP_REQUIRED_INPUTS)
     if current_source:
         allowed_theme_inputs = {current_startup_inputs}
@@ -1183,7 +1223,11 @@ def verify_startup(path, info, marker, *, current_source=True):
     uses_pre_page_adapter_startup_inputs = (
         frozenset(source_inputs) == frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
     uses_image_metadata_outputs = uses_current_startup_inputs or uses_pre_page_adapter_startup_inputs
-    expected_outputs = STARTUP_OUTPUTS if uses_image_metadata_outputs else PRE_IMAGE_METADATA_STARTUP_OUTPUTS
+    if uses_image_metadata_outputs:
+        expected_outputs = (STARTUP_OUTPUTS if has_native_preparation
+                            else LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS)
+    else:
+        expected_outputs = PRE_IMAGE_METADATA_STARTUP_OUTPUTS
     outputs = manifest.get('outputs')
     if not isinstance(outputs, dict) or set(outputs) != set(expected_outputs):
         raise RuntimeError('startup manifest 的 output 路径清单不完整。')
@@ -1197,6 +1241,29 @@ def verify_startup(path, info, marker, *, current_source=True):
         if not isinstance(digest, str) or digest != hashlib.sha256(data).hexdigest():
             raise RuntimeError(f'启动产物摘要不匹配：{candidate}')
         output_bytes[relative] = data
+
+    if has_native_preparation:
+        preparation_data = output_bytes['startup/prepare.js']
+        if not preparation_data or len(preparation_data) >= MAX_STARTUP_BYTES:
+            raise RuntimeError('startup/prepare.js 必须小于 24 MiB。')
+        try:
+            preparation_script = preparation_data.decode('utf-8')
+        except UnicodeDecodeError as exc:
+            raise RuntimeError('startup/prepare.js 必须是 UTF-8。') from exc
+        if (re.search(r'^\s*(?:import|export)\s', preparation_script, re.M)
+                or re.search(r'\b(?:fixture|preview)\s*:\s*true\b', preparation_script)
+                or re.search(r'''["'`](?:https?:)?//[^\s"'`]+''', preparation_script)
+                or re.search(r'\b(?:fetch|XMLHttpRequest)\s*\(', preparation_script)):
+            raise RuntimeError('startup/prepare.js 含有模块导入、fixture/preview 开关或外部资源访问。')
+        preparation_entry = preparation_script.rsplit('return bootstrapStartup({', 1)
+        if len(preparation_entry) != 2:
+            raise RuntimeError('startup/prepare.js 未从受控 bootstrap 入口返回安装结果。')
+        preparation_arguments = preparation_entry[1].split('});', 1)[0]
+        if "playbackOwner: 'native'" not in preparation_arguments:
+            raise RuntimeError('startup/prepare.js 未绑定原生播放所有权。')
+        default_entry = script.rsplit('return bootstrapStartup({', 1)
+        if len(default_entry) != 2 or 'playbackOwner:' in default_entry[1].split('});', 1)[0]:
+            raise RuntimeError('startup/install.js 必须保留页面自动播放默认入口。')
 
     preview_sources = (
         ('index.html', 'style.css', 'animation.js', 'image-settings.js', 'localization.js',
@@ -1294,6 +1361,16 @@ def verify_startup(path, info, marker, *, current_source=True):
         raise RuntimeError('startup/install.js 默认素材对象无效。') from exc
     if bundled_assets != preview_assets:
         raise RuntimeError('启动载荷与预览没有使用同一组默认图像和线稿。')
+    if has_native_preparation:
+        if assets_prefix not in preparation_script:
+            raise RuntimeError('startup/prepare.js 未嵌入与预览一致的默认素材对象。')
+        preparation_literal = preparation_script.split(assets_prefix, 1)[1].split(');\n', 1)[0]
+        try:
+            preparation_assets = json.loads(preparation_literal)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError('startup/prepare.js 默认素材对象无效。') from exc
+        if preparation_assets != preview_assets:
+            raise RuntimeError('页面与原生准备载荷没有使用同一组默认图像和线稿。')
     legacy_entry = 'return installStartup(installAnimation, globalThis);' in script
     bootstrap_entry = ('return bootstrapStartup({' in script
                        and 'return installStartup(installAnimation, host);' in script)

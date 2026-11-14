@@ -754,10 +754,11 @@ struct StartupBudget {
     let preflightDeadline: TimeInterval
     let totalDeadline: TimeInterval
 
-    init(startedAt: TimeInterval) {
+    init(startedAt: TimeInterval, deadline: TimeInterval? = nil) {
         self.startedAt = startedAt
-        preflightDeadline = startedAt + 15
-        totalDeadline = startedAt + 60
+        let callerDeadline = deadline.map { $0.isFinite ? $0 : startedAt } ?? startedAt + 60
+        totalDeadline = min(startedAt + 60, callerDeadline)
+        preflightDeadline = min(startedAt + 15, totalDeadline)
     }
 
     func attachDeadline(startedAt: TimeInterval) -> TimeInterval {
@@ -1135,6 +1136,8 @@ protocol StartupTransport: AnyObject {
     func connect(to url: URL, timeout: TimeInterval) throws
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any]
     func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any]
+    func makeSettingsSnapshotSession(page: StartupSnapshotPage, request: StartupSettingsSnapshotRequest,
+                                     timeout: TimeInterval) async throws -> any StartupSettingsSnapshotSession
     func disconnectPage()
     func close()
 }
@@ -1147,7 +1150,309 @@ extension StartupTransport {
     // A transport without a retained controller has no authority to clean up a
     // current global merely because its owner and run ID happen to match.
     func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any] { ["disposed": false] }
+    func makeSettingsSnapshotSession(page: StartupSnapshotPage, request: StartupSettingsSnapshotRequest,
+                                     timeout: TimeInterval) async throws -> any StartupSettingsSnapshotSession {
+        throw StartupFailure(reason: "snapshot-unsupported", message: "当前页面连接不支持安全的设置快照读取。")
+    }
     func disconnectPage() {}
+}
+
+struct StartupSnapshotPage: Sendable {
+    let id: String
+    let href: String
+}
+
+struct StartupSettingsSnapshotRequest: Sendable {
+    let owner: String
+    let runID: Int
+    let runNonce: String
+}
+
+struct StartupSettingsSnapshotPoint: Sendable, Equatable {
+    let x: Double
+    let y: Double
+}
+
+struct StartupSettingsSnapshotValues: Sendable {
+    let avatar: String
+    let artwork: String
+    let contours: [[StartupSettingsSnapshotPoint]]
+    let introTitle: String
+    let introCaption: String
+    let artworkSubtitle: String
+    let wallpaperStrength: Int
+    let explicitText: [String: Bool]
+}
+
+struct StartupSettingsSnapshotAppearance: Sendable, Equatable {
+    let locale: String
+    let theme: String
+
+    var isValid: Bool {
+        ["en", "zh-CN"].contains(locale) && ["light", "dark"].contains(theme)
+    }
+}
+
+struct StartupSettingsSnapshot: Sendable {
+    let owner: String
+    let runID: Int
+    let runNonce: String
+    let snapshotID: String
+    let status: String
+    let sha256: String
+    let appearance: StartupSettingsSnapshotAppearance
+    let values: StartupSettingsSnapshotValues
+}
+
+protocol StartupSettingsSnapshotSession: AnyObject {
+    func prepareWorkspace(deadline: TimeInterval, now: () -> TimeInterval) async throws -> [String: Any]
+    func cancelWorkspace(timeout: TimeInterval) async throws
+    func begin(timeout: TimeInterval) async throws -> [String: Any]
+    func read(snapshotID: String, index: Int, offset: Int, timeout: TimeInterval) async throws -> [String: Any]
+    func dispose(snapshotID: String?, timeout: TimeInterval) async throws
+}
+
+extension StartupSettingsSnapshotSession {
+    func cancelWorkspace(timeout: TimeInterval) async throws {
+        throw StartupFailure(reason: "snapshot-unsupported", message: "当前控制器不支持原生准备取消。")
+    }
+    func prepareWorkspace(deadline: TimeInterval, now: () -> TimeInterval) async throws -> [String: Any] {
+        throw StartupFailure(reason: "snapshot-unsupported", message: "当前控制器不支持原生工作区准备。")
+    }
+}
+
+/// Receives one immutable page-owned snapshot. Every request consumes the caller's original deadline.
+struct StartupSettingsSnapshotReceiver {
+    static let maximumBytes = 24 * 1024 * 1024 + 4 * 1024
+    static let chunkSize = 64 * 1024
+    fileprivate static let owner = "azhou-codex-startup"
+
+    static func clearNativeOwnedBuffer(_ bytes: inout Data) {
+        guard !bytes.isEmpty else { return }
+        bytes.resetBytes(in: 0..<bytes.count)
+    }
+
+    static func appendNativeChunk(_ chunk: Data, to aggregate: inout Data) {
+        chunk.withUnsafeBytes { source in
+            aggregate.append(contentsOf: source.bindMemory(to: UInt8.self))
+        }
+    }
+
+    static func receive(transport: any StartupTransport, page: StartupSnapshotPage,
+                        request: StartupSettingsSnapshotRequest, deadline: TimeInterval,
+                        now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) async throws -> StartupSettingsSnapshot {
+        guard request.owner == owner, request.runID > 0, request.runID <= 9_007_199_254_740_991,
+              validNonce(request.runNonce),
+              page.id.range(of: "^[A-Za-z0-9._-]{1,256}$", options: .regularExpression) != nil,
+              page.href.utf8.count <= 2048,
+              WallpaperValidation.mainPage(["type": "page", "url": page.href]) else { throw invalidSnapshot() }
+        let session = try await transport.makeSettingsSnapshotSession(
+            page: page, request: request, timeout: try timeout(deadline: deadline, now: now()))
+        var snapshotID: String?
+        var completed = false
+        do {
+            var bytes = Data()
+            // Clear only the aggregate Data buffer; Swift String and Foundation JSON internals are outside this erasure boundary.
+            defer { clearNativeOwnedBuffer(&bytes) }
+            try Task.checkCancellation()
+            let descriptor = try await session.begin(timeout: try timeout(deadline: deadline, now: now()))
+            snapshotID = descriptor["snapshotID"] as? String
+            let metadata = try validateDescriptor(descriptor, request: request)
+            snapshotID = metadata.snapshotID
+            bytes.reserveCapacity(metadata.byteLength)
+            var encodedLength = 0
+            var offset = 0
+            for index in 0..<metadata.chunkCount {
+                try Task.checkCancellation()
+                let chunk = try await session.read(snapshotID: metadata.snapshotID, index: index, offset: offset,
+                                                   timeout: try timeout(deadline: deadline, now: now()))
+                let expectedLength = min(chunkSize, metadata.byteLength - offset)
+                let dataBase64 = try validateChunk(chunk, request: request, metadata: metadata,
+                                                   index: index, offset: offset, expectedLength: expectedLength)
+                guard var decoded = Data(base64Encoded: dataBase64) else { throw invalidSnapshot() }
+                defer { clearNativeOwnedBuffer(&decoded) }
+                guard decoded.count == expectedLength, decoded.base64EncodedString() == dataBase64 else {
+                    throw invalidSnapshot()
+                }
+                encodedLength += dataBase64.utf8.count
+                appendNativeChunk(decoded, to: &bytes)
+                offset += expectedLength
+                guard bytes.count == offset, bytes.count <= metadata.byteLength else { throw invalidSnapshot() }
+            }
+            guard offset == metadata.byteLength, bytes.count == metadata.byteLength,
+                  encodedLength == metadata.encodedByteLength,
+                  SHA256.hash(data: bytes).map({ String(format: "%02x", $0) }).joined() == metadata.sha256,
+                  let text = String(data: bytes, encoding: .utf8),
+                  let object = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] else {
+                throw invalidSnapshot()
+            }
+            let values = try validateSnapshotObject(object, status: metadata.status)
+            let appearance = try validateAppearance(object["appearance"])
+            completed = true
+            return StartupSettingsSnapshot(owner: request.owner, runID: request.runID, runNonce: request.runNonce,
+                                           snapshotID: metadata.snapshotID, status: metadata.status,
+                                           sha256: metadata.sha256, appearance: appearance, values: values)
+        } catch {
+            if !completed {
+                // Dispose is pinned to the session's captured socket and RemoteObject.
+                // A cancellation may invalidate the active page, but cannot retarget cleanup.
+                let remaining = deadline - now()
+                if remaining > 0 {
+                    try? await session.dispose(snapshotID: snapshotID, timeout: min(2, remaining))
+                }
+            }
+            throw error
+        }
+    }
+
+    private struct Metadata {
+        let snapshotID: String
+        let status: String
+        let byteLength: Int
+        let encodedByteLength: Int
+        let chunkCount: Int
+        let sha256: String
+    }
+
+    private static func timeout(deadline: TimeInterval, now: TimeInterval) throws -> TimeInterval {
+        try StartupBudget.boundedTimeout(maximum: 10, stageDeadline: deadline, totalDeadline: deadline, now: now)
+    }
+
+    private static func validateDescriptor(_ value: [String: Any], request: StartupSettingsSnapshotRequest) throws -> Metadata {
+        guard strictBool(value["ok"]) == true, value["owner"] as? String == request.owner,
+              integer(value["runId"]) == request.runID, value["runNonce"] as? String == request.runNonce,
+              let snapshotID = value["snapshotID"] as? String, snapshotID == "\(request.runID):\(request.runNonce)",
+              let status = value["status"] as? String, ["missing", "valid"].contains(status),
+              let byteLength = integer(value["byteLength"]), byteLength > 0, byteLength <= maximumBytes,
+              integer(value["chunkSize"]) == chunkSize,
+              let chunkCount = integer(value["chunkCount"]), chunkCount == (byteLength + chunkSize - 1) / chunkSize,
+              let encodedByteLength = integer(value["encodedByteLength"]),
+              encodedByteLength == encodedLength(byteLength, chunkCount: chunkCount),
+              value["digestAlgorithm"] as? String == "sha-256",
+              let sha256 = value["sha256"] as? String, sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            throw invalidSnapshot()
+        }
+        return Metadata(snapshotID: snapshotID, status: status, byteLength: byteLength,
+                        encodedByteLength: encodedByteLength, chunkCount: chunkCount, sha256: sha256)
+    }
+
+    private static func validateChunk(_ value: [String: Any], request: StartupSettingsSnapshotRequest,
+                                      metadata: Metadata, index: Int, offset: Int,
+                                      expectedLength: Int) throws -> String {
+        guard strictBool(value["ok"]) == true, value["owner"] as? String == request.owner,
+              integer(value["runId"]) == request.runID, value["runNonce"] as? String == request.runNonce,
+              value["snapshotID"] as? String == metadata.snapshotID,
+              integer(value["index"]) == index, integer(value["offset"]) == offset,
+              integer(value["byteLength"]) == expectedLength,
+              integer(value["totalBytes"]) == metadata.byteLength,
+              integer(value["chunkCount"]) == metadata.chunkCount,
+              value["status"] as? String == metadata.status,
+              value["digestAlgorithm"] as? String == "sha-256",
+              value["sha256"] as? String == metadata.sha256,
+              let dataBase64 = value["dataBase64"] as? String,
+              dataBase64.utf8.count == encodedLength(expectedLength, chunkCount: 1) else { throw invalidSnapshot() }
+        return dataBase64
+    }
+
+    private static func validateAppearance(_ value: Any?) throws -> StartupSettingsSnapshotAppearance {
+        guard let object = value as? [String: Any], Set(object.keys) == Set(["locale", "theme"]),
+              let locale = object["locale"] as? String, let theme = object["theme"] as? String else {
+            throw invalidSnapshot()
+        }
+        let appearance = StartupSettingsSnapshotAppearance(locale: locale, theme: theme)
+        guard appearance.isValid else { throw invalidSnapshot() }
+        return appearance
+    }
+
+    private static func validateSnapshotObject(_ object: [String: Any], status: String) throws -> StartupSettingsSnapshotValues {
+        guard Set(object.keys) == Set(["status", "settings", "explicitText", "appearance"]),
+              object["status"] as? String == status,
+              let settings = object["settings"] as? [String: Any],
+              Set(settings.keys) == Set(["schemaVersion", "avatar", "artwork", "contours", "introTitle",
+                                         "introCaption", "artworkSubtitle", "wallpaperStrength"]),
+              integer(settings["schemaVersion"]) == 1,
+              let avatar = settings["avatar"] as? String, validPNGDataURL(avatar, maximum: 2 * 1024 * 1024),
+              let artwork = settings["artwork"] as? String, validPNGDataURL(artwork, maximum: 12 * 1024 * 1024),
+              let rawContours = settings["contours"] as? [Any], rawContours.count <= 1200,
+              let introTitle = settings["introTitle"] as? String, introTitle.utf16.count <= 16,
+              let introCaption = settings["introCaption"] as? String, introCaption.utf16.count <= 48,
+              let artworkSubtitle = settings["artworkSubtitle"] as? String, artworkSubtitle.utf16.count <= 60,
+              let wallpaperStrength = integer(settings["wallpaperStrength"]), (0...75).contains(wallpaperStrength),
+              let explicit = object["explicitText"] as? [String: Any],
+              Set(explicit.keys) == Set(["introTitle", "introCaption", "artworkSubtitle"]),
+              let explicitTitle = strictBool(explicit["introTitle"]),
+              let explicitCaption = strictBool(explicit["introCaption"]),
+              let explicitSubtitle = strictBool(explicit["artworkSubtitle"]) else { throw invalidSnapshot() }
+
+        var contours: [[StartupSettingsSnapshotPoint]] = []
+        contours.reserveCapacity(rawContours.count)
+        var totalPoints = 0
+        for rawPath in rawContours {
+            guard let path = rawPath as? [Any], path.count >= 2 else { throw invalidSnapshot() }
+            totalPoints += path.count
+            guard totalPoints <= 300_000 else { throw invalidSnapshot() }
+            var points: [StartupSettingsSnapshotPoint] = []
+            points.reserveCapacity(path.count)
+            for rawPoint in path {
+                guard let pair = rawPoint as? [Any], pair.count == 2,
+                      let x = finiteNumber(pair[0]), (0...1536).contains(x),
+                      let y = finiteNumber(pair[1]), (0...1024).contains(y) else { throw invalidSnapshot() }
+                points.append(StartupSettingsSnapshotPoint(x: x, y: y))
+            }
+            contours.append(points)
+        }
+        return StartupSettingsSnapshotValues(avatar: avatar, artwork: artwork, contours: contours,
+            introTitle: introTitle, introCaption: introCaption, artworkSubtitle: artworkSubtitle,
+            wallpaperStrength: wallpaperStrength,
+            explicitText: ["introTitle": explicitTitle, "introCaption": explicitCaption,
+                           "artworkSubtitle": explicitSubtitle])
+    }
+
+    private static func validPNGDataURL(_ value: String, maximum: Int) -> Bool {
+        let prefix = "data:image/png;base64,"
+        guard value.utf8.count <= maximum, value.hasPrefix(prefix) else { return false }
+        let encoded = String(value.dropFirst(prefix.count))
+        guard !encoded.isEmpty, encoded.range(of: "^[A-Za-z0-9+/]+={0,2}$", options: .regularExpression) != nil,
+              let data = Data(base64Encoded: encoded), data.base64EncodedString() == encoded,
+              data.starts(with: [137, 80, 78, 71, 13, 10, 26, 10]) else { return false }
+        return true
+    }
+
+    private static func encodedLength(_ byteLength: Int, chunkCount: Int) -> Int {
+        guard byteLength > 0, chunkCount > 0 else { return 0 }
+        var total = 0
+        for index in 0..<chunkCount {
+            let length = min(chunkSize, byteLength - index * chunkSize)
+            total += 4 * ((length + 2) / 3)
+        }
+        return total
+    }
+
+    fileprivate static func integer(_ value: Any?) -> Int? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let double = number.doubleValue
+        guard double.isFinite, double.rounded() == double, double >= 0, double <= Double(Int.max) else { return nil }
+        return number.intValue
+    }
+
+    fileprivate static func strictBool(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
+    }
+
+    private static func finiteNumber(_ value: Any) -> Double? {
+        guard let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        let double = number.doubleValue
+        return double.isFinite ? double : nil
+    }
+
+    private static func invalidSnapshot() -> StartupFailure {
+        StartupFailure(reason: "snapshot-invalid", message: "Codex 页面没有返回有效的设置快照。")
+    }
+
+    fileprivate static func validNonce(_ value: String) -> Bool {
+        value.range(of: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", options: .regularExpression) != nil
+    }
 }
 
 final class StartupCDPRequestState {
@@ -1250,6 +1555,107 @@ protocol WallpaperSocketTask: AnyObject {
 extension WallpaperSocketTask { var response: URLResponse? { nil } }
 extension URLSessionWebSocketTask: WallpaperSocketTask {}
 
+fileprivate struct StartupSnapshotCDPBinding {
+    let generation: UUID
+    let pageID: String
+    let href: String
+    let controllerID: String
+    let socket: any WallpaperSocketTask
+    let request: StartupSettingsSnapshotRequest
+}
+
+private final class WallpaperStartupSettingsSnapshotSession: StartupSettingsSnapshotSession {
+    private weak var transport: WallpaperTransport?
+    private let binding: StartupSnapshotCDPBinding
+    private var started = false
+    private var disposed = false
+    private var snapshotID: String?
+    private var nextIndex = 0
+    private var nextOffset = 0
+
+    init(transport: WallpaperTransport, binding: StartupSnapshotCDPBinding) {
+        self.transport = transport
+        self.binding = binding
+    }
+
+    func prepareWorkspace(deadline: TimeInterval, now: () -> TimeInterval) async throws -> [String: Any] {
+        guard !disposed else { throw snapshotProtocolFailure() }
+        let timeout = try StartupBudget.boundedTimeout(maximum: 10, stageDeadline: deadline,
+                                                       totalDeadline: deadline, now: now())
+        let clock = try await call("clock", request: identityRequest, timeout: timeout)
+        try Task.checkCancellation()
+        guard StartupSettingsSnapshotReceiver.strictBool(clock["ok"]) == true,
+              let pageTime = clock["now"] as? NSNumber, CFGetTypeID(pageTime) != CFBooleanGetTypeID(),
+              pageTime.doubleValue.isFinite, pageTime.doubleValue >= 0 else { throw snapshotProtocolFailure() }
+        let remaining = try StartupBudget.boundedTimeout(maximum: .greatestFiniteMagnitude,
+            stageDeadline: deadline, totalDeadline: deadline, now: now())
+        var request = identityRequest
+        // Page time was sampled before this reply arrived. Subtracting the native
+        // elapsed budget here makes the page deadline conservative, never later.
+        request["expiresAt"] = pageTime.doubleValue + remaining * 1000
+        return try await call("prepare", request: request, timeout: min(10, remaining))
+    }
+
+    func cancelWorkspace(timeout: TimeInterval) async throws {
+        guard let transport else { throw snapshotProtocolFailure() }
+        _ = try await transport.callSettingsSnapshot("cancelWorkspace", request: identityRequest,
+            binding: binding, timeout: timeout, cleanup: true)
+    }
+
+    func begin(timeout: TimeInterval) async throws -> [String: Any] {
+        guard !started, !disposed else { throw snapshotProtocolFailure() }
+        started = true
+        let result = try await call("begin", request: identityRequest, timeout: timeout)
+        if let supplied = result["snapshotID"] as? String,
+           supplied == "\(binding.request.runID):\(binding.request.runNonce)" {
+            snapshotID = supplied
+        }
+        return result
+    }
+
+    func read(snapshotID: String, index: Int, offset: Int, timeout: TimeInterval) async throws -> [String: Any] {
+        guard started, !disposed, self.snapshotID == snapshotID,
+              index == nextIndex, offset == nextOffset,
+              let transport else { throw snapshotProtocolFailure() }
+        let request: [String: Any] = identityRequest.merging([
+            "snapshotID": snapshotID, "index": index, "offset": offset,
+        ]) { current, _ in current }
+        let result = try await transport.callSettingsSnapshot("read", request: request, binding: binding, timeout: timeout)
+        guard StartupSettingsSnapshotReceiver.strictBool(result["ok"]) == true,
+              StartupSettingsSnapshotReceiver.integer(result["index"]) == index,
+              StartupSettingsSnapshotReceiver.integer(result["offset"]) == offset,
+              let length = StartupSettingsSnapshotReceiver.integer(result["byteLength"]), length > 0,
+              length <= StartupSettingsSnapshotReceiver.chunkSize else { throw snapshotProtocolFailure() }
+        nextIndex += 1
+        nextOffset += length
+        return result
+    }
+
+    func dispose(snapshotID: String?, timeout: TimeInterval) async throws {
+        guard !disposed else { return }
+        disposed = true
+        guard let transport else { throw snapshotProtocolFailure() }
+        var request = identityRequest
+        if let snapshotID, snapshotID == self.snapshotID { request["snapshotID"] = snapshotID }
+        _ = try await transport.callSettingsSnapshot("dispose", request: request, binding: binding,
+                                                      timeout: timeout, cleanup: true)
+    }
+
+    private var identityRequest: [String: Any] {
+        ["owner": binding.request.owner, "runId": binding.request.runID,
+         "runNonce": binding.request.runNonce, "href": binding.href]
+    }
+
+    private func call(_ operation: String, request: [String: Any], timeout: TimeInterval) async throws -> [String: Any] {
+        guard let transport else { throw snapshotProtocolFailure() }
+        return try await transport.callSettingsSnapshot(operation, request: request, binding: binding, timeout: timeout)
+    }
+
+    private func snapshotProtocolFailure() -> StartupFailure {
+        StartupFailure(reason: "snapshot-protocol", message: "设置快照传输已失效。")
+    }
+}
+
 private final class URLSessionWallpaperPageSession: WallpaperPageSession {
     private let transport: WallpaperTransport
     private let socket: any WallpaperSocketTask
@@ -1283,6 +1689,7 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
     }()
     private var serial = 0
     private var startupSocket: (any WallpaperSocketTask)?
+    private var startupPageID: String?
     private var startupControllerObjectID: String?
     private var startupPageGeneration = UUID()
     private let startupBindingLock = NSLock()
@@ -1304,6 +1711,7 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         startupPageGeneration = UUID()
         let socket = startupSocket
         startupSocket = nil
+        startupPageID = nil
         startupControllerObjectID = nil
         startupBindingLock.unlock()
         socket?.cancel(with: .normalClosure, reason: nil)
@@ -1373,9 +1781,62 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
             throw CancellationError()
         }
         startupPageGeneration = UUID()
+        startupPageID = url.lastPathComponent
         startupControllerObjectID = nil
         startupSocket = socket
         startupBindingLock.unlock()
+    }
+
+    func makeSettingsSnapshotSession(page: StartupSnapshotPage, request: StartupSettingsSnapshotRequest,
+                                     timeout: TimeInterval) async throws -> any StartupSettingsSnapshotSession {
+        guard request.owner == StartupSettingsSnapshotReceiver.owner,
+              request.runID > 0, request.runID <= 9_007_199_254_740_991,
+              StartupSettingsSnapshotReceiver.validNonce(request.runNonce),
+              page.id.range(of: "^[A-Za-z0-9._-]{1,256}$", options: .regularExpression) != nil,
+              page.href.utf8.count <= 2048,
+              WallpaperValidation.mainPage(["type": "page", "url": page.href]), timeout > 0 else {
+            throw StartupFailure(reason: "snapshot-request-invalid", message: "设置快照读取身份无效。")
+        }
+        let statusResponse = try await evaluate(StartupConnector.statusExpression, timeout: timeout)
+        guard statusResponse["href"] as? String == page.href,
+              StartupSettingsSnapshotReceiver.strictBool(statusResponse["missing"]) == false,
+              let status = statusResponse["status"] as? [String: Any],
+              status["owner"] as? String == request.owner,
+              StartupSettingsSnapshotReceiver.integer(status["version"]) == 1,
+              StartupSettingsSnapshotReceiver.integer(status["runId"]) == request.runID else {
+            throw StartupFailure(reason: "snapshot-binding-mismatch", message: "设置快照页面或运行身份已变化。")
+        }
+        let binding = startupBinding()
+        guard binding.pageID == page.id, let controllerID = binding.controllerID,
+              let socket = try? startupSocket(for: binding.generation) else {
+            throw StartupFailure(reason: "snapshot-binding-mismatch", message: "设置快照控制器绑定已失效。")
+        }
+        return WallpaperStartupSettingsSnapshotSession(
+            transport: self,
+            binding: StartupSnapshotCDPBinding(generation: binding.generation, pageID: page.id,
+                href: page.href, controllerID: controllerID, socket: socket, request: request)
+        )
+    }
+
+    fileprivate func callSettingsSnapshot(_ operation: String, request: [String: Any],
+                                           binding: StartupSnapshotCDPBinding,
+                                           timeout: TimeInterval, cleanup: Bool = false) async throws -> [String: Any] {
+        guard ["begin", "read", "dispose", "prepare", "clock", "cancelWorkspace"].contains(operation), timeout > 0 else {
+            throw StartupFailure(reason: "attach-timeout", message: "设置快照请求已超过启动期限。")
+        }
+        if !cleanup {
+            let current = startupBinding()
+            guard current.generation == binding.generation, current.pageID == binding.pageID,
+                  current.controllerID == binding.controllerID else { throw CancellationError() }
+            let activeSocket = try startupSocket(for: binding.generation)
+            guard activeSocket === binding.socket else { throw CancellationError() }
+        }
+        return try await startupRequest(method: "Runtime.callFunctionOn", parameters: [
+            "objectId": binding.controllerID,
+            "functionDeclaration": Self.settingsSnapshotFunction,
+            "arguments": [["value": operation], ["value": request]],
+        ], timeout: timeout, generation: binding.generation,
+           requestSocket: binding.socket, allowRetiredPage: cleanup, ignoreTaskCancellation: cleanup)
     }
 
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
@@ -1428,13 +1889,55 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         return method.value.call(api);
       }
       if (typeof api.status !== 'function') return {href, missing: true};
-      return {href, missing: false, status: api.status()};
+      const root = globalThis.document?.getElementById?.('root');
+      const shellReady = Boolean(globalThis.document?.body && root?.querySelector?.('[data-app-shell-frame]') && root?.querySelector?.('[data-app-shell-main-surface],[data-app-shell-page-surface]'));
+      return {href, missing: false, status: api.status(), shellReady};
     })
     """
 
-    private func startupBinding() -> (generation: UUID, controllerID: String?) {
+    static let settingsSnapshotFunction = """
+    (function(operation, request) {
+      const fail = reason => ({ok:false, reason});
+      const data = (object, key) => {
+        if (!object || typeof object !== 'object') return undefined;
+        const d = Object.getOwnPropertyDescriptor(object, key);
+        return d && Object.hasOwn(d, 'value') ? d.value : undefined;
+      };
+      const href = location.href;
+      const globalDescriptor = Object.getOwnPropertyDescriptor(globalThis, '__azhouStartup');
+      const api = globalDescriptor && Object.hasOwn(globalDescriptor, 'value') ? globalDescriptor.value : null;
+      if (!request || href !== this.href || href !== request.href || !this.controller || api !== this.controller)
+        return fail('snapshot-stale');
+      if (request.owner !== 'azhou-codex-startup' || !Number.isSafeInteger(request.runId) || request.runId < 1
+          || typeof request.runNonce !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(request.runNonce))
+        return fail('snapshot-request-invalid');
+      if (data(api, 'owner') !== request.owner || data(api, 'version') !== 1) return fail('snapshot-unsupported');
+      const status = data(api, 'status');
+      if (typeof status !== 'function') return fail('snapshot-unsupported');
+      const current = status.call(api);
+      if (!current || current.owner !== request.owner || current.version !== 1 || current.runId !== request.runId)
+        return fail('snapshot-stale');
+      if (operation === 'clock') {
+        if (current.playbackOwner !== 'native' || current.phase !== 'prepared') return fail('snapshot-stale');
+        return {ok:true, now:performance.now()};
+      }
+      const names = {begin:'beginSettingsSnapshot', read:'readSettingsSnapshotChunk', dispose:'disposeSettingsSnapshot', prepare:'prepareWorkspace', cancelWorkspace:'cancelWorkspace'};
+      const method = data(api, names[operation]);
+      if (!names[operation] || typeof method !== 'function') return fail('snapshot-unsupported');
+      const input = {owner:request.owner, runId:request.runId, runNonce:request.runNonce};
+      if (operation === 'prepare') input.expiresAt = request.expiresAt;
+      if (operation === 'read') {
+        input.snapshotID = request.snapshotID; input.index = request.index; input.offset = request.offset;
+      } else if (operation === 'dispose' && typeof request.snapshotID === 'string') {
+        input.snapshotID = request.snapshotID;
+      }
+      return method.call(api, input);
+    })
+    """
+
+    private func startupBinding() -> (generation: UUID, pageID: String?, controllerID: String?) {
         startupBindingLock.lock(); defer { startupBindingLock.unlock() }
-        return (startupPageGeneration, startupControllerObjectID)
+        return (startupPageGeneration, startupPageID, startupControllerObjectID)
     }
 
     private func commitStartupController(_ reference: String?, generation: UUID) throws {
@@ -1457,14 +1960,25 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
     }
 
     private func startupRequest(method: String, parameters: [String: Any], timeout: TimeInterval,
-                                generation: UUID, objectResult: Bool = false) async throws -> [String: Any] {
-        try requireStartupPage(generation)
+                                generation: UUID, objectResult: Bool = false,
+                                requestSocket: (any WallpaperSocketTask)? = nil,
+                                allowRetiredPage: Bool = false,
+                                ignoreTaskCancellation: Bool = false) async throws -> [String: Any] {
+        if !allowRetiredPage { try requireStartupPage(generation) }
         let id = try startupRequests.begin()
         defer { startupRequests.finish() }
         guard timeout > 0 else {
             throw StartupFailure(reason: "protocol-error", message: "启动页面连接不可用。")
         }
-        let socket = try startupSocket(for: generation)
+        let socket: any WallpaperSocketTask
+        if allowRetiredPage {
+            guard let requestSocket else { throw StartupFailure(reason: "protocol-error", message: "设置快照清理缺少原页面连接。") }
+            socket = requestSocket
+        } else {
+            let activeSocket = try startupSocket(for: generation)
+            if let requestSocket, activeSocket !== requestSocket { throw CancellationError() }
+            socket = activeSocket
+        }
         let timeoutMilliseconds = try StartupBudget.requestTimeoutMilliseconds(min(timeout, 10))
         var params = parameters.merging(["returnByValue": !objectResult, "awaitPromise": true,
                                         "userGesture": false]) { original, _ in original }
@@ -1480,10 +1994,10 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         defer { timeoutWork.cancel() }
         do {
             try await socket.send(.string(String(decoding: data, as: UTF8.self)))
-            try requireStartupPage(generation)
+            if !allowRetiredPage { try requireStartupPage(generation) }
             while true {
                 let message = try await socket.receive()
-                try requireStartupPage(generation)
+                if !allowRetiredPage { try requireStartupPage(generation) }
                 let incoming: Data
                 switch message {
                 case .string(let text): incoming = Data(text.utf8)
@@ -1498,10 +2012,10 @@ final class WallpaperTransport: NSObject, URLSessionTaskDelegate, StartupTranspo
         } catch let error as CancellationError {
             throw error
         } catch let failure as StartupFailure {
-            try requireStartupPage(generation)
+            if !ignoreTaskCancellation && !allowRetiredPage { try requireStartupPage(generation) }
             throw failure
         } catch {
-            try requireStartupPage(generation)
+            if !ignoreTaskCancellation && !allowRetiredPage { try requireStartupPage(generation) }
             let network = error as NSError
             let httpStatus = (socket.response as? HTTPURLResponse)?.statusCode
             // Chromium may answer a retired page socket with either 404 or 500.
@@ -1649,6 +2163,63 @@ struct NativeStartupStatus {
     }
 }
 
+/// Native preparation is deliberately distinct from the page-player ready result.
+struct StartupPreparedWorkspace: Equatable {
+    let pageID: String
+    let runID: Int
+    let wallpaperDisposition: String
+    let wallpaperReason: String
+}
+
+enum StartupPreparedResult: Equatable {
+    case observed(StartupPreparedWorkspace)
+    case released
+}
+
+private struct StartupPreparedStatus {
+    let runID: Int
+    let workspaceNonce: String?
+    let disposition: String
+    let reason: String
+
+    static func parse(_ value: Any?) -> Self? {
+        guard let raw = value as? [String: Any],
+              raw["owner"] as? String == "azhou-codex-startup",
+              StartupSettingsSnapshotReceiver.integer(raw["version"]) == 1,
+              let run = StartupSettingsSnapshotReceiver.integer(raw["runId"]), run > 0,
+              raw["playbackOwner"] as? String == "native", raw["phase"] as? String == "prepared",
+              NativeStartupStatus.boolean(raw["prepared"]) == true,
+              NativeStartupStatus.boolean(raw["ready"]) == false,
+              NativeStartupStatus.boolean(raw["completed"]) == false,
+              NativeStartupStatus.boolean(raw["overlay"]) == false,
+              raw["completion"] is NSNull, raw["reason"] as? String == "",
+              let disposition = raw["wallpaperDisposition"] as? String,
+              let wallpaper = raw["wallpaper"] as? [String: Any],
+              let applied = NativeStartupStatus.boolean(wallpaper["applied"]),
+              let decoded = NativeStartupStatus.boolean(wallpaper["imageDecoded"]),
+              let reason = wallpaper["reason"] as? String else { return nil }
+        switch disposition {
+        case "pending": guard !applied, reason.isEmpty else { return nil }
+        case "applied": guard applied, decoded, reason.isEmpty else { return nil }
+        case "disabled": guard !applied, !decoded, reason == "disabled" else { return nil }
+        case "degraded": guard !applied, ["wallpaper-unsupported", "storage-unavailable", "owner-conflict"].contains(reason) else { return nil }
+        default: return nil
+        }
+        let workspaceNonce: String?
+        if raw["workspace"] is NSNull {
+            guard disposition == "pending" else { return nil }
+            workspaceNonce = nil
+        } else {
+            guard let workspace = raw["workspace"] as? [String: Any],
+                  StartupSettingsSnapshotReceiver.integer(workspace["runId"]) == run,
+                  let nonce = workspace["runNonce"] as? String, StartupSettingsSnapshotReceiver.validNonce(nonce),
+                  workspace["phase"] as? String == (disposition == "pending" ? "pending" : "complete") else { return nil }
+            workspaceNonce = nonce
+        }
+        return Self(runID: run, workspaceNonce: workspaceNonce, disposition: disposition, reason: reason)
+    }
+}
+
 struct StartupConnector {
     private static let controllerWatchdogDuration: TimeInterval = 25
     private static let completionObservationReserve: TimeInterval = 1.5
@@ -1696,6 +2267,128 @@ struct StartupConnector {
                 }
             }
             return .failed(reason: "protocol-error")
+        }
+    }
+
+    /// The consumer starts playback once, then reports its own terminal state.
+    /// This method keeps the bound transport and operation lease until the latest
+    /// workspace proof is reconciled with that state. It never activates a host.
+    func runPrepared(payload: String, runNonce: String, deadline: TimeInterval,
+                     playbackReserve: TimeInterval,
+                     acceptSnapshot: (StartupSettingsSnapshot) async throws -> Void,
+                     presentationFinished: () -> Bool,
+                     releaseRequested: () -> Bool,
+                     presentationFailure: () -> String? = { nil }) async throws -> StartupPreparedResult {
+        guard StartupSettingsSnapshotReceiver.validNonce(runNonce), playbackReserve.isFinite,
+              playbackReserve >= 0 else {
+            throw StartupFailure(reason: "protocol-error", message: "原生启动身份或播放预算无效。")
+        }
+        var snapshotAccepted = false
+        return try await withAttachedPage(payload: payload, deadline: deadline) { selected, attempted, stage in
+            if releaseRequested() { return .released }
+            let reserve = snapshotAccepted ? 0 : playbackReserve + Self.completionObservationReserve
+            let admissionDeadline = deadline - reserve
+            var href = ""
+            while href.isEmpty {
+                if releaseRequested() { return .released }
+                try validateOwnership(admissionDeadline)
+                let inspected = try await transport.evaluate(Self.inspectExpression, timeout: min(10, admissionDeadline - now()))
+                try requireBudget(admissionDeadline)
+                guard let observed = inspected["href"] as? String,
+                      WallpaperValidation.mainPage(["type": "page", "url": observed]),
+                      Self.boolean(inspected["controllerPresent"]) == false,
+                      let shell = Self.boolean(inspected["shellReady"]) else {
+                    throw StartupFailure(reason: "page-unsupported", message: "原生准备需要无冲突的可信工作区。")
+                }
+                if shell { href = observed } else { try await sleep(min(0.1, admissionDeadline - now())) }
+            }
+            _ = try await requireCurrentPage(selected, deadline: admissionDeadline)
+            try validateOwnership(admissionDeadline, signature: true)
+            if releaseRequested() { return .released }
+            guard attempted.insert(selected.id).inserted else {
+                throw StartupFailure(reason: "startup-interrupted", message: "同一页面不能重复准备。")
+            }
+            stage = "native-install"
+            let installed = try await transport.evaluate(try Self.installExpression(payload, expectedHref: href),
+                                                          timeout: min(10, admissionDeadline - now()))
+            try requireBudget(admissionDeadline)
+            guard Self.boolean(installed["installed"]) == true,
+                  Self.boolean(installed["alreadyActive"]) == false else {
+                throw StartupFailure(reason: "protocol-error", message: "页面未接受原生准备载荷。")
+            }
+            var boundRun: Int?
+            var workspaceRequested = false
+            var workspaceSession: (any StartupSettingsSnapshotSession)?
+            do {
+            while true {
+                if let failure = presentationFailure() { throw StartupFailure(reason: failure, message: "原生呈现失败。") }
+                if releaseRequested() { return .released }
+                try requireBudget(deadline)
+                stage = "native-status"
+                let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, deadline - now()))
+                try requireBudget(deadline)
+                guard response["href"] as? String == href, Self.boolean(response["missing"]) == false,
+                      let status = StartupPreparedStatus.parse(response["status"]),
+                      let shellReady = Self.boolean(response["shellReady"]) else {
+                    throw StartupFailure(reason: "protocol-error", message: "页面未保持原生准备协议。")
+                }
+                guard boundRun == nil || boundRun == status.runID else {
+                    throw StartupFailure(reason: "startup-interrupted", message: "工作区准备运行已变化。")
+                }
+                boundRun = status.runID
+                if workspaceRequested, status.workspaceNonce != runNonce {
+                    throw StartupFailure(reason: "startup-interrupted", message: "本次工作区准备身份已变化。")
+                }
+                _ = try await requireCurrentPage(selected, deadline: deadline, recoverOverlap: true)
+                let page = StartupSnapshotPage(id: selected.id, href: href)
+                let request = StartupSettingsSnapshotRequest(owner: "azhou-codex-startup", runID: status.runID, runNonce: runNonce)
+                if !workspaceRequested {
+                    stage = "native-workspace"
+                    let session = try await transport.makeSettingsSnapshotSession(page: page, request: request,
+                                                                                 timeout: min(10, deadline - now()))
+                    workspaceSession = session
+                    let result = try await session.prepareWorkspace(deadline: deadline, now: now)
+                    try requireBudget(deadline)
+                    guard Self.boolean(result["ok"]) == true, Self.boolean(result["accepted"]) == true else {
+                        throw StartupFailure(reason: "protocol-error", message: "工作区未接受准备请求。")
+                    }
+                    workspaceRequested = true
+                }
+                if !snapshotAccepted {
+                    if releaseRequested() { return .released }
+                    stage = "native-snapshot"
+                    let snapshot = try await StartupSettingsSnapshotReceiver.receive(transport: transport, page: page,
+                        request: request, deadline: deadline - reserve, now: now)
+                    _ = try await requireCurrentPage(selected, deadline: deadline - reserve, recoverOverlap: true)
+                    if releaseRequested() { return .released }
+                    try requireBudget(deadline - reserve)
+                    // Acceptance may start the external renderer before returning.
+                    // Never retry that side effect, even if its consumer throws.
+                    snapshotAccepted = true
+                    do { try await acceptSnapshot(snapshot) }
+                    catch {
+                        throw StartupFailure(reason: "startup-interrupted", message: "原生播放器未接受本次快照。")
+                    }
+                    // The response predates both asynchronous consumers. Never use it as a final proof.
+                    continue
+                }
+                if releaseRequested() { return .released }
+                if presentationFinished(), shellReady, status.disposition != "pending" {
+                    return .observed(StartupPreparedWorkspace(pageID: selected.id, runID: status.runID,
+                        wallpaperDisposition: status.disposition, wallpaperReason: status.reason))
+                }
+                try await sleep(min(0.1, max(0, deadline - now())))
+            }
+            } catch {
+                if let workspaceSession {
+                    let cleanupTimeout = min(2, max(0, deadline - now()))
+                    // Unstructured tasks do not inherit cancellation. Cleanup stays
+                    // pinned to the captured socket/controller and original budget.
+                    let cleanup = Task { try? await workspaceSession.cancelWorkspace(timeout: cleanupTimeout) }
+                    await cleanup.value
+                }
+                throw error
+            }
         }
     }
 
@@ -1843,6 +2536,17 @@ struct StartupConnector {
     }
 
     private func attach(payload: String, deadline: TimeInterval) async throws -> StartupOutcome {
+        do {
+            return try await withAttachedPage(payload: payload, deadline: deadline) { selected, attempted, stage in
+                try await attachPage(selected, payload: payload, attempted: &attempted, stage: &stage, deadline: deadline)
+            }
+        } catch let failure as StartupFailure where failure.reason == "startup-interrupted" {
+            return .partial(reason: failure.reason)
+        }
+    }
+
+    private func withAttachedPage<Result>(payload: String, deadline: TimeInterval,
+        body: (Page, inout Set<String>, inout String) async throws -> Result) async throws -> Result {
         defer { transport.close() }
         guard (1...65535).contains(expectedPort), !payload.isEmpty,
               payload.utf8.count < 24 * 1024 * 1024 else {
@@ -1858,11 +2562,13 @@ struct StartupConnector {
         do {
             while true {
                 try validateOwnership(deadline, signature: true)
-                guard visited.insert(selected.id).inserted else { return .partial(reason: "startup-interrupted") }
+                guard visited.insert(selected.id).inserted else {
+                    throw StartupFailure(reason: "startup-interrupted", message: "禁止重复接入同一页面。")
+                }
                 stage = "connect"
                 try transport.connect(to: selected.socket, timeout: min(5, deadline - now()))
                 do {
-                    return try await attachPage(selected, payload: payload, attempted: &attempted, stage: &stage, deadline: deadline)
+                    return try await body(selected, &attempted, &stage)
                 } catch let failure as StartupFailure where failure.pageConnectionLost {
                     try requireBudget(deadline)
                     report(stage, page: selected, error: failure)

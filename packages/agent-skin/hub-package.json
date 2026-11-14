@@ -9,7 +9,7 @@
   "license_status": "no open-source license grant recorded; user is contacting the upstream maintainer",
   "external_distribution": "not authorized",
   "runtime_version": "0.9.0",
-  "runtime_build": "41",
+  "runtime_build": "42",
   "build_inputs": [
     "Native/App.swift",
     "Native/Wallpaper.swift",
@@ -29,6 +29,7 @@
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
     "extension/hosts/dsh.mjs",
+    "extension/hosts/dsh-startup-gate.js",
     "extension/bootstrap.mjs",
     "image-settings.js",
     "localization.js",
@@ -62,6 +63,7 @@
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
     "extension/hosts/dsh.mjs",
+    "extension/hosts/dsh-startup-gate.js",
     "extension/bootstrap.mjs",
     "localization.js",
     "image-metadata-reader.js",
@@ -107,6 +109,7 @@
     "tools/test-coverage-policy.py",
     "tools/test-functional-verdict.py",
     "tools/test-installed-acceptance.py",
+    "tools/startup_event_verdict.py",
     "tools/test-production-builders.py",
     "tools/test-production-preflight.py",
     "tools/test-production-verifier.py",
@@ -157,6 +160,7 @@
     "plans/README.md",
     "plans/001-vivid-lab-motion.md",
     "tools/dsh-adapter.unit.test.mjs",
+    "tools/dsh-startup-gate.unit.test.mjs",
     "tools/build-dsh-plugin.py",
     "tools/test-dsh-build.py"
   ]

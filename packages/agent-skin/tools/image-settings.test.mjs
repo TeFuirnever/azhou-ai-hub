@@ -639,6 +639,172 @@ test('loading settings without IndexedDB returns a copy of the supplied defaults
   });
 });
 
+test('loadSnapshot distinguishes a missing record and freezes only resolved settings', async () => {
+  const storage = makeIndexedDB(undefined);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB });
+  const defaults = {
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Bundled title',
+    wallpaperStrength: 42,
+  };
+
+  const snapshot = await fixture.api.loadSnapshot(defaults);
+
+  assert.equal(snapshot.status, 'missing');
+  assert.equal(snapshot.settings.introTitle, 'Bundled title');
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.explicitText)), {
+    introTitle: true,
+    introCaption: false,
+    artworkSubtitle: false,
+  });
+  assert.equal(Object.hasOwn(snapshot, 'baseline'), false);
+  assert.equal(Object.isFrozen(snapshot), true);
+  assert.equal(Object.isFrozen(snapshot.settings), true);
+  assert.equal(Object.isFrozen(snapshot.settings.contours), true);
+  assert.equal(Object.isFrozen(snapshot.settings.contours[0]), true);
+  assert.equal(Object.isFrozen(snapshot.settings.contours[0][0]), true);
+  assert.equal(storage.state.transactions.at(-1).mode, 'readonly');
+  assert.equal(storage.state.puts, 0);
+  assert.equal(storage.state.deletes, 0);
+  assert.equal(storage.state.clears, 0);
+});
+
+test('loadSnapshot returns normalized custom settings without the raw baseline', async () => {
+  const record = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Saved title',
+    wallpaperStrength: 17,
+  };
+  const storage = makeIndexedDB(record);
+  const fixture = makeFixture({
+    indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]],
+  });
+
+  const snapshot = await fixture.api.loadSnapshot({
+    avatar: 'data:image/png;base64,CCCC',
+    artwork: 'data:image/png;base64,DDDD',
+    contours: [[[2, 2], [3, 3]]],
+    introTitle: 'Bundled title',
+    introCaption: 'Bundled caption',
+    artworkSubtitle: 'Bundled subtitle',
+    wallpaperStrength: 42,
+  });
+
+  assert.equal(snapshot.status, 'valid');
+  assert.equal(snapshot.settings.introTitle, 'Saved title');
+  assert.equal(snapshot.settings.wallpaperStrength, 17);
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.explicitText)), {
+    introTitle: true,
+    introCaption: true,
+    artworkSubtitle: true,
+  });
+  assert.equal(Object.hasOwn(snapshot, 'baseline'), false);
+  assert.deepEqual(storage.state.record, record);
+  assert.equal(storage.state.transactions.at(-1).mode, 'readonly');
+  assert.equal(storage.state.puts, 0);
+  assert.equal(storage.state.deletes, 0);
+  assert.equal(storage.state.clears, 0);
+});
+
+test('loadSnapshot reports an invalid stored record as failure', async () => {
+  const invalid = { schemaVersion: 7, futureField: { keep: true } };
+  const storage = makeIndexedDB(invalid);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB });
+
+  const snapshot = await fixture.api.loadSnapshot({
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]],
+    wallpaperStrength: 42,
+  });
+
+  assert.equal(snapshot.status, 'failure');
+  assert.equal(snapshot.reason, 'settings-invalid');
+  assert.equal(Object.hasOwn(snapshot, 'settings'), false);
+  assert.deepEqual(storage.state.record, invalid);
+  assert.equal(storage.state.puts, 0);
+  assert.equal(storage.state.deletes, 0);
+  assert.equal(storage.state.clears, 0);
+});
+
+test('loadSnapshot reports a storage read failure separately from a missing record', async () => {
+  const fixture = makeFixture({ indexedDB: { open() { throw new Error('private storage detail'); } } });
+
+  const snapshot = await fixture.api.loadSnapshot({
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [],
+    wallpaperStrength: 42,
+  });
+
+  assert.equal(snapshot.status, 'failure');
+  assert.equal(snapshot.reason, 'settings-unavailable');
+  assert.equal(Object.hasOwn(snapshot, 'settings'), false);
+});
+
+test('loadSnapshot reports a pending read timeout as failure, not as a missing record', async () => {
+  const storage = makeIndexedDB(undefined, { holdRequests: true });
+  const fixture = makeFixture({ indexedDB: storage.indexedDB });
+  const loading = fixture.api.loadSnapshot({
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Safe default',
+    wallpaperStrength: 42,
+  });
+  for (let attempt = 0; attempt < 10 && storage.state.heldRequests.length === 0; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  assert.equal(storage.state.heldRequests.length, 1, 'the readonly settings read is pending');
+
+  fixture.advance(5_000);
+  const snapshot = await loading;
+
+  assert.equal(snapshot.status, 'failure');
+  assert.equal(snapshot.reason, 'operation-timeout');
+  assert.equal(Object.hasOwn(snapshot, 'settings'), false);
+  assert.equal(Object.hasOwn(snapshot, 'baseline'), false);
+  assert.equal(storage.state.transactions[0].aborted, true);
+  assert.equal(storage.state.puts, 0);
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true]);
+  fixture.api.dispose();
+});
+
+test('loadSnapshot remains unchanged after later saved settings change', async () => {
+  const initial = {
+    schemaVersion: 1,
+    avatar: 'data:image/png;base64,AAAA',
+    artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Before save',
+    introCaption: 'Caption',
+    artworkSubtitle: 'Subtitle',
+    wallpaperStrength: 42,
+  };
+  const next = { ...initial, contours: [[[4, 4], [5, 5]]], introTitle: 'After save' };
+  const storage = makeIndexedDB(initial);
+  const fixture = makeFixture({
+    indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024], [512, 512], [1536, 1024], [512, 512], [1536, 1024]],
+  });
+  const snapshot = await fixture.api.loadSnapshot(initial);
+  const frozenValue = JSON.stringify(snapshot);
+
+  await fixture.api.save(next);
+  await fixture.api.loadSnapshot(initial);
+
+  assert.equal(snapshot.settings.introTitle, 'Before save');
+  assert.deepEqual(JSON.parse(JSON.stringify(snapshot.settings.contours)), [[[0, 0], [1, 1]]]);
+  assert.equal(JSON.stringify(snapshot), frozenValue);
+  assert.equal(storage.state.puts, 1);
+});
+
 test('settings editor leads with a draft workspace preview and passes a clone to animation preview', async () => {
   const localization = createLocalization({ locale: 'zh-CN' });
   const fixture = makeFixture({ localization });

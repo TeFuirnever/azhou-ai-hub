@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import json
+import copy
 from contextlib import redirect_stdout
 from pathlib import Path
 import tempfile
@@ -94,6 +95,112 @@ class AgentSkinAssessmentTests(unittest.TestCase):
         self.assertEqual("ready", result["startup"]["status"])
         self.assertEqual("unobserved", result["playback_completion"])
         self.assertEqual("not-attempted", result["wallpaper_status"])
+
+    def native_events(self, end: str = "completed", *, workspace: bool = True) -> list[dict]:
+        nonce = "11111111-2222-4333-8444-555555555555"
+        outcome, code = {"completed": ("startup-ready", 0), "skipped": ("skipped", 0),
+                         "interrupted": ("partial", 2), "failed": ("behavior-not-proven", 1)}[end]
+        fields = {"presentation": end, "outcome": outcome, "runNonce": nonce, "targetPID": 3579,
+            "pageTargetID": "page-1",
+            "coverDrawCommitted": True, "cover": {"runNonce": nonce, "drawCommitted": True},
+            "workspaceObserved": workspace, "workspace": {"runNonce": nonce, "runId": 1,
+                "pageTargetID": "page-1", "wallpaperDisposition": "disabled", "wallpaperReason": "disabled"}
+                if workspace else None, "visualContinuity": "not-measured"}
+        if end in {"interrupted", "failed"}:
+            fields["reason"] = "startup-interrupted" if end == "interrupted" else "attach-timeout"
+        return [self.event("launcher-start"), self.event("target-opened", targetPID=3579),
+            self.event("startup-installed", targetPID=3579, runId=1, pageTargetID="page-1"),
+            self.event("startup-native-result", **fields),
+            self.event("launcher-exit", outcome=outcome, exitCode=code, runNonce=nonce, targetPID=3579)]
+
+    def test_native_completion_is_separate_from_page_ready_and_visual_review(self) -> None:
+        events = self.native_events()
+        result = self.assess("launch", events)
+        self.assertEqual("native-completed", result["status"])
+        self.assertEqual("completed", result["startup"]["status"])
+        self.assertEqual("native", result["startup"]["presentation"])
+        self.assertEqual("completed", result["playback_completion"])
+        self.assertEqual("not-measured", result["startup"]["visualContinuity"])
+        self.assertEqual("pending", result["visual_review"])
+        self.assertEqual([], result["event_errors"])
+        for disposition in ("applied", "degraded"):
+            candidate = copy.deepcopy(events)
+            candidate[-2]["workspace"].update(wallpaperDisposition=disposition,
+                wallpaperReason="" if disposition == "applied" else "wallpaper-unsupported")
+            self.assertEqual("native-completed", self.assess("launch", candidate)["status"])
+
+    def test_native_skip_interruption_and_failure_keep_their_real_outcomes(self) -> None:
+        for end, code, status in [("skipped", 0, "skipped"), ("interrupted", 2, "partial"),
+                                  ("failed", 1, "behavior-not-proven")]:
+            with self.subTest(end=end):
+                result = self.assess("launch", self.native_events(end, workspace=False), returncode=code)
+                self.assertEqual(status, result["status"])
+                self.assertEqual(end, result["startup"]["status"])
+                self.assertEqual("not-measured", result["startup"]["visualContinuity"])
+                self.assertEqual("pending", result["visual_review"])
+        early = self.native_events("skipped", workspace=False)
+        early = [early[0], early[-2], early[-1]]
+        early[-2]["targetPID"] = early[-1]["targetPID"] = None
+        early[-2]["coverDrawCommitted"] = early[-2]["cover"]["drawCommitted"] = False
+        result = self.assess("launch", early)
+        self.assertEqual("skipped", result["status"])
+        self.assertFalse(result["startup"]["installed"])
+
+    def test_native_receipts_reject_missing_mismatched_and_contradictory_evidence(self) -> None:
+        valid = self.native_events()
+        for index, keys in [(3, ["presentation", "outcome", "runNonce", "targetPID", "cover", "workspace",
+                                "coverDrawCommitted", "workspaceObserved", "visualContinuity", "pageTargetID"]),
+                            (4, ["runNonce", "targetPID", "outcome", "exitCode"])]:
+            for key in keys:
+                with self.subTest(missing=key, index=index):
+                    candidate = copy.deepcopy(valid)
+                    candidate[index].pop(key)
+                    self.assertEqual("behavior-not-proven", self.assess("launch", candidate)["status"])
+        mutations = [
+            (3, "runNonce", "not-a-uuid"), (3, "targetPID", 4000), (4, "targetPID", 4000),
+            (4, "runNonce", "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"),
+            (3, "workspaceObserved", False), (3, "coverDrawCommitted", False),
+            (3, "workspaceObserved", 1), (3, "coverDrawCommitted", 1),
+            (3, "presentation", []), (3, "presentation", "disabled"), (3, "cover", None),
+            (3, "workspace", None), (3, "workspace", []), (3, "reason", "startup-interrupted"),
+            (3, "visualContinuity", "passed"), (4, "exitCode", True), (4, "outcome", "skipped"),
+        ]
+        for index, key, bad in mutations:
+            with self.subTest(field=key, bad=bad):
+                candidate = copy.deepcopy(valid)
+                candidate[index][key] = bad
+                self.assertEqual("behavior-not-proven", self.assess("launch", candidate)["status"])
+        for section, key, bad in [("cover", "runNonce", "other"), ("cover", "drawCommitted", False),
+                ("cover", "drawCommitted", 1), ("workspace", "runNonce", "other"),
+                ("workspace", "runId", True), ("workspace", "runId", 2),
+                ("workspace", "pageTargetID", "retired"), ("workspace", "wallpaperDisposition", "pending"),
+                ("workspace", "wallpaperDisposition", []), ("workspace", "wallpaperReason", None),
+                ("workspace", "wallpaperReason", "wallpaper-unsupported")]:
+            candidate = copy.deepcopy(valid)
+            candidate[3][section][key] = bad
+            self.assertEqual("behavior-not-proven", self.assess("launch", candidate)["status"], (section, key))
+        for code in (1, 2, True, None):
+            self.assertEqual("behavior-not-proven", self.assess("launch", valid, returncode=code)["status"])
+        for candidate in [valid[1:], valid[:-1], valid + [valid[-1]], valid[:3] + [valid[3], valid[3], valid[4]],
+                valid[:3] + [dict(valid[3], event="startup-ready"), valid[3], valid[4]]]:
+            self.assertEqual("behavior-not-proven", self.assess("launch", candidate)["status"])
+
+    def test_native_workspace_must_match_the_latest_page_installation(self) -> None:
+        events = self.native_events()
+        events.insert(3, {**events[2], "seconds": 3.5, "runId": 2, "pageTargetID": "page-2"})
+        self.assertEqual("behavior-not-proven", self.assess("launch", events)["status"])
+        events[-2]["workspace"].update(runId=2, pageTargetID="page-2")
+        events[-2]["pageTargetID"] = "page-2"
+        self.assertEqual("native-completed", self.assess("launch", events)["status"])
+        prepared_only = self.native_events()
+        prepared_only.pop(2)
+        self.assertEqual("native-completed", self.assess("launch", prepared_only)["status"])
+        prepared_only[-2]["pageTargetID"] = "page-replacement"
+        self.assertEqual("behavior-not-proven", self.assess("launch", prepared_only)["status"])
+        prepared_only = self.native_events()
+        prepared_only = [prepared_only[0], prepared_only[-2], prepared_only[-1]]
+        prepared_only[-2]["targetPID"] = prepared_only[-1]["targetPID"] = None
+        self.assertEqual("behavior-not-proven", self.assess("launch", prepared_only)["status"])
 
     def test_hot_activation_is_not_reported_as_injection(self) -> None:
         result = self.assess("launch", [

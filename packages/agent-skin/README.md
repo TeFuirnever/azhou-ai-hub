@@ -2,13 +2,13 @@
 
 两端本机安装、旧来源恢复及安装后复查，先读 [本地安装 SOP](docs/local-install-sop.md)。
 
-本目录是 Hub 的 canonical package `agent-skin`，当前源码版本为 **0.9.0/build 41**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；Codex 使用原生入口和同窗口 CDP 动画、壁纸及设置流程；DeepSeek Harness（DSH）通过可组装的插件包接入共享核心。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带数字及无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。Codex 宿主验收状态见 support-matrix。中英界面跟随官方应用的语言与深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
+本目录是 Hub 的 canonical package `agent-skin`，当前源码候选为 **0.9.0/build 42**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”；Codex 冷启动采用原生遮罩、校验后的外观快照和原生窗口动画，DSH 插件包使用文档级门控并复用共享播放器。热启动仍激活原 Codex 进程且不重播。build 42 已安装到维护者的 Mac，独立播放器、热启动和冷启动事件检查通过；Codex 视觉连续性与 DSH 桌面首帧仍待验收。DSH 候选在隔离网页 profile 中通过浅色、深色和播放准备超时检查，现已更新维护者 Mac 的共享包并保留旧包。真实桌面 profile 显示了宿主加载提示、阿舟动画、工作区壁纸和 build 42 外观设置；连续首帧录像仍待完成。build 24 等到宿主控件可见且未被加载层遮挡后再显示 Appearance；Home 导航不可用时，备用入口避开输入区，导航恢复后迁到 Your dot 下方。build 25 支持 Your dot 位于分组导航列表中的宿主结构。C0 定义共享宿主合同和按操作能力门，并保留 Codex adapter。build 30 加入启动遮罩移除后的焦点恢复、避免预览状态与进度覆盖插画、将折叠外观入口限制在导航栏内，以及保持窄窗口壁纸焦点。build 32 通过稳定的导航标签识别带数字及无障碍未读提示的 Your dot，Appearance 紧随其后并保留 6 像素上间距。Codex 宿主验收状态见 support-matrix。中英界面跟随官方应用的语言和深浅色，不另设语言或主题偏好；入口和设置身份使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。本地源码、构建与隔离验证不能代替真实宿主验收。
 
 Codex 读取构建载荷时，`startup` 目录和 `install.js` 须为实体，载荷必须是非空、严格小于 24 MiB 的 UTF-8 普通文件；读取前后检测到身份或内容状态变化会报告 `asset-invalid`。资源根仍按原规则解析；这不能排除最后检查之后的替换，也不构成宿主或权利验收。
 
-Codex 冷启动在动画就绪时激活窗口，并在原有时限内继续观察播放；若宿主替换了尚未完成的主页面，只在原进程、端口和旧页面消失均核验通过后接续。自然完成、用户跳过或进入设置后结束接入；热启动仍只激活，不重播。此机制不常驻，也不恢复接入结束后的页面替换；壁纸与视觉结果需单独验收。
+Codex 冷启动在签名预检后先显示本应用拥有的原生遮罩，再启动或接入宿主并导出一份经过验证的设置快照；原生播放器使用同一份快照播放现有 12 秒动画，宿主工作区观察独立进行。只有自然播放结束且当前页面提供有效工作区与壁纸状态时才交接；跳过、关闭、超时或错误会释放自有窗口且不会终止 Codex。热启动只激活已核验的同一进程。原生封面提交不是屏幕可见性证据，实机首帧和连续显露仍须单独验收。
 
-Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、启动就绪、跳过、中断和未证实状态。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。这些 Hub 接口目前由合成事件测试验证，不是实际宿主验收。
+Hub 运行评估根据已核验的 App 版本选择事件合同：0.7.1 保留旧评估；0.8.0 及更高版本按 `azhou-startup.event.v1` 单独报告热激活、页面就绪和原生启动终态。原生的完成、跳过、中断和失败必须通过同一运行的 nonce、目标、当前页面与工作区回执；完成会映射到 `native-completed`，不会伪装成旧版页面播放器事件。`smoke` 只评估独立播放器的完整播放，`wallpaper-status` 保持只读；恢复计划只清理 Agent Skin 控制器与壁纸，并保留已保存设置、Codex 进程和调试端口。合成事件测试不证明安装或视觉连续性。
 
 原始来源仍为 [`panding999/codex-startup-animation`](https://github.com/panding999/codex-startup-animation)，本地来源为 [`TeFuirnever/codex-startup-animation`](https://github.com/TeFuirnever/codex-startup-animation.git)，基础提交 `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248`。来源工作树含未提交维护内容；上游没有提供开源许可，**不得对外发布或再分发**。详见 [上游来源](UPSTREAM.md)。
 
@@ -143,11 +143,11 @@ Codex 主界面壁纸使用 `assets/private/wallpaper-scene-q-v3.png`，原生�
 | 日常入口 | ~/Applications/阿舟 AI 实验室.app |
 | Bundle ID | local.azhou.codex-startup |
 | 主可执行文件 | AzhouCodexStartup |
-| 版本 | 0.9.0 / build 41 |
+| 版本 | 0.9.0 / build 42 candidate |
 | Dock策略 | LSUIElement=true / accessory |
 | 主程序识别 | 规范化真实路径、com.openai.codex、有效主可执行文件；排除自身和嵌套Helper |
 
-本机核实的官方应用路径为 `/Applications/ChatGPT.app`，Bundle ID 为 `com.openai.codex`；每次运行仍重新核对实际目标与进程。Codex 已运行时，入口核验并激活同一进程后退出，不打开播放器，也不向现有页面注入或重播动画。Codex 未运行时，入口先启动官方应用，再在已绑定页面只读轮询支持的外壳。外壳就绪并通过当前页、进程和签名复核后，入口通过核验的回环 CDP 安装 `startup/install.js`，在同一窗口播放动画。启动接入总预算为 60 秒，其中签名预检最多 15 秒、页面接入最多 45 秒。发送载荷前还须为现有 25 秒控制器 watchdog 和 1.5 秒收尾余量保留时间；外壳到达过晚则返回 `attach-timeout`，不播放。该就绪检查不保证页面之后不再导航，也不承诺启动更快。启动器不退出官方应用，也不修改其安装包。
+本机核实的官方应用路径为 `/Applications/ChatGPT.app`，Bundle ID 为 `com.openai.codex`；每次运行仍重新核对实际目标与进程。Codex 已运行时，入口核验并激活同一进程后退出，不打开播放器，也不向现有页面注入或重播动画。Codex 未运行时，入口先完成签名预检、提交自有封面绘制，再启动官方应用；页面就绪后读取并校验一份设置快照，原生本地播放器在同一个原生窗口播放动画，同时只读观察 Codex 工作区。播放与当前页面工作区都确认后才释放窗口。总启动预算沿用 60 秒，其中签名预检最多 15 秒、接入最多 45 秒；动画保持 12 秒。外壳或可播放余量不足时不发送页面载荷。动画或接入失败会清理自有播放器，不终止 Codex。窗口绘制提交不能证明它已先于宿主出现在屏幕上，实机首帧和连续显露仍待验收。
 
 当前源码的启动接入可在主页面于 inspect、安装回复或状态轮询阶段被销毁时接续到唯一替换主页面：仅当完整目标清单证实旧 target 已消失、且进程启动身份与独占回环端口未变时才接续，沿用原总预算与同一进程操作锁，每个 target 至多安装一次，安装、就绪与跳过证据绑定页面 target，已完成的运行不重播；旧 ID 尚在清单时只做有界只读复核，不连接、安装或释放任何候选页。Foundation WebSocket 握手 `NSURLErrorDomain/-1011` 且实际 HTTP 状态为 404 或 500 仅允许进入该替换证明，401 与其它状态仍拒绝；未完成的就绪复查仅对 `timedOut`、`networkConnectionLost`、`cannotConnectToHost` 清单失败做原预算内只读同页重试。接入轮询每轮只做进程级核验，完整签名核验保留在首次发现、每次连接前、发送载荷前与异常清理边界。为单次真实冷启分类失败时，可仅为该次启动设置默认关闭的 `AZHOU_STARTUP_DIAGNOSTICS=1`，经既有日志通道追加有界且无内容的身份诊断记录，不改变公开失败类别。细节合同见[功能测试](docs/testing.md)；实机冷启验收仍单独记录。
 
@@ -214,11 +214,11 @@ Build 12 将冷启动时的页面外壳等待上限从 5 秒延长到 60 秒。�
 
 重试不重建控制器、不重播动画、不访问偏好存储；健康壁纸直接复查。控制器内的重试最多等待 10 秒，同一时刻只执行一次；结果的 `retries` 保留已过滤的重试前失败信息。新一轮设置或控制器移除会取消旧请求，迟到回调不能重新应用。禁用背景、忙碌状态、缺少有效请求或所有权冲突会拒绝重试。旧控制器没有该 API 时返回 `retry-unavailable`，不会强行替换；下次从更新后的入口冷启动才会加载新控制器。重试可恢复已知失败状态，但不证明某次历史失效的触发原因已查明。
 
-当前启动构建通过 `extension/renderer.mjs` 在同窗口播放。结束或跳过后，点击阿舟外观入口打开设置（[入口位置、运行版本与保存边界](docs/theme-appearance.md)）；动画已就绪但播放停滞、25 秒 watchdog 到期时，同样释放浮层并在宿主布局可用时恢复同一入口，点击只新建设置会话，不重播动画，超时状态仍记 `overlay-timeout`。取消不保存，保存后应用背景并关闭设置，启动动画可单独预览草稿。真实宿主、人工无障碍及安装恢复等验收分别留证，局部通过不代表完整验收通过；不再拦截与官方浏览器冲突的 ⌘⌥B。恢复外观会移除本页壁纸及设置入口，并保留已保存的用户设置。独立预览仍由 `Native/App.swift` 播放。
+Codex 正式冷启动由原生入口播放；页面控制器保持安装状态以应用背景与提供设置入口。DSH client 只有在早期 document bridge 成功接管时才启动一次共享播放器；否则页面不会迟到补播，已保存壁纸在此降级路径的表现仍待实机复核。结束或跳过后，点击阿舟外观入口打开设置（[入口位置、运行版本与保存边界](docs/theme-appearance.md)）；25 秒页面播放器 watchdog 仍只负责页面动画与浮层清理，独立预览仍由 `Native/App.swift` 播放。
 
 ## DeepSeek Harness 插件包
 
-`tools/build-dsh-plugin.py` 从同一中性核心组装 DSH 插件包 `.build/azhou-dsh-plugin/azhou-agent-skin/`。包内 `package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 插入一行注册，`client.js` 以 `window.__ModuleLoader__.load` 工厂内嵌控制器、DSH 页面适配器和启动接线，另有 locale 元数据、图标和 manifest；宿主半侧为官方空模板。外观入口是宿主设置弹窗里的 `settings.section` 行（`sidebarEntry: false`，不挂侧栏胶囊；动画预览在面板启动页，壁纸重试走面板保存路径），壁纸表面是唯一的 `[data-slot='main']`，主题跟随 `data-ds-dark-theme` 与 `body` 上的 `--dsw-*` 变量，设置使用独立的 `azhou-dsh-startup` IndexedDB 命名空间。默认壁纸不内嵌：中性壁纸路径应用已保存的设置，私有场景图会为每次启动增加数兆字节负载；大图可经宿主半侧 `webServer` 前缀路由提供，这是第三方皮肤插件的既有模式，本版未附带。
+`tools/build-dsh-plugin.py` 从同一中性核心组装 DSH 插件包 `.build/azhou-dsh-plugin/azhou-agent-skin/`。包内 `package.json` 声明 `dsh.bundle.patch` 与 `dsh.client`，`cordis.patch.yml` 插入一行注册，`client.js` 以 `window.__ModuleLoader__.load` 工厂内嵌控制器、DSH 页面适配器和启动接线，另有 locale 元数据、图标和 manifest；`index.js` 通过 `webserver/index-inject` 发布带独立 watchdog 的早期遮罩行。DSH client 只有在同一 document 的遮罩存在且有效时才接管并播放一次，页面热更新不会重播，CSP 或遮罩失效时不迟播；已保存壁纸在无有效门控路径的实际表现仍待实机复核。这个宿主接口不证明桌面窗口第一帧由遮罩覆盖，Web 与 desktop 仍须分别做真实验收。外观入口是宿主设置弹窗里的 `settings.section` 行（`sidebarEntry: false`，不挂侧栏胶囊；动画预览在面板启动页，壁纸重试走面板保存路径），壁纸表面是唯一的 `[data-slot='main']`，主题跟随 `data-ds-dark-theme` 与 `body` 上的 `--dsw-*` 变量，设置使用独立的 `azhou-dsh-startup` IndexedDB 命名空间。包内嵌默认场景图作为首次壁纸，已保存的自定义图片从独立设置中读取。其他大图不随插件附带。
 
 ```sh
 cd packages/agent-skin
@@ -262,7 +262,7 @@ python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/az
 
 `assets/private/`、`dist/`、`.build/`、`.local/` 均被Git忽略，构建检查禁止它们被跟踪。原素材及其衍生应用、录屏、截图不得公开提交或发布。来源与发布边界见 [UPSTREAM.md](UPSTREAM.md)，迁移范围见 [MIGRATION-INVENTORY.md](MIGRATION-INVENTORY.md)。知识核对工作记录不随本包迁入。
 
-历史 `extension/`、`Native/Extension.swift` 和旧默认素材没有迁入；当前正常构建不使用它们。
+原项目的历史 `extension/`、`Native/Extension.swift` 和旧默认素材没有迁入。当前构建使用本包维护的 `extension/` 实现。
 
 
 ## 同主题原生 Codex pet
