@@ -367,6 +367,14 @@ try {
   cpSync(join(zcodeTree, "docs", "harness", "zcode.md"), join(zcodeBundle, "docs", "harness", "zcode.md"));
   cpSync(join(zcodeTree, "docs", "guide"), join(zcodeBundle, "docs", "guide"), { recursive: true });
   cpSync(join(codexTree, "LICENSE"), join(zcodeBundle, "LICENSE"));
+  // The payload is a standalone distribution unit installed far from the
+  // package root, so the bundled Cursor Team Kit and thermos skills must
+  // carry their component notices with them: both MIT licenses require the
+  // copyright and permission notices to accompany copies, and NOTICE.md
+  // chains to NOTICE-skills.md and the two component LICENSE files.
+  for (const notice of ["NOTICE.md", "NOTICE-skills.md", "LICENSE-cursor-team-kit", "LICENSE-thermos"]) {
+    cpSync(join(ROOT, notice), join(zcodeBundle, notice));
+  }
   writeFileSync(
     join(zcodeRoot, "marketplace.json"),
     `${JSON.stringify(

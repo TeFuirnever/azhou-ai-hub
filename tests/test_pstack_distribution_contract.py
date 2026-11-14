@@ -280,6 +280,13 @@ class PstackDistributionContractTest(unittest.TestCase):
                          (source / "README.md").read_bytes())
         self.assertTrue((payload / "docs/harness/zcode.md").is_file())
         self.assertFalse((payload / "hooks").exists())
+        # Standalone distribution: the component notices the bundled Cursor
+        # Team Kit and thermos skills require travel inside the payload.
+        for notice in ("NOTICE.md", "NOTICE-skills.md",
+                       "LICENSE-cursor-team-kit", "LICENSE-thermos"):
+            with self.subTest(notice=notice):
+                self.assertEqual((payload / notice).read_bytes(),
+                                 (PACKAGE / notice).read_bytes())
 
 
     def test_copilot_setup_overlay_cites_only_existing_setup_steps_and_anchors(self) -> None:
