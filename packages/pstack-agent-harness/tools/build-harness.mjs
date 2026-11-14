@@ -366,7 +366,7 @@ try {
   mkdirSync(join(zcodeBundle, "docs", "harness"), { recursive: true });
   cpSync(join(zcodeTree, "docs", "harness", "zcode.md"), join(zcodeBundle, "docs", "harness", "zcode.md"));
   cpSync(join(zcodeTree, "docs", "guide"), join(zcodeBundle, "docs", "guide"), { recursive: true });
-  cpSync(join(codexTree, "LICENSE"), join(zcodeBundle, "LICENSE"));
+  cpSync(join(zcodeTree, "LICENSE"), join(zcodeBundle, "LICENSE"));
   // The payload is a standalone distribution unit installed far from the
   // package root, so the bundled Cursor Team Kit and thermos skills must
   // carry their component notices with them: both MIT licenses require the

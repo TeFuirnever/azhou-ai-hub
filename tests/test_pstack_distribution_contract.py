@@ -38,6 +38,16 @@ def tree_bytes(root: Path) -> dict[str, bytes]:
     }
 
 
+def skill_description(skill: Path) -> str:
+    frontmatter = re.match(
+        r"^---\n([\s\S]*?)\n---",
+        (skill / "SKILL.md").read_text(encoding="utf-8"),
+    ).group(1)
+    value = next(line for line in frontmatter.splitlines()
+                 if line.startswith("description:"))[len("description:"):].strip()
+    return json.loads(value) if value.startswith('"') else value
+
+
 class PstackDistributionContractTest(unittest.TestCase):
     def test_harness_ci_parity_detects_untracked_generator_outputs(self) -> None:
         # A clean git diff alone does not notice a newly generated file.
@@ -177,6 +187,7 @@ class PstackDistributionContractTest(unittest.TestCase):
         tree = HARNESS / "zcode"
         guide = (tree / "docs/harness/zcode.md").read_text(encoding="utf-8")
         self.assertIn("<pstack>/agents/comment-sicko.md", guide)
+        self.assertIn("<pstack>/skills/poteto-mode/SKILL.md", guide)
         self.assertNotIn("poteto-mode/references/agents/comment-sicko.md", guide)
         self.assertTrue((tree / "agents/comment-sicko.md").is_file())
 
@@ -257,6 +268,7 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertEqual(registry["name"], "azhou-hub")
         self.assertEqual(len(registry["plugins"]), 1)
         self.assertEqual(registry["plugins"][0]["name"], EXPECTED_PLUGIN)
+        self.assertNotIn("source", registry["plugins"][0])
         payload = tree / EXPECTED_PLUGIN
         manifest = json_file(payload / ".zcode-plugin/plugin.json")
         self.assertEqual((manifest["name"], manifest["version"]),
@@ -269,20 +281,35 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertTrue(commands <= skills_for("zcode"))
         # The bundled payload carries the full inventory, so ZCode no longer
         # needs shared-root links to serve these skills.
-        self.assertEqual(skills_for(f"zcode-plugin/{EXPECTED_PLUGIN}"), skills_for("zcode"))
+        bundled = skills_for(f"zcode-plugin/{EXPECTED_PLUGIN}")
+        self.assertEqual(len(bundled), EXPECTED_SKILLS)
+        self.assertEqual(bundled, skills_for("zcode"))
+        self.assertEqual({p.name for p in (payload / "skills").iterdir()}, bundled)
         source = HARNESS / "zcode"
         for name in sorted(skills_for("zcode")):
             self.assertEqual(tree_bytes(payload / "skills" / name),
                              tree_bytes(source / "skills" / name))
+        for skill in sorted(commands):
+            stub = (payload / "commands" / f"{skill}.md").read_text(encoding="utf-8")
+            frontmatter, body = stub.split("\n---\n", 1)
+            self.assertEqual(body, f"\nInvoke the `{skill}` skill and follow it.\n")
+            self.assertEqual(json.loads(frontmatter.split("description: ", 1)[1]),
+                             skill_description(payload / "skills" / skill))
         for rel in ("agents", "docs/guide"):
             self.assertEqual(tree_bytes(payload / rel), tree_bytes(source / rel))
         self.assertEqual((payload / "README.md").read_bytes(),
                          (source / "README.md").read_bytes())
+        self.assertEqual((payload / "LICENSE").read_bytes(),
+                         (source / "LICENSE").read_bytes())
         self.assertEqual((payload / "docs/harness/zcode.md").read_bytes(),
                          (source / "docs/harness/zcode.md").read_bytes())
         self.assertFalse((payload / "hooks").exists())
         self.assertFalse((payload / "plugin.json").exists())
         self.assertFalse((payload / ".claude-plugin").exists())
+        self.assertEqual({p.name for p in payload.iterdir()},
+                         {".zcode-plugin", "commands", "skills", "agents", "docs",
+                          "LICENSE", "LICENSE-cursor-team-kit", "LICENSE-thermos",
+                          "NOTICE.md", "NOTICE-skills.md", "README.md"})
         # Standalone distribution: the component notices the bundled Cursor
         # Team Kit and thermos skills require travel inside the payload.
         for notice in ("NOTICE.md", "NOTICE-skills.md",
