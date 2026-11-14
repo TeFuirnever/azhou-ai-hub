@@ -278,8 +278,11 @@ class PstackDistributionContractTest(unittest.TestCase):
             self.assertEqual(tree_bytes(payload / rel), tree_bytes(source / rel))
         self.assertEqual((payload / "README.md").read_bytes(),
                          (source / "README.md").read_bytes())
-        self.assertTrue((payload / "docs/harness/zcode.md").is_file())
+        self.assertEqual((payload / "docs/harness/zcode.md").read_bytes(),
+                         (source / "docs/harness/zcode.md").read_bytes())
         self.assertFalse((payload / "hooks").exists())
+        self.assertFalse((payload / "plugin.json").exists())
+        self.assertFalse((payload / ".claude-plugin").exists())
         # Standalone distribution: the component notices the bundled Cursor
         # Team Kit and thermos skills require travel inside the payload.
         for notice in ("NOTICE.md", "NOTICE-skills.md",

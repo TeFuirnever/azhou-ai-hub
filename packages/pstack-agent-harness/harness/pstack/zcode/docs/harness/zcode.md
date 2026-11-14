@@ -9,7 +9,7 @@ pstack skills use Cursor names. In ZCode, read this file once per session, then 
 | `Task` | Dispatch a child through the session's own dispatch, when it has one. ZCode types those children `subagent_child`. With no dispatch, run the step yourself and say so. |
 | `AskQuestion` | Ask in plain text and let the user answer. No structured-choice tool is recorded. |
 | Open a todolist | No todolist tool is recorded. Keep the list in your reply and update it at each phase. |
-| Run another pstack skill (`/name` or "the **name** skill") | Invoke the skill explicitly. ZCode discovers the 68 pstack skills bundled inside the installed plugin (user-level skills still come from `.agents/skills/`), so tell the user to invoke the Skill by its discovered ZCode name; use `zcode skills list` to verify it, rather than assuming a Claude Code namespaced slash command. The same plugin exposes commands such as `/architect`. |
+| Run another pstack skill (`/name` or "the **name** skill") | Invoke the skill explicitly. ZCode discovers the 68 pstack skills bundled inside the installed plugin (user-level skills still come from `.agents/skills/`), so tell the user to invoke the Skill by its discovered ZCode name; use `zcode skills list` to verify it, rather than assuming a Claude Code namespaced slash command. With no skill-invocation surface in the session, read `<pstack>/skills/<name>/SKILL.md` from the installed plugin payload and follow it. The same plugin exposes commands such as `/architect`. |
 | `Grep`, `Glob` | The session's shell tool with `rg`, `find`, `ls`. |
 | Read a file | The session's file-read tool. |
 | Edit or delete a file | The session's file-edit tool. |
