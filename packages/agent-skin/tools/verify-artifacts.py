@@ -331,8 +331,6 @@ STARTUP_OUTPUTS = (
     'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
     'web/assets/defaults/contours.js',
 )
-# Exact output set for current image-metadata payloads before the separate,
-# signed native-preparation entrypoint was introduced.
 LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS = (
     'startup/install.js',
     'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',

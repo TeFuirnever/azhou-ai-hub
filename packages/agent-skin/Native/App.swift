@@ -1231,7 +1231,6 @@ private final class NativeBrandCoverView: NSView {
     }
 }
 
-/// Owns UI resources only. The driver owns run transitions and all terminal decisions.
 @MainActor
 final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private let nonce: String
@@ -1347,8 +1346,6 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { if !released { event(.failed("asset-invalid")) } }
 }
 
-/// One-run identity used only by the native local WKWebView. It is not a host
-/// setting, URL parameter, or selectable playback mode.
 struct NativeStartupBridgeInput: Sendable {
     let runNonce: String
     let locale: String
@@ -1381,8 +1378,6 @@ struct NativeStartupBridgeInput: Sendable {
     }
 }
 
-/// The native bridge re-encodes only the already validated, immutable page
-/// snapshot. 256 KiB Base64 messages keep each WKWebView evaluation bounded.
 enum NativeStartupSnapshotTransfer {
     static let chunkSize = 192 * 1024
     static let maximumBytes = StartupSettingsSnapshotReceiver.maximumBytes
@@ -1820,8 +1815,6 @@ enum StartupPayloadReader {
         return String(data: bytes, encoding: .utf8)
     }
 
-    /// 逐层相对打开并快照：root → startup → 固定枚举选择的载荷；载荷必须是尺寸在
-    /// (0, sizeCeiling) 区间的常规文件。
     private static func openChain(_ root: URL, kind: Kind) -> OpenedPayload? {
         let rootFD = Darwin.open(root.path, directoryFlags)
         guard rootFD >= 0 else { return nil }
@@ -2768,8 +2761,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         journal.record("native-presentation-result", ["runNonce": receipt.runNonce,
             "presentation": receipt.presentation.rawValue, "workspaceObserved": receipt.workspace != nil,
             "coverDrawCommitted": receipt.coverDrawCommitted, "visualContinuity": "not-measured"])
-        // Background launch is intentional. Do not reclaim focus after user skip
-        // or after the user has chosen another application during startup.
         let currentFrontmost = runtime.frontmostApplication?.processIdentifier
         if receipt.presentation == .completed, currentFrontmost != nil,
            currentFrontmost == nativeEntryFrontmostPID || currentFrontmost == Int32(runtime.processIdentifier) {
@@ -2779,15 +2770,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         runtime.terminate()
     }
 
-    /// Codex 路径的终局：以既有 StartupOutcome 词表定局并执行终局编排。
     private func concludeStartupRun(_ outcome: StartupOutcome) {
         session.beginEventStream(writer: journal.eventWriter, at: runtime.uptime)
         guard let final = session.concludeEventStream(outcome, at: runtime.uptime) else { return }
         carryOutFinalOutcome(final, promoted: exitLedger.promoted)
     }
 
-    /// 终局编排：ready/skipped 复用就绪时的激活结果；失败两档按晋升与否决定可见错误
-    /// 还是直接退出；成功档在晋升窗口等动画完成，否则立即退场。
     private func carryOutFinalOutcome(_ final: NativeStartupFinalOutcome, promoted: Bool) {
         exitLedger.processExitCode = final.exitCode
         switch final {

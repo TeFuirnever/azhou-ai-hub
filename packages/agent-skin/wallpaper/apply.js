@@ -94,8 +94,6 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         finish('cancelled');
         return;
       }
-      // Cold hosts can mount the workspace after startup. The startup owner can
-      // cancel this wait when a newer settings action replaces the run.
       timer = host.setTimeout(() => finish(wallpaperShellState(isCurrent, binding) || 'timeout'), 60000);
       check();
     });

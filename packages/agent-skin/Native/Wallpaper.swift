@@ -1221,7 +1221,6 @@ extension StartupSettingsSnapshotSession {
     }
 }
 
-/// Receives one immutable page-owned snapshot. Every request consumes the caller's original deadline.
 struct StartupSettingsSnapshotReceiver {
     static let maximumBytes = 24 * 1024 * 1024 + 4 * 1024
     static let chunkSize = 64 * 1024
@@ -1294,8 +1293,6 @@ struct StartupSettingsSnapshotReceiver {
                                            sha256: metadata.sha256, appearance: appearance, values: values)
         } catch {
             if !completed {
-                // Dispose is pinned to the session's captured socket and RemoteObject.
-                // A cancellation may invalidate the active page, but cannot retarget cleanup.
                 let remaining = deadline - now()
                 if remaining > 0 {
                     try? await session.dispose(snapshotID: snapshotID, timeout: min(2, remaining))
@@ -2163,7 +2160,6 @@ struct NativeStartupStatus {
     }
 }
 
-/// Native preparation is deliberately distinct from the page-player ready result.
 struct StartupPreparedWorkspace: Equatable {
     let pageID: String
     let runID: Int
@@ -2270,9 +2266,6 @@ struct StartupConnector {
         }
     }
 
-    /// The consumer starts playback once, then reports its own terminal state.
-    /// This method keeps the bound transport and operation lease until the latest
-    /// workspace proof is reconciled with that state. It never activates a host.
     func runPrepared(payload: String, runNonce: String, deadline: TimeInterval,
                      playbackReserve: TimeInterval,
                      acceptSnapshot: (StartupSettingsSnapshot) async throws -> Void,
@@ -2362,14 +2355,11 @@ struct StartupConnector {
                     _ = try await requireCurrentPage(selected, deadline: deadline - reserve, recoverOverlap: true)
                     if releaseRequested() { return .released }
                     try requireBudget(deadline - reserve)
-                    // Acceptance may start the external renderer before returning.
-                    // Never retry that side effect, even if its consumer throws.
                     snapshotAccepted = true
                     do { try await acceptSnapshot(snapshot) }
                     catch {
                         throw StartupFailure(reason: "startup-interrupted", message: "原生播放器未接受本次快照。")
                     }
-                    // The response predates both asynchronous consumers. Never use it as a final proof.
                     continue
                 }
                 if releaseRequested() { return .released }
@@ -2678,8 +2668,6 @@ struct StartupConnector {
                 }
                 if status.ready, ["playing", "settings", "complete"].contains(status.phase) {
                     if !notifiedReady { notifiedReady = true; onReady?() }
-                    // A ready animation can still lose its startup page. Keep the
-                    // bounded replacement path alive until playback or user handoff.
                     if status.completed || status.phase == "settings" { return .ready(runID: status.runID) }
                 }
                 try await sleep(min(0.1, max(0, deadline - now())))
