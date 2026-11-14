@@ -20,8 +20,15 @@ Skill-chain boundary (why the run stops at the command step).
 - The shared root no longer carries them on this machine: `~/.agents/skills` holds no pstack skill directory (its 14 top-level symlinks are the super-*/novel-* families; no `architect`, `poteto-mode`, `babysit` or sibling names), `~/.zcode/skills` holds none, and no `architect` skill directory exists under `~/.agents` or `~/.zcode/skills`. The 2026-11-11 inventory had already marked "68 Skills discoverable at current installed bytes" UNVERIFIED with only HISTORICAL shared-root discovery behind it; this receipt upgrades that to a measured absence on 2026-11-14.
 - The drift window is 2026-11-03 → 2026-11-11; the cause is not established by this receipt.
 
-Verdict.
+Restoration and post-restore probe (2026-11-14, same day).
 
-- Claimed: the ZCode plugin's command surface is user-invocable from a real GUI session — command recognized and body executed — at plugin `0.15.36` enabled, observed 2026-11-14.
-- Not claimed: end-to-end pstack workflow invocation (the command's referenced skills are absent from every machine skill root, so the chain fails at the skill step exactly as the probe shows), SessionStart hook trust, `0.15.37` currency on ZCode, and any statement about other hosts.
-- Restoring the 68 skills to a skill root is a pstack reconfiguration and requires its own explicit task under the pstack source and generation contract; until then the command surface resolves but each command's skill step fails as observed.
+- The [2026-11-04 retirement receipt](pstack-azhouzhou-retirement-2026-11-04.md) records the original install shape in its skills-root invariant: `~/.agents/skills` then held 164 entries with "the 68 skills-root-tree pstack skills all present" as plain-name links ("The links stay: they carry no plugin name"). The restoration reproduces exactly that shape.
+- 66 of the 68 skill names were restored as top-level symlinks in `~/.agents/skills` pointing at the Hub source tree `packages/pstack-agent-harness/harness/pstack/skills-root/skills/<name>` in the maintainer checkout; all 66 resolve a `SKILL.md` (verified per link). Two names, `tdd` and `teach`, are occupied by other current installs and were ceded to them rather than overwritten.
+- Tooling note for the record: a first `ln -s` pass hit the two occupied names and, because `ln -s` with an existing directory destination nests the link inside it, briefly created stray `tdd/tdd` and `teach/teach` entries; both were removed immediately after target verification and the two host skill directories were left with their pre-run contents.
+- Post-restore probe: a fresh ZCode GUI session (`sess_0d4853e2-4a0b-4aac-9211-afd6d6f66260`, archived after capture) received exactly `/architect`, and this time the full chain engaged — command recognized, the `architect` skill loaded from the restored link, and the session answered inside the skill's own five-phase methodology (Ground→Sketch→Agree→Implement→Scrap), declining to start an exercise without a design target.
+
+Verdict (after restoration).
+
+- Claimed: the ZCode plugin command surface and its skill chain are user-invocable from a real GUI session at plugin `0.15.36` enabled — command recognized, referenced skill discovered through the shared root, and the skill's methodology driving the session — observed 2026-11-14.
+- Not claimed: a complete read-only pstack task run in the GUI (the probe deliberately stopped before any exercise; the 2026-11-11 inventory's item-64 capture list remains the bar), SessionStart hook trust, `0.15.37` currency on ZCode, and any statement about other hosts.
+- The links live in the maintainer checkout's canonical tree and carry no plugin name; they are the pstack skills install, not cleanup residue — the 2026-11-03 → 2026-11-11 disappearance recorded above is the cautionary precedent.
