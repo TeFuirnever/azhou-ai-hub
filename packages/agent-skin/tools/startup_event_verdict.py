@@ -6,6 +6,7 @@ They consume only the versioned native terminal emitted by NativeStartupEventStr
 from __future__ import annotations
 
 import math
+from pathlib import PurePosixPath, PureWindowsPath
 from uuid import UUID
 
 SCHEMA = "azhou-startup.event.v1"
@@ -18,6 +19,12 @@ _ENDS = {"completed": ("startup-ready", 0, "native-completed", "completed"),
          "skipped": ("skipped", 0, "skipped", "skipped"),
          "interrupted": ("partial", 2, "partial", "interrupted"),
          "failed": ("behavior-not-proven", 1, "behavior-not-proven", "failed")}
+
+
+def _absolute_path(value: object) -> bool:
+    return isinstance(value, str) and (
+        PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute()
+    )
 
 
 def _positive(value: object) -> bool:
@@ -47,7 +54,7 @@ def assess_native_launch(events: list[dict], returncode: object,
         seconds = item.get("seconds")
         if (item.get("schema") != SCHEMA or not _positive(pid) or not _positive(item.get("launcherPID"))
                 or item.get("launcherPID") != pid
-                or not isinstance(path, str) or not path.startswith("/") or item.get("launcherPath") != path
+                or not _absolute_path(path) or item.get("launcherPath") != path
                 or type(seconds) not in (int, float)):
             return refused
         try:

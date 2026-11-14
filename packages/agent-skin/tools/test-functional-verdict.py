@@ -131,6 +131,13 @@ class FunctionalVerdictTests(unittest.TestCase):
         self.assertEqual("not-attempted", self.assess_native(candidate)["startup"]["status"])
         self.assertEqual("not-attempted", self.assess_native(valid, path="/foreign")["startup"]["status"])
 
+    def test_native_verdict_accepts_absolute_windows_receipt_paths(self):
+        path = r"C:\Program Files\Azhou\Agent Skin.app"
+        events = self.native_events()
+        for event in events:
+            event["launcherPath"] = path
+        self.assertEqual("native-completed", self.assess_native(events, path=path)["status"])
+
     def test_actual_native_producer_samples_are_consumed_when_available(self):
         root = os.environ.get("AZHOU_AGENT_SKIN_NATIVE_EVENT_SAMPLES")
         if not root:
