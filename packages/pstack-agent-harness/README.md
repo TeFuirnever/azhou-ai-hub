@@ -77,7 +77,7 @@ Native command listing and skill discovery do not by themselves prove GUI
 invocation, though after the 2026-11-14 app restart a real GUI session
 loaded a bundled skill from the installed payload
 ([receipt](../../evidence/zcode-plugin-bundled-skills-2026-11-14.md)); a
-full bundled command→skill workflow run and ZCode plugin SessionStart hook
-delivery are not claimed.
+full bundled command→skill workflow run, a complete read-only pstack task
+run and ZCode plugin SessionStart hook delivery are not claimed.
 
 Configure per-role models with `/setup-pstack`; the sheet lives at `~/.claude/pstack-models.md` on Claude Code and `<codex-home>/pstack-models.md` on Codex. All licenses are MIT; the notices under `NOTICE*.md` and `LICENSE-*` cover the three upstream sources.
