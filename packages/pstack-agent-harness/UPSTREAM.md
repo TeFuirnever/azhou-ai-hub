@@ -61,7 +61,8 @@ patch, and commit the result.
 The generator now emits four committed trees from the source and adapter
 documents: `harness/pstack/claude-code/`, `codex/`, `zcode/` and
 `skills-root/`. Each carries 68 skills; the additional `zcode-plugin/`
-surface holds 41 commands, and the Codex native plugin holds 41 prompts.
+surface holds 41 commands and bundles the same 68 skills, and the Codex
+native plugin holds 41 prompts.
 `scripts/integration_pstack.py` reads `harness/pstack/codex/`. The
 superseded fork-port directories (`plugins/`, `tests/`, `tla/` and
 `lean/`) have been removed; this `tools/` directory holds the quilt

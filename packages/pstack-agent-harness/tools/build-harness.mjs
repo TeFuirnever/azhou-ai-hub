@@ -313,12 +313,14 @@ try {
     written += 1;
   }
 
-  // ZCode installs a commands-only plugin. Its skills stay served by the
-  // shared skills root (`~/.agents/skills`), so the plugin surface adds slash
-  // commands without a second copy of the 68 skills. The local-marketplace
-  // layout and the `commands` manifest pointer were proven against zcode
-  // 0.17.1 on 2026-11-03; a `hooks` field has no proven declaration format
-  // and stays out.
+  // ZCode installs the plugin with its skills bundled. The payload declares
+  // the same root-level skills directory the host's official github,
+  // zcode-guide and visualize plugins use, so ZCode needs no symlinks in the
+  // shared skills root (`~/.agents/skills`) to serve the 68 skills. The
+  // local-marketplace layout and the `commands`/`skills` manifest pointers
+  // were proven against zcode 0.17.1 (2026-11-03) and the bundled-skills
+  // shape against the official plugins cache (2026-11-14); a `hooks` field
+  // has no proven declaration format and stays out.
   const ZCODE_MARKETPLACE = "azhou-hub";
   const zcodeRoot = join(outDir, "pstack", "zcode-plugin");
   // No version layer: the local-source installer copies the plugin directory
@@ -337,6 +339,7 @@ try {
         author: manifest.author,
         license: manifest.license,
         commands: "commands",
+        skills: "skills",
       },
       null,
       2,
@@ -348,6 +351,9 @@ try {
       `---\ndescription: ${JSON.stringify(skillDescription(skill))}\n---\n\nInvoke the \`${skill}\` skill and follow it.\n`,
     );
   }
+  cpSync(join(codexTree, "skills"), join(zcodeBundle, "skills"), { recursive: true });
+  const zcodeSkills = readdirSync(join(zcodeBundle, "skills"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory()).length;
   cpSync(join(codexTree, "LICENSE"), join(zcodeBundle, "LICENSE"));
   writeFileSync(
     join(zcodeRoot, "marketplace.json"),
@@ -369,7 +375,7 @@ try {
     )}\n`,
   );
 
-  assembled = { trees: trees.length, prompts: written, zcodeCommands: written };
+  assembled = { trees: trees.length, prompts: written, zcodeCommands: written, zcodeSkills };
 } catch (error) {
   rmSync(outDir, { recursive: true, force: true });
   fail(`harness assembly failed: ${error.message}`);
@@ -380,5 +386,5 @@ rmSync(SCRATCH, { recursive: true, force: true });
 console.log(
   `harness trees written to ${outDir} from ${series.length} patch(es), ` +
     `hooks assembled into ${assembled.trees} tree(s), ${assembled.prompts} Codex prompts, ` +
-    `${assembled.zcodeCommands} ZCode commands`,
+    `${assembled.zcodeCommands} ZCode commands, ${assembled.zcodeSkills} bundled ZCode skills`,
 );

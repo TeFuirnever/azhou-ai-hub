@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "packages" / "pstack-agent-harness"
 HARNESS = PACKAGE / "harness" / "pstack"
 EXPECTED_PLUGIN = "pstack-azhouzhou"
-EXPECTED_VERSION = "0.15.37"
+EXPECTED_VERSION = "0.15.38"
 EXPECTED_SKILLS = 68
 EXPECTED_COMMANDS = 41
 
@@ -205,7 +205,8 @@ class PstackDistributionContractTest(unittest.TestCase):
         series = (PACKAGE / "patches/series").read_text(encoding="utf-8").splitlines()
         self.assertIn("0021-hub-distribution-version-0.15.37.patch", series)
         self.assertIn("0022-hub-claude-sheet-hook-path.patch", series)
-        self.assertEqual(series[-1], "0023-hub-worktree-audit-preserve-untracked.patch")
+        self.assertIn("0023-hub-worktree-audit-preserve-untracked.patch", series)
+        self.assertEqual(series[-1], "0024-hub-distribution-version-0.15.38.patch")
 
     def test_codex_adapter_model_and_agent_paths_match_native_hook(self) -> None:
         source = (PACKAGE / "hub-adapters/codex.md").read_text(encoding="utf-8")
@@ -236,13 +237,13 @@ class PstackDistributionContractTest(unittest.TestCase):
                 rows = [line for line in content.splitlines()
                         if line.startswith("| `pstack` |")]
                 self.assertEqual(len(rows), 1)
-                for marker in ("pstack-azhouzhou", "0.15.37", "MiMo", "DeepSeek Harness"):
+                for marker in ("pstack-azhouzhou", "0.15.38", "MiMo", "DeepSeek Harness"):
                     self.assertIn(marker, rows[0])
                 self.assertTrue(any("DeepSeek Harness" in line and
                                     "pstack-azhouzhou" in line
                                     for line in content.splitlines() if "zcode" in line))
 
-    def test_zcode_commands_plugin_is_flat_and_has_no_skills_or_hooks(self) -> None:
+    def test_zcode_plugin_bundles_commands_and_all_skills(self) -> None:
         tree = HARNESS / "zcode-plugin"
         registry = json_file(tree / "marketplace.json")
         self.assertEqual(registry["name"], "azhou-hub")
@@ -253,12 +254,14 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertEqual((manifest["name"], manifest["version"]),
                          (EXPECTED_PLUGIN, EXPECTED_VERSION))
         self.assertEqual(manifest["commands"], "commands")
-        self.assertNotIn("skills", manifest)
+        self.assertEqual(manifest["skills"], "skills")
         self.assertNotIn("hooks", manifest)
         commands = {p.stem for p in (payload / "commands").glob("*.md")}
         self.assertEqual(len(commands), EXPECTED_COMMANDS)
         self.assertTrue(commands <= skills_for("zcode"))
-        self.assertFalse((payload / "skills").exists())
+        # The bundled payload carries the full inventory, so ZCode no longer
+        # needs shared-root links to serve these skills.
+        self.assertEqual(skills_for(f"zcode-plugin/{EXPECTED_PLUGIN}"), skills_for("zcode"))
         self.assertFalse((payload / "hooks").exists())
 
 
