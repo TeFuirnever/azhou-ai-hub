@@ -101,7 +101,8 @@ function makeFixture(options = {}) {
         for (const listener of element.listeners.get('click') || []) listener({ target: element });
       },
       removeAttribute(name) { attributes.delete(name); },
-      showModal() { element.open = true; },
+      showModal() { element.showModalCalls = (element.showModalCalls || 0) + 1; element.open = true; },
+      show() { element.showCalls = (element.showCalls || 0) + 1; element.open = true; },
       close() { element.open = false; },
       listeners: new Map(),
     };
@@ -894,6 +895,150 @@ test('settings callbacks keep cancel semantics and legacy onSaved behavior when 
   assert.equal(saved[0].introTitle, 'Saved title');
   assert.equal(cancelled, 1);
   fixture.api.dispose();
+});
+
+test('embedded presentation renders inline without modal traps and keeps the section open', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({ indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024], [512, 512], [1536, 1024]] });
+  await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Saved title', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
+  });
+  const saved = [];
+  const applied = [];
+  let cancelled = 0;
+  assert.equal(fixture.api.openSettings({
+    onApply: async value => { applied.push(value); return { applied: true }; },
+    onSaved: value => saved.push(value),
+    onCancel: () => { cancelled++; },
+  }, { presentation: 'embedded' }), true);
+  const dialog = fixture.elements.find(element => element.tagName === 'DIALOG');
+  assert.ok(dialog);
+  assert.equal(dialog.showCalls, 1, 'the embedded section opens inline');
+  assert.equal(dialog.showModalCalls ?? 0, 0, 'the embedded section never takes the modal stack');
+  assert.equal(dialog.style.getPropertyValue('width'), '100%');
+  assert.equal(dialog.style.getPropertyValue('max-height'), 'none');
+  assert.equal(dialog.listeners.has('cancel'), false, 'no native cancel path is wired inline');
+  assert.equal(dialog.listeners.has('keydown'), false, 'the host page navigation stays untrapped');
+
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  title.value = 'Draft edit';
+  title.listeners.get('input')[0]();
+  const cancelButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '取消');
+  cancelButton.click();
+  assert.equal(fixture.api.isSettingsOpen(), true, 'embedded cancel keeps the section mounted');
+  assert.equal(cancelled, 0, 'embedded cancel is not a settings cancellation');
+  assert.equal(title.value, 'Saved title', 'embedded cancel discards the draft edit');
+  for (const listener of dialog.listeners.get('cancel') || []) listener({ target: dialog, preventDefault() {} });
+  assert.equal(fixture.api.isSettingsOpen(), true, 'an unwired cancel event stays inert inline');
+
+  title.value = 'Embedded title';
+  title.listeners.get('input')[0]();
+  const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
+  const status = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
+  await saveButton.listeners.get('click')[0]();
+  assert.equal(fixture.api.isSettingsOpen(), true, 'an embedded save keeps the section mounted');
+  assert.equal(saved.length, 1);
+  assert.equal(saved[0].introTitle, 'Embedded title');
+  assert.equal(applied.length, 1);
+  assert.equal(status.textContent, '设置已保存，背景已应用。');
+  assert.equal(saveButton.textContent, '保存', 'a settled embedded save returns to the plain save action');
+
+  title.value = 'Embedded title 2';
+  title.listeners.get('input')[0]();
+  await saveButton.listeners.get('click')[0]();
+  assert.equal(saved.length, 2, 'the live embedded section accepts further save rounds');
+  assert.equal(applied.length, 2);
+  fixture.api.dispose();
+});
+
+test('embedded cancel reverts to the last saved record, not the open-time baseline', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({ indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024], [512, 512], [1536, 1024]] });
+  await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Open-time baseline', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
+  });
+  const applied = [];
+  assert.equal(fixture.api.openSettings({
+    onApply: async value => { applied.push(value.introTitle); return { applied: true }; },
+    onSaved: () => {},
+  }, { presentation: 'embedded' }), true);
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
+  const cancelButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '取消');
+
+  title.value = 'Saved round 1';
+  title.listeners.get('input')[0]();
+  await saveButton.listeners.get('click')[0]();
+  assert.equal(storage.state.puts, 1);
+
+  title.value = 'Unsaved round 2';
+  title.listeners.get('input')[0]();
+  cancelButton.click();
+  assert.equal(title.value, 'Saved round 1',
+    'the embedded cancel rolls back to the last saved record, keeping the earlier save');
+
+  await saveButton.listeners.get('click')[0]();
+  assert.equal(storage.state.puts, 2, 'the next save stores the reverted draft');
+  assert.deepEqual(applied, ['Saved round 1', 'Saved round 1']);
+  fixture.api.dispose();
+});
+
+test('embedded cancel drops a saved-but-unapplied commit so the next save is fresh', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({ indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024], [512, 512], [1536, 1024]] });
+  await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Open-time baseline', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
+  });
+  const applied = [];
+  const saved = [];
+  let applyOutcome = { applied: false, reason: 'wallpaper-unavailable' };
+  assert.equal(fixture.api.openSettings({
+    onApply: async value => { applied.push(value.introTitle); return applyOutcome; },
+    onSaved: value => saved.push(value.introTitle),
+  }, { presentation: 'embedded' }), true);
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
+  const cancelButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '取消');
+
+  title.value = 'Broken apply';
+  title.listeners.get('input')[0]();
+  await saveButton.listeners.get('click')[0]();
+  assert.equal(storage.state.puts, 1, 'the record is stored even though the host apply failed');
+  assert.equal(saveButton.textContent, '重试应用', 'the failed apply leaves the retry action visible');
+
+  cancelButton.click();
+  assert.equal(saveButton.textContent, '保存', 'the embedded cancel drops the pending-apply commit');
+  assert.equal(title.value, 'Broken apply',
+    'the revert baseline is the stored record, matching what the host still holds');
+
+  applyOutcome = { applied: true };
+  title.value = 'Fresh edit';
+  title.listeners.get('input')[0]();
+  await saveButton.listeners.get('click')[0]();
+  assert.equal(storage.state.puts, 2, 'the next save is a fresh save, not a retry of the old commit');
+  assert.deepEqual(applied, ['Broken apply', 'Fresh edit'],
+    'the fresh save carries the edited draft rather than replaying the dropped commit');
+  fixture.api.dispose();
+
+  const modalFixture = makeFixture({ indexedDB: makeIndexedDB().indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]] });
+  await modalFixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0, 0], [1, 1]]],
+    introTitle: 'Saved title', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
+  });
+  assert.equal(modalFixture.api.openSettings({}), true, 'the standalone default stays modal');
+  const modalDialog = modalFixture.elements.find(element => element.tagName === 'DIALOG');
+  assert.equal(modalDialog.showModalCalls, 1);
+  assert.equal(modalDialog.showCalls ?? 0, 0);
+  assert.ok(modalDialog.listeners.has('cancel'));
+  assert.ok(modalDialog.listeners.has('keydown'));
+  modalFixture.api.dispose();
 });
 
 test('the settings page puts editing first and keeps read-only appearance state without exposing build instructions', async () => {

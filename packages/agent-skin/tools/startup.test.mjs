@@ -2077,6 +2077,7 @@ test('mountSettings embeds the same panel into a host element and its disposer u
   const mountSpec = specs[1].spec;
   assert.equal(specs[0].spec.intent, 'play');
   assert.equal(mountSpec.intent, 'settings', 'the embed starts straight in the settings intent');
+  assert.equal(mountSpec.presentation, 'embedded', 'the embed declares the non-modal presentation');
   assert.notEqual(mountSpec.runId, specs[0].spec.runId, 'the embed runs on its own run id');
 
   // Overlay isolation: embed traffic never moves the startup state machine.

@@ -86,6 +86,7 @@ function createImageSettings(environment) {
     'settings.button.retryApply': '重试应用',
     'settings.button.applyingBackground': '正在应用…',
     'settings.status.applyingBackground': '设置已保存，正在应用背景…',
+    'settings.status.saved': '设置已保存，背景已应用。',
     'settings.error.backgroundApply': '设置已保存，但背景应用失败。可以重试，或关闭设置。',
     'settings.button.choosePortrait': '选择启动头像',
     'settings.button.chooseBackground': '选择背景图片',
@@ -146,6 +147,7 @@ function createImageSettings(environment) {
   let panelCommit = null;
   let panelApplying = false;
   let panelSavedNotified = false;
+  let panelPresentation = 'modal';
   let panelStatus = null;
   let localizationUnsubscribe = null;
 
@@ -1038,7 +1040,8 @@ function createImageSettings(environment) {
       if (!panelOpen || panelAtStart !== panelGeneration || panelCommit !== commit) return false;
       if (result?.applied !== true && result?.reason !== 'disabled') throw new Error('background-apply-failed');
       panelApplying = false;
-      closePanel('saved');
+      if (panelPresentation === 'embedded') settleEmbeddedSave(commit.saved);
+      else closePanel('saved');
       return true;
     } catch {
       if (!panelOpen || panelAtStart !== panelGeneration || panelCommit !== commit) return false;
@@ -1067,6 +1070,13 @@ function createImageSettings(environment) {
     dialog.style.setProperty('border-color', 'var(--agent-skin-border, CanvasText)');
     dialog.style.setProperty('background-color', 'var(--agent-skin-surface, Canvas)');
     dialog.style.setProperty('color', 'var(--agent-skin-text, CanvasText)');
+    if (panelPresentation === 'embedded') {
+      // Inline section presentation: flow with the host container instead of
+      // the modal sheet viewport clamps.
+      dialog.style.setProperty('width', '100%');
+      dialog.style.setProperty('max-height', 'none');
+      dialog.style.setProperty('box-shadow', 'none');
+    }
 
     const focusRules = '[data-agent-skin-settings] :is(button,input,textarea,select,summary,[tabindex]):focus-visible{outline:3px solid #fff;outline-offset:2px;box-shadow:0 0 0 5px #111}@media(forced-colors:active){[data-agent-skin-settings] :is(button,input,textarea,select,summary,[tabindex]):focus-visible{outline-color:Highlight;box-shadow:none}}';
     try {
@@ -1442,7 +1452,10 @@ function createImageSettings(environment) {
     cancel.type = 'button';
     styleButton(cancel);
     cancel.textContent = translate('settings.button.cancel');
-    cancel.addEventListener('click', cancelSettings);
+    cancel.addEventListener('click', () => {
+      if (panelPresentation === 'embedded') revertPanelDraft();
+      else cancelSettings();
+    });
     const saveButton = document.createElement('button');
     saveButton.type = 'button';
     styleButton(saveButton, true);
@@ -1475,6 +1488,7 @@ function createImageSettings(environment) {
       panelSavedNotified = false;
       updatePanelBusy();
       if (panelCommit.onApply) await applyCommittedSettings(panelCommit);
+      else if (panelPresentation === 'embedded') settleEmbeddedSave(panelCommit.saved);
       else closePanel('saved');
     });
     controls.push(restore, cancel, saveButton);
@@ -1486,12 +1500,17 @@ function createImageSettings(environment) {
     content.appendChild(actions);
     dialog.appendChild(content);
     document.body.appendChild(dialog);
-    dialog.addEventListener('cancel', event => {
-      if (event.target !== dialog) return;
-      event.preventDefault();
-      cancelSettings();
-    });
-    dialog.addEventListener('keydown', containPanelTab, true);
+    if (panelPresentation !== 'embedded') {
+      // Native `cancel` fires only for showModal() dialogs, and the Tab trap
+      // matches the modal presentation. The embedded section keeps the host
+      // settings page's own navigation untrapped.
+      dialog.addEventListener('cancel', event => {
+        if (event.target !== dialog) return;
+        event.preventDefault();
+        cancelSettings();
+      });
+      dialog.addEventListener('keydown', containPanelTab, true);
+    }
     panelControls = {
       controls, status, fields, strength, strengthValue, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
@@ -1508,8 +1527,10 @@ function createImageSettings(environment) {
     if (footerHeight > 0) dialog.style.setProperty('scroll-padding-bottom', footerHeight + 6 + 'px');
   }
 
-  function openSettings(callbacks = {}) {
-    if (disposed || panelOpen || !currentSettings || active || !buildSettingsPanel()) return false;
+  function openSettings(callbacks = {}, options = {}) {
+    if (disposed || panelOpen || !currentSettings || active) return false;
+    panelPresentation = options && options.presentation === 'embedded' ? 'embedded' : 'modal';
+    if (!buildSettingsPanel()) return false;
     draft = cloneSettings(currentSettings);
     panelCallbacks = callbacks && typeof callbacks === 'object' ? callbacks : {};
     panelCommit = null;
@@ -1523,7 +1544,9 @@ function createImageSettings(environment) {
     else if (loadReason === 'settings-unavailable' || loadReason === 'settings-blocked') {
       setPanelStatus('settings.load.unavailable', 'alert');
     } else setPanelStatus('');
-    try { dialog.showModal(); }
+    // The embedded section renders inline: show() keeps the dialog non-modal
+    // with no backdrop and no native cancel event.
+    try { if (panelPresentation === 'embedded') dialog.show(); else dialog.showModal(); }
     catch {
       panelOpen = false;
       panelCallbacks = null;
@@ -1558,6 +1581,48 @@ function createImageSettings(environment) {
     const callback = panelCallbacks?.onCancel;
     closePanel('cancel');
     try { callback?.(); } catch {}
+    return true;
+  }
+
+  // Embedded presentation: a saved commit stays open for further edits. The
+  // save notification fires exactly once per commit, matching closePanel's
+  // modal-path contract, and the commit is cleared so the fields re-enable.
+  // currentSettings mirrors the stored record — the modal path re-reads it
+  // through load() on each reopen, the embedded panel never reopens.
+  function settleEmbeddedSave(savedSnapshot) {
+    if (!panelSavedNotified) {
+      panelSavedNotified = true;
+      const savedCallback = panelCallbacks?.onSaved;
+      try { savedCallback?.(savedSnapshot); } catch {}
+    }
+    currentSettings = cloneSettings(savedSnapshot);
+    panelCommit = null;
+    panelApplying = false;
+    updatePanelBusy();
+    setPanelStatus('settings.status.saved');
+  }
+
+  // Embedded presentation: cancel discards draft edits without closing the
+  // section — only the host unmounting the embed ends it. A saved-but-unapplied
+  // commit follows the modal cancel-with-commit contract: its stored record
+  // becomes the revert baseline and the pending-apply state is dropped, so the
+  // fields, the save action and the stored record agree again (the modal path
+  // closes the panel instead of reverting).
+  function revertPanelDraft() {
+    if (!panelOpen || active || panelApplying) return false;
+    if (panelCommit) {
+      if (!panelSavedNotified) {
+        panelSavedNotified = true;
+        const savedCallback = panelCallbacks?.onSaved;
+        try { savedCallback?.(panelCommit.saved); } catch {}
+      }
+      currentSettings = cloneSettings(panelCommit.saved);
+      panelCommit = null;
+    }
+    draft = cloneSettings(currentSettings);
+    updatePanelFields();
+    updatePanelBusy();
+    setPanelStatus('');
     return true;
   }
 

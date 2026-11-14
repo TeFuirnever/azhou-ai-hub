@@ -6425,10 +6425,11 @@ try {
         const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
         adapter = createCodexPageAdapter(host);
       }
-      const evidence = window.lifecycleFixture = {disposed:0,closed:0};
+      const evidence = window.lifecycleFixture = {disposed:0,closed:0,embedPresentations:[]};
       const payload = (_win, _doc, _location, _performance, _indexedDB, _Image, _Path2D, _URL,
         _raf, _cancelRaf, _setTimeout, _clearTimeout, _module, send, spec) => {
         const emit = (action, fields={}) => send({type:'azhou-startup', action, runId:spec.runId, ...fields});
+        if (spec.intent === 'settings') evidence.embedPresentations.push(spec.presentation ?? null);
         if (spec.intent === 'play') {
           evidence.ready = () => emit('ready');
           evidence.complete = () => emit('complete', {skipped:false});
@@ -6488,6 +6489,8 @@ try {
       return true;
     })()`);
     assert.equal(mounted, true, 'DSH controller mounted one embedded settings frame');
+    assert.deepEqual(await cdp.evaluate('lifecycleFixture.embedPresentations'), ['embedded'],
+      'the embed frameSpec declares the non-modal presentation in a real browser');
     await until(() => cdp.evaluate('lifecycleFixture.disposed === 1 && lifecycleFixture.closed === 1'),
       1000, 'detached DSH settings panel released and host notified');
     const state = await cdp.evaluate(`(() => {
