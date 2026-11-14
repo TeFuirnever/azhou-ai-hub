@@ -41,14 +41,8 @@ const WALLPAPER_FAILURE_STAGES = Object.freeze({
   'retry-timeout': 'apply',
 });
 const WALLPAPER_RETRY_TIMEOUT_MS = 10_000;
-// Every generated install payload is strictly smaller than 24 MiB and embeds
-// the default assets. A missing-record snapshot is that asset subset plus a
-// fixed, small JSON envelope. Valid normalized records are separately capped
-// at 20 MiB by image-settings before this envelope is added.
 const SETTINGS_SNAPSHOT_MAX_BYTES = 24 * 1024 * 1024 + 4 * 1024;
 const SETTINGS_SNAPSHOT_CHUNK_BYTES = 64 * 1024;
-// Retention safety cap only; the Native launch deadline remains authoritative
-// and can cancel/dispose an export earlier.
 const SETTINGS_SNAPSHOT_TIMEOUT_MS = 30_000;
 const SETTINGS_SNAPSHOT_RUN_NONCE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 let nextRunId = 1;
@@ -230,7 +224,6 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
   controllerMetadata, externalStartGate = false) {
   const parent = typeof host.document?.body?.appendChild === 'function'
     ? host.document.body : host.document?.documentElement;
-  // The DSH document-start gate owns the maximum layer until this iframe reports ready.
   const zIndex = externalStartGate ? '2147483646' : '2147483647';
   return buildPanel(host, payload, runId, intent, assets, receive, appearance, pageAdapter, controllerMetadata,
     parent, `position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:${zIndex};background:transparent`,
@@ -887,6 +880,7 @@ class PageController {
       try { operation.settingsAPI?.dispose?.(); } catch {}
       operation.settingsAPI = null;
       if (this.dshWallpaperPreparation === operation) this.dshWallpaperPreparation = null;
+      this.#updateStartupWallpaperNotice();
     };
     operation.timer = this.host.setTimeout(() => {
       if (current()) this.#setWallpaperFailure('retry-timeout');
@@ -1308,9 +1302,18 @@ class PageController {
     return !!descriptor && Object.hasOwn(descriptor, 'value') && descriptor.value === this.api;
   }
 
+  #isDSHPrepared() {
+    return this.playbackOwner === 'dsh-gated' && this.state.phase === 'prepared' && this.intent === 'prepare';
+  }
+
+  #canRetryStartupWallpaper() {
+    return (this.state.phase === 'complete' && this.state.completed)
+      || (this.#isDSHPrepared() && !this.dshWallpaperPreparation?.active);
+  }
+
   #isCurrentRetry(runId, generation) {
     return !this.disposed && generation === this.wallpaperGeneration && runId === this.state.runId
-      && this.state.phase === 'complete' && this.state.completed && this.#ownsStartupController();
+      && this.#canRetryStartupWallpaper() && this.#ownsStartupController();
   }
 
   // Embed-sourced wallpaper applies stay current while the controller owns the
@@ -1326,7 +1329,7 @@ class PageController {
     const failure = wallpaperFailure({ failureCode: code });
     if (failure) Object.assign(result, failure);
     this.state.wallpaper = result;
-    if (this.intent === 'play') {
+    if (this.intent === 'play' || this.#isDSHPrepared()) {
       this.startupWallpaperFailure = failure && this.wallpaperRequest && !this.wallpaperDisabled
         ? { ...result } : null;
       if (!this.wallpaperRetryPromise) this.startupWallpaperNoticeDismissed = false;
@@ -1339,8 +1342,9 @@ class PageController {
     const cause = this.state.completion?.cause;
     const visible = !this.disposed && !this.startupWallpaperNoticeDismissed
       && !!this.startupWallpaperFailure && !!this.wallpaperRequest && !this.wallpaperDisabled
-      && this.state.phase === 'complete' && this.state.completed
-      && ['natural', 'skip', 'settings-cancel'].includes(cause);
+      && (this.#isDSHPrepared() ? !this.dshWallpaperPreparation?.active
+        : this.state.phase === 'complete' && this.state.completed
+          && ['natural', 'skip', 'settings-cancel'].includes(cause));
     this.appearanceEntry?.setWallpaperFailure(visible ? this.startupWallpaperFailure : null,
       announcementKey);
   }
@@ -1369,7 +1373,7 @@ class PageController {
     if (this.disposed) return Promise.resolve(this.#retryResult(false, previousFailure, 'disposed'));
     if (this.wallpaperRetryPromise) return this.wallpaperRetryPromise;
     if (!this.#ownsStartupController()) return Promise.resolve(this.#retryResult(false, previousFailure, 'unknown-owner'));
-    if (this.state.phase !== 'complete' || !this.state.completed) {
+    if (!this.#canRetryStartupWallpaper()) {
       return Promise.resolve(this.#retryResult(false, previousFailure, 'busy'));
     }
     if (this.wallpaperDisabled || this.state.wallpaper.reason === 'disabled') {
@@ -1506,7 +1510,7 @@ class PageController {
         const current = wallpaperRecord(this.host, this.wallpaperOwner);
         if (current.present && !current.supported) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
-          if (this.intent === 'play') this.startupWallpaperFailure = null;
+          if (this.intent === 'play' || this.#isDSHPrepared()) this.startupWallpaperFailure = null;
           this.#updateStartupWallpaperNotice();
           return { ...this.state.wallpaper };
         }
@@ -1518,7 +1522,7 @@ class PageController {
       if (!current.supported) {
         if (current.present) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
-          if (this.intent === 'play') this.startupWallpaperFailure = null;
+          if (this.intent === 'play' || this.#isDSHPrepared()) this.startupWallpaperFailure = null;
           this.#updateStartupWallpaperNotice();
           return { ...this.state.wallpaper };
         }
@@ -1537,10 +1541,10 @@ class PageController {
       if (this.state.wallpaper.applied) {
         const hadStartupFailure = !!this.startupWallpaperFailure;
         this.startupWallpaperFailure = null;
-        this.#updateStartupWallpaperNotice(this.intent === 'play' && retry && hadStartupFailure
+        this.#updateStartupWallpaperNotice(retry && hadStartupFailure && this.#canRetryStartupWallpaper()
           ? 'applied' : undefined);
       } else {
-        if (this.intent === 'play') {
+        if (this.intent === 'play' || this.#isDSHPrepared()) {
           const failure = wallpaperFailure(this.state.wallpaper);
           this.startupWallpaperFailure = failure && this.wallpaperRequest && !this.wallpaperDisabled
             ? { ...this.state.wallpaper } : null;
@@ -1853,7 +1857,6 @@ class PageController {
       status.prepared = this.state.phase === 'prepared';
       const operation = this.nativeWorkspace;
       if (status.prepared) {
-        // A previously installed wallpaper is not evidence for this run's settings read.
         const currentOperation = operation?.runId === this.state.runId ? operation : null;
         status.wallpaper = currentOperation?.result ? { ...currentOperation.result }
           : { applied: false, reason: '', imageDecoded: false };

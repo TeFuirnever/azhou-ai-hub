@@ -408,6 +408,21 @@ function realDSHWallpaperFixture(options = {}) {
   const storage = dshSettingsStorage(saved, options);
   const { host } = fixture;
   let imageIndex = 0;
+  const entryStateListeners = new Set();
+  const entryNotices = [];
+  const basePageAdapter = fixture.pageAdapter;
+  fixture.pageAdapter = {
+    ...basePageAdapter,
+    mountEntry(...args) {
+      const entry = basePageAdapter.mountEntry(...args);
+      return { ...entry, setWallpaperFailure(failure, announcementKey) {
+        entry.setWallpaperFailure(failure, announcementKey);
+        const notice = { failure: failure ? { ...failure } : null, announcementKey };
+        entryNotices.push(notice);
+        for (const listener of [...entryStateListeners]) listener(notice);
+      } };
+    },
+  };
   host.indexedDB = storage.indexedDB;
   host.crypto = { subtle: webcrypto.subtle };
   host.atob = globalThis.atob;
@@ -430,6 +445,9 @@ function realDSHWallpaperFixture(options = {}) {
   const rendererCalls = [];
   const installRenderer = async offered => {
     rendererCalls.push({ image: offered.image, strength: offered.strength });
+    if (options.failFirstApply && rendererCalls.length === 1) {
+      return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'shell-unsupported', imageDecoded: false };
+    }
     const wallpaper = Object.freeze({ owner: 'azhou.dsh-startup-animation', version: '0.9.0',
       status: () => ({ applied: true, imageDecoded: true }), dispose() {} });
     Object.defineProperty(host, '__azhouWallpaper', { value: wallpaper,
@@ -442,7 +460,32 @@ function realDSHWallpaperFixture(options = {}) {
   fixture.payload.createImageSettings = createImageSettings;
   fixture.payload.applyWallpaper = createWallpaperApplicator(installRenderer,
     { version: '0.9.0', css: '', pageAdapter: fixture.pageAdapter }, host);
-  return { ...fixture, storage, rendererCalls, saved };
+  const waitForWallpaper = (api, predicate, message, timeoutMs = 5000) => {
+    const current = () => api.status().wallpaper;
+    const matches = () => predicate(current(), entryNotices.at(-1) ?? null);
+    if (matches()) return Promise.resolve(current());
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (error, wallpaper) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        entryStateListeners.delete(check);
+        if (error) reject(error);
+        else resolve(wallpaper);
+      };
+      const check = () => {
+        try {
+          const wallpaper = current();
+          if (matches()) finish(null, wallpaper);
+        } catch (error) { finish(error); }
+      };
+      const timer = setTimeout(() => finish(new Error(message)), timeoutMs);
+      entryStateListeners.add(check);
+      check();
+    });
+  };
+  return { ...fixture, storage, rendererCalls, saved, entryNotices, waitForWallpaper };
 }
 
 async function waitForCondition(predicate, message) {
@@ -481,7 +524,7 @@ test('a DSH page without the gate reads its own saved wallpaper and applies it w
   assert.deepEqual(installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated'),
     { installed: true, alreadyActive: false });
   const api = fixture.host.__azhouStartup;
-  await waitForCondition(() => fixture.rendererCalls.length === 1, 'saved DSH wallpaper was not applied');
+  await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied, 'saved DSH wallpaper was not applied');
   assert.deepEqual(fixture.storage.state.opens, [{ name: 'azhou-dsh-startup', version: 1 }]);
   assert.equal(fixture.storage.state.requests[0].key, 'images');
   assert.equal(fixture.storage.state.transactions[0].mode, 'readonly');
@@ -507,7 +550,7 @@ test('a claimed DSH gate timeout restores saved wallpaper while preserving the f
   assert.equal(api.status().phase, 'failed');
   assert.equal(api.status().reason, 'startup-gate-expired');
   assert.equal(frame.removed, true, 'the stalled startup frame is gone before restoration begins');
-  await waitForCondition(() => fixture.rendererCalls.length === 1,
+  await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied,
     'saved wallpaper did not restore after the gate timeout');
 
   const status = api.status();
@@ -532,7 +575,7 @@ test('a DSH renderer timeout before ready restores saved wallpaper and keeps tim
   assert.equal(api.status().reason, 'overlay-timeout');
   assert.equal(frame.removed, true);
 
-  await waitForCondition(() => fixture.rendererCalls.length === 1,
+  await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied,
     'saved wallpaper did not restore after the pre-ready renderer timeout');
   const status = api.status();
   assert.equal(status.phase, 'timeout');
@@ -551,7 +594,7 @@ test('a DSH asset error before ready restores saved wallpaper and preserves its 
   fixture.host.send({ type: 'azhou-startup', action: 'assetError', reason: 'asset-invalid',
     runId: api.status().runId }, frame.contentWindow);
 
-  await waitForCondition(() => fixture.rendererCalls.length === 1,
+  await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied,
     'saved wallpaper did not restore after the pre-ready asset error');
   const status = api.status();
   assert.equal(status.phase, 'failed');
@@ -571,7 +614,7 @@ test('a DSH skip before ready restores saved wallpaper without changing skip com
   fixture.host.send({ type: 'azhou-startup', action: 'complete', skipped: true,
     runId: api.status().runId }, frame.contentWindow);
 
-  await waitForCondition(() => fixture.rendererCalls.length === 1,
+  await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied,
     'saved wallpaper did not restore after the pre-ready skip');
   const status = api.status();
   assert.equal(status.phase, 'complete');
@@ -608,7 +651,7 @@ test('a DSH settings preview cancels pending recovery and wins over the late sav
   const settingsRunId = fixture.calls.specs.at(-1).runId;
   fixture.host.send({ type: 'azhou-startup', action: 'background', runId: settingsRunId,
     image: fixture.saved.artwork, strength: 57 }, settingsFrame.contentWindow);
-  await waitForCondition(() => fixture.rendererCalls.length === 1,
+  await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied,
     'the settings preview did not apply');
   fixture.storage.state.releaseFirst();
   await new Promise(resolve => setImmediate(resolve));
@@ -659,7 +702,7 @@ test('a disposed DSH recovery cannot overwrite the new page controller state', a
   fixture.host.indexedDB = nextSettings.indexedDB;
   installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
   const nextApi = fixture.host.__azhouStartup;
-  await waitForCondition(() => fixture.rendererCalls.length === 1,
+  await fixture.waitForWallpaper(nextApi, wallpaper => wallpaper.applied,
     'new page did not restore its own saved wallpaper');
   fixture.storage.state.releaseFirst();
   await new Promise(resolve => setImmediate(resolve));
@@ -681,6 +724,37 @@ test('a saved disabled DSH wallpaper remains disabled without invoking the rende
   assert.equal(api.status().phase, 'prepared');
   assert.equal(api.status().overlay, false);
   assert.equal(fixture.frames.length, 0);
+  api.dispose();
+});
+
+test('a settled DSH preparation failure is announced and can be retried without playback', async () => {
+  const fixture = realDSHWallpaperFixture({ failFirstApply: true, holdFirstRead: true });
+  installStartup(fixture.payload, fixture.host, fixture.pageAdapter, 'dsh-gated');
+  const api = fixture.host.__azhouStartup;
+  await waitForCondition(() => typeof fixture.storage.state.releaseFirst === 'function',
+    'the DSH preparation did not start its saved wallpaper read');
+
+  const busy = await api.retryWallpaper();
+  assert.equal(busy.reason, 'busy', 'an active preparation cannot race its wallpaper retry');
+  assert.equal(api.status().phase, 'prepared');
+  assert.equal(fixture.rendererCalls.length, 0);
+
+  const failureNotice = fixture.waitForWallpaper(api, (_wallpaper, notice) =>
+    notice?.failure?.failureCode === 'shell-unsupported', 'settled DSH failure was not announced');
+  fixture.storage.state.releaseFirst();
+  await failureNotice;
+  assert.equal(api.status().wallpaper.failureCode, 'shell-unsupported');
+  assert.equal(api.status().phase, 'prepared');
+  assert.equal(fixture.frames.length, 0, 'wallpaper recovery does not start the animation');
+
+  const retry = await api.retryWallpaper();
+  assert.equal(retry.retried, true);
+  assert.equal(retry.wallpaper.applied, true);
+  assert.equal(api.status().phase, 'prepared');
+  assert.equal(api.status().wallpaper.applied, true);
+  assert.equal(fixture.rendererCalls.length, 2);
+  assert.equal(fixture.calls.launches, 0);
+  assert.deepEqual(fixture.entryNotices.at(-1), { failure: null, announcementKey: 'applied' });
   api.dispose();
 });
 
@@ -730,7 +804,7 @@ test('opening settings cancels the DSH restore so a newer settings wallpaper win
   const frame = fixture.frames.at(-1);
   fixture.host.send({ type: 'azhou-startup', action: 'background', runId: api.status().runId,
     image: SAVED_DSH_IMAGE, strength: 54 }, frame.contentWindow);
-  await waitForCondition(() => fixture.rendererCalls.length === 1, 'new settings wallpaper was not applied');
+  await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied, 'new settings wallpaper was not applied');
   fixture.storage.state.releaseFirst();
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(fixture.rendererCalls, [{ image: SAVED_DSH_IMAGE, strength: 54 }]);
@@ -760,7 +834,8 @@ test('DSH pagehide and HMR dispose cancel old reads and ignore late results', as
   assert.equal(hmr.storage.state.aborts, 1, 'dispose closes the old page operation');
   installStartup(hmr.payload, hmr.host, hmr.pageAdapter, 'dsh-gated');
   const newApi = hmr.host.__azhouStartup;
-  await waitForCondition(() => hmr.rendererCalls.length === 1, 'replacement controller did not restore saved wallpaper');
+  await hmr.waitForWallpaper(newApi, wallpaper => wallpaper.applied,
+    'replacement controller did not restore saved wallpaper');
   hmr.storage.state.releaseFirst();
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(hmr.rendererCalls, [{ image: hmr.saved.artwork, strength: 31 }]);
