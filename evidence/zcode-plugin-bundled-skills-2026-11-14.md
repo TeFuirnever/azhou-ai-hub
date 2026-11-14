@@ -57,14 +57,36 @@ complete pstack task run.
 - `find ~/.agents/skills -maxdepth 1 -type l ! -exec test -e {} \;` → 0
   broken links.
 
+## Post-restart GUI verification (2026-11-14, after app restart)
+
+The user restarted the ZCode app later the same day, closing the restart
+boundary this receipt had left open:
+
+- `zcode plugins list` in the restarted environment: `pstack-azhouzhou@azhou-hub`
+  `[enabled]` resolving to the 0.15.38 cache path with `skills: 68`;
+  `zcode skills list` still shows all 68 plugin-namespaced entries;
+  `~/.agents/skills` still holds 14 links with 0 broken.
+- A real GUI-session Skill invocation loaded `pstack-azhouzhou:why` from the
+  0.15.38 payload. The loaded body's opening line is the zcode-tree adapter
+  pointer — it tells the session "In ZCode, read the ZCode adapter once per
+  session before you follow this skill. It maps the Cursor names in pstack
+  skills to ZCode.", naming the adapter doc as `docs/harness/zcode.md`
+  relative to the payload root — and the skill's base directory resolved
+  inside the installed payload, so GUI-session loading of a bundled skill is
+  verified, not only CLI discovery.
+- The restarted session's agent roster registered the payload's agents as
+  spawnable agent types — `poteto-agent`, `comment-sicko`,
+  `thermo-nuclear-review-subagent` and
+  `thermo-nuclear-code-quality-review-subagent` — in both bare and
+  `pstack-azhouzhou:`-namespaced forms.
+
 ## Boundaries
 
-- The long-running GUI app still holds the pre-update registration in memory
-  until restart; the CLI evidence above spans the pre-deletion and post-
-  deletion probes and is post-update and cache-backed, and the post-deletion
-  state is link-less. GUI invocation of the bundled command→skill chain on
-  0.15.38 was not re-probed in this pass; the 2026-11-14 GUI receipt remains
-  the evidence for the command→skill chain on the link-served form.
+- The GUI verification above covers a real session loading a bundled skill
+  from the payload and the registered agent roster. A full bundled
+  command→skill workflow run, a complete read-only pstack task run and
+  SessionStart hook trust remain unclaimed; the 2026-11-14 GUI receipt
+  remains the evidence for command recognition on the link-served form.
 - The stale `0.0.0`/`0.15.36` cache directories are host-managed leftovers;
   they were not touched.
 - Bundled upstream prose that still describes cursor-team-kit/thermos as
