@@ -2675,7 +2675,7 @@ test('the codex page adapter exposes its host strategy seam explicitly', () => {
   const controlled = controlledHost();
   const identification = adapter.identify(controlled.host);
   assert.equal(identification.kind, 'matched');
-  assert.equal(identification.documentToken, 'app://-/index.html?initialRoute=%2F');
+  assert.equal(identification.documentToken, adapter.identify(controlled.host).documentToken);
   assert.deepEqual(adapter.identify({ location: { href: 'not a url' } }),
     { kind: 'unmatched', reason: 'page-unsupported' });
   assert.deepEqual(adapter.identify(undefined), { kind: 'unmatched', reason: 'page-unsupported' });
@@ -3307,6 +3307,41 @@ test('legal-size normalized settings plus envelope exceed 20 MiB and remain expo
   assert.equal(fixture.disposeCalls(), 1);
   fixture.api.dispose();
 });
+
+for (const navigate of [false, true]) {
+  test(`pending snapshot ${navigate ? 'rejects observed A to B to A' : 'completes on the same observed page'}`, async () => {
+    let finishRead;
+    let wallpaperWrites = 0;
+    const fixture = snapshotFixture(() => new Promise(resolve => { finishRead = resolve; }), {
+      playbackOwner: 'native', wallpaperApply: () => { wallpaperWrites += 1; },
+    });
+    const { api, adapter, host } = fixture;
+    const request = snapshotRequest(api, 'native-observed-page');
+    const pending = api.beginSettingsSnapshot(request);
+    const first = adapter.identify(host).documentToken;
+    if (navigate) {
+      host.location = new URL('app://-/index.html?initialRoute=%2Fthread');
+      adapter.identify(host);
+      host.location = new URL(mainURL);
+    }
+    const current = adapter.identify(host).documentToken;
+    if (!navigate) assert.equal(current, first);
+    finishRead(snapshotResult('valid'));
+    const descriptor = await pending;
+    if (navigate) {
+      assert.deepEqual(descriptor, { ok: false, reason: 'snapshot-stale' });
+      assert.equal(api.readSettingsSnapshotChunk({ ...request,
+        snapshotID: `${request.runId}:${request.runNonce}`, index: 0, offset: 0 }).ok, false);
+      assert.deepEqual(await api.beginSettingsSnapshot(request), { ok: false, reason: 'snapshot-stale' });
+      assert.equal(fixture.disposeCalls(), 1);
+    } else {
+      assert.equal(descriptor.ok, true);
+      assert.equal(api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0)).ok, true);
+    }
+    assert.equal(wallpaperWrites, 0);
+    api.dispose();
+  });
+}
 
 test('pagehide and run replacement erase pending snapshots and reject late callbacks', async () => {
   let finishRead;
