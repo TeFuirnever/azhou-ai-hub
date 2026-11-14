@@ -114,7 +114,7 @@ function wallpaperRecord(host, owner = LEGACY_WALLPAPER_OWNER) {
 // Only the mounting parent, the frame styling and the accessibility label
 // differ; the overlay's full-viewport behavior is pinned by its tests.
 function buildPanel(host, payload, runId, intent, assets, receive, appearance, pageAdapter,
-  controllerMetadata, parent, cssText, labelKey = 'overlayLabel') {
+  controllerMetadata, parent, cssText, labelKey = 'overlayLabel', presentation) {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function' || !document.body) {
     throw new TypeError('startup overlay host is unavailable');
@@ -153,7 +153,11 @@ function buildPanel(host, payload, runId, intent, assets, receive, appearance, p
   // Preserve the exact legacy factory when no host namespace was supplied.
   const createSettings = environment.settingsNamespace === undefined || typeof settingsFactory !== 'function'
     ? settingsFactory : input => settingsFactory({ ...input, settingsNamespace: environment.settingsNamespace });
-  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, appearance });
+  // The overlay frameSpec stays byte-identical to the legacy shape; only the
+  // settings-section embed declares a presentation mode.
+  const frameSpec = Object.freeze(presentation
+    ? { runId, intent, protocolVersion: 1, assets, appearance, presentation }
+    : { runId, intent, protocolVersion: 1, assets, appearance });
   // Preserve the result so the settings panel can report wallpaper failures.
   const SEND = (data) => receive({ source: frame.contentWindow, data });
   return {
@@ -181,11 +185,14 @@ function mountOverlay(host, payload, runId, intent, assets, receive, appearance,
 
 // Settings-section embed: the same panel document placed inside a host-provided
 // element. The host modal owns Esc, the backdrop and the viewport, so the frame
-// only fills its container — no fixed positioning, no takeover of its own.
+// only fills its container — no fixed positioning, no takeover of its own. The
+// embedded presentation renders the panel non-modally inside that container:
+// no showModal focus trap, and Escape or a cancel click never tears the
+// section down — only the host unmounting it does.
 function mountSettingsPanel(host, payload, runId, assets, receive, appearance, pageAdapter,
   controllerMetadata, target) {
   return buildPanel(host, payload, runId, 'settings', assets, receive, appearance, pageAdapter, controllerMetadata,
-    target, 'display:block;width:100%;height:100%;border:0;background:transparent', 'appearanceLabel');
+    target, 'display:block;width:100%;height:100%;border:0;background:transparent', 'appearanceLabel', 'embedded');
 }
 
 function panelDisconnected({ element, contentWindow }) {
