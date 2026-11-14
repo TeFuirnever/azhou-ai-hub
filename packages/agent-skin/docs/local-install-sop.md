@@ -77,10 +77,10 @@ python3 tools/verify-artifacts.py --verify-dsh-plugin /absolute/installed/azhou-
 Codex 的只读安装验收入口：
 
 ```sh
-python3 -B tools/test-installed-acceptance.py --out .local/local-install/codex
+python3 -B tools/test-installed-acceptance.py --out .local/local-install/codex-run-001
 ```
 
-冷启动使用同一工具的 `--cold-start`，前提是宿主已完整退出；工具不会自动退出运行中的宿主。没有 Dock 固定入口、未执行冷启动或缺少视觉审阅时保留 pending。整体非通过需要逐项解释，不能把 pending 改写成失败或全通过。
+每次使用新的输出目录；已有目录和符号链接会在执行检查前被拒绝，避免覆盖或复用旧证据。冷启动使用同一工具的 `--cold-start`，前提是宿主已完整退出；工具不会自动退出运行中的宿主。没有 Dock 固定入口、未执行冷启动或缺少视觉审阅时保留 pending。整体非通过需要逐项解释，不能把 pending 改写成失败或全通过。
 
 每轮在 Git 忽略的本地证据目录保留一份收据，至少记录：
 

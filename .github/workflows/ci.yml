@@ -167,12 +167,19 @@ jobs:
           python -B tools/test-startup-build.py
           python -B tools/test-startup-browser-selection-cli.py
           node tools/test-image-settings-browser.mjs
-          python -B tools/test-startup-payload-browser.py --out "$RUNNER_TEMP/agent-skin-browser-evidence"
+          python -B tools/test-startup-payload-browser.py --native-window-ordering --out "$RUNNER_TEMP/agent-skin-browser-evidence"
           mkdir -p .build
           xcrun --sdk macosx swiftc -target "$(uname -m)-apple-macos13.0" \
             Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift \
             Native/CodexSkinDriver.swift -o .build/startup-app-compile \
             -framework AppKit -framework WebKit
+      - name: Retain isolated startup functional evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent-skin-browser-evidence
+          path: ${{ runner.temp }}/agent-skin-browser-evidence
+          retention-days: 5
 
   agent-skin-unit-coverage:
     name: Agent Skin full production UT coverage

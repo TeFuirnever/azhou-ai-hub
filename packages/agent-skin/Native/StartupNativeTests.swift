@@ -342,7 +342,7 @@ struct StartupNativeTests {
         if CommandLine.arguments.contains("--probe-cold-window-ordering") {
             _ = NSApplication.shared
             NSApp.setActivationPolicy(.accessory)
-            print("Cold-window ordering checks: \(try nativeColdWindowOrderingChecks())")
+            _ = try nativeColdWindowOrderingChecks()
             return
         }
         if let index = CommandLine.arguments.firstIndex(of: "--probe-startup-handshake"),
@@ -5936,46 +5936,115 @@ private func nativeColdWorkspaceChecks(key: HostApplicationKey) throws -> Int {
 private func nativeColdWindowOrderingChecks() throws -> Int {
     var checks = 0
     func expect(_ condition: Bool, _ label: String) { precondition(condition, "FAILED: " + label); checks += 1 }
-    let beforePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+    guard let beforePID = NSWorkspace.shared.frontmostApplication?.processIdentifier, beforePID > 0,
+          NSScreen.main != nil else {
+        preconditionFailure("window-ordering requires an active graphical desktop and foreground application")
+    }
+    func emit(_ value: [String: Any]) throws {
+        let data = try JSONSerialization.data(withJSONObject: value, options: [.sortedKeys])
+        print(String(decoding: data, as: UTF8.self))
+        fflush(stdout)
+    }
+    func windowIDs(onScreen: Bool) -> [Int] {
+        let options: CGWindowListOption = onScreen ? [.optionOnScreenOnly, .excludeDesktopElements] : .optionAll
+        guard let rows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            preconditionFailure("WindowServer observations are unavailable")
+        }
+        return rows.compactMap { $0[kCGWindowNumber as String] as? Int }
+    }
+    func waitForWindows(_ condition: ([Int]) -> Bool, onScreen: Bool) -> [Int] {
+        let deadline = Date().addingTimeInterval(3)
+        var ids = windowIDs(onScreen: onScreen)
+        while !condition(ids) && Date() < deadline {
+            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+            ids = windowIDs(onScreen: onScreen)
+        }
+        return ids
+    }
     let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
     for normalControl in [true, false] {
-        var cover: NSWindow?
-        let frame = NSRect(x: 24, y: 40, width: 260, height: 160)
-        let presentation = AppKitNativePlayerPresentation(
-            activateApp: { preconditionFailure("cold ordering must not activate") },
-            makeVisible: { _ in preconditionFailure("cold ordering must not select a key window") },
-            runAlert: { _ in }, orderCover: { window in
-                cover = window
-                if normalControl { window.level = .normal }
-                window.setFrame(frame, display: false); window.orderFront(nil)
-            })
-        _ = try presentation.showColdCover(locale: .chinese, runNonce: "ordering-test", delegate: delegate)
-        guard let cover else { preconditionFailure("production cold presentation must own a window") }
-        let host = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
-        host.isReleasedWhenClosed = false
-        defer { presentation.discardColdPlayer(); host.orderOut(nil); host.close() }
-        host.orderFront(nil)
-        let windowNumber = cover.windowNumber
-        presentation.createPlayer(locale: .chinese, mode: "launch", theme: "light", inspect: false,
-            nativeStartup: .init(runNonce: "ordering-test", locale: "zh-CN", theme: "light"),
-            messageHandler: delegate, navigationDelegate: delegate)
-        for revealed in [false, true] {
-            if revealed { presentation.revealColdPlayer() }
-            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
-            let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-            let ids = rows.compactMap { $0[kCGWindowNumber as String] as? Int }
-            guard let coverIndex = ids.firstIndex(of: windowNumber), let hostIndex = ids.firstIndex(of: host.windowNumber) else {
-                preconditionFailure("ordering regression needs both real onscreen window identities")
+        // Release the probe's own strong references before observing WindowServer teardown.
+        let discarded = try autoreleasepool { () throws -> (cover: Int, host: Int, geometry: Bool, second: Bool) in
+            let previousWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+            let frame = NSRect(x: 24, y: 40, width: 260, height: 160)
+            let presentation = AppKitNativePlayerPresentation(
+                activateApp: { preconditionFailure("cold ordering must not activate") },
+                makeVisible: { _ in preconditionFailure("cold ordering must not select a key window") },
+                runAlert: { _ in }, orderCover: normalControl ? { window in
+                    window.level = .normal
+                    window.orderFront(nil)
+                } : nil)
+            _ = try presentation.showColdCover(locale: .chinese, runNonce: "ordering-test", delegate: delegate)
+            let createdWindows = NSApp.windows.filter { !previousWindows.contains(ObjectIdentifier($0)) }
+            guard createdWindows.count == 1, let cover = createdWindows.first, cover.delegate === delegate else {
+                preconditionFailure("production cold presentation must own exactly one new window")
             }
-            print("cold-ordering control=\(normalControl) revealed=\(revealed) cover=\(windowNumber) host=\(host.windowNumber) coverIndex=\(coverIndex) hostIndex=\(hostIndex) frontmost=\(beforePID ?? 0)")
-            fflush(stdout)
-            expect(normalControl ? hostIndex < coverIndex : coverIndex < hostIndex,
-                "real AppKit ordering distinguishes the normal-level negative control from the cold fix before and after reveal")
-            expect(cover.windowNumber == windowNumber && NSWorkspace.shared.frontmostApplication?.processIdentifier == beforePID,
-                "cold cover and reveal reuse their window without changing the foreground application")
+            cover.setFrame(frame, display: false)
+            let host = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
+            host.isReleasedWhenClosed = false
+            defer { presentation.discardColdPlayer(); host.orderOut(nil); host.close() }
+            host.orderFront(nil)
+            let windowNumber = cover.windowNumber
+            guard let content = cover.contentView, content.subviews.count == 1,
+                  let coverView = content.subviews.first else {
+                preconditionFailure("real cold window must initially contain one native cover view")
+            }
+            presentation.createPlayer(locale: .chinese, mode: "launch", theme: "light", inspect: false,
+                nativeStartup: .init(runNonce: "ordering-test", locale: "zh-CN", theme: "light"),
+                messageHandler: delegate, navigationDelegate: delegate)
+            guard let webView = content.subviews.compactMap({ $0 as? WKWebView }).first else {
+                preconditionFailure("real cold window must contain its cover and WKWebView")
+            }
+            let hostNumber = host.windowNumber
+            for revealed in [false, true] {
+                if revealed { presentation.revealColdPlayer() }
+                let ids = waitForWindows({ ids in
+                    guard let coverIndex = ids.firstIndex(of: windowNumber),
+                          let hostIndex = ids.firstIndex(of: hostNumber) else { return false }
+                    return normalControl ? hostIndex < coverIndex : coverIndex < hostIndex
+                }, onScreen: true)
+                guard let coverIndex = ids.firstIndex(of: windowNumber), let hostIndex = ids.firstIndex(of: hostNumber) else {
+                    preconditionFailure("ordering regression needs both real onscreen window identities")
+                }
+                let foregroundPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
+                let mounted = content.subviews.compactMap { $0 as? WKWebView }
+                let coverPresent = coverView.superview === content
+                try emit(["schema": "azhou-cold-window-order.v1", "event": "observation",
+                    "control": normalControl, "revealed": revealed,
+                    "coverWindowID": windowNumber, "hostWindowID": hostNumber,
+                    "coverIndex": coverIndex, "hostIndex": hostIndex,
+                    "foregroundPIDBefore": beforePID, "foregroundPID": foregroundPID,
+                    "probePID": ProcessInfo.processInfo.processIdentifier,
+                    "webViewID": String(describing: ObjectIdentifier(webView)),
+                    "webViewCount": mounted.count, "webViewMounted": mounted.first === webView,
+                    "webViewHidden": webView.isHidden, "coverPresent": coverPresent,
+                    "coverIsKey": cover.isKeyWindow,
+                    "canJoinAllSpaces": cover.collectionBehavior.contains(.canJoinAllSpaces),
+                    "moveToActiveSpace": cover.collectionBehavior.contains(.moveToActiveSpace)])
+                expect(normalControl ? hostIndex < coverIndex : coverIndex < hostIndex,
+                    "real AppKit ordering distinguishes the normal-level negative control from the cold fix before and after reveal")
+                expect(cover.windowNumber == windowNumber && foregroundPID == beforePID && !cover.isKeyWindow,
+                    "cold cover and reveal reuse their window without changing the foreground application")
+                expect(mounted.count == 1 && mounted.first === webView && webView.isHidden == !revealed
+                    && coverPresent == !revealed, "reveal exposes the same real WKWebView and removes the native cover")
+            }
+            expect(!cover.collectionBehavior.contains(.canJoinAllSpaces) && !cover.collectionBehavior.contains(.moveToActiveSpace),
+                "cold window never follows the user to another Space")
+            presentation.discardColdPlayer()
+            host.orderOut(nil)
+            host.close()
+            let geometryEmpty = presentation.geometry.isEmpty
+            presentation.discardColdPlayer()
+            let secondDiscardEmpty = presentation.geometry.isEmpty
+            return (windowNumber, hostNumber, geometryEmpty, secondDiscardEmpty)
         }
-        expect(!cover.collectionBehavior.contains(.canJoinAllSpaces) && !cover.collectionBehavior.contains(.moveToActiveSpace),
-            "cold window never follows the user to another Space")
+        let remaining = waitForWindows({ !$0.contains(discarded.cover) && !$0.contains(discarded.host) }, onScreen: false)
+        try emit(["schema": "azhou-cold-window-order.v1", "event": "cleanup", "control": normalControl,
+            "coverWindowID": discarded.cover, "hostWindowID": discarded.host,
+            "coverWindowPresent": remaining.contains(discarded.cover), "hostWindowPresent": remaining.contains(discarded.host),
+            "geometryEmpty": discarded.geometry, "secondDiscardEmpty": discarded.second])
+        expect(!remaining.contains(discarded.cover) && !remaining.contains(discarded.host) && discarded.geometry && discarded.second,
+            "discard removes both owned WindowServer identities and remains harmless when repeated")
     }
     return checks
 }

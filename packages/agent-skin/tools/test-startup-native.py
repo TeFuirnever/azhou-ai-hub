@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Run native protocol fixtures and real loopback WebSocket handshake regressions."""
+"""Run native fixtures and handshakes, with an explicit owned-window functional gate."""
 
 from __future__ import annotations
 
 import http.server
+import argparse
+from datetime import datetime, timezone
+import hashlib
 import json
 import platform
 import threading
@@ -12,6 +15,112 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+NATIVE_INPUTS = ("Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
+                 "Native/CodexSkinDriver.swift", "Native/StartupNativeTests.swift", "tools/test-startup-native.py")
+
+
+def source_fingerprint() -> dict[str, str]:
+    return {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in NATIVE_INPUTS}
+
+
+def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
+    if type(returncode) is not int or returncode != 0:
+        raise ValueError(f"window probe exited {returncode}")
+    rows = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+    observations, cleanup = {}, {}
+    for row in rows:
+        if not isinstance(row, dict) or row.get("schema") != "azhou-cold-window-order.v1" \
+                or type(row.get("control")) is not bool:
+            raise ValueError("invalid window observation record")
+        control = row["control"]
+        for key in ("coverWindowID", "hostWindowID"):
+            if type(row.get(key)) is not int or row[key] <= 0:
+                raise ValueError(f"invalid {key}")
+        if row["coverWindowID"] == row["hostWindowID"]:
+            raise ValueError("owned windows must have distinct identities")
+        if row.get("event") == "cleanup":
+            if control in cleanup or any(row.get(key) is not expected for key, expected in (
+                    ("coverWindowPresent", False), ("hostWindowPresent", False),
+                    ("geometryEmpty", True), ("secondDiscardEmpty", True))):
+                raise ValueError("missing or duplicate owned-window teardown")
+            cleanup[control] = row
+        elif row.get("event") == "observation":
+            if type(row.get("revealed")) is not bool:
+                raise ValueError("revealed must be boolean")
+            pair = (control, row["revealed"])
+            if pair in observations:
+                raise ValueError("duplicate observation pair")
+            for key in ("coverIndex", "hostIndex"):
+                if type(row.get(key)) is not int or row[key] < 0:
+                    raise ValueError(f"invalid {key}")
+            if row["coverIndex"] == row["hostIndex"] or \
+                    (row["hostIndex"] < row["coverIndex"]) != control:
+                raise ValueError("negative control or production window order regressed")
+            for key in ("foregroundPIDBefore", "foregroundPID", "probePID"):
+                if type(row.get(key)) is not int or row[key] <= 0:
+                    raise ValueError(f"unavailable {key}")
+            if row["foregroundPID"] != row["foregroundPIDBefore"]:
+                raise ValueError("probe changed foreground application")
+            if not isinstance(row.get("webViewID"), str) or not row["webViewID"] \
+                    or type(row.get("webViewCount")) is not int or row["webViewCount"] != 1:
+                raise ValueError("missing real WKWebView identity")
+            expected_flags = {"webViewMounted": True, "webViewHidden": not row["revealed"],
+                              "coverPresent": not row["revealed"], "coverIsKey": False,
+                              "canJoinAllSpaces": False, "moveToActiveSpace": False}
+            if any(row.get(key) is not expected for key, expected in expected_flags.items()):
+                raise ValueError("reveal hierarchy, activation or Space behavior regressed")
+            observations[pair] = row
+        else:
+            raise ValueError("unknown window observation event")
+    if set(observations) != {(control, revealed) for control in (False, True) for revealed in (False, True)} \
+            or set(cleanup) != {False, True}:
+        raise ValueError("requires four observations and two cleanup records")
+    for control in (False, True):
+        before, after = (observations[(control, revealed)] for revealed in (False, True))
+        if any(before[key] != after[key] for key in ("coverWindowID", "hostWindowID", "webViewID")) \
+                or any(cleanup[control][key] != before[key] for key in ("coverWindowID", "hostWindowID")):
+            raise ValueError("owned window or WKWebView identity changed")
+    if len({row["foregroundPID"] for row in observations.values()}) != 1 \
+            or len({row["probePID"] for row in observations.values()}) != 1:
+        raise ValueError("foreground or probe identity drifted")
+    return rows
+
+
+def window_ordering_checks(output: Path, out: Path, source_before: dict, binary_before: str) -> int:
+    command = [str(output), "--probe-cold-window-ordering"]
+    report = {"kind": "synthetic-owned-window-ordering", "unitCoverageInput": False,
+              "scope": "owned-window ordering with a synthetic same-process host",
+              "visualContinuity": "not-measured", "passed": False, "command": command,
+              "startedAt": datetime.now(timezone.utc).isoformat(),
+              "sourceBefore": source_before, "binaryBefore": binary_before}
+    stdout, stderr = "", ""
+    try:
+        run = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False, timeout=25)
+        stdout, stderr = run.stdout, run.stderr
+        report["returncode"] = run.returncode
+        report["observations"] = validate_window_observations(stdout, run.returncode)
+        report["passed"] = True
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        if isinstance(error, subprocess.TimeoutExpired):
+            stdout = error.stdout or ""
+            stderr = error.stderr or ""
+            stdout = stdout.decode(errors="replace") if isinstance(stdout, bytes) else stdout
+            stderr = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr
+        report["error"] = str(error)
+    finally:
+        try:
+            report["sourceAfter"] = source_fingerprint()
+            report["binaryAfter"] = hashlib.sha256(output.read_bytes()).hexdigest()
+            if report["sourceAfter"] != source_before or report["binaryAfter"] != binary_before:
+                raise ValueError("native source or binary changed during verification")
+        except (OSError, ValueError) as error:
+            report.update(passed=False, error=str(error))
+        report["finishedAt"] = datetime.now(timezone.utc).isoformat()
+        (out / "stdout.jsonl").write_text(stdout, encoding="utf-8")
+        (out / "stderr.log").write_text(stderr, encoding="utf-8")
+        (out / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    print(f"Owned-window ordering evidence: {out} (passed={report['passed']})", flush=True)
+    return 0 if report["passed"] else 1
 
 
 
@@ -52,10 +161,24 @@ def handshake_checks(output: Path) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--window-ordering", action="store_true", help="require the real owned-window functional probe")
+    parser.add_argument("--out", type=Path, help="fresh functional evidence directory")
+    args = parser.parse_args()
+    if args.window_ordering != (args.out is not None):
+        parser.error("--window-ordering and --out must be supplied together")
+    if args.out:
+        # mkdir rejects existing directories and dangling symlinks before any child runs.
+        args.out = args.out.absolute()
+        args.out.mkdir(parents=True, exist_ok=False)
     if sys.platform != "darwin":
+        if args.window_ordering:
+            print("FAILED: requested window ordering requires macOS and an active graphical desktop", file=sys.stderr)
+            return 1
         print("SKIPPED: native startup protocol tests require macOS and AppKit")
         return 0
 
+    source_before = source_fingerprint() if args.window_ordering else None
     output = ROOT / ".build/startup-native-tests"
     output.parent.mkdir(parents=True, exist_ok=True)
     target = f"{platform.machine()}-apple-macos13.0"
@@ -69,6 +192,7 @@ def main() -> int:
     compiled = subprocess.run(command, cwd=ROOT, check=False)
     if compiled.returncode:
         return compiled.returncode
+    binary_before = hashlib.sha256(output.read_bytes()).hexdigest() if args.window_ordering else None
     tested = subprocess.run([str(output)], cwd=ROOT, check=False)
     if tested.returncode:
         return tested.returncode
@@ -93,6 +217,8 @@ def main() -> int:
     receipt = ROOT / ".build/startup-helper-expressions.json"
     receipt.write_text(json.dumps(expressions, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
     print(f"Native helper expressions emitted for isolated browser checks: {receipt}")
+    if args.window_ordering:
+        return window_ordering_checks(output, args.out, source_before, binary_before)
     return 0
 
 
