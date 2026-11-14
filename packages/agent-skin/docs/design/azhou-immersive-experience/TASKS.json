@@ -1,0 +1,229 @@
+{
+  "schema": "azhou-immersive-design.v1",
+  "status": "design_only",
+  "implementation_ready": false,
+  "runtime_validation": "not_run",
+  "historical_nh_status": "NH-TASKS.json is a preserved design snapshot, not current implementation status",
+  "tasks": [
+    {
+      "id": "NH-00",
+      "pr": "P01",
+      "status": "planned_unverified",
+      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。",
+      "evidence": "P01 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/docs/design/azhou-immersive-experience/*"
+      ]
+    },
+    {
+      "id": "NH-10",
+      "pr": "P01",
+      "status": "planned_unverified",
+      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。",
+      "evidence": "P01 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/docs/design/azhou-immersive-experience/*"
+      ]
+    },
+    {
+      "id": "ALIGN-00",
+      "pr": "P01",
+      "status": "planned_unverified",
+      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。",
+      "evidence": "P01 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/docs/design/azhou-immersive-experience/*"
+      ]
+    },
+    {
+      "id": "ALIGN-01",
+      "pr": "P01",
+      "status": "planned_unverified",
+      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。",
+      "evidence": "P01 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/docs/design/azhou-immersive-experience/*"
+      ]
+    },
+    {
+      "id": "ALIGN-02",
+      "pr": "P02",
+      "status": "planned_unverified",
+      "completion": "先审角色参考页，再审场景母版、关键帧和壁纸。只在授权及人工通过后提交生产资产，联动素材清单、许可与生产验证。",
+      "evidence": "P02 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/assets/azhou/*",
+        "packages/agent-skin/theme-config.json",
+        "packages/agent-skin/tools/verify-artifacts.py"
+      ]
+    },
+    {
+      "id": "ALIGN-03",
+      "pr": "P02",
+      "status": "planned_unverified",
+      "completion": "先审角色参考页，再审场景母版、关键帧和壁纸。只在授权及人工通过后提交生产资产，联动素材清单、许可与生产验证。",
+      "evidence": "P02 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/assets/azhou/*",
+        "packages/agent-skin/theme-config.json",
+        "packages/agent-skin/tools/verify-artifacts.py"
+      ]
+    },
+    {
+      "id": "ALIGN-04",
+      "pr": "P02",
+      "status": "planned_unverified",
+      "completion": "先审角色参考页，再审场景母版、关键帧和壁纸。只在授权及人工通过后提交生产资产，联动素材清单、许可与生产验证。",
+      "evidence": "P02 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/assets/azhou/*",
+        "packages/agent-skin/theme-config.json",
+        "packages/agent-skin/tools/verify-artifacts.py"
+      ]
+    },
+    {
+      "id": "NH-20",
+      "pr": "P03",
+      "status": "planned_unverified",
+      "completion": "先与现有修复 owner 协调已完成部分，再实现剩余只读快照、单播放器、代际就绪、跳过和绝对期限。同步所有终态消费者及测试，不创建第二设置库。",
+      "evidence": "P03 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/Native/*",
+        "packages/agent-skin/image-settings.js",
+        "packages/agent-skin/extension/*",
+        "packages/agent-skin/tools/*",
+        "scripts/integration_startup_animation.py",
+        "tests/test_agent_skin*"
+      ]
+    },
+    {
+      "id": "NH-30",
+      "pr": "P03",
+      "status": "planned_unverified",
+      "completion": "先与现有修复 owner 协调已完成部分，再实现剩余只读快照、单播放器、代际就绪、跳过和绝对期限。同步所有终态消费者及测试，不创建第二设置库。",
+      "evidence": "P03 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/Native/*",
+        "packages/agent-skin/image-settings.js",
+        "packages/agent-skin/extension/*",
+        "packages/agent-skin/tools/*",
+        "scripts/integration_startup_animation.py",
+        "tests/test_agent_skin*"
+      ]
+    },
+    {
+      "id": "ALIGN-05",
+      "pr": "P04",
+      "status": "planned_unverified",
+      "completion": "把已审场景放入 12 秒编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
+      "evidence": "P04 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/animation.js",
+        "packages/agent-skin/wallpaper/*",
+        "packages/agent-skin/style.css",
+        "packages/agent-skin/theme-config.json",
+        "packages/agent-skin/extension/codex-page-adapter.mjs",
+        "packages/agent-skin/tools/*"
+      ]
+    },
+    {
+      "id": "ALIGN-06",
+      "pr": "P04",
+      "status": "planned_unverified",
+      "completion": "把已审场景放入 12 秒编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
+      "evidence": "P04 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/animation.js",
+        "packages/agent-skin/wallpaper/*",
+        "packages/agent-skin/style.css",
+        "packages/agent-skin/theme-config.json",
+        "packages/agent-skin/extension/codex-page-adapter.mjs",
+        "packages/agent-skin/tools/*"
+      ]
+    },
+    {
+      "id": "ALIGN-07",
+      "pr": "P04",
+      "status": "planned_unverified",
+      "completion": "把已审场景放入 12 秒编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
+      "evidence": "P04 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/animation.js",
+        "packages/agent-skin/wallpaper/*",
+        "packages/agent-skin/style.css",
+        "packages/agent-skin/theme-config.json",
+        "packages/agent-skin/extension/codex-page-adapter.mjs",
+        "packages/agent-skin/tools/*"
+      ]
+    },
+    {
+      "id": "NH-11",
+      "pr": "P05",
+      "status": "planned_unverified",
+      "completion": "先证明当前 DSH 的早期 hook、CSP 和 desktop 支持。只有支持时实施 gate、独立 watchdog 与原子接管。无支持时提交脱敏能力缺口，不改官方宿主。",
+      "evidence": "P05 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/extension/hosts/*",
+        "packages/agent-skin/tools/build-dsh-plugin.py",
+        "packages/agent-skin/tools/*dsh*",
+        "packages/agent-skin/docs/dsh-plugin.md"
+      ]
+    },
+    {
+      "id": "NH-40",
+      "pr": "P05",
+      "status": "planned_unverified",
+      "completion": "先证明当前 DSH 的早期 hook、CSP 和 desktop 支持。只有支持时实施 gate、独立 watchdog 与原子接管。无支持时提交脱敏能力缺口，不改官方宿主。",
+      "evidence": "P05 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/extension/hosts/*",
+        "packages/agent-skin/tools/build-dsh-plugin.py",
+        "packages/agent-skin/tools/*dsh*",
+        "packages/agent-skin/docs/dsh-plugin.md"
+      ]
+    },
+    {
+      "id": "NH-90",
+      "pr": "P06",
+      "status": "planned_unverified",
+      "completion": "完成每端真实入口与视觉验收，记录源码、构建、安装、加载和运行身份。同步双语说明与支持范围。DSH blocked 只允许 Codex 独立结论，不称双端完成。",
+      "evidence": "P06 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/docs/*",
+        "docs/support-matrix.md",
+        "docs/integration-provenance.md",
+        "README.md",
+        "README.zh-CN.md"
+      ]
+    },
+    {
+      "id": "ALIGN-90",
+      "pr": "P06",
+      "status": "planned_unverified",
+      "completion": "完成每端真实入口与视觉验收，记录源码、构建、安装、加载和运行身份。同步双语说明与支持范围。DSH blocked 只允许 Codex 独立结论，不称双端完成。",
+      "evidence": "P06 checklist and acceptance receipts",
+      "files": [
+        "packages/agent-skin/docs/*",
+        "docs/support-matrix.md",
+        "docs/integration-provenance.md",
+        "README.md",
+        "README.zh-CN.md"
+      ]
+    }
+  ],
+  "pr_dependencies": {
+    "P01": "None",
+    "P02": "P01",
+    "P03": "P01",
+    "P04": "P02, P03",
+    "P05": "P01, P03",
+    "P06": "P04; P05 resolved as completed or evidenced blocked"
+  },
+  "product_execution": "requires_explicit_go",
+  "visual_review_required": [
+    "P02",
+    "P03",
+    "P04",
+    "P05 when interaction changes"
+  ]
+}
