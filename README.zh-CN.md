@@ -175,7 +175,7 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **候选版**：Codex／Claude 原生插件、zcode 仅含 commands 的插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力；ZCode 图形界面调用尚未验收，宿主调用、hook 信任和发布批准仍需独立证据。 |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **候选版**：Codex／Claude 原生插件、zcode 仅含 commands 的插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力。2026-11-14 的 GUI 探针验证了 zcode 命令面，且当日恢复共享根技能链接后其引用技能已加载并驱动会话；完整只读 pstack 任务运行、hook 信任与发布批准仍需独立证据。 |
 
 ![Agent Skin 效果图](assets/github/integration-agent-skin-effect.png)
 
