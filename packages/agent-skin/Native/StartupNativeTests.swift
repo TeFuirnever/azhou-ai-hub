@@ -151,13 +151,29 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
     private(set) var removedHandlers: [String] = []
     private(set) var errors: [(String, String, String)] = []
     private(set) var createdPlayers: [(NativeDisplayLocale, String, String, Bool)] = []
+    private(set) var nativeStartupInputs: [NativeStartupBridgeInput?] = []
     private(set) var loadedPlayers: [(URL, URL)] = []
     var evaluationResult: (Any?, Error?) = ("{}", nil)
     var snapshotResult: (NSImage?, Error?) = (nil, nil)
+    var nativeCoverCount = 0
+    var coldRevealCount = 0
+    var coverValid = true
+    var coverHook: ((String) -> Void)?
+    weak var nativeHandler: NativeColdPlayer?
+    var evaluationHook: ((String) -> (Any?, Error?))?
+    func showColdCover(locale: NativeDisplayLocale, runNonce: String, delegate: NSWindowDelegate) throws -> NativeCoverReceipt {
+        nativeCoverCount += 1
+        nativeHandler = delegate as? NativeColdPlayer
+        coverHook?(runNonce)
+        return NativeCoverReceipt(runNonce: runNonce, drawObserved: coverValid, transactionCommitted: coverValid)
+    }
+    func revealColdPlayer() { coldRevealCount += 1 }
 
     func createPlayer(locale: NativeDisplayLocale, mode: String, theme: String, inspect: Bool,
+                      nativeStartup: NativeStartupBridgeInput?,
                       messageHandler: WKScriptMessageHandler, navigationDelegate: WKNavigationDelegate) {
         createdPlayers.append((locale, mode, theme, inspect))
+        nativeStartupInputs.append(nativeStartup)
     }
     func loadPlayer(page: URL, allowingReadAccessTo root: URL) { loadedPlayers.append((page, root)) }
     func updateLabels(_ locale: NativeDisplayLocale) { updatedLocales.append(locale) }
@@ -167,7 +183,8 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
     func orderOut() { orderedOutCount += 1 }
     func evaluateJavaScript(_ source: String, completion: ((Any?, Error?) -> Void)?) {
         evaluations.append(source)
-        completion?(evaluationResult.0, evaluationResult.1)
+        let result = evaluationHook?(source) ?? evaluationResult
+        completion?(result.0, result.1)
     }
     func fadeOut(duration: TimeInterval, completion: @escaping () -> Void) {
         fadeDurations.append(duration)
@@ -302,6 +319,22 @@ struct StartupNativeTests {
             writer.emit("player-terminated", fields: ["completed": true, "failed": false], at: 64)
             try write("smoke", records())
         }
+
+        for end in [SkinNativePresentationEnd.completed, .skipped, .interrupted, .failed] {
+            let (writer, records) = makeWriter(startedAt: 70, launcherPID: 170)
+            let stream = NativeStartupEventStream(writer: writer)
+            stream.begin(at: 70)
+            stream.targetOpened(pid: 2170, at: 71)
+            _ = stream.bindPage(pid: 2170, pageID: "native-page")
+            let workspace = end == .completed ? SkinNativeWorkspaceObservation(pageGeneration: "native-page",
+                runID: 7, wallpaperDisposition: "disabled", wallpaperReason: "disabled") : nil
+            _ = stream.resolveNative(SkinNativeLaunchReceipt(operationID: UUID(),
+                runNonce: "11111111-2222-4333-8444-555555555555", presentation: end,
+                reason: end == .failed ? "attach-timeout" : nil, workspace: workspace,
+                coverDrawCommitted: true), at: 73)
+            _ = stream.finish(at: 74)
+            try write("native-\(end.rawValue)", records())
+        }
     }
 
     @MainActor
@@ -349,6 +382,12 @@ struct StartupNativeTests {
             print(String(decoding: try JSONSerialization.data(withJSONObject: result), as: UTF8.self))
             return
         }
+        if CommandLine.arguments.contains("--probe-ready-replacement") {
+            let result = try await startupReplacementScenario(stage: "status", mode: "after-ready",
+                                                              readyOverlap: CommandLine.arguments.contains("--ready-overlap"))
+            print(String(decoding: try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys]), as: UTF8.self))
+            exit(result["currentPageID"] as? String == "page-b" && result["completed"] as? Bool == true ? 0 : 1)
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--emit-event-jsonl") {
             let path = index + 1 < CommandLine.arguments.count
                 ? CommandLine.arguments[index + 1] : ".build/native-event-samples"
@@ -395,6 +434,113 @@ struct StartupNativeTests {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
         }
+        let startupBridgeInput = NativeStartupBridgeInput(runNonce: "native-run-01", locale: "zh-CN", theme: "light")
+        let startupBridgeSource = startupBridgeInput.documentStartSource() ?? ""
+        expect(startupBridgeSource.contains("Object.defineProperty(window, '__agentSkinNativeStartup'")
+               && startupBridgeSource.contains("writable: false")
+               && startupBridgeSource.contains("configurable: false")
+               && startupBridgeSource.contains("azhou-agent-skin-native"),
+               "formal local bootstrap binds one immutable native identity at document start")
+        expect(!startupBridgeSource.contains("data:image")
+               && NativeStartupBridgeInput(runNonce: "bad nonce", locale: "zh-CN", theme: "light")
+                    .documentStartSource() == nil,
+               "document-start identity carries no settings payload and rejects malformed nonces")
+        expect(NativeStartupSnapshotTransfer.maximumBytes == StartupSettingsSnapshotReceiver.maximumBytes
+               && NativeStartupSnapshotTransfer.chunkSize == 192 * 1024
+               && NativeStartupSnapshotTransfer.maximumExpressionBytes == 512 * 1024,
+               "native WK transfer shares the receiver byte ceiling and keeps each message bounded")
+        let transferValues = StartupSettingsSnapshotValues(
+            avatar: "data:image/png;base64,AA==", artwork: "data:image/png;base64,AA==",
+            contours: [[StartupSettingsSnapshotPoint(x: 10, y: 10),
+                        StartupSettingsSnapshotPoint(x: 20, y: 30)]],
+            introTitle: "阿舟", introCaption: "冷启动", artworkSubtitle: "工作区准备",
+            wallpaperStrength: 42,
+            explicitText: ["introTitle": true, "introCaption": true, "artworkSubtitle": true])
+        let transferSnapshot = StartupSettingsSnapshot(
+            owner: "azhou-codex-startup", runID: 7, runNonce: "native-run-01",
+            snapshotID: "7:native-run-01", status: "valid", sha256: String(repeating: "a", count: 64),
+            appearance: StartupSettingsSnapshotAppearance(locale: "zh-CN", theme: "light"),
+            values: transferValues)
+        var transferExpressions: [String] = []
+        var transferTimeouts: [TimeInterval] = []
+        try await NativeStartupSnapshotTransfer.send(
+            snapshot: transferSnapshot, runNonce: "native-run-01", deadline: 110, now: { 100 },
+            evaluate: { expression, timeout in
+                transferExpressions.append(expression); transferTimeouts.append(timeout); return true
+            })
+        expect(transferExpressions.count == 3
+               && transferExpressions[0].contains("acceptNativeSnapshotDescriptor")
+               && transferExpressions[1].contains("acceptNativeSnapshotChunk")
+               && transferExpressions[2].contains("finishNativeSnapshot"),
+               "WK handoff sends descriptor, ordered payload chunks, and finish through the local adapter")
+        expect(transferExpressions.allSatisfy { $0.utf8.count < NativeStartupSnapshotTransfer.maximumExpressionBytes }
+               && transferTimeouts.allSatisfy { $0 > 0 && $0 <= 2 },
+               "every native message stays under its expression cap and consumes the absolute deadline")
+        var mismatchCalls = 0
+        do {
+            try await NativeStartupSnapshotTransfer.send(
+                snapshot: transferSnapshot, runNonce: "another-run", deadline: 110, now: { 100 },
+                evaluate: { _, _ in mismatchCalls += 1; return true })
+            fatalError("a mismatched startup nonce unexpectedly transferred a snapshot")
+        } catch { }
+        expect(mismatchCalls == 0, "a snapshot for another run is refused before its first WK side effect")
+        var failedTransferExpressions: [String] = []
+        do {
+            try await NativeStartupSnapshotTransfer.send(
+                snapshot: transferSnapshot, runNonce: "native-run-01", deadline: 110, now: { 100 },
+                evaluate: { expression, _ in
+                    failedTransferExpressions.append(expression)
+                    return !expression.contains("acceptNativeSnapshotChunk")
+                })
+            fatalError("a rejected snapshot chunk unexpectedly completed")
+        } catch { }
+        expect(failedTransferExpressions.count == 3
+               && failedTransferExpressions.last?.contains("cancelNativeSnapshot") == true,
+               "a failed WK chunk triggers one nonce-bound cleanup call")
+        var delayedFinishStarted: CheckedContinuation<Void, Never>?
+        var delayedFinishResult: CheckedContinuation<Any?, Error>?
+        var delayedTransferExpressions: [String] = []
+        let delayedTransfer = Task { @MainActor in
+            try await NativeStartupSnapshotTransfer.send(
+                snapshot: transferSnapshot, runNonce: "native-run-01", deadline: 110, now: { 100 },
+                evaluate: { expression, _ in
+                    delayedTransferExpressions.append(expression)
+                    if expression.contains("finishNativeSnapshot") {
+                        delayedFinishStarted?.resume()
+                        delayedFinishStarted = nil
+                        return try await withCheckedThrowingContinuation {
+                            (continuation: CheckedContinuation<Any?, Error>) in
+                            delayedFinishResult = continuation
+                        }
+                    }
+                    return true
+                })
+        }
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            delayedFinishStarted = continuation
+        }
+        delayedTransfer.cancel()
+        delayedFinishResult?.resume(returning: true)
+        delayedFinishResult = nil
+        var delayedCancellationCaught = false
+        do { try await delayedTransfer.value }
+        catch is CancellationError { delayedCancellationCaught = true }
+        catch { }
+        let nonceBoundCleanup = delayedTransferExpressions.last
+        expect(delayedCancellationCaught
+               && delayedTransferExpressions.count == 4
+               && nonceBoundCleanup?.contains("cancelNativeSnapshot") == true
+               && nonceBoundCleanup?.contains("native-run-01") == true
+               && nonceBoundCleanup?.contains("[\"native-run-01\"]") == true,
+               "cancellation during a delayed finish rejects success and cleans up only the bound run")
+        var expiredCalls = 0
+        do {
+            try await NativeStartupSnapshotTransfer.send(
+                snapshot: transferSnapshot, runNonce: "native-run-01", deadline: 99, now: { 100 },
+                evaluate: { _, _ in expiredCalls += 1; return true })
+            fatalError("an expired WK transfer unexpectedly completed")
+        } catch { }
+        expect(expiredCalls == 0, "an expired startup budget refuses WK transfer before sending")
         let registeredTimeout = DispatchWorkItem {}
         do {
             let _: any NativeApplication = try await withCheckedThrowingContinuation { continuation in
@@ -801,6 +947,8 @@ struct StartupNativeTests {
         expect(wrongPortTransport.pagesCount == 0 && wrongPortTransport.evaluateCount == 0,
                "wrong listener ownership is rejected before page lookup or payload")
 
+        checks += await startupShellAdmissionChecks(target: existing)
+
         var fakeNow: TimeInterval = 0
         let startupURL = "app://-/index.html?initialRoute=%2F"
         let successfulTransport = FakeStartupTransport(
@@ -809,38 +957,74 @@ struct StartupNativeTests {
                 "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"
             ]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": [
                     "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 7,
                     "ready": true, "completed": false, "overlay": true, "reason": "",
                     "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
                     "completion": NSNull()
+                ]],
+                ["href": startupURL, "missing": false, "status": [
+                    "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 7,
+                    "ready": true, "completed": true, "overlay": false, "reason": "",
+                    "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+                    "completion": ["cause": "natural", "beforeReady": false]
                 ]]
             ],
             pageFailures: 1
         )
+        var readyNotifications = 0
         let successful = await StartupConnector(
             target: existing,
             expectedPort: 9222,
             system: FakeStartupSystem(expectedPID: 4123, ports: [9222]),
             transport: successfulTransport,
+            onReady: { readyNotifications += 1 },
             now: { fakeNow },
             sleep: { fakeNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(successful == .ready(runID: 7), "a controlled main page reaches startup-ready")
-        expect(successfulTransport.pagesCount == 4, "page discovery retries and rechecks identity before install and ready within the shared budget")
+        expect(successfulTransport.pagesCount == 5, "page discovery retries and rechecks identity before install and ready within the shared budget")
         expect(successfulTransport.connectCount == 1, "startup uses one selected page socket")
         expect(successfulTransport.payloadCount == 1, "startup installs its payload once")
-        expect(successfulTransport.closeCount == 1, "startup closes its socket on readiness")
+        expect(successfulTransport.closeCount == 1, "startup closes its socket after playback completes")
         expect(successfulTransport.disposeCount == 0, "successful startup is not disposed")
+        expect(readyNotifications == 1 && successfulTransport.evaluateCount == 4,
+               "readiness notifies presentation once but does not finish playback observation")
+
+        for phase in ["playing", "settings"] {
+            var time: TimeInterval = 0
+            var notifications = 0
+            let transport = FakeStartupTransport(
+                pages: [["type": "page", "id": "selected-page", "url": startupURL,
+                         "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
+                evaluations: [
+                    ["href": startupURL, "controllerPresent": false, "shellReady": true],
+                    ["installed": true, "alreadyActive": false],
+                    ["href": startupURL, "missing": false, "status": [
+                        "owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": 7,
+                        "ready": true, "completed": false, "overlay": true, "reason": "",
+                        "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
+                        "completion": NSNull()
+                    ]]
+                ], repeatLastEvaluation: true)
+            let result = await StartupConnector(target: existing, expectedPort: 9222,
+                system: FakeStartupSystem(expectedPID: 4123, ports: [9222]), transport: transport,
+                onReady: { notifications += 1 }, now: { time }, sleep: { time += $0 })
+                .run(payload: "test-only-probe", deadline: 45)
+            expect(result == (phase == "playing" ? .failed(reason: "attach-timeout") : .ready(runID: 7)),
+                   "playing remains bounded while settings hands control to the user without waiting")
+            expect(notifications == 1 && transport.payloadCount == 1 && transport.closeCount == 1,
+                   "repeated ready polls neither reactivate nor reinstall, and always close")
+        }
 
         var skippedNow: TimeInterval = 0
         let skippedTransport = FakeStartupTransport(
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": [
                     "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 8,
@@ -857,7 +1041,7 @@ struct StartupNativeTests {
             transport: skippedTransport,
             now: { skippedNow },
             sleep: { skippedNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(skipped == .skipped(runID: 8, beforeReady: true), "a pre-ready skip stays distinct from readiness")
         expect(skippedTransport.payloadCount == 1 && skippedTransport.closeCount == 1,
                "skip does not replay and closes its page socket")
@@ -867,7 +1051,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": [
                     "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 9,
@@ -884,7 +1068,7 @@ struct StartupNativeTests {
             transport: savedTransport,
             now: { savedNow },
             sleep: { savedNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(saved == .ready(runID: 9), "a completed settings save remains a valid ready attachment")
         expect(savedTransport.payloadCount == 1 && savedTransport.disposeCount == 0,
                "settings save does not cause the connector to dispose the installed controller")
@@ -894,7 +1078,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": "app://-/index.html?initialRoute=%2Fsettings", "missing": false]
             ]
@@ -906,7 +1090,7 @@ struct StartupNativeTests {
             transport: navigationTransport,
             now: { navigationNow },
             sleep: { navigationNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(navigation == .partial(reason: "startup-interrupted"), "navigation interrupts the owned startup run")
         expect(navigationTransport.payloadCount == 1 && navigationTransport.closeCount == 1,
                "navigation does not reinject and closes its page socket")
@@ -922,7 +1106,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": loadingStatus(9)],
                 ["href": startupURL, "missing": false, "status": [
@@ -939,7 +1123,7 @@ struct StartupNativeTests {
             transport: driftTransport,
             now: { driftNow },
             sleep: { driftNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(drift == .partial(reason: "startup-interrupted"), "a status run ID change interrupts the owned startup run")
         expect(driftTransport.disposeCount == 0, "a changed status run ID does not dispose another run")
 
@@ -948,7 +1132,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": loadingStatus(11)]
             ],
@@ -961,11 +1145,11 @@ struct StartupNativeTests {
             transport: stalledTransport,
             now: { stalledNow },
             sleep: { stalledNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 0.35)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(stalled == .failed(reason: "attach-timeout"), "never-ready polling ends at the shared deadline")
         expect(stalledTransport.payloadCount == 1 && stalledTransport.closeCount == 1,
                "never-ready polling does not reinstall and closes the session")
-        expect(stalledTransport.requestTimeouts.allSatisfy { $0 <= 0.35 },
+        expect(stalledTransport.requestTimeouts.allSatisfy { $0 > 0 && $0 <= 10 } && stalledNow <= 45.001,
                "page lookup, WebSocket connect, and evaluation requests stay inside the absolute budget")
         expect(stalledTransport.requestTimeouts.contains { $0 < 0.1 },
                "the final status request is truncated to the remaining stage time")
@@ -975,7 +1159,7 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": [
                     "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": true,
@@ -991,7 +1175,7 @@ struct StartupNativeTests {
             transport: malformedStatusTransport,
             now: { malformedNow },
             sleep: { malformedNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(malformedStatus == .failed(reason: "protocol-error"), "a malformed required status field is rejected")
         expect(malformedStatusTransport.disposeCount == 1 && malformedStatusTransport.closeCount == 1,
                "malformed status on the trusted installed controller attempts disposal before closing")
@@ -1003,18 +1187,18 @@ struct StartupNativeTests {
             pages: [["type": "page", "id": "selected-page", "url": startupURL,
                      "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": ["owner": "unknown"]]
             ],
-            afterEvaluation: { _, index in if index == 2 { expiredNow = 1 } }
+            afterEvaluation: { _, index in if index == 2 { expiredNow = 45 } }
         )
         let expiredMalformedStatus = await StartupConnector(
             target: existing, expectedPort: 9222,
             system: FakeStartupSystem(expectedPID: 4123, ports: [9222]),
             transport: expiredMalformedStatusTransport,
             now: { expiredNow }, sleep: { expiredNow += $0 }
-        ).run(payload: "test-only-probe", deadline: 1)
+        ).run(payload: "test-only-probe", deadline: 45)
         expect(expiredMalformedStatus == .failed(reason: "protocol-error"),
                "malformed status remains a protocol failure when its response exhausts the budget")
         expect(expiredMalformedStatusTransport.disposeCount == 0 && expiredMalformedStatusTransport.closeCount == 1,
@@ -1049,6 +1233,9 @@ struct StartupNativeTests {
         #if AGENT_SKIN_NATIVE_EVENT_TESTS
         checks += try await startupPageReplacementChecks()
         checks += try await startupControllerBindingChecks()
+        checks += try await startupSettingsSnapshotChecks()
+        checks += try await startupPreparedConnectorChecks()
+        checks += try await nativeColdLaunchChecks()
         checks += try await nativeEventContractChecks()
         checks += try await skinHostContractChecks()
         checks += codexLaunchConfigurationChecks()
@@ -1148,6 +1335,554 @@ private final class FakeStartupTransport: StartupTransport {
         return try await evaluate(try StartupConnector.disposeExpression(href), timeout: timeout)
     }
     func close() { closeCount += 1 }
+}
+
+@MainActor
+private func startupSettingsSnapshotChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
+        guard condition() else { fatalError("FAILED: native settings snapshot: \(label)") }
+        checks += 1
+    }
+
+    func opened(_ world: StartupSnapshotWorld, pageID: String = "page-a") throws -> WallpaperTransport {
+        let transport = WallpaperTransport(session: nil, socketFactory: { world.socket($0) })
+        world.transport = transport
+        try transport.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/\(pageID)")!, timeout: 5)
+        return transport
+    }
+    let page = StartupSnapshotPage(id: "page-a", href: "app://-/index.html?initialRoute=%2F")
+    let request = StartupSettingsSnapshotRequest(owner: "azhou-codex-startup", runID: 1, runNonce: "test-run-1")
+
+    var receiverOwnedBytes = Data("receiver-owned-buffer".utf8)
+    StartupSettingsSnapshotReceiver.clearNativeOwnedBuffer(&receiverOwnedBytes)
+    expect(!receiverOwnedBytes.isEmpty && receiverOwnedBytes.allSatisfy { $0 == 0 },
+           "receiver-owned snapshot bytes are zeroed within their bounded Data buffer")
+    var aggregateBytes = Data("prefix:".utf8)
+    var sourceChunk = Data("chunk-secret".utf8)
+    let sourceAlias = sourceChunk
+    StartupSettingsSnapshotReceiver.appendNativeChunk(sourceChunk, to: &aggregateBytes)
+    StartupSettingsSnapshotReceiver.clearNativeOwnedBuffer(&sourceChunk)
+    expect(sourceChunk.allSatisfy { $0 == 0 }
+           && aggregateBytes == Data("prefix:chunk-secret".utf8)
+           && sourceAlias == Data("chunk-secret".utf8),
+           "chunk append copies bytes into the aggregate before zeroing while Data aliases retain value semantics")
+
+    let healthy = StartupSnapshotWorld()
+    let healthyTransport = try opened(healthy)
+    defer { healthyTransport.close() }
+    let received = try await StartupSettingsSnapshotReceiver.receive(
+        transport: healthyTransport, page: page, request: request, deadline: 50, now: { healthy.time() })
+    expect(received.snapshotID == "1:test-run-1" && received.status == "valid" && received.values.wallpaperStrength == 42,
+           "a snapshot is received through the real WallpaperTransport session")
+    expect(received.appearance == StartupSettingsSnapshotAppearance(locale: "zh-CN", theme: "light"),
+           "host locale and theme are read from the same digest-bound snapshot")
+    expect(healthy.operationLog.filter { $0 == "page-a:read" }.count == healthy.descriptor["chunkCount"] as? Int,
+           "the receiver reads every declared chunk")
+    expect(healthy.chunkBase64.first?.hasSuffix("==") == true,
+           "each 64 KiB chunk is independently Base64 encoded and padded")
+    expect(healthy.descriptor["encodedByteLength"] as? Int == healthy.chunkBase64.reduce(0) { $0 + $1.utf8.count },
+           "descriptor encoded length sums independently padded chunk strings")
+    expect(healthy.objectIDs.allSatisfy { $0 == "controller-page-a" },
+           "begin and chunks use the retained controller object ID")
+    expect(healthy.maxSocketMessageSize == 2 * 1024 * 1024,
+           "the snapshot path keeps the existing 2 MiB WebSocket limit")
+
+    let wrapped = StartupSnapshotWorld()
+    let wrappedBase = WallpaperTransport(session: nil, socketFactory: { wrapped.socket($0) })
+    wrapped.transport = wrappedBase
+    let capture = NativeStartupCapture(targetPID: 4123)
+    let writer = NativeEventWriter(startedAt: 0, launcherPID: 42, launcherPath: "/synthetic/launcher",
+                                   now: { wrapped.time() }, sink: { _ in })
+    let events = NativeStartupEventStream(writer: writer)
+    events.begin(at: 1); events.targetOpened(pid: 4123, at: 1)
+    let eventTransport = NativeStartupEventTransport(base: wrappedBase, capture: capture, events: events, now: { wrapped.time() })
+    let observingTransport = InstallObservingStartupTransport(base: eventTransport, recorder: CodexInstallObservation())
+    try observingTransport.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-a")!, timeout: 5)
+    defer { observingTransport.close() }
+    let wrappedSnapshot = try await StartupSettingsSnapshotReceiver.receive(
+        transport: observingTransport, page: page, request: request, deadline: 50, now: { wrapped.time() })
+    expect(wrappedSnapshot.snapshotID == received.snapshotID && wrapped.operationLog.contains("page-a:begin"),
+           "both production startup transport wrappers forward the captured snapshot session")
+    let operationsBeforeWrongPage = wrapped.operationLog
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: observingTransport,
+            page: StartupSnapshotPage(id: "page-b", href: page.href), request: request,
+            deadline: 50, now: { wrapped.time() })
+        fatalError("FAILED: event wrapper must reject a page different from the captured page")
+    } catch is CancellationError {
+        expect(wrapped.operationLog == operationsBeforeWrongPage,
+               "wrapper page mismatch fails before beginning or disposing another page's snapshot")
+    }
+
+    let unsupported = StartupSnapshotWorld(controllerSupportsSnapshot: false)
+    let unsupportedTransport = try opened(unsupported)
+    defer { unsupportedTransport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: unsupportedTransport, page: page, request: request, deadline: 50, now: { unsupported.time() })
+        fatalError("FAILED: an old controller without snapshot methods must fail closed")
+    } catch let failure as StartupFailure {
+        expect(failure.reason == "snapshot-invalid", "old controller snapshot API is rejected")
+    }
+    expect(unsupported.operationLog.contains("page-a:dispose"),
+           "unsupported snapshot begin still attempts disposal on its bound controller")
+    expect(unsupported.objectIDs.allSatisfy { $0 == "controller-page-a" },
+           "unsupported API cleanup never uses an unbound global controller")
+
+    for (name, mutate) in [
+        ("owner", { (descriptor: inout [String: Any]) in descriptor["owner"] = "foreign" }),
+        ("run ID", { (descriptor: inout [String: Any]) in descriptor["runId"] = 2 }),
+        ("nonce", { (descriptor: inout [String: Any]) in descriptor["runNonce"] = "other-run" }),
+        ("status", { (descriptor: inout [String: Any]) in descriptor["status"] = "failure" }),
+        ("length", { (descriptor: inout [String: Any]) in descriptor["encodedByteLength"] = 1 }),
+        ("digest", { (descriptor: inout [String: Any]) in descriptor["sha256"] = String(repeating: "0", count: 64) }),
+    ] {
+        let malformed = StartupSnapshotWorld()
+        malformed.mutateDescriptor = mutate
+        let transport = try opened(malformed)
+        defer { transport.close() }
+        do {
+            _ = try await StartupSettingsSnapshotReceiver.receive(
+                transport: transport, page: page, request: request, deadline: 50, now: { malformed.time() })
+            fatalError("FAILED: malformed \(name) descriptor must be rejected")
+        } catch is StartupFailure {
+            expect(malformed.operationLog.contains("page-a:dispose"), "\(name) descriptor failure attempts bound cleanup")
+            if name != "digest" {
+                expect(!malformed.operationLog.contains("page-a:read"), "\(name) descriptor failure downloads no chunks")
+            }
+        }
+    }
+
+    for invalidAppearance: Any in [NSNull(), ["locale": "fr", "theme": "light"],
+                                  ["locale": "en", "theme": "auto"],
+                                  ["locale": "en", "theme": "dark", "extra": "untrusted"]] {
+        var object = try JSONSerialization.jsonObject(with: StartupSnapshotWorld.makePayload()) as! [String: Any]
+        object["appearance"] = invalidAppearance
+        let malformed = StartupSnapshotWorld(payload: try JSONSerialization.data(withJSONObject: object))
+        let transport = try opened(malformed)
+        defer { transport.close() }
+        do {
+            _ = try await StartupSettingsSnapshotReceiver.receive(
+                transport: transport, page: page, request: request, deadline: 50, now: { malformed.time() })
+            fatalError("FAILED: an invalid snapshot appearance must not be replaced with system preferences")
+        } catch let failure as StartupFailure {
+            expect(failure.reason == "snapshot-invalid", "invalid snapshot appearance fails closed")
+            expect(malformed.operationLog.contains("page-a:dispose"), "appearance failure attempts bound cleanup")
+        }
+    }
+
+    let digestMismatch = StartupSnapshotWorld()
+    digestMismatch.mutateDescriptor = { $0["sha256"] = String(repeating: "0", count: 64) }
+    digestMismatch.mutateChunk = { chunk, _ in chunk["sha256"] = String(repeating: "0", count: 64) }
+    let digestTransport = try opened(digestMismatch)
+    defer { digestTransport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: digestTransport, page: page, request: request, deadline: 50,
+            now: { digestMismatch.time() })
+        fatalError("FAILED: a mismatched whole-snapshot digest must be rejected")
+    } catch is StartupFailure {
+        expect(digestMismatch.chunkBase64.count == digestMismatch.descriptor["chunkCount"] as? Int,
+               "all chunks are received before the final whole-snapshot digest check")
+        expect(digestMismatch.operationLog.contains("page-a:dispose"), "whole digest failure attempts bound cleanup")
+    }
+
+    let wrongSequence = StartupSnapshotWorld()
+    wrongSequence.mutateChunk = { chunk, index in if index == 0 { chunk["offset"] = 1 } }
+    let sequenceTransport = try opened(wrongSequence)
+    defer { sequenceTransport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: sequenceTransport, page: page, request: request, deadline: 50, now: { wrongSequence.time() })
+        fatalError("FAILED: an out-of-order chunk must be rejected")
+    } catch is StartupFailure {
+        expect(wrongSequence.operationLog.contains("page-a:dispose"), "chunk sequence failure attempts bound cleanup")
+    }
+
+    let wrongIndex = StartupSnapshotWorld()
+    wrongIndex.mutateChunk = { chunk, index in if index == 0 { chunk["index"] = index + 1 } }
+    let wrongIndexTransport = try opened(wrongIndex)
+    defer { wrongIndexTransport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: wrongIndexTransport, page: page, request: request, deadline: 50, now: { wrongIndex.time() })
+        fatalError("FAILED: a chunk with an unexpected sequence number must be rejected")
+    } catch is StartupFailure {
+        expect(wrongIndex.operationLog.contains("page-a:dispose"), "chunk index failure attempts bound cleanup")
+    }
+
+    let wrongTotal = StartupSnapshotWorld()
+    wrongTotal.mutateChunk = { chunk, index in if index == 0 { chunk["totalBytes"] = wrongTotal.payload.count + 1 } }
+    let wrongTotalTransport = try opened(wrongTotal)
+    defer { wrongTotalTransport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: wrongTotalTransport, page: page, request: request, deadline: 50, now: { wrongTotal.time() })
+        fatalError("FAILED: a chunk with an inconsistent total length must be rejected")
+    } catch is StartupFailure {
+        expect(wrongTotal.operationLog.contains("page-a:dispose"), "chunk total length failure attempts bound cleanup")
+    }
+
+    let invalidUTF8 = StartupSnapshotWorld(payload: StartupSnapshotWorld.makePayload(invalidUTF8: true))
+    let utf8Transport = try opened(invalidUTF8)
+    defer { utf8Transport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: utf8Transport, page: page, request: request, deadline: 50, now: { invalidUTF8.time() })
+        fatalError("FAILED: invalid UTF-8 snapshot must be rejected")
+    } catch is StartupFailure {
+        expect(invalidUTF8.operationLog.contains("page-a:dispose"), "invalid UTF-8 failure attempts bound cleanup")
+    }
+
+    let invalidSchema = StartupSnapshotWorld(payload: StartupSnapshotWorld.makePayload(schemaVersion: 2))
+    let schemaTransport = try opened(invalidSchema)
+    defer { schemaTransport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: schemaTransport, page: page, request: request, deadline: 50, now: { invalidSchema.time() })
+        fatalError("FAILED: unsupported settings schema must be rejected")
+    } catch is StartupFailure {
+        expect(invalidSchema.operationLog.contains("page-a:dispose"), "schema failure attempts bound cleanup")
+    }
+
+    let tooLarge = StartupSnapshotWorld()
+    tooLarge.mutateDescriptor = { descriptor in
+        let count = (StartupSettingsSnapshotReceiver.maximumBytes + 1 + StartupSettingsSnapshotReceiver.chunkSize - 1)
+            / StartupSettingsSnapshotReceiver.chunkSize
+        descriptor["byteLength"] = StartupSettingsSnapshotReceiver.maximumBytes + 1
+        descriptor["chunkCount"] = count
+        descriptor["encodedByteLength"] = 4 * (((count - 1) * StartupSettingsSnapshotReceiver.chunkSize + 2) / 3)
+            + 4 * ((StartupSettingsSnapshotReceiver.maximumBytes + 1 - (count - 1) * StartupSettingsSnapshotReceiver.chunkSize + 2) / 3)
+    }
+    let largeTransport = try opened(tooLarge)
+    defer { largeTransport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: largeTransport, page: page, request: request, deadline: 50, now: { tooLarge.time() })
+        fatalError("FAILED: a descriptor above the maximum byte length must be rejected")
+    } catch is StartupFailure {
+        expect(!tooLarge.operationLog.contains("page-a:read"), "oversized descriptor is rejected before any chunk request")
+        expect(tooLarge.operationLog.contains("page-a:dispose"), "oversized descriptor attempts bound cleanup")
+    }
+
+    let cancelled = StartupSnapshotWorld(cancelAfterChunk: 0)
+    let cancelledTransport = try opened(cancelled)
+    defer { cancelledTransport.close() }
+    let cancellationTask = Task {
+        try await StartupSettingsSnapshotReceiver.receive(
+            transport: cancelledTransport, page: page, request: request, deadline: 50, now: { cancelled.time() })
+    }
+    do {
+        _ = try await cancellationTask.value
+        fatalError("FAILED: cancellation during chunk receive must propagate")
+    } catch is CancellationError {
+        expect(cancelled.operationLog.contains("page-a:dispose"), "cancelled transfer attempts cleanup despite task cancellation")
+    }
+
+    let replaced = StartupSnapshotWorld(replaceAfterChunk: 0)
+    let replacedTransport = try opened(replaced)
+    defer { replacedTransport.close() }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: replacedTransport, page: page, request: request, deadline: 50, now: { replaced.time() })
+        fatalError("FAILED: page replacement during a snapshot must cancel the transfer")
+    } catch is CancellationError {
+        expect(replaced.operationLog.contains("page-a:dispose"), "page replacement attempts cleanup on the old controller: \(replaced.operationLog)")
+        expect(!replaced.operationLog.contains("page-b:dispose") && replaced.objectIDs.allSatisfy { $0 == "controller-page-a" },
+               "page replacement cannot retarget cleanup to the successor page")
+    }
+
+    let expired = StartupSnapshotWorld()
+    let expiredTransport = try opened(expired)
+    defer { expiredTransport.close() }
+    var expiredNow: TimeInterval = 1
+    expired.afterChunk = { index in if index == 0 { expiredNow = 50 } }
+    do {
+        _ = try await StartupSettingsSnapshotReceiver.receive(
+            transport: expiredTransport, page: page, request: request, deadline: 50, now: { expiredNow })
+        fatalError("FAILED: the original absolute deadline must bound later chunks")
+    } catch is StartupFailure {
+        expect(expired.operationLog.filter { $0 == "page-a:read" }.count == 1,
+               "the original deadline prevents a second chunk request")
+        expect(!expired.operationLog.contains("page-a:dispose"), "expired deadline sends no cleanup request past its bound")
+    }
+    return checks
+}
+
+private final class StartupSnapshotWorld: @unchecked Sendable {
+    let href = "app://-/index.html?initialRoute=%2F"
+    var runNonce = "test-run-1"
+    var preparedMode = false
+    var preparedDisposition = "disabled"
+    var preparedShell = true
+    var malformedPrepared = false
+    var preparedPages: Set<String> = []
+    var preparedExpiries: [Double] = []
+    var cleanupCancellationStates: [Bool] = []
+    var afterWorkspaceClock: (() -> Void)?
+    var submittedInstall: String?
+    let payload: Data
+    let controllerSupportsSnapshot: Bool
+    let cancelAfterChunk: Int?
+    let replaceAfterChunk: Int?
+    weak var transport: WallpaperTransport?
+    var mutateDescriptor: ((inout [String: Any]) -> Void)?
+    var mutateChunk: ((inout [String: Any], Int) -> Void)?
+    var afterChunk: ((Int) -> Void)?
+    private(set) var operationLog: [String] = []
+    private(set) var objectIDs: [String] = []
+    private(set) var chunkBase64: [String] = []
+    var maxSocketMessageSize = 0
+    private var clock: TimeInterval = 1
+
+    var descriptor: [String: Any] {
+        let count = (payload.count + StartupSettingsSnapshotReceiver.chunkSize - 1) / StartupSettingsSnapshotReceiver.chunkSize
+        let encoded = (0..<count).reduce(0) { total, index in
+            let length = min(StartupSettingsSnapshotReceiver.chunkSize, payload.count - index * StartupSettingsSnapshotReceiver.chunkSize)
+            return total + 4 * ((length + 2) / 3)
+        }
+        return ["ok": true, "owner": "azhou-codex-startup", "runId": 1, "runNonce": runNonce,
+                "snapshotID": "1:\(runNonce)", "status": "valid", "byteLength": payload.count,
+                "encodedByteLength": encoded, "chunkSize": StartupSettingsSnapshotReceiver.chunkSize,
+                "chunkCount": count, "digestAlgorithm": "sha-256",
+                "sha256": SHA256.hash(data: payload).map { String(format: "%02x", $0) }.joined()]
+    }
+
+    init(controllerSupportsSnapshot: Bool = true, cancelAfterChunk: Int? = nil, replaceAfterChunk: Int? = nil,
+         payload: Data? = nil) {
+        self.controllerSupportsSnapshot = controllerSupportsSnapshot
+        self.cancelAfterChunk = cancelAfterChunk
+        self.replaceAfterChunk = replaceAfterChunk
+        self.payload = payload ?? Self.makePayload()
+    }
+
+    func time() -> TimeInterval { clock }
+
+    static func makePayload(schemaVersion: Int = 1, invalidUTF8: Bool = false) -> Data {
+        let pngSignature = Data([137, 80, 78, 71, 13, 10, 26, 10])
+        let artworkBytes = pngSignature + Data(repeating: 0x42, count: 80_000)
+        let settings: [String: Any] = [
+            "schemaVersion": schemaVersion,
+            "avatar": "data:image/png;base64,\(pngSignature.base64EncodedString())",
+            "artwork": "data:image/png;base64,\(artworkBytes.base64EncodedString())",
+            "contours": [[[0, 0], [1536, 1024]]],
+            "introTitle": "阿舟 AI 实验室", "introCaption": "AZHOU / AI LAB",
+            "artworkSubtitle": "和阿舟一起，把想法做出来。", "wallpaperStrength": 42,
+        ]
+        let object: [String: Any] = ["status": "valid", "settings": settings,
+            "appearance": ["locale": "zh-CN", "theme": "light"],
+            "explicitText": ["introTitle": true, "introCaption": true, "artworkSubtitle": true]]
+        var data = try! JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        if invalidUTF8 { data.append(0xff) }
+        return data
+    }
+
+    func socket(_ request: URLRequest) -> any WallpaperSocketTask {
+        StartupSnapshotSocket(pageID: request.url?.lastPathComponent ?? "unknown", world: self)
+    }
+
+    func reply(pageID: String, request: [String: Any]) throws -> Data {
+        let requestID = request["id"] as? Int ?? -1
+        let params = request["params"] as? [String: Any] ?? [:]
+        let objectID = params["objectId"] as? String
+        let envelope: ([String: Any]) throws -> Data = { value in
+            try JSONSerialization.data(withJSONObject: ["id": requestID, "result": ["result": ["value": value]]])
+        }
+        if preparedMode, request["method"] as? String == "Runtime.evaluate",
+           let expression = params["expression"] as? String {
+            if expression == StartupConnector.inspectExpression {
+                return try envelope(["href": href, "controllerPresent": false, "shellReady": true])
+            }
+            if expression.contains("Promise.resolve((") {
+                submittedInstall = expression
+                operationLog.append("\(pageID):install")
+                return try envelope(["installed": true, "alreadyActive": false])
+            }
+        }
+        if request["method"] as? String == "Runtime.evaluate",
+           params["expression"] as? String == WallpaperTransport.controllerReferenceExpression {
+            return try JSONSerialization.data(withJSONObject: ["id": requestID,
+                "result": ["result": ["type": "object", "objectId": "controller-\(pageID)"]]])
+        }
+        guard request["method"] as? String == "Runtime.callFunctionOn",
+              objectID == "controller-\(pageID)" else {
+            return try JSONSerialization.data(withJSONObject: ["id": requestID, "error": ["code": -32000, "message": "wrong bound object"]])
+        }
+        objectIDs.append(objectID ?? "")
+        if params["functionDeclaration"] as? String == WallpaperTransport.boundStatusExpression {
+            if preparedMode {
+                let disposition = preparedPages.contains(pageID) ? preparedDisposition : "pending"
+                let reason = disposition == "disabled" ? "disabled"
+                    : disposition == "degraded" ? "wallpaper-unsupported" : ""
+                return try envelope(["href": href, "missing": false, "shellReady": preparedShell, "status": [
+                    "owner": "azhou-codex-startup", "version": 1, "runId": 1,
+                    "playbackOwner": "native", "phase": "prepared", "prepared": true,
+                    "ready": malformedPrepared, "completed": false, "overlay": false, "reason": "",
+                    "completion": NSNull(), "wallpaperDisposition": disposition,
+                    "workspace": preparedPages.contains(pageID)
+                        ? ["runId": 1, "runNonce": runNonce, "phase": disposition == "pending" ? "pending" : "complete"] : NSNull(),
+                    "wallpaper": ["applied": disposition == "applied", "reason": reason,
+                                  "imageDecoded": disposition == "applied"],
+                ]])
+            }
+            return try envelope(["href": href, "missing": false, "status": [
+                "owner": "azhou-codex-startup", "version": 1, "runId": 1,
+            ]])
+        }
+        guard params["functionDeclaration"] as? String == WallpaperTransport.settingsSnapshotFunction,
+              let args = params["arguments"] as? [[String: Any]], args.count == 2,
+              let operation = args[0]["value"] as? String,
+              let input = args[1]["value"] as? [String: Any] else {
+            return try JSONSerialization.data(withJSONObject: ["id": requestID, "error": ["code": -32602, "message": "bad snapshot request"]])
+        }
+        operationLog.append("\(pageID):\(operation)")
+        switch operation {
+        case "clock":
+            afterWorkspaceClock?()
+            return try envelope(["ok": true, "now": 1000])
+        case "prepare":
+            preparedPages.insert(pageID)
+            preparedExpiries.append((input["expiresAt"] as? NSNumber)?.doubleValue ?? -1)
+            return try envelope(["ok": true, "accepted": true])
+        case "cancelWorkspace":
+            cleanupCancellationStates.append(Task.isCancelled)
+            return try envelope(["ok": true, "cancelled": true])
+        case "begin":
+            guard controllerSupportsSnapshot else { return try envelope(["ok": false, "reason": "snapshot-unsupported"]) }
+            var result = descriptor
+            mutateDescriptor?(&result)
+            return try envelope(result)
+        case "read":
+            guard let index = input["index"] as? Int, let offset = input["offset"] as? Int,
+                  index >= 0, offset >= 0, offset < payload.count else { return try envelope(["ok": false, "reason": "snapshot-order-invalid"]) }
+            let length = min(StartupSettingsSnapshotReceiver.chunkSize, payload.count - offset)
+            let bytes = payload.subdata(in: offset..<(offset + length))
+            let text = bytes.base64EncodedString()
+            chunkBase64.append(text)
+            let original = descriptor
+            var result: [String: Any] = ["ok": true, "owner": "azhou-codex-startup", "runId": 1,
+                "runNonce": runNonce, "snapshotID": "1:\(runNonce)", "index": index, "offset": offset,
+                "byteLength": length, "totalBytes": payload.count, "chunkCount": original["chunkCount"]!,
+                "status": "valid", "digestAlgorithm": "sha-256", "sha256": original["sha256"]!, "dataBase64": text]
+            mutateChunk?(&result, index)
+            afterChunk?(index)
+            if cancelAfterChunk == index { withUnsafeCurrentTask { $0?.cancel() } }
+            if replaceAfterChunk == index {
+                transport?.disconnectPage()
+                try? transport?.connect(to: URL(string: "ws://127.0.0.1:49221/devtools/page/page-b")!, timeout: 5)
+            }
+            return try envelope(result)
+        case "dispose":
+            return try envelope(controllerSupportsSnapshot ? ["ok": true, "disposed": true]
+                : ["ok": false, "reason": "snapshot-unsupported"])
+        default:
+            return try envelope(["ok": false, "reason": "snapshot-request-invalid"])
+        }
+    }
+}
+
+private final class StartupSnapshotSocket: WallpaperSocketTask, @unchecked Sendable {
+    let pageID: String
+    let world: StartupSnapshotWorld
+    var maximumMessageSize = 0 {
+        didSet { world.maxSocketMessageSize = max(world.maxSocketMessageSize, maximumMessageSize) }
+    }
+    var response: URLResponse? { nil }
+    private var pending: [String: Any] = [:]
+    private(set) var cancelled = 0
+
+    init(pageID: String, world: StartupSnapshotWorld) { self.pageID = pageID; self.world = world }
+    func resume() {}
+    func send(_ message: URLSessionWebSocketTask.Message) async throws {
+        guard case .string(let text) = message,
+              let request = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] else {
+            throw URLError(.cannotParseResponse)
+        }
+        pending = request
+    }
+    func receive() async throws -> URLSessionWebSocketTask.Message {
+        .data(try world.reply(pageID: pageID, request: pending))
+    }
+    func cancel(with closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) { cancelled += 1 }
+}
+
+@MainActor
+private func startupShellAdmissionChecks(target: StartupTargetFacts) async -> Int {
+    var checks = 0
+    var failures: [String] = []
+    func expect(_ value: Bool, _ label: String) {
+        if !value { failures.append(label) }
+        checks += 1
+    }
+    let href = "app://-/index.html?initialRoute=%2F"
+    let pages: [[String: Any]] = [["type": "page", "id": "selected-page", "url": href,
+                                 "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/selected-page"]]
+    let pending: [String: Any] = ["href": href, "controllerPresent": false, "shellReady": false]
+    let ready: [String: Any] = ["href": href, "controllerPresent": false, "shellReady": true]
+    let installed: [String: Any] = ["installed": true, "alreadyActive": false]
+    let complete: [String: Any] = ["href": href, "missing": false, "status": [
+        "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 1,
+        "ready": true, "completed": true, "overlay": false, "reason": "",
+        "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+        "completion": ["cause": "natural", "beforeReady": false]
+    ]]
+    let cases: [(String, [[String: Any]], StartupOutcome, Int, Int?)] = [
+        ("a bound page waits for its shell then plays once", [pending, ready, installed, complete], .ready(runID: 1), 1, 4),
+        ("a temporary page without a shell receives no payload", [pending], .failed(reason: "attach-timeout"), 0, nil),
+        ("a missing readiness field rejects the page", [["href": href, "controllerPresent": false]], .failed(reason: "page-unsupported"), 0, 1),
+        ("a numeric readiness field cannot admit the page", [["href": href, "controllerPresent": false, "shellReady": 1]], .failed(reason: "page-unsupported"), 0, 1),
+        ("an incumbent appearing during the wait is preserved", [pending, ["href": href, "controllerPresent": true, "shellReady": false]], .partial(reason: "startup-active"), 0, 2)
+    ]
+    for (label, responses, expected, payloads, evaluations) in cases {
+        var clock: TimeInterval = 0
+        let transport = FakeStartupTransport(pages: pages, evaluations: responses, repeatLastEvaluation: true)
+        let result = await StartupConnector(target: target, expectedPort: 9222,
+            system: FakeStartupSystem(expectedPID: target.pid, ports: [9222]), transport: transport,
+            now: { clock }, sleep: { clock += $0 }).run(payload: "test-only-probe", deadline: 60)
+        expect(result == expected && transport.payloadCount == payloads, label)
+        expect(transport.closeCount == 1 && transport.disposeCount == 0, "\(label) closes without taking a controller")
+        if let evaluations { expect(transport.evaluateCount == evaluations, "\(label) uses only the admitted playback") }
+        expect(clock <= 60 && transport.requestTimeouts.allSatisfy { $0 > 0 && $0 <= 10 }, "\(label) stays bounded")
+    }
+    for lateSignature in [false, true] {
+        var clock: TimeInterval = 0
+        var inspected = false
+        var validations = 0
+        let system = FakeStartupSystem(expectedPID: target.pid, ports: [9222])
+        system.afterValidation = {
+            if inspected { validations += 1 }
+            if lateSignature && validations == 3 { clock = 34 }
+        }
+        let transport = FakeStartupTransport(pages: pages, evaluations: [ready, installed, complete],
+            afterEvaluation: { _, _ in inspected = true })
+        let result = await StartupConnector(target: target, expectedPort: 9222, system: system, transport: transport,
+            now: { clock }, sleep: { clock += $0 })
+            .run(payload: "test-only-probe", deadline: lateSignature ? 60 : 26.5)
+        expect(result == .failed(reason: "attach-timeout") && transport.payloadCount == 0,
+               lateSignature ? "the final signature check cannot consume the playback reserve" : "a late shell cannot start beyond the full controller window")
+    }
+    var cancelledClock: TimeInterval = 0
+    let cancelledTransport = FakeStartupTransport(pages: pages, evaluations: [pending], repeatLastEvaluation: true)
+    let cancelled = await Task { @MainActor in
+        await StartupConnector(target: target, expectedPort: 9222,
+            system: FakeStartupSystem(expectedPID: target.pid, ports: [9222]), transport: cancelledTransport,
+            now: { cancelledClock }, sleep: { cancelledClock += $0; withUnsafeCurrentTask { $0?.cancel() } })
+            .run(payload: "test-only-probe", deadline: 60)
+    }.value
+    expect(cancelled == .partial(reason: "startup-interrupted") && cancelledTransport.payloadCount == 0,
+           "cancelling the shell wait never installs a controller")
+    let changedSystem = FakeStartupSystem(expectedPID: target.pid, ports: [9222])
+    let changedTransport = FakeStartupTransport(pages: pages, evaluations: [pending, ready, installed, complete],
+        afterEvaluation: { _, _ in changedSystem.validationError = StartupFailure(reason: "target-identity", message: "changed process") })
+    var changedClock: TimeInterval = 0
+    let changed = await StartupConnector(target: target, expectedPort: 9222, system: changedSystem, transport: changedTransport,
+        now: { changedClock }, sleep: { changedClock += $0 }).run(payload: "test-only-probe", deadline: 60)
+    expect(changed == .failed(reason: "target-identity") && changedTransport.payloadCount == 0,
+           "ownership changes while waiting refuse without a payload")
+    precondition(failures.isEmpty, "FAILED: shell admission: " + failures.joined(separator: "; "))
+    return checks
 }
 
 #if AGENT_SKIN_NATIVE_EVENT_TESTS
@@ -1948,9 +2683,11 @@ private func nativeEventContractChecks() async throws -> Int {
            "read-only probe resolves synthetic app target path=\(probeEvent?["targetPath"] as? String ?? "<none>") bundle=\(probeEvent?["targetBundleID"] as? String ?? "<none>") without acquiring the launch lock")
 
     func settleLaunch(_ runtime: FakeNativeAppRuntime) async throws {
-        for _ in 0..<30 where runtime.terminated == 0 {
+        let deadline = ProcessInfo.processInfo.systemUptime + 5
+        while runtime.terminated == 0 && ProcessInfo.processInfo.systemUptime < deadline {
             try await Task.sleep(nanoseconds: 1_000_000)
         }
+        expect(runtime.terminated > 0, "the synthetic launcher reaches its terminal callback within the test deadline")
     }
     func eventNames(_ runtime: FakeNativeAppRuntime) -> [String] {
         runtime.output.compactMap { line in
@@ -1983,21 +2720,32 @@ private func nativeEventContractChecks() async throws -> Int {
         pages: [["type": "page", "id": "cold-main", "url": coldStartupURL,
                  "webSocketDebuggerUrl": "ws://127.0.0.1:45678/devtools/page/cold-main"]],
         evaluations: [
-            ["href": coldStartupURL, "controllerPresent": false],
+            ["href": coldStartupURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": coldStartupURL, "missing": false, "status": [
                 "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 31,
                 "ready": true, "completed": false, "overlay": true, "reason": "",
                 "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
                 "completion": NSNull()
+            ]],
+            ["href": coldStartupURL, "missing": false, "status": [
+                "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 31,
+                "ready": true, "completed": true, "overlay": false, "reason": "",
+                "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+                "completion": ["cause": "natural", "beforeReady": false]
             ]]
-        ]
+        ], afterEvaluation: { _, index in
+            if index == 3 {
+                expect(coldTarget.activationCount == 1 && coldRuntime.terminated == 0,
+                       "the actual AppDelegate activates at playing readiness and remains alive until completion")
+            }
+        }
     )
     coldRuntime.startupTransportFactory = { capture, events in
         NativeStartupEventTransport(base: coldTransport, capture: capture, events: events,
                                     now: { coldRuntime.uptime })
     }
-    let coldDelegate = AppDelegate(runtime: coldRuntime, presentation: FakeNativePlayerPresentation())
+    let coldDelegate = AppDelegate(runtime: coldRuntime, presentation: FakeNativePlayerPresentation(), nativeColdLaunch: false)
     coldDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
     try await settleLaunch(coldRuntime)
     coldDelegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
@@ -2011,15 +2759,77 @@ private func nativeEventContractChecks() async throws -> Int {
     expect(coldTransport.closeCount == 1, "cold startup closes the injected transport")
     expect(coldTarget.activationCount == 1, "verified readiness activates the same target once")
     expect(coldRuntime.terminated == 1 && coldRuntime.acquiredLock?.releaseCount == 1,
-           "cold startup terminates after readiness and releases its instance lock")
+           "cold startup terminates after completion and releases its instance lock")
     expect(eventNames(coldRuntime).contains("startup-installed") && eventNames(coldRuntime).contains("startup-ready")
            && eventNames(coldRuntime).contains("launcher-exit") && coldRuntime.processExitCode == 0,
            "cold startup emits installed, ready, and successful teardown events")
 
+    try Data("native-prepare-entry-fixture".utf8).write(to: coldResources.appendingPathComponent("startup/prepare.js"))
+    try FileManager.default.createDirectory(at: coldResources.appendingPathComponent("web"), withIntermediateDirectories: true)
+    try Data("<html></html>".utf8).write(to: coldResources.appendingPathComponent("web/index.html"))
+    let nativeRuntime = FakeNativeAppRuntime(arguments: ["agent-skin"], resourceURL: coldResources)
+    nativeRuntime.uptime = ProcessInfo.processInfo.systemUptime
+    nativeRuntime.allocatedPort = 49221
+    nativeRuntime.installedTargetURL = syntheticCodex
+    nativeRuntime.applications = [retiredTarget]
+    nativeRuntime.openedApplication = coldTarget
+    nativeRuntime.startupTargetSystem = FakeStartupSystem(expectedPID: 45, ports: [49221])
+    let nativeWorld = StartupSnapshotWorld(); nativeWorld.preparedMode = true
+    let nativeTransport = PreparedConnectorTransport(nativeWorld)
+    let nativeCandidatePresentation = FakeNativePlayerPresentation()
+    nativeCandidatePresentation.coverHook = { nativeWorld.runNonce = $0 }
+    nativeRuntime.beforeOpenCompletion = {
+        expect(nativeCandidatePresentation.nativeCoverCount == 1, "actual AppDelegate opens host only after cover receipt")
+        nativeRuntime.applications = [coldTarget]
+    }
+    nativeRuntime.startupTransportFactory = { capture, events in
+        NativeStartupEventTransport(base: nativeTransport, capture: capture, events: events, now: { nativeRuntime.uptime })
+    }
+    nativeCandidatePresentation.evaluationHook = { source in
+        if source.contains("finishNativeSnapshot") {
+            nativeCandidatePresentation.nativeHandler?.receive(body: ["action": "ready", "runId": nativeWorld.runNonce,
+                "duration": 12000], isMainFrame: true)
+        } else if source == "window.launcherUI.beginLaunch()" {
+            nativeCandidatePresentation.nativeHandler?.receive(body: ["action": "complete", "runId": nativeWorld.runNonce,
+                "skipped": false], isMainFrame: true)
+        }
+        return (true, nil)
+    }
+    let nativeDelegate = AppDelegate(runtime: nativeRuntime, presentation: nativeCandidatePresentation)
+    nativeDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+    try await settleLaunch(nativeRuntime)
+    nativeDelegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+    expect(nativeTransport.world.submittedInstall?.contains("native-prepare-entry-fixture") == true
+        && nativeTransport.world.submittedInstall?.contains("test-only-probe") == false,
+        "actual AppDelegate selects fixed prepare.js rather than legacy page-player payload: \(nativeRuntime.output.joined(separator: " | "))")
+    expect(nativeRuntime.openCount == 1 && nativeRuntime.processExitCode == 0
+        && nativeCandidatePresentation.nativeCoverCount == 1 && nativeCandidatePresentation.createdPlayers.count == 1
+        && nativeCandidatePresentation.orderedOutCount == 1 && nativeRuntime.acquiredLock?.releaseCount == 1,
+        "native AppDelegate consumer finishes and releases its cover and single-instance lease")
+    expect(eventNames(nativeRuntime).contains("startup-native-result")
+        && !eventNames(nativeRuntime).contains("startup-ready"), "actual native consumer uses dedicated native evidence")
+    let nativeEvents = nativeRuntime.output.compactMap { line -> [String: Any]? in
+        guard let data = line.data(using: .utf8) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+    let nativeResult = nativeEvents.first { $0["event"] as? String == "startup-native-result" }
+    let nativeExit = nativeEvents.first { $0["event"] as? String == "launcher-exit" }
+    let nativeWorkspace = nativeResult?["workspace"] as? [String: Any]
+    let nativeCover = nativeResult?["cover"] as? [String: Any]
+    expect(nativeResult?["runNonce"] as? String == nativeWorld.runNonce
+        && nativeExit?["runNonce"] as? String == nativeWorld.runNonce
+        && nativeResult?["targetPID"] as? Int == 45 && nativeExit?["targetPID"] as? Int == 45
+        && nativeCover?["runNonce"] as? String == nativeWorld.runNonce
+        && nativeCover?["drawCommitted"] as? Bool == true
+        && nativeWorkspace?["runNonce"] as? String == nativeWorld.runNonce
+        && nativeWorkspace?["runId"] as? Int == 1
+        && nativeResult?["visualContinuity"] as? String == "not-measured",
+        "native event and exit preserve actual run, target, cover and workspace receipts without visual claims")
+
     let missingPayloadRuntime = FakeNativeAppRuntime(arguments: ["agent-skin"])
     missingPayloadRuntime.installedTargetURL = syntheticCodex
     missingPayloadRuntime.startupTargetSystem = FakeStartupSystem(expectedPID: 45, ports: [45678])
-    let missingPayloadDelegate = AppDelegate(runtime: missingPayloadRuntime, presentation: FakeNativePlayerPresentation())
+    let missingPayloadDelegate = AppDelegate(runtime: missingPayloadRuntime, presentation: FakeNativePlayerPresentation(), nativeColdLaunch: false)
     missingPayloadDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
     try await settleLaunch(missingPayloadRuntime)
     missingPayloadDelegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
@@ -2030,7 +2840,7 @@ private func nativeEventContractChecks() async throws -> Int {
 
     let missingTargetRuntime = FakeNativeAppRuntime(arguments: ["agent-skin"])
     missingTargetRuntime.bundleURL = URL(fileURLWithPath: "/Applications/ChatGPT.app")
-    AppDelegate(runtime: missingTargetRuntime, presentation: FakeNativePlayerPresentation())
+    AppDelegate(runtime: missingTargetRuntime, presentation: FakeNativePlayerPresentation(), nativeColdLaunch: false)
         .applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
     expect(missingTargetRuntime.openCount == 0 && missingTargetRuntime.terminated == 1
            && eventNames(missingTargetRuntime).contains("startup-failed"),
@@ -2065,7 +2875,7 @@ private func nativeEventContractChecks() async throws -> Int {
                                                withDestinationURL: outsideStartup)
     let (linkedPayloadRuntime, _, _) = makeColdRuntime(pid: 491, resourceURL: linkedResourceRoot)
     linkedPayloadRuntime.startupTransportFactory = { _, _ in FakeStartupTransport(pages: [], evaluations: []) }
-    let linkedPayloadDelegate = AppDelegate(runtime: linkedPayloadRuntime, presentation: FakeNativePlayerPresentation())
+    let linkedPayloadDelegate = AppDelegate(runtime: linkedPayloadRuntime, presentation: FakeNativePlayerPresentation(), nativeColdLaunch: false)
     linkedPayloadDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
     try await settleLaunch(linkedPayloadRuntime)
     let linkedFailure = linkedPayloadRuntime.output.compactMap { line -> [String: Any]? in
@@ -2081,9 +2891,15 @@ private func nativeEventContractChecks() async throws -> Int {
     defer { try? FileManager.default.removeItem(at: boundedRoot) }
     let boundedDirectory = boundedRoot.appendingPathComponent("startup", isDirectory: true)
     let boundedFile = boundedDirectory.appendingPathComponent("install.js")
+    let prepareFile = boundedDirectory.appendingPathComponent("prepare.js")
     try FileManager.default.createDirectory(at: boundedDirectory, withIntermediateDirectories: true)
     try Data("fixture-payload".utf8).write(to: boundedFile)
     expect(StartupPayloadReader.read(from: boundedRoot) == "fixture-payload", "bounded payload reader accepts normal UTF-8 bytes")
+    expect(StartupPayloadReader.read(from: boundedRoot, kind: .nativePrepare) == nil,
+           "an older package without prepare.js is rejected instead of falling back to install.js")
+    try Data("fixture-native-prepare".utf8).write(to: prepareFile)
+    expect(StartupPayloadReader.read(from: boundedRoot, kind: .nativePrepare) == "fixture-native-prepare",
+           "bounded payload reader accepts the explicitly selected prepare.js resource")
     var interruptedReads = 0
     let retriedPayload = StartupPayloadReader.read(from: boundedRoot) { descriptor, buffer, count in
         if interruptedReads == 0 { interruptedReads += 1; errno = EINTR; return -1 }
@@ -2114,6 +2930,26 @@ private func nativeEventContractChecks() async throws -> Int {
            "the replaced and replacement payloads remain available for review")
     try FileManager.default.removeItem(at: savedPayload)
     try Data("fixture-payload".utf8).write(to: boundedFile)
+    let savedPrepare = boundedDirectory.appendingPathComponent("saved-prepare-original.js")
+    var prepareReplacementError: Error?, prepareReplaced = false
+    let changedPrepare = StartupPayloadReader.read(from: boundedRoot, kind: .nativePrepare) { descriptor, buffer, count in
+        let received = Darwin.read(descriptor, buffer, count)
+        if received > 0 && !prepareReplaced {
+            do {
+                try FileManager.default.moveItem(at: prepareFile, to: savedPrepare)
+                try Data("foreign-native-prepare".utf8).write(to: prepareFile)
+                prepareReplaced = true
+            } catch { prepareReplacementError = error }
+        }
+        return received
+    }
+    expect(prepareReplacementError == nil && prepareReplaced && changedPrepare == nil,
+           "the selected prepare.js path is rechecked after reading and replacement is rejected")
+    expect((try? Data(contentsOf: savedPrepare)) == Data("fixture-native-prepare".utf8)
+           && (try? Data(contentsOf: prepareFile)) == Data("foreign-native-prepare".utf8),
+           "prepare.js replacement leaves both original and replacement available for review")
+    try FileManager.default.removeItem(at: savedPrepare)
+    try Data("fixture-native-prepare".utf8).write(to: prepareFile)
     var growthError: Error?, grew = false, readBytes = 0
     let grownPayload = StartupPayloadReader.read(from: boundedRoot) { descriptor, buffer, count in
         let received = Darwin.read(descriptor, buffer, count)
@@ -2144,6 +2980,17 @@ private func nativeEventContractChecks() async throws -> Int {
     expect(mkfifo(boundedFile.path, 0o600) == 0, "synthetic payload FIFO was created")
     expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects a FIFO without waiting for a writer")
     try FileManager.default.removeItem(at: boundedFile)
+
+    try FileManager.default.removeItem(at: prepareFile)
+    try FileManager.default.createSymbolicLink(at: prepareFile, withDestinationURL: startupPayloadURL)
+    expect(StartupPayloadReader.read(from: boundedRoot, kind: .nativePrepare) == nil,
+           "the selected prepare.js path rejects a symlink without falling back to install.js")
+    try FileManager.default.removeItem(at: prepareFile)
+    expect(mkfifo(prepareFile.path, 0o600) == 0, "synthetic prepare FIFO was created")
+    expect(StartupPayloadReader.read(from: boundedRoot, kind: .nativePrepare) == nil,
+           "the selected prepare.js path rejects a FIFO without waiting for a writer")
+    try FileManager.default.removeItem(at: prepareFile)
+
     try FileManager.default.createDirectory(at: boundedFile, withIntermediateDirectories: false)
     expect(StartupPayloadReader.read(from: boundedRoot) == nil, "bounded payload reader rejects a directory")
     try FileManager.default.removeItem(at: boundedFile)
@@ -2156,6 +3003,13 @@ private func nativeEventContractChecks() async throws -> Int {
     try oversizedHandle.close()
     expect(StartupPayloadReader.read(from: boundedRoot) == nil,
            "bounded payload reader rejects the exclusive size limit")
+
+    try Data().write(to: prepareFile)
+    let oversizedPrepareHandle = try FileHandle(forWritingTo: prepareFile)
+    try oversizedPrepareHandle.truncate(atOffset: UInt64(24 * 1024 * 1024))
+    try oversizedPrepareHandle.close()
+    expect(StartupPayloadReader.read(from: boundedRoot, kind: .nativePrepare) == nil,
+           "the selected prepare.js path rejects the exclusive size limit")
 
     let hotRuntime = FakeNativeAppRuntime(arguments: ["agent-skin"], resourceURL: coldResources)
     hotRuntime.installedTargetURL = syntheticCodex
@@ -2235,7 +3089,7 @@ private func nativeEventContractChecks() async throws -> Int {
     try FileManager.default.createDirectory(at: emptyPayloadURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data().write(to: emptyPayloadURL)
     let (emptyPayloadRuntime, _, _) = makeColdRuntime(pid: 51, resourceURL: emptyPayloadResources)
-    let emptyPayloadDelegate = AppDelegate(runtime: emptyPayloadRuntime, presentation: FakeNativePlayerPresentation())
+    let emptyPayloadDelegate = AppDelegate(runtime: emptyPayloadRuntime, presentation: FakeNativePlayerPresentation(), nativeColdLaunch: false)
     emptyPayloadDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
     try await settleLaunch(emptyPayloadRuntime)
     emptyPayloadDelegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
@@ -2244,7 +3098,7 @@ private func nativeEventContractChecks() async throws -> Int {
            "cold startup rejects an empty packaged payload before opening the target")
 
     func runConfiguredStartup(_ runtime: FakeNativeAppRuntime) async throws {
-        let delegate = AppDelegate(runtime: runtime, presentation: FakeNativePlayerPresentation())
+        let delegate = AppDelegate(runtime: runtime, presentation: FakeNativePlayerPresentation(), nativeColdLaunch: false)
         delegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         try await settleLaunch(runtime)
         delegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
@@ -2465,6 +3319,7 @@ private func nativeEventContractChecks() async throws -> Int {
            "presentation methods handle calls made before a local player window exists")
     let systemPreviewDelegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["agent-skin", "--preview"]))
     nativePresentation.createPlayer(locale: .english, mode: "preview", theme: "dark", inspect: true,
+                                    nativeStartup: nil,
                                     messageHandler: systemPreviewDelegate, navigationDelegate: systemPreviewDelegate)
     nativePresentation.loadPlayer(page: previewWebRoot.appendingPathComponent("index.html"), allowingReadAccessTo: previewWebRoot)
     nativePresentation.evaluateJavaScript("void 0", completion: nil)
@@ -2921,8 +3776,9 @@ private func skinHostContractChecks() async throws -> Int {
     }
     func statusBody(runID: Int, phase: String, ready: Bool) -> [String: Any] {
         ["owner": "azhou-codex-startup", "version": 1, "phase": phase, "runId": runID,
-         "ready": ready, "completed": false, "overlay": true, "reason": "",
-         "wallpaper": ["applied": false, "reason": "", "imageDecoded": false], "completion": NSNull()]
+         "ready": ready, "completed": phase == "complete", "overlay": phase != "complete", "reason": "",
+         "wallpaper": ["applied": false, "reason": "", "imageDecoded": false],
+         "completion": phase == "complete" ? ["cause": "natural", "beforeReady": false] : NSNull()]
     }
     let installedApp = FakeNativeApplication(
         pid: 5321, bundleIdentifier: "com.openai.codex",
@@ -2935,9 +3791,9 @@ private func skinHostContractChecks() async throws -> Int {
     let readyTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
-            ["href": installURL, "missing": false, "status": statusBody(runID: 7, phase: "playing", ready: true)],
+            ["href": installURL, "missing": false, "status": statusBody(runID: 7, phase: "complete", ready: true)],
         ])
     var readyOpening: [Bool] = []
     let readyObservation = CodexInstallObservation()
@@ -3059,7 +3915,7 @@ private func skinHostContractChecks() async throws -> Int {
     let activeTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": true],
         ])
     let activeAssembly = CodexSkinAssembly(
@@ -3118,9 +3974,9 @@ private func skinHostContractChecks() async throws -> Int {
     let busyTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
-            ["href": installURL, "missing": false, "status": statusBody(runID: 11, phase: "playing", ready: true)],
+            ["href": installURL, "missing": false, "status": statusBody(runID: 11, phase: "complete", ready: true)],
         ])
     let busyAssembly = CodexSkinAssembly(
         preflightBundle: { _, _ in }, activateExisting: { _ in false },
@@ -3289,7 +4145,7 @@ private func skinHostContractChecks() async throws -> Int {
     let interruptedTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": "app://-/index.html?initialRoute=%2Fsettings", "missing": false],
         ])
@@ -3360,7 +4216,7 @@ private func skinHostContractChecks() async throws -> Int {
     let skippedTransport = FakeStartupTransport(
         pages: [pageEntry()],
         evaluations: [
-            ["href": installURL, "controllerPresent": false],
+            ["href": installURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": installURL, "missing": false, "status": [
                 "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 8,
@@ -3471,10 +4327,10 @@ private func skinHostContractChecks() async throws -> Int {
     let busyDisableDriver = contractDriver(runtime: busyDisableRuntime,
                                            system: FakeStartupSystem(expectedPID: 5328, ports: [9333]),
                                            transport: FakeStartupTransport(pages: [pageEntry()], evaluations: [
-                                               ["href": installURL, "controllerPresent": false],
+                                               ["href": installURL, "controllerPresent": false, "shellReady": true],
                                                ["installed": true, "alreadyActive": false],
                                                ["href": installURL, "missing": false,
-                                                "status": statusBody(runID: 12, phase: "playing", ready: true)],
+                                                "status": statusBody(runID: 12, phase: "complete", ready: true)],
                                            ]),
                                            findings: verifiedCodexFindings(codexKey))
     async let busyFirstLaunch = busyDisableDriver.launch(
@@ -3591,7 +4447,7 @@ private final class LostReplyStartupTransport: StartupTransport {
             throw WallpaperFailure(state: "endpoint-unavailable", chinese: "丢失回复", english: "lost reply")
         }
         if source.contains("dispose.value.call(api)") { disposeEvaluations += 1 }
-        if source.contains("controllerPresent") { return ["href": "app://-/index.html?initialRoute=%2F", "controllerPresent": false] }
+        if source.contains("controllerPresent") { return ["href": "app://-/index.html?initialRoute=%2F", "controllerPresent": false, "shellReady": true] }
         return [:]
     }
     func close() {}
@@ -3647,6 +4503,7 @@ private func nativePureStatusContractChecks() -> Int {
     }
     for value in [status(ready: true), status(completed: true),
                   status(phase: "playing"), status(phase: "settings"),
+                  status(phase: "playing", ready: true, completed: true, completion: ["cause": "natural", "beforeReady": false]),
                   status(phase: "complete", overlay: false),
                   status(phase: "failed", overlay: false), status(phase: "timeout", overlay: false)] {
         expect(NativeStartupStatus.parse(value) == nil, "contradictory lifecycle flags fail closed")
@@ -3723,8 +4580,10 @@ private func nativePureStatusContractChecks() -> Int {
 // connector, install recorder and event capture; only HTTP/socket/host boundaries
 // are synthetic. All document generations deliberately start at runID 1.
 private final class StartupReplacementWorld: @unchecked Sendable {
+    static let deadline: TimeInterval = 45
     let stage: String
     let mode: String
+    let readyOverlap: Bool
     let handshakeStatus: Int?
     let href = "app://-/index.html?initialRoute=%2F"
     private let lock = NSLock()
@@ -3736,6 +4595,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     private(set) var disposedControllers: [String] = []
     private(set) var installReplyTimes: [String: TimeInterval] = [:]
     private(set) var requests: [String] = []
+    private(set) var candidateActionsWhileOldListed: [String] = []
     private(set) var requestIDs: [Int] = []
     private(set) var sockets: [StartupReplacementSocket] = []
     private(set) var lockAcquires = 0
@@ -3745,8 +4605,11 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     private var lagReadsLeft = 0
     private var waitReads = 0
     private var recheckReads = 0
-    init(stage: String, mode: String = "replace", handshakeStatus: Int? = nil) {
+    private var inspectReads: [String: Int] = [:]
+    private var oldListed = true
+    init(stage: String, mode: String = "replace", handshakeStatus: Int? = nil, readyOverlap: Bool = false) {
         self.stage = stage; self.mode = mode
+        self.readyOverlap = readyOverlap
         self.handshakeStatus = handshakeStatus ?? ["handshake-404": 404, "handshake-401": 401][mode]
         lagReadsLeft = mode.hasPrefix("lag-") ? Int(String(mode.dropFirst(4))) ?? 0 : 0
     }
@@ -3759,11 +4622,24 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     func pages() throws -> [[String: Any]] {
         lock.lock(); defer { lock.unlock() }
         clock += 0.01
+        let entries = try pageEntries()
+        oldListed = entries.contains { $0["id"] as? String == "page-a" }
+        return entries
+    }
+    private func pageEntries() throws -> [[String: Any]] {
         func entry(_ id: String, type: String = "page", url: String? = nil) -> [String: Any] {
             ["id": id, "type": type, "url": url ?? href,
              "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(id)"]
         }
         if generation == 0 { return [entry("page-a")] }
+        if readyOverlap {
+            waitReads += 1
+            if waitReads <= 3 {
+                var old = entry("page-a")
+                if mode == "old-socket-drift" { old["webSocketDebuggerUrl"] = "ws://127.0.0.1:49221/devtools/page/other" }
+                return [old, entry("page-b")]
+            }
+        }
         if mode.hasPrefix("recheck-") {
             recheckReads += 1
             let responseFailures = ["recheck-http401", "recheck-http503", "recheck-redirect", "recheck-foreign-url",
@@ -3811,7 +4687,9 @@ private final class StartupReplacementWorld: @unchecked Sendable {
     }
     func socket(_ request: URLRequest) -> any WallpaperSocketTask {
         let socket = StartupReplacementSocket(id: request.url!.lastPathComponent, world: self)
-        lock.lock(); sockets.append(socket); lock.unlock()
+        lock.lock()
+        if socket.id != "page-a", oldListed { candidateActionsWhileOldListed.append(socket.id + ":connect") }
+        sockets.append(socket); lock.unlock()
         return socket
     }
     func reply(id: String, request: [String: Any]) throws -> Data {
@@ -3826,7 +4704,9 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             : expression == StartupConnector.inspectExpression ? "inspect"
             : expression == StartupConnector.statusExpression ? "status" : "dispose"
         requests.append("\(id):\(operation)"); requestIDs.append(request["id"] as? Int ?? -1)
+        if id != "page-a", oldListed { candidateActionsWhileOldListed.append("\(id):\(operation)") }
         requestsLocked = requestsLocked && lockHeld
+        if operation == "inspect" { inspectReads[id, default: 0] += 1 }
         // CDP Runtime.callFunctionOn has no execution timeout parameter. Its
         // independent client timer bounds the request, unlike Runtime.evaluate.
         if request["method"] as? String == "Runtime.callFunctionOn" {
@@ -3854,6 +4734,10 @@ private final class StartupReplacementWorld: @unchecked Sendable {
         }
         if operation == "install" { installs[id, default: 0] += 1 }
         if id == "page-a", operation == "status" { statusCount += 1 }
+        if mode == "shell-replace", id == "page-a", operation == "inspect" {
+            if inspectReads[id] == 2 { generation += 1 }
+            if inspectReads[id] == 3 { throw URLError(.networkConnectionLost) }
+        }
         let replaceNow = id == "page-a" && operation == stage && (stage != "status" || statusCount == 2)
             || id == "page-b" && operation == "install" && ["chain", "reuse"].contains(mode)
         func envelope(_ value: [String: Any]) -> [String: Any] {
@@ -3881,19 +4765,22 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             case "timeout-error": throw URLError(.timedOut)
             case "handshake-unknown": throw URLError(.badServerResponse)
             case "posix-loss": throw NSError(domain: NSPOSIXErrorDomain, code: Int(ECONNRESET))
-            case "deadline": clock = 5; throw URLError(.networkConnectionLost)
+            case "deadline": clock = Self.deadline; throw URLError(.networkConnectionLost)
             case "before-install": break
             case "cancel-ready-list": terminal = "ready-replaced"
             case "ready-replaced", "complete-replaced", "skip-replaced", "failed-replaced", "disposed-replaced", "run-drift": terminal = mode
             case "ready-blip", "recheck-once": terminal = "ready-replaced"
             case "complete-blip": terminal = "complete-replaced"
-            default: throw URLError(.networkConnectionLost)
+            default:
+                if readyOverlap { terminal = "ready-replaced" }
+                else { throw URLError(.networkConnectionLost) }
             } }
         }
         if mode.hasPrefix("recheck-"), generation > 0 { terminal = "ready-replaced" }
         let value: [String: Any]
         switch operation {
-        case "inspect": value = ["href": href, "controllerPresent": id == "page-b" && mode == "already-present"]
+        case "inspect": value = ["href": href, "controllerPresent": id == "page-b" && mode == "already-present",
+                                  "shellReady": mode != "shell-replace" || id != "page-a" && inspectReads[id, default: 0] > 1]
         case "install":
             installReplyTimes[id] = clock
             value = mode == "missing-new-receipt" && id == "page-b" ? ["installed": "invalid"]
@@ -3903,7 +4790,7 @@ private final class StartupReplacementWorld: @unchecked Sendable {
                 if ["recheck-controller", "recheck-missing"].contains(mode) { return try data(envelope(["href": href, "missing": true])) }
                 if mode == "recheck-href" { return try data(envelope(["href": "app://-/index.html?initialRoute=settings", "missing": false])) }
                 if mode == "recheck-schema" { return try data(envelope(["href": href, "missing": false, "status": ["owner": "foreign"]])) }
-                if mode == "recheck-complete" { terminal = "complete-replaced" }
+                if ["recheck-once", "recheck-lost", "recheck-connect", "recheck-complete"].contains(mode) { terminal = "complete-replaced" }
                 if mode == "recheck-skip" { terminal = "skip-replaced" }
                 if mode == "recheck-failed" { terminal = "failed-replaced" }
                 if mode == "recheck-disposed" { terminal = "disposed-replaced" }
@@ -3911,9 +4798,11 @@ private final class StartupReplacementWorld: @unchecked Sendable {
             }
             let timedOut = mode == "recheck-timeout" && recheckReads > 1
             let completed = ["complete-replaced", "skip-replaced"].contains(terminal ?? "")
+                || id != "page-a"
             let failed = terminal == "failed-replaced"
             let disposed = terminal == "disposed-replaced"
-            let ready = id != "page-a" || ["ready-replaced", "complete-replaced", "run-drift"].contains(terminal ?? "")
+            let ready = id != "page-a" || mode == "after-ready"
+                || ["ready-replaced", "complete-replaced", "run-drift"].contains(terminal ?? "")
             let phase = timedOut ? "timeout" : failed ? "failed" : disposed ? "disposed" : completed ? "complete" : ready ? "playing" : "loading"
             let completion: Any = completed ? ["cause": terminal == "skip-replaced" ? "skip" : "natural",
                                                 "beforeReady": terminal == "skip-replaced" && mode != "recheck-skip"] : NSNull()
@@ -4039,8 +4928,9 @@ private final class StartupReplacementURLProtocol: URLProtocol {
 
 @MainActor
 private func startupReplacementScenario(stage: String, mode: String = "replace",
-                                        diagnostics enabled: Bool = false, handshakeStatus: Int? = nil) async throws -> [String: Any] {
-    let world = StartupReplacementWorld(stage: stage, mode: mode, handshakeStatus: handshakeStatus)
+                                        diagnostics enabled: Bool = false, handshakeStatus: Int? = nil,
+                                        readyOverlap: Bool = false) async throws -> [String: Any] {
+    let world = StartupReplacementWorld(stage: stage, mode: mode, handshakeStatus: handshakeStatus, readyOverlap: readyOverlap)
     StartupReplacementURLProtocol.world = world
     defer { StartupReplacementURLProtocol.world = nil }
     var diagnosticRecords: [[String: Any]] = []
@@ -4055,6 +4945,7 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             launcherPath: "/synthetic/Agent-Skin.app", now: world.time, sink: { records.append($0) }))
         events.begin(at: 0); events.targetOpened(pid: 4123, at: 0)
         let recorder = CodexInstallObservation()
+        var presentationPages: [String] = []
         let transport = InstallObservingStartupTransport(
             base: NativeStartupEventTransport(base: base, capture: capture, events: events, now: world.time), recorder: recorder)
         let target = StartupTargetFacts(pid: 4123, bundle: URL(fileURLWithPath: "/synthetic/Codex.app"),
@@ -4062,11 +4953,12 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             bundleID: "com.openai.codex", launchTime: mode == "missing-launch" ? nil : 100)
         let outcome = await StartupConnector(target: target, expectedPort: 49221, system: StartupReplacementSystem(world),
             transport: transport, diagnostics: enabled ? { _, fields in diagnosticRecords.append(fields) } : nil,
+            onReady: { presentationPages.append(capture.snapshot().pageID ?? "") },
             now: world.time, sleep: {
                 world.advance($0)
                 if mode == "recheck-cancel-wait", world.recheckCount() > 0 { withUnsafeCurrentTask { $0?.cancel() } }
             })
-            .run(payload: "test-only-probe", deadline: 5)
+            .run(payload: "test-only-probe", deadline: StartupReplacementWorld.deadline)
         let observation = capture.snapshot()
         let final = events.resolve(outcome, observation: observation, at: world.time())
         return ["stage": stage, "mode": mode, "recovered": outcome == .ready(runID: 1) && final == .ready,
@@ -4074,8 +4966,11 @@ private func startupReplacementScenario(stage: String, mode: String = "replace",
             "installs": world.installs, "installSentCount": recorder.installSentCount, "disposedControllers": world.disposedControllers,
             "requests": world.requests, "requestIDs": world.requestIDs,
             "connections": world.sockets.map(\.id), "socketCloses": world.sockets.map(\.canceled),
+            "candidateActionsWhileOldListed": world.candidateActionsWhileOldListed,
             "lockAcquires": world.lockAcquires, "lockReleases": world.lockReleases, "requestsLocked": world.requestsLocked,
             "currentPageID": observation.pageID ?? "", "installedAt": observation.installedAt ?? -1,
+            "completed": observation.status?.completed ?? false,
+            "presentationPages": presentationPages,
             "installReplyTimes": world.installReplyTimes,
             "installationPageIDs": records.filter { $0["event"] as? String == "startup-installed" }.compactMap { $0["pageTargetID"] as? String },
             "readyPageIDs": records.filter { $0["event"] as? String == "startup-ready" }.compactMap { $0["pageTargetID"] as? String },
@@ -4163,6 +5058,16 @@ private func startupPageReplacementChecks() async throws -> Int {
     func expect(_ condition: @autoclosure () -> Bool, _ label: String) {
         guard condition() else { fatalError("FAILED: page replacement: \(label)") }; checks += 1
     }
+    let afterReady = try await startupReplacementScenario(stage: "status", mode: "after-ready")
+    expect(afterReady["recovered"] as? Bool == true && afterReady["currentPageID"] as? String == "page-b"
+        && afterReady["completed"] as? Bool == true,
+        "a playing page replaced after readiness must complete on the proven successor before handoff")
+    expect(afterReady["presentationPages"] as? [String] == ["page-a", "page-b"],
+        "presentation gets readiness before page replacement and the successor completes independently")
+    let overlap = try await startupReplacementScenario(stage: "status", mode: "after-ready", diagnostics: true, readyOverlap: true)
+    expect(overlap["recovered"] as? Bool == true && overlap["currentPageID"] as? String == "page-b"
+        && overlap["completed"] as? Bool == true && overlap["installs"] as? [String: Int] == ["page-a": 1, "page-b": 1],
+        "a playing old page overlapping its successor must wait for retirement and complete on the successor")
     func common(_ r: [String: Any]) {
         expect(r["lockAcquires"] as? Int == 1 && r["lockReleases"] as? Int == 1 && r["requestsLocked"] as? Bool == true,
                "one operation lock covers every generation")
@@ -4173,6 +5078,33 @@ private func startupPageReplacementChecks() async throws -> Int {
         expect(installs.values.allSatisfy { $0 == 1 }, "each target receives at most one installation")
         expect(r["installSentCount"] as? Int == installs.values.reduce(0, +), "cumulative sent evidence is never reset")
     }
+    common(overlap)
+    let gatedReplacement = try await startupReplacementScenario(stage: "never", mode: "shell-replace", diagnostics: true, readyOverlap: true)
+    common(gatedReplacement)
+    expect(gatedReplacement["recovered"] as? Bool == true && gatedReplacement["installs"] as? [String: Int] == ["page-b": 1]
+        && (gatedReplacement["requests"] as? [String] ?? []).filter { $0 == "page-b:inspect" }.count == 2
+        && gatedReplacement["candidateActionsWhileOldListed"] as? [String] == [],
+        "a temporary page loses its connection before installation and the uniquely proven successor waits for its own shell before one playback")
+    let overlapProofs = (overlap["diagnostics"] as? [[String: Any]] ?? []).filter { $0["stage"] as? String == "proof" }
+    expect(overlapProofs.compactMap { $0["oldIDPresent"] as? Bool } == [true, true, false]
+        && overlap["candidateActionsWhileOldListed"] as? [String] == []
+        && overlap["disposedControllers"] as? [String] == []
+        && overlap["presentationPages"] as? [String] == ["page-a", "page-b"],
+        "overlap performs only retirement proof until the old ID disappears and each page supplies its own readiness")
+    for (mode, reason) in [("persist", "attach-timeout"), ("old-socket-drift", "ambiguous-main-page")] {
+        let r = try await startupReplacementScenario(stage: "status", mode: mode, diagnostics: true, readyOverlap: true); common(r)
+        expect(r["outcome"] as? String == "failed(reason: \"\(reason)\")"
+            && r["connections"] as? [String] == ["page-a"] && r["installs"] as? [String: Int] == ["page-a": 1]
+            && r["candidateActionsWhileOldListed"] as? [String] == [] && (r["elapsed"] as? Double ?? 99) <= StartupReplacementWorld.deadline + 0.1,
+            "\(mode) cannot use a playing overlap to bypass the selected socket, retirement or deadline boundaries")
+    }
+    let terminalOverlap = try await startupReplacementScenario(stage: "status", mode: "complete-replaced", diagnostics: true, readyOverlap: true)
+    common(terminalOverlap)
+    expect(terminalOverlap["outcome"] as? String == "partial(reason: \"startup-interrupted\")"
+        && terminalOverlap["connections"] as? [String] == ["page-a"]
+        && terminalOverlap["installs"] as? [String: Int] == ["page-a": 1]
+        && !(terminalOverlap["diagnostics"] as? [[String: Any]] ?? []).contains { $0["stage"] as? String == "proof" },
+        "a completed run cannot enter retirement proof or replay even while the old and new pages overlap")
     for stage in ["inspect", "install", "status"] {
         let r = try await startupReplacementScenario(stage: stage); common(r)
         let installs = r["installs"] as? [String: Int] ?? [:]
@@ -4221,7 +5153,7 @@ private func startupPageReplacementChecks() async throws -> Int {
     }
     let permanent = try await startupReplacementScenario(stage: "status", mode: "recheck-permanent"); common(permanent)
     expect(permanent["outcome"] as? String == "failed(reason: \"attach-timeout\")"
-        && (permanent["elapsed"] as? Double ?? 6) <= 5 && (permanent["recheckReads"] as? Int ?? 0) > 1
+        && (permanent["elapsed"] as? Double ?? 99) <= StartupReplacementWorld.deadline && (permanent["recheckReads"] as? Int ?? 0) > 1
         && permanent["connections"] as? [String] == ["page-a"], "permanent failure consumes only the original deadline")
     for mode in ["recheck-http401", "recheck-http503", "recheck-redirect", "recheck-foreign-url",
                  "recheck-array", "recheck-json", "recheck-oversized", "recheck-unknown"] {
@@ -4355,7 +5287,8 @@ private func startupPageReplacementChecks() async throws -> Int {
             "HTTP 500 never bypasses \(mode) proof refusal or cancellation")
         if mode == "persist" {
             expect(r["outcome"] as? String == "failed(reason: \"attach-timeout\")"
-                && (r["elapsed"] as? Double ?? 0) >= 5 && (r["elapsed"] as? Double ?? 99) <= 5.1,
+                && (r["elapsed"] as? Double ?? 0) >= StartupReplacementWorld.deadline
+                && (r["elapsed"] as? Double ?? 99) <= StartupReplacementWorld.deadline + 0.1,
                 "HTTP 500 with a still-live old ID only consumes the original bounded proof budget")
         }
     }
@@ -4564,5 +5497,358 @@ private func launcherCommandLineChecks() -> Int {
     // A stream failure latch is idempotent and never touches verified key state.
     system.latchStreamFailure("synthetic")
     expect(system.eventStream == nil, "latching a failure without an open stream stays inert")
+    return checks
+}
+
+
+private final class PreparedConnectorTransport: StartupTransport {
+    let world: StartupSnapshotWorld
+    let base: WallpaperTransport
+    var selected = "page-a"
+    var closed = false
+    init(_ world: StartupSnapshotWorld) {
+        self.world = world
+        base = WallpaperTransport(session: nil, socketFactory: { world.socket($0) })
+    }
+    func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        [["id": selected, "type": "page", "url": world.href,
+          "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(selected)"]]
+    }
+    func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
+        try await pages(port: port, timeout: timeout)
+    }
+    func connect(to url: URL, timeout: TimeInterval) throws { try base.connect(to: url, timeout: timeout) }
+    func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
+        try await base.evaluate(source, timeout: timeout)
+    }
+    func makeSettingsSnapshotSession(page: StartupSnapshotPage, request: StartupSettingsSnapshotRequest,
+                                     timeout: TimeInterval) async throws -> any StartupSettingsSnapshotSession {
+        try await base.makeSettingsSnapshotSession(page: page, request: request, timeout: timeout)
+    }
+    func disconnectPage() { base.disconnectPage() }
+    func close() { closed = true; base.close() }
+}
+
+@MainActor
+private func startupPreparedConnectorChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: Bool, _ label: String) {
+        precondition(condition, "FAILED: " + label); checks += 1
+    }
+    let bundle = URL(fileURLWithPath: "/Applications/Codex.app")
+    let target = StartupTargetFacts(pid: 4123, bundle: bundle,
+        executable: bundle.appendingPathComponent("Contents/MacOS/Codex"), bundleID: "com.openai.codex", launchTime: 100)
+    for disposition in ["disabled", "degraded", "applied"] {
+        let world = StartupSnapshotWorld(); world.preparedMode = true; world.preparedDisposition = disposition
+        let transport = PreparedConnectorTransport(world)
+        var snapshots = 0
+        var finished = false
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport,
+            now: { 1 }, sleep: { _ in finished = true })
+        let outcome = try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+            deadline: 60, playbackReserve: 12, acceptSnapshot: { _ in snapshots += 1 },
+            presentationFinished: { finished }, releaseRequested: { false })
+        expect(outcome == .observed(.init(pageID: "page-a", runID: 1,
+            wallpaperDisposition: disposition, wallpaperReason: disposition == "disabled" ? "disabled"
+                : disposition == "degraded" ? "wallpaper-unsupported" : "")), "independent workspace disposition survives native reconciliation")
+        expect(snapshots == 1 && transport.closed, "exactly one snapshot accepted and transport always closed")
+        expect(world.operationLog.contains("page-a:prepare"), "connector uses the bound production prepare method")
+    }
+    do {
+        let world = StartupSnapshotWorld(); world.preparedMode = true
+        let transport = PreparedConnectorTransport(world)
+        var snapshots = 0
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport, now: { 1 })
+        let outcome = try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+            deadline: 60, playbackReserve: 12, acceptSnapshot: { _ in
+                snapshots += 1; transport.selected = "page-b"
+            }, presentationFinished: { true }, releaseRequested: { false })
+        expect(outcome == .observed(.init(pageID: "page-b", runID: 1, wallpaperDisposition: "disabled", wallpaperReason: "disabled")),
+               "retired page is replaced before workspace acceptance")
+        expect(snapshots == 1 && world.operationLog.filter { $0.hasSuffix(":begin") }.count == 1,
+               "successor prepares workspace without replaying or re-reading accepted animation snapshot")
+        expect(world.operationLog.contains("page-a:prepare") && world.operationLog.contains("page-b:prepare"),
+               "each generation proves its own workspace")
+    }
+    for mode in ["skip", "deadline", "malformed", "no-shell"] {
+        let world = StartupSnapshotWorld(); world.preparedMode = true
+        world.malformedPrepared = mode == "malformed"
+        world.preparedShell = mode != "no-shell"
+        let transport = PreparedConnectorTransport(world)
+        var time = 1.0
+        var snapshots = 0
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport,
+            now: { time }, sleep: { _ in time = 60 })
+        do {
+            let outcome = try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+                deadline: mode == "deadline" ? 10 : 60, playbackReserve: 12,
+                acceptSnapshot: { _ in snapshots += 1 }, presentationFinished: { true },
+                releaseRequested: { mode == "skip" })
+            expect(mode == "skip" && outcome == .released, "skip is released, never ready")
+        } catch is StartupFailure {
+            expect(mode != "skip", "invalid or exhausted preparation fails explicitly")
+        }
+        expect(transport.closed, "failure and skip release the bound transport")
+        if mode != "no-shell" { expect(snapshots == 0, "invalid admission never starts playback") }
+    }
+    do {
+        let world = StartupSnapshotWorld(); world.preparedMode = true
+        let transport = PreparedConnectorTransport(world)
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport, now: { 1 })
+        let task = Task {
+            try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+                deadline: 60, playbackReserve: 12, acceptSnapshot: { _ in
+                    withUnsafeCurrentTask { $0?.cancel() }
+                }, presentationFinished: { false }, releaseRequested: { false })
+        }
+        do { _ = try await task.value; preconditionFailure("cancelled preparation unexpectedly completed") }
+        catch is CancellationError { }
+        expect(world.operationLog.contains("page-a:cancelWorkspace"), "task cancellation sends cleanup to the original controller")
+        expect(world.cleanupCancellationStates == [false], "cleanup executes without inherited task cancellation")
+        expect(world.preparedExpiries == [60000], "remote monotonic sample plus remaining native budget bounds the page lease")
+        expect(transport.closed, "cancelled native preparation closes only its transport")
+    }
+    do {
+        let world = StartupSnapshotWorld(); world.preparedMode = true
+        let transport = PreparedConnectorTransport(world)
+        var skip = false
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport, now: { 1 })
+        let outcome = try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+            deadline: 60, playbackReserve: 12, acceptSnapshot: { _ in skip = true },
+            presentationFinished: { false }, releaseRequested: { skip })
+        expect(outcome == .released && world.preparedPages.contains("page-a"), "skip releases while workspace preparation may continue")
+        expect(!world.operationLog.contains("page-a:cancelWorkspace"), "user skip does not cancel background wallpaper preparation")
+    }
+    do {
+        let world = StartupSnapshotWorld(); world.preparedMode = true
+        let transport = PreparedConnectorTransport(world)
+        var time = 1.0
+        world.afterWorkspaceClock = { time = 10 }
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport, now: { time })
+        do {
+            _ = try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+                deadline: 60, playbackReserve: 12, acceptSnapshot: { _ in time = 60 },
+                presentationFinished: { false }, releaseRequested: { false })
+            preconditionFailure("expired preparation unexpectedly completed")
+        } catch let failure as StartupFailure { expect(failure.reason == "attach-timeout", "native deadline remains absolute") }
+        expect(world.preparedExpiries == [51000], "clock reply latency reduces the page lease instead of extending it")
+        expect(!world.operationLog.contains("page-a:cancelWorkspace"), "expired budget sends no cleanup business request past its deadline")
+        expect(transport.closed, "expired native run releases transport while independent page deadline prevents late writes")
+    }
+    return checks
+}
+
+
+@MainActor
+private func nativeColdLaunchChecks() async throws -> Int {
+    var checks = 0
+    func expect(_ condition: Bool, _ label: String) { precondition(condition, "FAILED: " + label); checks += 1 }
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent("skin-native-cover-" + UUID().uuidString)
+    try FileManager.default.createDirectory(at: root.appendingPathComponent("web"), withIntermediateDirectories: true)
+    try Data("<html></html>".utf8).write(to: root.appendingPathComponent("web/index.html"))
+    defer { try? FileManager.default.removeItem(at: root) }
+    let bundle = URL(fileURLWithPath: "/Applications/Codex.app")
+    let key = HostApplicationKey(host: .codex, bundleURL: bundle,
+        executableURL: bundle.appendingPathComponent("Contents/MacOS/Codex"), bundleIdentifier: "com.openai.codex",
+        version: "fixture", build: "fixture", executableSHA256: "")
+    let findings = SkinCapability.allCases.map { capability in
+        CapabilityFinding(subject: .init(application: key, surface: SkinHostContract.surface(for: capability),
+            contractVersion: SkinHostContract.version), capability: capability, state: .verified, evidenceIDs: ["fixture"], reason: "fixture")
+    }
+    let inputs = BoundHostInputs(identity: .init(key: key, signingIdentity: "fixture", evidenceID: "fixture"),
+        findings: findings, contractVersion: SkinHostContract.version)
+    _ = NSApplication.shared
+    let originalMenu = NSApp.mainMenu
+    defer { NSApp.mainMenu = originalMenu }
+    for mode in ["complete", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
+                 "cancel-open", "cancel-task", "short-preflight", "short-cover", "short-attach", "window-close"] {
+        let runtime = FakeNativeAppRuntime(arguments: ["skin"], resourceURL: root)
+        let app = FakeNativeApplication(pid: 4123, bundleIdentifier: key.bundleIdentifier, bundleURL: bundle,
+            executableURL: key.executableURL, launchTime: 100)
+        if mode == "hot" { runtime.applications = [app] }
+        let facts = StartupTargetFacts(pid: 4123, bundle: bundle, executable: key.executableURL,
+            bundleID: key.bundleIdentifier, launchTime: 100)
+        let operationID = UUID()
+        let world = StartupSnapshotWorld(); world.preparedMode = true; world.runNonce = operationID.uuidString
+        let transport = PreparedConnectorTransport(world)
+        let system = FakeStartupSystem(expectedPID: 4123, ports: [49221])
+        let presentation = FakeNativePlayerPresentation()
+        presentation.coverValid = mode != "bad-cover"
+        presentation.coverHook = {
+            world.runNonce = $0
+            if mode == "short-cover" { runtime.uptime = 108 }
+        }
+        if mode == "short-attach" { world.afterWorkspaceClock = { runtime.uptime = 130 } }
+        let callerDeadline: TimeInterval = ["short-preflight", "short-cover"].contains(mode) ? 108 : mode == "short-attach" ? 130 : 160
+        var closeWindow: NSWindow?
+        var windowCloseCount = 0
+        var closeObserver: NSObjectProtocol?
+        let realPresentation: AppKitNativePlayerPresentation? = mode == "window-close"
+            ? AppKitNativePlayerPresentation(activateApp: {}, makeVisible: { _ in }, runAlert: { _ in }, orderCover: { window in
+                closeWindow = window
+                closeObserver = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: nil) { _ in windowCloseCount += 1 }
+            }) : nil
+        defer { if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) } }
+        var portAllocations = 0
+        var sequence: [String] = []
+        var records: [[String: Any]] = []
+        let events = NativeStartupEventStream(writer: NativeEventWriter(startedAt: 100, launcherPID: 42,
+            launcherPath: "/synthetic", now: { runtime.uptime }, sink: { records.append($0) }))
+        events.begin(at: 100)
+        var assembly = CodexSkinAssembly(preflightBundle: { _, budget in
+            sequence.append("preflight")
+            expect(budget.totalDeadline == min(160, callerDeadline)
+                && budget.preflightDeadline == min(115, callerDeadline), "caller deadline bounds preflight and total budget")
+            if mode == "preflight" { throw StartupFailure(reason: "target-identity", message: "fixture") }
+            if mode == "short-preflight" { runtime.uptime = 108 }
+        }, activateExisting: { _ in app.activate() }, preparePort: { portAllocations += 1; return 49221 }, openApplication: { _, _, deadline, _ in
+            sequence.append("open")
+            expect(presentation.nativeCoverCount == 1 || closeWindow != nil, "cold host opens after native cover draw receipt")
+            expect(deadline == min(146, callerDeadline), "opening respects the earlier caller and 45-second attach deadline")
+            if mode == "deadline" { presentation.schedules.last?.fire() }
+            if mode == "cancel-open" { throw CancellationError() }
+            if mode == "window-close" {
+                guard let window = closeWindow, let delegate = window.delegate as? NativeColdPlayer else {
+                    preconditionFailure("actual cover window must bind NativeColdPlayer as its X delegate")
+                }
+                window.performClose(nil)
+                expect(windowCloseCount == 1 && realPresentation?.geometry.isEmpty == true,
+                    "real AppKit performClose reaches windowShouldClose and immediately releases the owned cover once")
+                expect(delegate.windowShouldClose(window) == false && windowCloseCount == 1,
+                    "a duplicate X delegate event cannot release the window twice")
+            }
+            return app
+        }, onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { events },
+        onOpeningChanged: { _ in }, startupFacts: { _ in facts }, performDisable: nil)
+        assembly.nativePresentation = { nonce, event in
+            sequence.append("cover")
+            return NativeColdPlayer(nonce: nonce, runtime: runtime, presentation: realPresentation ?? presentation, event: event)
+        }
+        presentation.evaluationHook = { source in
+            if source.contains("finishNativeSnapshot") {
+                if mode == "skip" { presentation.nativeHandler?.requestSkip() }
+                else if mode == "cancel-task" { withUnsafeCurrentTask { $0?.cancel() } }
+                else if mode == "failure" {
+                    presentation.nativeHandler?.receive(body: ["action": "assetError", "runId": world.runNonce], isMainFrame: true)
+                } else {
+                    presentation.nativeHandler?.receive(body: ["action": "ready", "runId": world.runNonce, "duration": 12000], isMainFrame: true)
+                }
+            }
+            if source == "window.launcherUI.beginLaunch()" {
+                sequence.append("play")
+                presentation.nativeHandler?.receive(body: ["action": "complete", "runId": world.runNonce, "skipped": false], isMainFrame: true)
+            }
+            return (true, nil)
+        }
+        let driver = CodexSkinDriver(inputs: inputs, runtime: runtime, readPayload: { sequence.append("payload"); return "trusted-native-prepare" },
+            makeTargetSystem: { system }, makeConnector: { target, port, system, capture, events in
+                let observing = NativeStartupEventTransport(base: transport, capture: capture, events: events, now: { runtime.uptime })
+                return StartupConnector(target: target, expectedPort: port, system: system, transport: observing,
+                    now: { runtime.uptime }, sleep: { _ in try await Task.sleep(nanoseconds: 1_000_000) })
+            }, installObservation: CodexInstallObservation(), assembly: assembly)
+        let result = await Task { @MainActor in
+            await driver.launch(.init(expectedApplication: key, operationID: operationID, startedAt: 100, deadline: callerDeadline))
+        }.value
+        if mode == "hot" {
+            if case .activated = result {} else { preconditionFailure("native assembly changed hot activation") }
+            expect(sequence.isEmpty && presentation.nativeCoverCount == 0, "hot path reads no payload and constructs no cover")
+            continue
+        }
+        guard case .nativePresentation(let receipt) = result else { preconditionFailure("cold native result lost its presentation identity") }
+        if mode == "complete" {
+            expect(receipt.presentation == .completed && receipt.workspace?.wallpaperDisposition == "disabled", "native completion reconciles independently observed workspace")
+            expect(sequence == ["preflight", "payload", "cover", "open", "play"], "production driver invokes real NativeColdPlayer in the intended order")
+            expect(presentation.evaluations.contains { $0.contains("acceptNativeSnapshotDescriptor") }
+                && presentation.evaluations.contains { $0.contains("acceptNativeSnapshotChunk") }
+                && presentation.evaluations.contains { $0.contains("finishNativeSnapshot") }, "actual NativeColdPlayer consumes the bounded snapshot bridge")
+            expect(presentation.createdPlayers.count == 1 && presentation.coldRevealCount == 1, "native player mounts and reveals exactly once")
+            expect(events.resolveNative(receipt, at: 110) == .ready, "native journal accepts independent evidence without page-player ready")
+            expect(records.contains { $0["event"] as? String == "startup-native-result" }
+                && !records.contains { $0["event"] as? String == "startup-ready" }, "native evidence is not relabelled as page playback")
+        } else if mode == "cancel-open" || mode == "cancel-task" {
+            expect(receipt.presentation == .interrupted && receipt.reason == "startup-interrupted" && receipt.workspace == nil,
+                "actual driver distinguishes Task cancellation from protocol failure and user skip")
+            expect(events.resolveNative(receipt, at: 110) == .partial(reason: "startup-interrupted"),
+                "cancelled native receipt resolves to the established partial/startup-interrupted outcome")
+            if mode == "cancel-task" {
+                expect(world.operationLog.contains("page-a:cancelWorkspace"), "cancelled driver cleans up its bound workspace operation")
+            }
+        } else if mode == "skip" || mode == "window-close" {
+            expect(receipt.presentation == .skipped && receipt.workspace == nil, "skip releases without inventing workspace readiness")
+            expect(events.resolveNative(receipt, at: 110) == .skipped, "native user skip has its own terminal receipt")
+            expect(!world.operationLog.contains("page-a:cancelWorkspace"), "skip during WK transfer retains background host preparation")
+        } else {
+            expect(receipt.presentation == .failed, "failed native branch returns its own failure receipt")
+            expect(events.resolveNative(receipt, at: 110) == .behaviorNotProven(reason: receipt.reason ?? "protocol-error"),
+                "native failure keeps its production reason and failure exit")
+            if ["bad-cover", "preflight", "short-preflight", "short-cover"].contains(mode) {
+                expect(!sequence.contains("open"), "failed admission never opens the host")
+            }
+            if mode.hasPrefix("short-") {
+                expect(receipt.reason == "attach-timeout", "short caller deadline is a timeout rather than protocol error")
+                expect(world.submittedInstall == nil || mode == "short-attach", "preflight and cover deadlines cannot reach page install")
+                if mode == "short-preflight" { expect(!sequence.contains("payload") && !sequence.contains("cover"), "expired preflight performs no later payload or cover work") }
+                if mode == "short-cover" { expect(portAllocations == 0, "expired cover does not allocate a host port") }
+                if mode == "short-attach" { expect(world.preparedExpiries.isEmpty && presentation.createdPlayers.isEmpty,
+                    "attach cannot reset an expired caller deadline for workspace or WK preparation") }
+            }
+        }
+        _ = events.finish(at: 111)
+        if !["preflight", "short-preflight", "window-close"].contains(mode) { expect(presentation.orderedOutCount == 1, "every created cover is released once") }
+        expect(!app.isTerminated && runtime.terminated == 0, "skip, cancellation and window X never terminate the user's host")
+        expect(app.activationCount == 0, "driver does not steal focus during native presentation or skip")
+        let revealCount = presentation.coldRevealCount
+        presentation.nativeHandler?.receive(body: ["action": "ready", "runId": world.runNonce, "duration": 12000], isMainFrame: true)
+        expect(presentation.coldRevealCount == revealCount, "late renderer events cannot revive a released run")
+    }
+    for mode in ["retired-page", "missing-target", "missing-cover", "pending-failure", "pending-interruption"] {
+        var records: [[String: Any]] = []
+        let stream = NativeStartupEventStream(writer: NativeEventWriter(startedAt: 100, launcherPID: 42,
+            launcherPath: "/synthetic", now: { 110 }, sink: { records.append($0) }))
+        stream.begin(at: 100)
+        if mode != "missing-target" {
+            stream.targetOpened(pid: 4123, at: 101)
+            _ = stream.bindPage(pid: 4123, pageID: "current-page")
+        }
+        if mode == "pending-failure" { stream.latchFailure("owner-conflict") }
+        if mode == "pending-interruption" { stream.latchInterruption() }
+        let receipt = SkinNativeLaunchReceipt(operationID: UUID(), runNonce: UUID().uuidString,
+            presentation: .completed, reason: nil, workspace: SkinNativeWorkspaceObservation(
+                pageGeneration: mode == "retired-page" ? "retired-page" : "current-page", runID: 1,
+                wallpaperDisposition: "disabled", wallpaperReason: "disabled"), coverDrawCommitted: mode != "missing-cover")
+        let result = stream.resolveNative(receipt, at: 110)
+        expect(result == (mode == "pending-interruption" ? .partial(reason: "startup-interrupted")
+            : .behaviorNotProven(reason: mode == "pending-failure" ? "owner-conflict" : "protocol-error")),
+            "native producer refuses missing, stale or contradicted evidence: \(mode)")
+        expect(stream.resolveNative(receipt, at: 111) == nil, "native terminal cannot be replaced by a late result")
+        _ = stream.finish(at: 112)
+        _ = stream.finish(at: 113)
+        expect(records.filter { $0["event"] as? String == "launcher-exit" }.count == 1,
+            "native exit binding is emitted once")
+    }
+    _ = NSApplication.shared
+    let oldMenu = NSApp.mainMenu
+    defer { NSApp.mainMenu = oldMenu }
+    var firstWindow: NSWindow?
+    var reusedWindow: NSWindow?
+    var activationCount = 0
+    let panel = AppKitNativePlayerPresentation(activateApp: { activationCount += 1 },
+        makeVisible: { reusedWindow = $0 }, runAlert: { _ in }, orderCover: { firstWindow = $0 })
+    let previewDelegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
+    let cover = try panel.showColdCover(locale: .chinese, runNonce: "appkit-unit", delegate: previewDelegate)
+    panel.createPlayer(locale: .chinese, mode: "launch", theme: "light", inspect: false,
+        nativeStartup: .init(runNonce: "appkit-unit", locale: "zh-CN", theme: "light"),
+        messageHandler: previewDelegate, navigationDelegate: previewDelegate)
+    panel.revealColdPlayer(); panel.makeVisible(); panel.orderOut(); panel.stopLoading(); panel.removeMessageHandler(named: "launcher")
+    expect(firstWindow != nil && firstWindow === reusedWindow, "real AppKit cover and WK attach reuse the identical NSWindow")
+    expect(cover.drawObserved && cover.transactionCommitted && activationCount == 0, "AppKit receipt reports draw/commit without activation or a visual no-flash claim")
+    panel.discardColdPlayer()
+    expect(panel.geometry.isEmpty, "cold teardown drops the owned window and WebKit view")
     return checks
 }

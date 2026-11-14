@@ -10,6 +10,7 @@ import argparse
 import json
 from pathlib import Path
 import plistlib
+import runpy
 import subprocess
 import sys
 import time
@@ -53,6 +54,9 @@ def cold_start_allowed(values: list[dict]) -> bool:
 
 
 def cold_start_observed(values: list[dict]) -> bool:
+    native = runpy.run_path(str(Path(__file__).with_name("startup_event_verdict.py")))["assess_native_launch"](values, 0)
+    if native is not None:
+        return native["status"] == "native-completed"
     events = {value.get("event") for value in values}
     exits = [value for value in values if value.get("event") == "launcher-exit"]
     return {"launcher-start", "target-opened", "startup-installed", "startup-ready"} <= events \

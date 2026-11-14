@@ -213,6 +213,27 @@ test('a cold shell timeout clears its timer and disconnects its observer', async
   assert.equal(renderer.calls.length, 0);
 });
 
+test('an aborted wallpaper restore disconnects its shell observer and clears its deadline', async () => {
+  const fixture = createHost();
+  const renderer = rendererRecorder();
+  const listeners = new Set();
+  const signal = {
+    aborted: false,
+    addEventListener(type, listener) { if (type === 'abort') listeners.add(listener); },
+    removeEventListener(type, listener) { if (type === 'abort') listeners.delete(listener); },
+  };
+  const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
+  const pending = apply(VALUE, () => true, signal);
+  await waitFor(() => fixture.observers.length === 1 && fixture.timers.length === 1);
+  signal.aborted = true;
+  for (const listener of [...listeners]) listener();
+  assert.deepEqual(await pending, { applied: false, reason: 'operation-cancelled', imageDecoded: false });
+  assert.equal(fixture.observers[0].disconnected, true);
+  assert.equal(fixture.timers[0].cleared, true);
+  assert.equal(listeners.size, 0);
+  assert.equal(renderer.calls.length, 0);
+});
+
 test('cancellation is checked before digest, after digest, and while awaiting the shell', async t => {
   await t.test('already stale work does not decode or observe', async () => {
     let digestCalls = 0;

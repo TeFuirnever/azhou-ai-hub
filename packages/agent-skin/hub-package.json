@@ -9,7 +9,7 @@
   "license_status": "MIT (repository root LICENSE) since the independent rewrite in #441 (2026-11-11); originally derived from the unlicensed upstream recorded above, whose historical bytes stay unlicensed; Azhou artwork under assets/azhou/ is CC BY-NC-ND 4.0 (assets/azhou/LICENSE) and the brand follows the root TRADEMARKS.md",
   "external_distribution": "code: MIT; assets/azhou artwork and bundles built with it: CC BY-NC-ND 4.0 (non-commercial, unmodified, attributed); a local assets/private overlay is never distributed",
   "runtime_version": "0.9.0",
-  "runtime_build": "41",
+  "runtime_build": "42",
   "build_inputs": [
     "Native/App.swift",
     "Native/Wallpaper.swift",
@@ -29,6 +29,7 @@
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
     "extension/hosts/dsh.mjs",
+    "extension/hosts/dsh-startup-gate.js",
     "extension/bootstrap.mjs",
     "image-settings.js",
     "localization.js",
@@ -68,6 +69,7 @@
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
     "extension/hosts/dsh.mjs",
+    "extension/hosts/dsh-startup-gate.js",
     "extension/bootstrap.mjs",
     "localization.js",
     "image-metadata-reader.js",
@@ -115,6 +117,7 @@
     "tools/test-coverage-policy.py",
     "tools/test-functional-verdict.py",
     "tools/test-installed-acceptance.py",
+    "tools/startup_event_verdict.py",
     "tools/test-production-builders.py",
     "tools/test-production-preflight.py",
     "tools/test-production-verifier.py",
@@ -165,6 +168,7 @@
     "plans/README.md",
     "plans/001-vivid-lab-motion.md",
     "tools/dsh-adapter.unit.test.mjs",
+    "tools/dsh-startup-gate.unit.test.mjs",
     "tools/build-dsh-plugin.py",
     "tools/test-dsh-build.py"
   ]

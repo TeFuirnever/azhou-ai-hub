@@ -21,6 +21,8 @@ import AppKit
 import WebKit
 import Darwin
 import CoreFoundation
+import CryptoKit
+import QuartzCore
 
 // MARK: - 入口命令行与身份
 
@@ -359,6 +361,7 @@ final class NativeStartupEventStream: @unchecked Sendable {
     private var installedPID: Int32?
     private var installedRunID: Int?
     private var pageID: String?
+    private var nativeExitBinding: [String: Any] = [:]
 
     init(writer: NativeEventWriter) { self.writer = writer }
 
@@ -454,6 +457,42 @@ final class NativeStartupEventStream: @unchecked Sendable {
         }
     }
 
+    func resolveNative(_ receipt: SkinNativeLaunchReceipt, at uptime: TimeInterval) -> NativeStartupFinalOutcome? {
+        underLock {
+            guard case .running = stage else { return nil }
+            let final: NativeStartupFinalOutcome
+            if let pendingFailure { final = .behaviorNotProven(reason: pendingFailure) }
+            else if let pendingInterruption { final = .partial(reason: pendingInterruption) }
+            else if receipt.presentation == .skipped { final = .skipped }
+            else if receipt.presentation == .interrupted { final = .partial(reason: "startup-interrupted") }
+            else if receipt.presentation == .completed, receipt.coverDrawCommitted,
+                    UUID(uuidString: receipt.runNonce) != nil,
+                    let workspace = receipt.workspace, workspace.runID > 0,
+                    !workspace.pageGeneration.isEmpty, workspace.pageGeneration == pageID,
+                    ["applied", "disabled", "degraded"].contains(workspace.wallpaperDisposition), openedPID != nil {
+                final = .ready
+            } else { final = .behaviorNotProven(reason: Self.fixedReason(receipt.reason ?? "protocol-error")) }
+            stage = .decided(final)
+            let targetPID: Any = openedPID.map { Int($0) } as Any? ?? NSNull()
+            var fields: [String: Any] = ["presentation": receipt.presentation.rawValue,
+                "runNonce": receipt.runNonce, "workspaceObserved": receipt.workspace != nil,
+                "coverDrawCommitted": receipt.coverDrawCommitted, "outcome": final.exitName,
+                "visualContinuity": "not-measured",
+                "cover": ["runNonce": receipt.runNonce, "drawCommitted": receipt.coverDrawCommitted],
+                "workspace": NSNull(), "targetPID": targetPID,
+                "pageTargetID": pageID as Any? ?? NSNull()]
+            if let workspace = receipt.workspace {
+                fields["workspace"] = ["runNonce": receipt.runNonce, "runId": workspace.runID,
+                    "pageTargetID": workspace.pageGeneration, "wallpaperDisposition": workspace.wallpaperDisposition,
+                    "wallpaperReason": workspace.wallpaperReason]
+            }
+            if let reason = final.reason { fields["reason"] = reason }
+            nativeExitBinding = ["runNonce": receipt.runNonce, "targetPID": targetPID]
+            writer.emit("startup-native-result", fields: fields, at: uptime)
+            return final
+        }
+    }
+
     /// 离场：已定局则补 launcher-exit；仍在进行中则先按挂起结论定局（无挂起时
     /// 失败关闭为 partial）。重复调用幂等并返回同一终局。
     @discardableResult
@@ -465,7 +504,10 @@ final class NativeStartupEventStream: @unchecked Sendable {
             case .exited(let settled):
                 return settled
             case .decided(let settled):
-                writer.emit("launcher-exit", fields: ["outcome": settled.exitName, "exitCode": Int(settled.exitCode)], at: uptime)
+                var fields = nativeExitBinding
+                fields["outcome"] = settled.exitName
+                fields["exitCode"] = Int(settled.exitCode)
+                writer.emit("launcher-exit", fields: fields, at: uptime)
                 stage = .exited(settled)
                 return settled
             case .running:
@@ -620,6 +662,12 @@ final class NativeStartupEventTransport: StartupTransport, @unchecked Sendable {
 
     func disposeController(href: String, timeout: TimeInterval) async throws -> [String: Any] {
         try await base.disposeController(href: href, timeout: timeout)
+    }
+
+    func makeSettingsSnapshotSession(page: StartupSnapshotPage, request: StartupSettingsSnapshotRequest,
+                                     timeout: TimeInterval) async throws -> any StartupSettingsSnapshotSession {
+        guard currentPageID() == page.id else { throw CancellationError() }
+        return try await base.makeSettingsSnapshotSession(page: page, request: request, timeout: timeout)
     }
 
     func disconnectPage() {
@@ -1136,8 +1184,12 @@ protocol NativeScheduledAction: AnyObject {
 
 @MainActor
 protocol NativePlayerPresentation: AnyObject {
+    func showColdCover(locale: NativeDisplayLocale, runNonce: String, delegate: NSWindowDelegate) throws -> NativeCoverReceipt
+    func revealColdPlayer()
+    func discardColdPlayer()
     var geometry: [String: Any] { get }
     func createPlayer(locale: NativeDisplayLocale, mode: String, theme: String, inspect: Bool,
+                      nativeStartup: NativeStartupBridgeInput?,
                       messageHandler: WKScriptMessageHandler, navigationDelegate: WKNavigationDelegate)
     func loadPlayer(page: URL, allowingReadAccessTo root: URL)
     func updateLabels(_ locale: NativeDisplayLocale)
@@ -1152,6 +1204,291 @@ protocol NativePlayerPresentation: AnyObject {
     func stopLoading()
     func removeMessageHandler(named name: String)
     func showError(title: String, message: String, closeTitle: String)
+}
+
+extension NativePlayerPresentation {
+    func showColdCover(locale: NativeDisplayLocale, runNonce: String, delegate: NSWindowDelegate) throws -> NativeCoverReceipt {
+        throw StartupFailure(reason: "protocol-error", message: "当前呈现端口不支持原生底板。")
+    }
+    func revealColdPlayer() {}
+    func discardColdPlayer() {
+        orderOut(); stopLoading(); removeMessageHandler(named: "launcher")
+    }
+}
+
+@MainActor
+private final class NativeBrandCoverView: NSView {
+    private(set) var drew = false
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor(srgbRed: 0.945, green: 0.918, blue: 0.875, alpha: 1).setFill()
+        dirtyRect.fill()
+        let title = "阿舟 AI 实验室" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 32, weight: .medium),
+            .foregroundColor: NSColor(srgbRed: 0.20, green: 0.19, blue: 0.17, alpha: 1)]
+        let size = title.size(withAttributes: attributes)
+        title.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2), withAttributes: attributes)
+        drew = true
+    }
+}
+
+@MainActor
+final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+    private let nonce: String
+    private let runtime: any NativeAppRuntime
+    private let presentation: any NativePlayerPresentation
+    private let event: (CodexNativePresentationEvent) -> Void
+    private var released = false
+    private var attached = false
+    private var root: URL?
+    private var evaluations: [UUID: (Error) -> Void] = [:]
+
+    init(nonce: String, runtime: any NativeAppRuntime, presentation: any NativePlayerPresentation,
+         event: @escaping (CodexNativePresentationEvent) -> Void) {
+        self.nonce = nonce; self.runtime = runtime; self.presentation = presentation; self.event = event
+    }
+    func showCover() throws -> NativeCoverReceipt {
+        guard !released else { throw CancellationError() }
+        return try presentation.showColdCover(locale: runtime.systemFallbackLocale(), runNonce: nonce, delegate: self)
+    }
+    func play(_ snapshot: StartupSettingsSnapshot, deadline: TimeInterval) async throws {
+        guard !released, !attached, snapshot.runNonce == nonce, let resources = runtime.resourceURL else { throw CancellationError() }
+        attached = true
+        let directory = PathCanonicalization.resolved(resources.appendingPathComponent("web", isDirectory: true))
+        let page = directory.appendingPathComponent("index.html")
+        guard FileManager.default.fileExists(atPath: page.path) else {
+            throw StartupFailure(reason: "asset-invalid", message: "本地播放器资源缺失。")
+        }
+        root = directory
+        presentation.createPlayer(locale: NativeDisplayLocale.verifiedReadyLocale(snapshot.appearance.locale) ?? .english,
+            mode: "launch", theme: snapshot.appearance.theme, inspect: false,
+            nativeStartup: NativeStartupBridgeInput(runNonce: nonce, locale: snapshot.appearance.locale, theme: snapshot.appearance.theme),
+            messageHandler: self, navigationDelegate: self)
+        presentation.loadPlayer(page: page, allowingReadAccessTo: directory)
+        let literal = String(decoding: try JSONSerialization.data(withJSONObject: [nonce]), as: UTF8.self)
+        while true {
+            try Task.checkCancellation()
+            guard !released, runtime.uptime + 13.5 < deadline else {
+                throw StartupFailure(reason: "attach-timeout", message: "本地播放器准备预算不足。")
+            }
+            if let ready = try? await evaluate("Boolean(window.launcherUI && window.launcherUI.nativeStartupRunNonce === \(literal)[0])", timeout: min(1, deadline - runtime.uptime)),
+               NativeStartupStatus.boolean(ready) == true { break }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+        try await NativeStartupSnapshotTransfer.send(snapshot: snapshot, runNonce: nonce, deadline: deadline - 13.5,
+            now: { self.runtime.uptime }, evaluate: { try await self.evaluate($0, timeout: $1) })
+    }
+    func beginPlayback(deadline: TimeInterval) {
+        guard !released, attached else { return }
+        presentation.revealColdPlayer()
+        Task { @MainActor [weak self] in
+            guard let self, !self.released else { return }
+            do {
+                guard self.runtime.uptime + 13.5 < deadline else {
+                    throw StartupFailure(reason: "attach-timeout", message: "开始播放前预算已耗尽。")
+                }
+                guard NativeStartupStatus.boolean(try await self.evaluate("window.launcherUI.beginLaunch()", timeout: min(1, deadline - self.runtime.uptime - 12))) == true else {
+                    throw StartupFailure(reason: "protocol-error", message: "播放器未接受开始。")
+                }
+            } catch { if !self.released { self.event(.failed("protocol-error")) } }
+        }
+    }
+    func releaseCover() {
+        guard !released else { return }
+        released = true
+        presentation.discardColdPlayer()
+        let pending = Array(evaluations.values)
+        evaluations.removeAll()
+        pending.forEach { $0(CancellationError()) }
+    }
+    func scheduleDeadline(after: TimeInterval, action: @escaping () -> Void) -> any NativeScheduledAction {
+        presentation.schedule(after: after, action)
+    }
+    private func evaluate(_ source: String, timeout: TimeInterval) async throws -> Any? {
+        guard !released, timeout > 0 else { throw CancellationError() }
+        let id = UUID()
+        return try await withCheckedThrowingContinuation { continuation in
+            var completed = false
+            var timer: (any NativeScheduledAction)?
+            let finish: (Result<Any?, Error>) -> Void = { result in
+                guard !completed else { return }
+                completed = true; timer?.cancel(); self.evaluations.removeValue(forKey: id)
+                continuation.resume(with: result)
+            }
+            evaluations[id] = { finish(.failure($0)) }
+            timer = presentation.schedule(after: timeout) { finish(.failure(StartupFailure(reason: "attach-timeout", message: "播放器响应超时。"))) }
+            presentation.evaluateJavaScript(source) { value, error in
+                if let error { finish(.failure(error)) } else { finish(.success(value)) }
+            }
+        }
+    }
+    func requestSkip() { if !released { event(.skipped) } }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { requestSkip(); return false }
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        receive(body: message.body, isMainFrame: message.frameInfo.isMainFrame)
+    }
+    func receive(body: Any, isMainFrame: Bool) {
+        guard !released, isMainFrame, let fields = body as? [String: Any], fields["runId"] as? String == nonce else { return }
+        switch PlayerMessage.decode(body) {
+        case .ready(_, let duration): event(.ready(duration: duration))
+        case .complete(let skipped, _):
+            guard let skipped = NativeStartupStatus.boolean(skipped) else { event(.failed("protocol-error")); return }
+            event(skipped ? .skipped : .completed)
+        case .close: event(.skipped)
+        case .scriptFailure, .assetFailure: event(.failed("asset-invalid"))
+        case .unrecognized: break
+        }
+    }
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        LocalWebNavigation.decide(url: action.request.url, root: root, completion: decisionHandler)
+    }
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { if !released { event(.failed("asset-invalid")) } }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { if !released { event(.failed("asset-invalid")) } }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { if !released { event(.failed("asset-invalid")) } }
+}
+
+struct NativeStartupBridgeInput: Sendable {
+    let runNonce: String
+    let locale: String
+    let theme: String
+
+    func documentStartSource() -> String? {
+        guard runNonce.range(of: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", options: .regularExpression) != nil,
+              locale == "en" || locale == "zh-CN",
+              theme == "light" || theme == "dark",
+              let payload = Self.json(["runNonce": runNonce, "locale": locale, "theme": theme]) else { return nil }
+        return """
+        (() => {
+          const raw = Object.freeze(\(payload));
+          const input = Object.freeze({
+            owner: 'azhou-agent-skin-native', version: 1, runNonce: raw.runNonce,
+            appearance: Object.freeze({ locale: raw.locale, theme: raw.theme }),
+          });
+          Object.defineProperty(window, '__agentSkinNativeStartup', {
+            value: input, enumerable: false, writable: false, configurable: false,
+          });
+        })();
+        """
+    }
+
+    private static func json(_ value: Any) -> String? {
+        guard JSONSerialization.isValidJSONObject(value),
+              let data = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]),
+              let result = String(data: data, encoding: .utf8) else { return nil }
+        return result
+    }
+}
+
+enum NativeStartupSnapshotTransfer {
+    static let chunkSize = 192 * 1024
+    static let maximumBytes = StartupSettingsSnapshotReceiver.maximumBytes
+    static let maximumExpressionBytes = 512 * 1024
+
+    static func send(snapshot: StartupSettingsSnapshot, runNonce: String, deadline: TimeInterval,
+                     now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+                     evaluate: (String, TimeInterval) async throws -> Any?) async throws {
+        guard snapshot.owner == "azhou-codex-startup", snapshot.runNonce == runNonce,
+              snapshot.runID > 0, snapshot.snapshotID == "\(snapshot.runID):\(runNonce)",
+              runNonce.range(of: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", options: .regularExpression) != nil,
+              ["missing", "valid"].contains(snapshot.status), snapshot.appearance.isValid,
+              snapshot.sha256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            throw failure("snapshot-transfer-invalid")
+        }
+        // Native Data buffers are zeroed below. Swift String/Base64 copies and
+        // WebKit/WebCrypto heap copies are runtime-owned and cannot be reliably erased.
+        var data = try encodedPayload(snapshot)
+        defer { StartupSettingsSnapshotReceiver.clearNativeOwnedBuffer(&data) }
+        guard data.count > 0, data.count <= maximumBytes else {
+            throw failure("snapshot-transfer-too-large")
+        }
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        let chunkCount = (data.count + chunkSize - 1) / chunkSize
+        guard chunkCount <= (maximumBytes + chunkSize - 1) / chunkSize else {
+            throw failure("snapshot-transfer-too-large")
+        }
+        let descriptor: [String: Any] = [
+            "owner": snapshot.owner, "version": 1, "runId": snapshot.runID,
+            "runNonce": runNonce, "snapshotID": snapshot.snapshotID,
+            "status": snapshot.status, "byteLength": data.count,
+            "chunkSize": chunkSize, "chunkCount": chunkCount, "sha256": digest,
+        ]
+        do {
+            try Task.checkCancellation()
+            guard try await acceptedCall("acceptNativeSnapshotDescriptor", arguments: [descriptor],
+                                        runNonce: runNonce,
+                                        deadline: deadline, now: now, evaluate: evaluate) else {
+                throw failure("snapshot-transfer-rejected")
+            }
+            var offset = 0
+            for index in 0..<chunkCount {
+                try Task.checkCancellation()
+                let end = min(offset + chunkSize, data.count)
+                var chunk = data.subdata(in: offset..<end)
+                defer { StartupSettingsSnapshotReceiver.clearNativeOwnedBuffer(&chunk) }
+                let base64 = chunk.base64EncodedString()
+                guard try await acceptedCall("acceptNativeSnapshotChunk", arguments: [runNonce, index, base64],
+                                             runNonce: runNonce,
+                                             deadline: deadline, now: now, evaluate: evaluate) else {
+                    throw failure("snapshot-transfer-rejected")
+                }
+                offset = end
+            }
+            try Task.checkCancellation()
+            guard offset == data.count,
+                  try await acceptedCall("finishNativeSnapshot", arguments: [runNonce],
+                                         runNonce: runNonce,
+                                         deadline: deadline, now: now, evaluate: evaluate) else {
+                throw failure("snapshot-transfer-rejected")
+            }
+            try Task.checkCancellation()
+        } catch {
+            if now() < deadline {
+                _ = try? await acceptedCall("cancelNativeSnapshot", arguments: [runNonce],
+                                            runNonce: runNonce,
+                                            deadline: deadline, now: now, evaluate: evaluate)
+            }
+            throw error
+        }
+    }
+
+    private static func encodedPayload(_ snapshot: StartupSettingsSnapshot) throws -> Data {
+        let values = snapshot.values
+        let settings: [String: Any] = [
+            "schemaVersion": 1, "avatar": values.avatar, "artwork": values.artwork,
+            "contours": values.contours.map { path in path.map { [$0.x, $0.y] } },
+            "introTitle": values.introTitle, "introCaption": values.introCaption,
+            "artworkSubtitle": values.artworkSubtitle, "wallpaperStrength": values.wallpaperStrength,
+        ]
+        let object: [String: Any] = ["status": snapshot.status, "settings": settings,
+                                     "explicitText": values.explicitText,
+                                     "appearance": ["locale": snapshot.appearance.locale,
+                                                    "theme": snapshot.appearance.theme]]
+        guard JSONSerialization.isValidJSONObject(object) else { throw failure("snapshot-transfer-invalid") }
+        do { return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]) }
+        catch { throw failure("snapshot-transfer-invalid") }
+    }
+
+    private static func acceptedCall(_ method: String, arguments: [Any], runNonce: String,
+                                     deadline: TimeInterval,
+                                     now: () -> TimeInterval,
+                                     evaluate: (String, TimeInterval) async throws -> Any?) async throws -> Bool {
+        guard ["acceptNativeSnapshotDescriptor", "acceptNativeSnapshotChunk", "finishNativeSnapshot",
+               "cancelNativeSnapshot"].contains(method),
+              let argumentData = try? JSONSerialization.data(withJSONObject: arguments, options: [.sortedKeys]),
+              let literals = String(data: argumentData, encoding: .utf8),
+              let nonceData = try? JSONSerialization.data(withJSONObject: [runNonce]),
+              let nonceArray = String(data: nonceData, encoding: .utf8),
+              nonceArray.first == "[", nonceArray.last == "]" else { throw failure("snapshot-transfer-invalid") }
+        let nonceLiteral = String(nonceArray.dropFirst().dropLast())
+        let source = "(() => { const expected = \(nonceLiteral); const d = Object.getOwnPropertyDescriptor(window, '__agentSkinNativeStartup'); const identity = d && Object.hasOwn(d, 'value') ? d.value : null; const p = Object.getOwnPropertyDescriptor(window, 'launcherUI'); const api = p && Object.hasOwn(p, 'value') ? p.value : null; const m = api && Object.getOwnPropertyDescriptor(api, '\(method)'); const n = api && Object.getOwnPropertyDescriptor(api, 'nativeStartupRunNonce'); return !!identity && identity.owner === 'azhou-agent-skin-native' && identity.version === 1 && identity.runNonce === expected && !!api && n && Object.hasOwn(n, 'value') && n.value === expected && n.writable === false && n.configurable === false && m && Object.hasOwn(m, 'value') && m.writable === false && m.configurable === false && typeof m.value === 'function' && m.value(...\(literals)) === true; })()"
+        guard source.utf8.count < maximumExpressionBytes else { throw failure("snapshot-transfer-too-large") }
+        let timeout = try StartupBudget.boundedTimeout(maximum: 2, stageDeadline: deadline,
+                                                       totalDeadline: deadline, now: now())
+        return (try await evaluate(source, timeout) as? Bool) == true
+    }
+
+    private static func failure(_ reason: String) -> StartupFailure {
+        StartupFailure(reason: reason, message: "原生播放器没有接收完整的启动设置快照。")
+    }
 }
 
 @MainActor
@@ -1173,18 +1510,22 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
     private static let fallbackPanel = NSRect(x: 0, y: 0, width: 1440, height: 900)
 
     private var panel: NSWindow?
+    private var cover: NativeBrandCoverView?
     private var webView: WKWebView?
     private var quitEntry: NSMenuItem?
     private var appMenuEntry: NSMenuItem?
     private let activateApp: () -> Void
     private let revealPanel: (NSWindow) -> Void
+    private let orderCover: (NSWindow) -> Void
     private let runAlert: (NSAlert) -> Void
 
     init(activateApp: (() -> Void)? = nil,
          makeVisible: ((NSWindow) -> Void)? = nil,
-         runAlert: ((NSAlert) -> Void)? = nil) {
+         runAlert: ((NSAlert) -> Void)? = nil,
+         orderCover: ((NSWindow) -> Void)? = nil) {
         self.activateApp = activateApp ?? { NSApp.activate(ignoringOtherApps: true) }
         self.revealPanel = makeVisible ?? { $0.makeKeyAndOrderFront(nil) }
+        self.orderCover = orderCover ?? { $0.orderFront(nil) }
         self.runAlert = runAlert ?? { _ = $0.runModal() }
     }
 
@@ -1194,16 +1535,58 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
     }
 
     func createPlayer(locale: NativeDisplayLocale, mode: String, theme: String, inspect: Bool,
+                      nativeStartup: NativeStartupBridgeInput?,
                       messageHandler: WKScriptMessageHandler, navigationDelegate: WKNavigationDelegate) {
         installQuitMenu(locale: locale)
-        let panel = makePanel(locale: locale)
+        let panel = nativeStartup == nil ? makePanel(locale: locale) : self.panel ?? makePanel(locale: locale)
         self.panel = panel
         panel.delegate = messageHandler as? NSWindowDelegate
         let view = makeWebView(mode: mode, locale: locale, theme: theme, inspect: inspect,
+                               nativeStartup: nativeStartup,
                                messageHandler: messageHandler, navigationDelegate: navigationDelegate)
         self.webView = view
+        view.isHidden = nativeStartup != nil
         panel.contentView?.addSubview(view)
     }
+    func showColdCover(locale: NativeDisplayLocale, runNonce: String, delegate: NSWindowDelegate) throws -> NativeCoverReceipt {
+        guard panel == nil else { throw StartupFailure(reason: "protocol-error", message: "原生启动窗口不可重复创建。") }
+        installQuitMenu(locale: locale)
+        let window = makePanel(locale: locale)
+        panel = window
+        window.delegate = delegate
+        let cover = NativeBrandCoverView(frame: window.contentView?.bounds ?? .zero)
+        cover.autoresizingMask = [.width, .height]
+        self.cover = cover
+        window.contentView?.addSubview(cover)
+        // These calls do not activate the application, hide another app, or opt
+        // into every Space. Draw/commit is not evidence of screen visibility.
+        orderCover(window)
+        CATransaction.begin()
+        cover.display()
+        CATransaction.commit()
+        CATransaction.flush()
+        return NativeCoverReceipt(runNonce: runNonce, drawObserved: cover.drew, transactionCommitted: true)
+    }
+    func revealColdPlayer() {
+        webView?.isHidden = false
+        cover?.removeFromSuperview()
+        cover = nil
+    }
+
+    func discardColdPlayer() {
+        panel?.orderOut(nil)
+        webView?.stopLoading()
+        webView?.configuration.userContentController.removeScriptMessageHandler(forName: "launcher")
+        webView?.navigationDelegate = nil
+        webView?.removeFromSuperview()
+        webView = nil
+        cover?.removeFromSuperview()
+        cover = nil
+        panel?.delegate = nil
+        panel?.close()
+        panel = nil
+    }
+
     func loadPlayer(page: URL, allowingReadAccessTo root: URL) {
         webView?.loadFileURL(page, allowingReadAccessTo: root)
     }
@@ -1287,12 +1670,18 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
     /// 非持久数据存储 + launcher 消息通道 + 文档起始注入的外观脚本。
     /// 变量名与 Object.freeze 结构由 animation.js 消费，属对外合同。
     private func makeWebView(mode: String, locale: NativeDisplayLocale, theme: String, inspect: Bool,
+                             nativeStartup: NativeStartupBridgeInput?,
                              messageHandler: WKScriptMessageHandler,
                              navigationDelegate: WKNavigationDelegate) -> WKWebView {
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         let controller = configuration.userContentController
         controller.add(messageHandler, name: "launcher")
+        if let startupSource = nativeStartup?.documentStartSource() {
+            controller.addUserScript(WKUserScript(source: startupSource,
+                                                  injectionTime: .atDocumentStart,
+                                                  forMainFrameOnly: true))
+        }
         controller.addUserScript(WKUserScript(source: appearanceBootstrap(mode: mode, locale: locale, theme: theme),
                                               injectionTime: .atDocumentStart,
                                               forMainFrameOnly: true))
@@ -1385,11 +1774,24 @@ enum StartupPayloadReader {
     private static let directoryFlags = O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
     private static let payloadFlags = O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC
 
+    enum Kind {
+        case install
+        case nativePrepare
+
+        fileprivate var fileName: String {
+            switch self {
+            case .install: return "install.js"
+            case .nativePrepare: return "prepare.js"
+            }
+        }
+    }
+
     /// 打开成功的三级目录/文件句柄及其打开时的 stat 快照。
     private struct OpenedPayload {
         let rootFD: Int32
         let startupFD: Int32
         let sourceFD: Int32
+        let kind: Kind
         let rootSnapshot: stat
         let startupSnapshot: stat
         let sourceSnapshot: stat
@@ -1397,7 +1799,12 @@ enum StartupPayloadReader {
 
     static func read(from root: URL,
                      readChunk: (Int32, UnsafeMutableRawPointer?, Int) -> Int = { Darwin.read($0, $1, $2) }) -> String? {
-        guard let opened = openChain(root) else { return nil }
+        read(from: root, kind: .install, readChunk: readChunk)
+    }
+
+    static func read(from root: URL, kind: Kind,
+                     readChunk: (Int32, UnsafeMutableRawPointer?, Int) -> Int = { Darwin.read($0, $1, $2) }) -> String? {
+        guard let opened = openChain(root, kind: kind) else { return nil }
         defer {
             Darwin.close(opened.sourceFD)
             Darwin.close(opened.startupFD)
@@ -1408,9 +1815,7 @@ enum StartupPayloadReader {
         return String(data: bytes, encoding: .utf8)
     }
 
-    /// 逐层相对打开并快照：root → startup → install.js；载荷必须是尺寸在
-    /// (0, sizeCeiling) 区间的常规文件。
-    private static func openChain(_ root: URL) -> OpenedPayload? {
+    private static func openChain(_ root: URL, kind: Kind) -> OpenedPayload? {
         let rootFD = Darwin.open(root.path, directoryFlags)
         guard rootFD >= 0 else { return nil }
         var rootSnapshot = stat()
@@ -1423,7 +1828,7 @@ enum StartupPayloadReader {
             Darwin.close(startupFD); Darwin.close(rootFD); return nil
         }
 
-        let sourceFD = openat(startupFD, "install.js", payloadFlags)
+        let sourceFD = kind.fileName.withCString { openat(startupFD, $0, payloadFlags) }
         guard sourceFD >= 0 else { Darwin.close(startupFD); Darwin.close(rootFD); return nil }
         var sourceSnapshot = stat()
         guard fstat(sourceFD, &sourceSnapshot) == 0,
@@ -1431,7 +1836,7 @@ enum StartupPayloadReader {
               sourceSnapshot.st_size > 0, sourceSnapshot.st_size < sizeCeiling else {
             Darwin.close(sourceFD); Darwin.close(startupFD); Darwin.close(rootFD); return nil
         }
-        return OpenedPayload(rootFD: rootFD, startupFD: startupFD, sourceFD: sourceFD,
+        return OpenedPayload(rootFD: rootFD, startupFD: startupFD, sourceFD: sourceFD, kind: kind,
                              rootSnapshot: rootSnapshot, startupSnapshot: startupSnapshot,
                              sourceSnapshot: sourceSnapshot)
     }
@@ -1465,7 +1870,9 @@ enum StartupPayloadReader {
         guard fstat(opened.sourceFD, &onHandle) == 0,
               isSameFile(opened.sourceSnapshot, onHandle) else { return false }
         var byName = stat()
-        guard fstatat(opened.startupFD, "install.js", &byName, AT_SYMLINK_NOFOLLOW) == 0,
+        guard opened.kind.fileName.withCString({
+                  fstatat(opened.startupFD, $0, &byName, AT_SYMLINK_NOFOLLOW)
+              }) == 0,
               isSameFile(onHandle, byName) else { return false }
         var startupNow = stat()
         guard fstatat(opened.rootFD, "startup", &startupNow, AT_SYMLINK_NOFOLLOW) == 0,
@@ -1586,8 +1993,10 @@ final class PlayerStage {
     func installPresentation(_ value: any NativePlayerPresentation) { presentation = value }
 
     func createPlayer(mode: String, theme: String, inspect: Bool,
+                      nativeStartup: NativeStartupBridgeInput? = nil,
                       messageHandler: WKScriptMessageHandler, navigationDelegate: WKNavigationDelegate) {
         presentation?.createPlayer(locale: displayLocale, mode: mode, theme: theme, inspect: inspect,
+                                   nativeStartup: nativeStartup,
                                    messageHandler: messageHandler, navigationDelegate: navigationDelegate)
     }
 
@@ -1766,11 +2175,11 @@ final class TrustedLaunchSession {
     }
 
     /// 生产载荷：资源目录缺失或读取防御未通过都以 asset-invalid 拒绝。
-    func productionPayload(runtime: any NativeAppRuntime) throws -> String {
+    func productionPayload(runtime: any NativeAppRuntime, kind: StartupPayloadReader.Kind = .install) throws -> String {
         guard let resources = runtime.resourceURL else {
             throw StartupFailure(reason: "asset-invalid", message: "资源目录缺失，本次不启动也不注入 Codex。")
         }
-        guard let text = StartupPayloadReader.read(from: PathCanonicalization.resolved(resources)) else {
+        guard let text = StartupPayloadReader.read(from: PathCanonicalization.resolved(resources), kind: kind) else {
             throw StartupFailure(reason: "asset-invalid", message: "startup/install.js 生产载荷缺失或无效，本次不启动也不注入 Codex。")
         }
         return text
@@ -1924,15 +2333,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private let stage: PlayerStage
     private let session: TrustedLaunchSession
     private let exitLedger: ExitLedger
+    private let nativeColdLaunch: Bool
+    private var nativePlayer: NativeColdPlayer?
+    private var nativeEntryFrontmostPID: Int32?
 
     /// 独占播放器模式（预览/冒烟）；一经晋升即转正为受信启动。
     private var isPlayerExclusive: Bool { !exitLedger.promoted && commandLine.playerExclusive }
 
     init(runtime: (any NativeAppRuntime)? = nil,
-         presentation: (any NativePlayerPresentation)? = nil) {
+         presentation: (any NativePlayerPresentation)? = nil,
+         nativeColdLaunch: Bool = true) {
         let resolvedRuntime = runtime ?? SystemNativeAppRuntime()
         let parsedArguments = LauncherCommandLine(arguments: resolvedRuntime.arguments)
         self.runtime = resolvedRuntime
+        self.nativeColdLaunch = nativeColdLaunch
         self.commandLine = parsedArguments
         self.identity = LauncherIdentity(bundleURL: resolvedRuntime.bundleURL)
         self.journal = LauncherJournal(runtime: resolvedRuntime, epoch: resolvedRuntime.epoch,
@@ -2158,7 +2572,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             guard let self else { return }
             let result = await self.launchThroughSkinHost(expectedApplication: expectedApplication)
             self.session.opening = false
-            self.concludeStartupRun(startupLegacyOutcome(from: result))
+            if case .nativePresentation(let receipt) = result {
+                self.concludeNativeStartup(receipt)
+            } else {
+                self.concludeStartupRun(startupLegacyOutcome(from: result))
+            }
         }
     }
 
@@ -2167,6 +2585,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     @MainActor
     private func launchThroughSkinHost(expectedApplication: HostApplicationKey) async -> SkinLaunchResult {
         let contractVersion = SkinHostContract.version
+        nativeEntryFrontmostPID = runtime.frontmostApplication?.processIdentifier
         // 组装期只有工作区观测到的身份；codesign 在各操作分支内执行。
         let observed = HostIdentityEvidence(key: expectedApplication,
                                             signingIdentity: "workspace-observed; codesign validated per operation branch",
@@ -2175,7 +2594,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         let system = runtime.makeStartupTargetSystem()
         let budget = StartupBudget(startedAt: runtime.uptime)
         let hostRuntime = runtime
-        let assembly = CodexSkinAssembly(
+        var assembly = CodexSkinAssembly(
             preflightBundle: { bundle, startupBudget in
                 do { try system.preflightBundle(bundle, deadline: startupBudget.preflightDeadline) }
                 catch let error as WallpaperFailure where error.state == "inspection-timeout" {
@@ -2219,6 +2638,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                 return try self.session.targetFacts(application)
             },
             performDisable: nil)
+        if nativeColdLaunch && !exitLedger.promoted {
+            assembly.nativePresentation = { [weak self] nonce, event in
+                guard let self else { throw CancellationError() }
+                let player = NativeColdPlayer(nonce: nonce, runtime: self.runtime,
+                    presentation: self.stage.presentation ?? AppKitNativePlayerPresentation(), event: event)
+                self.nativePlayer = player
+                return player
+            }
+        }
         let dependencies = SkinAssemblyDependencies(
             // 该入口从不通过依赖探测身份：它直接观测已核验的目标 bundle。
             // 如实上报“无独立身份探针”，不虚构观测。
@@ -2239,15 +2667,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
                     inputs: inputs, runtime: hostRuntime,
                     readPayload: { [weak self] in
                         guard let self else { throw StartupFailure(reason: "asset-invalid", message: "入口生命周期已结束。") }
-                        return try self.session.productionPayload(runtime: self.runtime)
+                        return try self.session.productionPayload(runtime: self.runtime, kind: self.nativeColdLaunch && !self.exitLedger.promoted ? .nativePrepare : .install)
                     },
                     makeTargetSystem: { hostRuntime.makeStartupTargetSystem() },
-                    makeConnector: { facts, port, connectorSystem, capture, events in
+                    makeConnector: { [weak self] facts, port, connectorSystem, capture, events in
                         StartupConnector(
                             target: facts, expectedPort: port, system: connectorSystem,
                             transport: InstallObservingStartupTransport(
                                 base: hostRuntime.makeStartupTransport(capture: capture, events: events),
-                                recorder: installObservation))
+                                recorder: installObservation),
+                            onReady: { [weak self] in _ = self?.activateOnce("startup-ready") })
                     },
                     installObservation: installObservation, assembly: assembly)
             })
@@ -2324,29 +2753,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     // MARK: 终局
 
-    /// Codex 路径的终局：以既有 StartupOutcome 词表定局并执行终局编排。
+    private func concludeNativeStartup(_ receipt: SkinNativeLaunchReceipt) {
+        nativePlayer?.releaseCover()
+        nativePlayer = nil
+        let final = session.eventStream?.resolveNative(receipt, at: runtime.uptime)
+        exitLedger.processExitCode = final?.exitCode ?? 1
+        journal.record("native-presentation-result", ["runNonce": receipt.runNonce,
+            "presentation": receipt.presentation.rawValue, "workspaceObserved": receipt.workspace != nil,
+            "coverDrawCommitted": receipt.coverDrawCommitted, "visualContinuity": "not-measured"])
+        let currentFrontmost = runtime.frontmostApplication?.processIdentifier
+        if receipt.presentation == .completed, currentFrontmost != nil,
+           currentFrontmost == nativeEntryFrontmostPID || currentFrontmost == Int32(runtime.processIdentifier) {
+            _ = activateOnce("native-workspace-observed")
+        }
+        exitLedger.terminating = true
+        runtime.terminate()
+    }
+
     private func concludeStartupRun(_ outcome: StartupOutcome) {
         session.beginEventStream(writer: journal.eventWriter, at: runtime.uptime)
         guard let final = session.concludeEventStream(outcome, at: runtime.uptime) else { return }
         carryOutFinalOutcome(final, promoted: exitLedger.promoted)
     }
 
-    /// 终局编排：ready/skipped 尝试激活目标；失败两档按晋升与否决定可见错误
-    /// 还是直接退出；成功档在晋升窗口等动画完成，否则立即退场。
     private func carryOutFinalOutcome(_ final: NativeStartupFinalOutcome, promoted: Bool) {
         exitLedger.processExitCode = final.exitCode
         switch final {
         case .activated:
             break
         case .ready:
-            if let target = session.target, !target.isTerminated {
-                let allowed = target.activate()
-                session.activated = allowed
-                journal.record("target-activation-after-startup",
-                               ["allowed": allowed, "targetPID": Int(target.processIdentifier)])
-            }
+            _ = activateOnce("startup-ready")
         case .skipped:
-            if let target = session.target, !target.isTerminated { session.activated = target.activate() }
+            _ = activateOnce("startup-skipped")
         case .partial(let reason), .behaviorNotProven(let reason):
             if promoted { presentFailure(stage.displayLocale.message(for: reason), reason) }
             else { exitLedger.terminating = true; runtime.terminate() }
@@ -2455,6 +2893,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if !exitLedger.terminating, let nativePlayer {
+            nativePlayer.requestSkip()
+            return .terminateCancel
+        }
         if !exitLedger.terminating {
             if commandLine.isSmokeTest && !exitLedger.smokeResultSucceeded { exitLedger.markSmokeFailureExit() }
             if session.isStreamPending { session.latchStreamInterruption() }
@@ -2518,6 +2960,7 @@ private final class PlaceholderUnavailableDriver: SkinHostDriver {
 /// reason；拒绝类折叠为两个既有失败身份，失败/中断保留原 reason 字符串。
 func startupLegacyOutcome(from result: SkinLaunchResult) -> StartupOutcome {
     switch result {
+    case .nativePresentation: return .failed(reason: "protocol-error")
     case .activated(let generation): return .activated(pid: generation.pid)
     case .ready(_, let runID): return .ready(runID: runID)
     case .skipped(_, let runID, let beforeReady): return .skipped(runID: runID, beforeReady: beforeReady)

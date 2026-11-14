@@ -42,6 +42,17 @@ class NativeEventAssessmentTests(unittest.TestCase):
         self.assertEqual("ready", result["startup"]["status"])
         self.assertEqual([], result["event_errors"])
 
+    def test_actual_native_terminal_samples_keep_four_distinct_outcomes(self) -> None:
+        for end, code, status in [("completed", 0, "native-completed"), ("skipped", 0, "skipped"),
+                                  ("interrupted", 2, "partial"), ("failed", 1, "behavior-not-proven")]:
+            with self.subTest(end=end):
+                result = self.assess(f"native-{end}.jsonl", "launch", code)
+                self.assertEqual(status, result["status"])
+                self.assertEqual(end, result["startup"]["status"])
+                self.assertEqual("not-measured", result["startup"]["visualContinuity"])
+                self.assertEqual("pending", result["visual_review"])
+                self.assertEqual([], result["event_errors"])
+
     def test_native_hot_activation_sample_is_not_injection(self) -> None:
         result = self.assess("target-activated.jsonl", "launch", 0)
         self.assertEqual("activated", result["status"])

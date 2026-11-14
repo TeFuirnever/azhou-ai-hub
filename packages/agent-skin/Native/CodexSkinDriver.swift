@@ -71,8 +71,60 @@ final class InstallObservingStartupTransport: StartupTransport {
         try await base.disposeController(href: href, timeout: timeout)
     }
 
+    func makeSettingsSnapshotSession(page: StartupSnapshotPage, request: StartupSettingsSnapshotRequest,
+                                     timeout: TimeInterval) async throws -> any StartupSettingsSnapshotSession {
+        try await base.makeSettingsSnapshotSession(page: page, request: request, timeout: timeout)
+    }
+
     func close() { base.close() }
     func disconnectPage() { base.disconnectPage() }
+}
+
+enum CodexNativePresentationEvent {
+    case ready(duration: Double)
+    case completed
+    case skipped
+    case failed(String)
+}
+
+struct NativeCoverReceipt {
+    let runNonce: String
+    let drawObserved: Bool
+    let transactionCommitted: Bool
+}
+
+@MainActor
+protocol CodexNativePresentation: AnyObject {
+    func showCover() throws -> NativeCoverReceipt
+    func play(_ snapshot: StartupSettingsSnapshot, deadline: TimeInterval) async throws
+    func beginPlayback(deadline: TimeInterval)
+    func releaseCover()
+    func scheduleDeadline(after: TimeInterval, action: @escaping () -> Void) -> any NativeScheduledAction
+}
+
+@MainActor
+private final class CodexNativeRun {
+    enum State { case covering, preparing, playing, completed, skipped, interrupted, failed(String) }
+    let nonce: String
+    var deadline: TimeInterval
+    var state: State = .covering
+    var coverCommitted = false
+    var released = false
+    var presentation: (any CodexNativePresentation)?
+    init(nonce: String, deadline: TimeInterval) { self.nonce = nonce; self.deadline = deadline }
+    var failure: String? {
+        if case .failed(let reason) = state { return reason }
+        if case .interrupted = state { return "startup-interrupted" }
+        return nil
+    }
+    var interrupted: Bool { if case .interrupted = state { return true }; return false }
+    var skipped: Bool { if case .skipped = state { return true }; return false }
+    var completed: Bool { if case .completed = state { return true }; return false }
+    func release() {
+        guard !released else { return }
+        released = true
+        presentation?.releaseCover()
+    }
 }
 
 /// App-owned assembly points (UI state, event stream, opening Codex). The driver
@@ -94,6 +146,7 @@ struct CodexSkinAssembly {
     /// WallpaperCLI's owned path in C0; when nil the driver refuses explicitly
     /// instead of silently degrading.
     let performDisable: ((StartupTargetFacts, String, TimeInterval) async throws -> [String: Any])?
+    var nativePresentation: ((String, @escaping (CodexNativePresentationEvent) -> Void) throws -> any CodexNativePresentation)? = nil
 }
 
 @MainActor
@@ -106,6 +159,7 @@ final class CodexSkinDriver: SkinHostDriver {
     private let installObservation: CodexInstallObservation
     private let assembly: CodexSkinAssembly
     private var pageOperationInFlight = false
+    private var nativeRun: CodexNativeRun?
 
     /// Stores dependencies only. Never reads the payload, allocates ports, builds
     /// a transport, launches the host or touches a page here (spec §6.3).
@@ -177,7 +231,10 @@ final class CodexSkinDriver: SkinHostDriver {
         pageOperationInFlight = true
         defer { pageOperationInFlight = false }
         let system = makeTargetSystem()
-        let budget = StartupBudget(startedAt: request.startedAt)
+        let budget = StartupBudget(startedAt: request.startedAt, deadline: request.deadline)
+        if existing == nil, let makePresentation = assembly.nativePresentation {
+            return await launchNative(request, system: system, budget: budget, makePresentation: makePresentation)
+        }
         let outcome: StartupOutcome
         do {
             outcome = try await StartupLaunchFlow.run(
@@ -218,6 +275,120 @@ final class CodexSkinDriver: SkinHostDriver {
         assembly.onOpeningChanged(false)
         return Self.bridge(outcome, request: request, key: inputs.identity.key,
                            observation: installObservation)
+    }
+
+    private func receiveNative(_ event: CodexNativePresentationEvent, nonce: String) {
+        guard let run = nativeRun, run.nonce == nonce, !run.released else { return }
+        switch event {
+        case .skipped:
+            run.state = .skipped
+            run.release()
+        case .failed(let reason):
+            run.state = .failed(reason)
+            run.release()
+        case .ready(let duration):
+            guard case .preparing = run.state else { return }
+            guard duration == 12, runtime.uptime + duration + 1.5 < run.deadline else {
+                run.state = .failed("attach-timeout"); run.release(); return
+            }
+            run.state = .playing
+            run.presentation?.beginPlayback(deadline: run.deadline)
+        case .completed:
+            guard case .playing = run.state else { return }
+            run.state = .completed
+        }
+    }
+
+    private func launchNative(_ request: SkinLaunchRequest, system: any StartupTargetSystem,
+                              budget: StartupBudget,
+                              makePresentation: (String, @escaping (CodexNativePresentationEvent) -> Void) throws -> any CodexNativePresentation) async -> SkinLaunchResult {
+        let run = CodexNativeRun(nonce: UUID().uuidString, deadline: budget.totalDeadline)
+        var deadlineTimer: (any NativeScheduledAction)?
+        var workspace: SkinNativeWorkspaceObservation?
+        defer {
+            deadlineTimer?.cancel()
+            run.release()
+            if nativeRun === run { nativeRun = nil }
+            assembly.onOpeningChanged(false)
+        }
+        do {
+            try Task.checkCancellation()
+            _ = try budget.timeout(maximum: 1, stageDeadline: budget.preflightDeadline, now: runtime.uptime)
+            try assembly.preflightBundle(inputs.identity.key.bundleURL, budget)
+            try Task.checkCancellation()
+            _ = try budget.timeout(maximum: 1, stageDeadline: budget.preflightDeadline, now: runtime.uptime)
+            let payload = try readPayload()
+            guard runtime.uptime < budget.totalDeadline else {
+                throw StartupFailure(reason: "attach-timeout", message: "启动预算已耗尽。")
+            }
+            nativeRun = run
+            let nonce = run.nonce
+            let presentation = try makePresentation(nonce) { [weak self] event in
+                self?.receiveNative(event, nonce: nonce)
+            }
+            run.presentation = presentation
+            let receipt = try presentation.showCover()
+            guard receipt.runNonce == run.nonce, receipt.drawObserved, receipt.transactionCommitted else {
+                throw StartupFailure(reason: "protocol-error", message: "自有窗口未完成本进程绘制提交。")
+            }
+            run.coverCommitted = true
+            try Task.checkCancellation()
+            _ = try budget.timeout(maximum: 1, stageDeadline: budget.totalDeadline, now: runtime.uptime)
+            deadlineTimer = presentation.scheduleDeadline(after: max(0, budget.totalDeadline - runtime.uptime)) { [weak self] in
+                self?.receiveNative(.failed("attach-timeout"), nonce: run.nonce)
+            }
+            let port = try assembly.preparePort()
+            guard runtime.uptime < budget.totalDeadline else {
+                throw StartupFailure(reason: "attach-timeout", message: "启动预算已耗尽。")
+            }
+            run.deadline = budget.attachDeadline(startedAt: runtime.uptime)
+            deadlineTimer?.cancel()
+            deadlineTimer = presentation.scheduleDeadline(after: max(0, run.deadline - runtime.uptime)) { [weak self] in
+                self?.receiveNative(.failed("attach-timeout"), nonce: nonce)
+            }
+            if let failure = run.failure { throw StartupFailure(reason: failure, message: "原生呈现失败。") }
+            assembly.onOpeningChanged(true)
+            let app = try await assembly.openApplication(inputs.identity.key.bundleURL, port, run.deadline, system)
+            assembly.onOpeningChanged(false)
+            assembly.onTargetOpened(app)
+            try Task.checkCancellation()
+            _ = try budget.timeout(maximum: 1, stageDeadline: run.deadline, now: runtime.uptime)
+            let facts = try assembly.startupFacts(app)
+            let capture = NativeStartupCapture(targetPID: facts.pid)
+            assembly.onCaptureReady(capture)
+            guard let stream = assembly.eventStream() else {
+                throw StartupFailure(reason: "protocol-error", message: "原生启动事件流不可用。")
+            }
+            stream.targetOpened(pid: facts.pid, at: runtime.uptime)
+            if let failure = run.failure { throw StartupFailure(reason: failure, message: "原生呈现已结束。") }
+            if !run.skipped {
+                installObservation.reset()
+                let result = try await makeConnector(facts, port, system, capture, stream).runPrepared(
+                    payload: payload, runNonce: run.nonce, deadline: run.deadline,
+                    playbackReserve: 12,
+                    acceptSnapshot: { snapshot in
+                        guard self.nativeRun === run, !run.released else { throw CancellationError() }
+                        run.state = .preparing
+                        do { try await presentation.play(snapshot, deadline: run.deadline) }
+                        catch { if !run.skipped { throw error } }
+                        if let failure = run.failure { throw StartupFailure(reason: failure, message: "原生播放器失败。") }
+                    }, presentationFinished: { run.completed }, releaseRequested: { run.skipped },
+                    presentationFailure: { run.failure })
+                if case .observed(let observed) = result {
+                    workspace = SkinNativeWorkspaceObservation(pageGeneration: observed.pageID, runID: observed.runID,
+                        wallpaperDisposition: observed.wallpaperDisposition, wallpaperReason: observed.wallpaperReason)
+                }
+            }
+        } catch {
+            if !run.skipped {
+                if Task.isCancelled || error is CancellationError { run.state = .interrupted }
+                else if run.failure == nil { run.state = .failed((error as? StartupFailure)?.reason ?? "protocol-error") }
+            }
+        }
+        let end: SkinNativePresentationEnd = run.skipped ? .skipped : run.interrupted ? .interrupted
+            : run.completed && workspace != nil ? .completed : .failed
+        return .nativePresentation(SkinNativeLaunchReceipt(operationID: request.operationID, runNonce: run.nonce,
+            presentation: end, reason: run.failure, workspace: workspace, coverDrawCommitted: run.coverCommitted))
     }
 
     // MARK: - inspect (read-only; never cold-starts the host or installs controllers)

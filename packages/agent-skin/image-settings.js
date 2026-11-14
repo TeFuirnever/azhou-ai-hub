@@ -627,6 +627,52 @@ function createImageSettings(environment) {
     return promise;
   }
 
+  async function loadSnapshot(defaults) {
+    const explicitDefaults = {
+      introTitle: typeof defaults?.introTitle === 'string',
+      introCaption: typeof defaults?.introCaption === 'string',
+      artworkSubtitle: typeof defaults?.artworkSubtitle === 'string',
+    };
+    let loaded;
+    try {
+      loaded = await load(defaults);
+    } catch (error) {
+      return Object.freeze({
+        status: 'failure',
+        reason: typeof error?.reason === 'string' ? error.reason : 'settings-unavailable',
+      });
+    }
+    const reason = typeof loaded?.reason === 'string' ? loaded.reason : 'settings-unavailable';
+    if (reason) return Object.freeze({ status: 'failure', reason });
+
+    try {
+      const contours = (Array.isArray(loaded.settings?.contours) ? loaded.settings.contours : [])
+        .map(path => Object.freeze(path.map(point => Object.freeze([point[0], point[1]]))));
+      const settings = Object.freeze({
+        schemaVersion: loaded.settings?.schemaVersion,
+        avatar: loaded.settings?.avatar,
+        artwork: loaded.settings?.artwork,
+        contours: Object.freeze(contours),
+        introTitle: loaded.settings?.introTitle,
+        introCaption: loaded.settings?.introCaption,
+        artworkSubtitle: loaded.settings?.artworkSubtitle,
+        wallpaperStrength: loaded.settings?.wallpaperStrength,
+      });
+      const explicitText = Object.freeze({
+        introTitle: explicitDefaults.introTitle || typeof loaded.baseline?.introTitle === 'string',
+        introCaption: explicitDefaults.introCaption || typeof loaded.baseline?.introCaption === 'string',
+        artworkSubtitle: explicitDefaults.artworkSubtitle || typeof loaded.baseline?.artworkSubtitle === 'string',
+      });
+      return Object.freeze({
+        status: loaded.baseline === undefined ? 'missing' : 'valid',
+        settings,
+        explicitText,
+      });
+    } catch {
+      return Object.freeze({ status: 'failure', reason: 'settings-invalid' });
+    }
+  }
+
   function recordEquals(left, right) {
     if (left === undefined || right === undefined) return left === right;
     try { return JSON.stringify(left) === JSON.stringify(right); }
@@ -2054,6 +2100,7 @@ function createImageSettings(environment) {
 
   return {
     load,
+    loadSnapshot,
     save,
     importImage,
     cancelImport,

@@ -10,6 +10,7 @@ export function bootstrapStartup({
   assets,
   host,
   pageAdapter,
+  playbackOwner = 'page',
 }) {
   const wallpaperOptions = { version, css };
   if (pageAdapter?.wallpaper) wallpaperOptions.pageAdapter = pageAdapter;
@@ -23,5 +24,6 @@ export function bootstrapStartup({
     createImageSettings: { value: createImageSettings },
     applyWallpaper: { value: applyWallpaper },
   });
-  return installStartup(installAnimation, host, pageAdapter);
+  if (playbackOwner === 'page') return installStartup(installAnimation, host, pageAdapter);
+  return installStartup(installAnimation, host, pageAdapter, playbackOwner);
 }

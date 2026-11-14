@@ -181,7 +181,9 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
-| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; source version `0.9.0/build 41`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT since the #441 rewrite; the bundled Azhou art is CC BY-NC-ND 4.0, so a fresh clone builds the Azhou skin. |
+| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; current source candidate `0.9.0/build 42`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT; bundled Azhou artwork is CC BY-NC-ND 4.0. |
+
+On a Codex cold start, the native launcher submits its own cover for drawing before opening Codex, reads the validated appearance snapshot, and plays the existing 12-second animation in its native window. It releases the cover after both playback and a supported Codex workspace are observed; hot starts still activate the existing process without replay. Build 42 is installed on the maintainer Mac. The standalone player, hot activation and cold-start event checks passed; cold-start visual continuity remains unverified. DSH uses a separate document gate. Build 42 is installed in the maintainer Mac’s shared DSH package and loaded in its desktop profile: the observed startup showed a host loading placeholder, the Azhou animation, then the workspace. Continuous first-frame capture remains pending. See the [startup contract](packages/agent-skin/docs/testing.md).
 
 <sub>🦊 Foundation CLI, pstack and Agent Skin previews: generated illustrations, not from the Azhou Scenes pipeline and without a colour gate; maintainer visual approval recorded 2026-11-12.</sub>
 

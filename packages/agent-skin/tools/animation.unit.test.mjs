@@ -4,13 +4,16 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import vm from 'node:vm';
+import { webcrypto } from 'node:crypto';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE_PATH = join(ROOT, 'animation.js');
 const source = await readFile(SOURCE_PATH, 'utf8');
 const animationContext = {};
 new vm.Script(source, { filename: SOURCE_PATH }).runInNewContext(animationContext);
-const { installAnimation } = animationContext;
+const { installAnimation, localPreviewInput } = animationContext;
+const MAX_NATIVE_SNAPSHOT_BYTES = 24 * 1024 * 1024 + 4 * 1024;
+const NATIVE_SNAPSHOT_CHUNK_BYTES = 192 * 1024;
 const localizationContext = {};
 new vm.Script(await readFile(join(ROOT, 'localization.js'), 'utf8'), {
   filename: join(ROOT, 'localization.js'),
@@ -124,7 +127,9 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   noResizeObserver = false, noMatchMedia = false, legacyMedia = false,
   backgroundResult, skipInstall = false,
   settingsAdapter = null,
-  theme = 'dark' } = {}) {
+  nativeFormal = false, nativeStartup = null,
+  snapshotMode = false, snapshotReader = null,
+  theme = 'dark', externalStartGate = false } = {}) {
   const raf = new Map();
   const timers = new Map();
   const windowListeners = new Map();
@@ -221,7 +226,8 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
     return result;
   };
   const window = {
-    navigator: { language: 'en-US' }, Float32Array,
+    navigator: { language: 'en-US' }, Float32Array, AbortController,
+    crypto: webcrypto, atob: globalThis.atob, btoa: globalThis.btoa, TextDecoder: globalThis.TextDecoder,
     innerWidth: 1280, innerHeight: 800, devicePixelRatio: 1,
     CSS: { supports: (_kind, value) => !/[;{}]/.test(value) && !value.includes('bogus') },
     visualViewport: { addEventListener() {}, removeEventListener() {} },
@@ -254,6 +260,9 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   if (native) {
     window.webkit = { messageHandlers: { launcher: { postMessage: message => messages.push(message) } } };
     window.__agentSkinNativeMode = nativeMode;
+    if (nativeStartup) Object.defineProperty(window, '__agentSkinNativeStartup', {
+      value: nativeStartup, writable: false, configurable: false,
+    });
   }
   class ImageMock {
     constructor() {
@@ -327,12 +336,29 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   } : undefined;
   const localizationFactory = localization === 'throw' ? () => { throw new Error('locale setup failed'); }
     : localization ? options => localizationContext.createLocalization(options) : undefined;
+  const formalInput = nativeFormal ? localPreviewInput(window, payload) : null;
   const handle = skipInstall ? null : installAnimation(
     window, document, window.location, environment.performance, undefined, ImageMock, Path2DMock,
     fakeURL, requestAnimationFrame, cancelAnimationFrame,
     environment.setTimeout, environment.clearTimeout, undefined, send,
-    { runId: 'unit-run', intent, assets: payload }, settingsFactory, localizationFactory,
+    formalInput?.frameSpec || { runId: 'unit-run', intent, assets: payload,
+      ...(snapshotMode ? { settingsSnapshot: 'required' } : {}),
+      ...(externalStartGate ? { externalStartGate: true } : {}) },
+    settingsFactory, localizationFactory, formalInput?.readStartupSnapshot || snapshotReader,
   );
+  if (handle?.preview && formalInput?.nativeBridge) {
+    for (const [name, method] of Object.entries({
+      acceptNativeSnapshotDescriptor: formalInput.nativeBridge.beginSnapshotTransfer,
+      acceptNativeSnapshotChunk: formalInput.nativeBridge.appendSnapshotChunk,
+      finishNativeSnapshot: formalInput.nativeBridge.finishSnapshotTransfer,
+      cancelNativeSnapshot: formalInput.nativeBridge.cancelSnapshotTransfer,
+    })) Object.defineProperty(handle.preview, name, {
+      value: method, enumerable: false, writable: false, configurable: false,
+    });
+    Object.defineProperty(handle.preview, 'nativeStartupRunNonce', {
+      value: formalInput.frameSpec.runId, enumerable: false, writable: false, configurable: false,
+    });
+  }
   Object.assign(window, {
     document, Image: ImageMock, Path2D: Path2DMock, URL: fakeURL, indexedDB: undefined,
     performance: environment.performance,
@@ -451,6 +477,26 @@ async function waitForFixture(predicate, description) {
   assert.fail(`fixture did not reach ${description}`);
 }
 
+function startupSnapshot(assets, { status = 'valid', appearance = { locale: 'en', theme: 'dark' }, explicitText = {
+  introTitle: true, introCaption: true, artworkSubtitle: true,
+} } = {}) {
+  return {
+    status,
+    settings: {
+      schemaVersion: 1,
+      avatar: assets.avatar,
+      artwork: assets.artwork,
+      contours: assets.contours,
+      introTitle: 'Snapshot title',
+      introCaption: 'Snapshot caption',
+      artworkSubtitle: 'Snapshot subtitle',
+      wallpaperStrength: 42,
+    },
+    explicitText,
+    appearance,
+  };
+}
+
 function runFixtureTimers(fixture, milliseconds) {
   const selected = [...fixture.timers.entries()].filter(([_id, timer]) => timer.delay === milliseconds);
   for (const [id, timer] of selected) {
@@ -540,6 +586,163 @@ test('the preview API prepares valid artwork, draws every phase, reacts to appea
   assert.equal(fixture.handle.preview.report().resources.liveRAF, 0);
 });
 
+test('the trusted native local adapter selects required snapshot input while ordinary preview stays unchanged', async () => {
+  const payload = {
+    avatar: 'data:image/png;base64,AA==', artwork: 'data:image/png;base64,AA==',
+    contours: [[[10, 10], [40, 20], [80, 15], [110, 45]]],
+  };
+  const snapshot = startupSnapshot(payload);
+  let loadCount = 0;
+  const nativeStartup = Object.freeze({
+    owner: 'azhou-agent-skin-native', version: 1, runNonce: 'run-native-01',
+    appearance: Object.freeze({ locale: 'zh-CN', theme: 'light' }),
+  });
+  const fixture = createFixture({
+    native: true, nativeMode: 'launch', nativeFormal: true, nativeStartup,
+    assets: payload,
+    settingsAdapter: {
+      load() { loadCount++; throw new Error('formal startup must not read IndexedDB'); },
+      dispose() {}, isSettingsOpen() { return false; }, isBusy() { return false; },
+    },
+  });
+  const encoded = new TextEncoder().encode(JSON.stringify(snapshot));
+  const digestBytes = new Uint8Array(await webcrypto.subtle.digest('SHA-256', encoded));
+  const digest = Array.from(digestBytes, byte => byte.toString(16).padStart(2, '0')).join('');
+  const chunkCount = Math.ceil(encoded.byteLength / NATIVE_SNAPSHOT_CHUNK_BYTES);
+  assert.equal(chunkCount, 1);
+  assert.equal(fixture.handle.preview.acceptNativeSnapshotDescriptor({
+    owner: 'azhou-codex-startup', version: 1, runId: 1, runNonce: 'run-native-01',
+    snapshotID: '1:run-native-01', status: 'valid', byteLength: encoded.byteLength,
+    chunkSize: NATIVE_SNAPSHOT_CHUNK_BYTES, chunkCount, sha256: digest,
+  }), true);
+  const base64 = Buffer.from(encoded).toString('base64');
+  assert.equal(fixture.handle.preview.acceptNativeSnapshotChunk('run-native-01', 0, base64), true);
+  assert.equal(fixture.handle.preview.finishNativeSnapshot('run-native-01'), true);
+  await waitReady(fixture);
+  assert.equal(loadCount, 0);
+  assert.equal(fixture.handle.preview.report().stage, 'pulse');
+  assert.equal(fixture.handle.preview.report().elapsed, 0, 'native readiness does not start the playback clock');
+  assert.equal(fixture.handle.preview.beginLaunch(), true, 'the native driver explicitly starts the prepared animation');
+  assert.equal(fixture.messages[0].action, 'ready');
+  assert.equal(fixture.messages[0].runId, 'run-native-01');
+  assert.equal(fixture.messages[0].locale, 'en', 'ready uses the snapshot host language, not initial cover language');
+  assert.equal(fixture.document.documentElement.dataset.theme, 'dark', 'snapshot host theme replaces the initial cover theme');
+
+  const ordinary = localPreviewInput({ AGENT_SKIN_ASSETS: payload }, payload);
+  assert.deepEqual(JSON.parse(JSON.stringify(ordinary.frameSpec)), {
+    runId: 'local-preview', intent: 'preview', protocolVersion: 1, assets: payload,
+  });
+  assert.equal(ordinary.readStartupSnapshot, undefined);
+});
+
+test('required snapshot appearance rejects missing or unsupported values before playback', async () => {
+  const assets = { avatar: 'data:image/png;base64,AA==', artwork: 'data:image/png;base64,AA==',
+    contours: [[[10, 10], [40, 20]]] };
+  for (const appearance of [null, { locale: 'fr', theme: 'dark' }, { locale: 'en', theme: 'auto' },
+    { locale: 'en', theme: 'dark', extra: true }]) {
+    const fixture = createFixture({ assets, snapshotMode: true,
+      snapshotReader: async () => startupSnapshot(assets, { appearance }) });
+    await waitForMessage(fixture, 'assetError');
+    assert.equal(fixture.messages.some(message => message.action === 'ready'), false);
+    fixture.handle.dispose();
+  }
+});
+
+test('an invalid native formal bridge fails closed and does not fall back to local settings storage', async () => {
+  let loadCount = 0;
+  const fixture = createFixture({
+    native: true, nativeMode: 'launch', nativeFormal: true,
+    nativeStartup: Object.freeze({ owner: 'wrong-owner', version: 1 }),
+    settingsAdapter: {
+      load() { loadCount++; return Promise.resolve({ settings: {}, baseline: undefined }); },
+      dispose() {}, isSettingsOpen() { return false; }, isBusy() { return false; },
+    },
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(loadCount, 0);
+  assert.ok(fixture.messages.some(message => message.action === 'assetError'));
+});
+
+test('skipping the native formal player aborts the pending snapshot and closes its bridge', async () => {
+  const nativeStartup = Object.freeze({
+    owner: 'azhou-agent-skin-native', version: 1, runNonce: 'run-native-skip',
+    appearance: Object.freeze({ locale: 'en', theme: 'dark' }),
+  });
+  let loadCount = 0;
+  const fixture = createFixture({
+    native: true, nativeMode: 'launch', nativeFormal: true, nativeStartup,
+    settingsAdapter: {
+      load() { loadCount++; return Promise.resolve({ settings: {}, baseline: undefined }); },
+      dispose() {}, isSettingsOpen() { return false; }, isBusy() { return false; },
+    },
+  });
+  await new Promise(resolve => setImmediate(resolve));
+  fixture.handle.preview.skip();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(loadCount, 0);
+  assert.ok(fixture.messages.some(message => message.action === 'complete' && message.skipped === true));
+  assert.equal(fixture.messages.some(message => message.action === 'ready' || message.action === 'assetError'), false);
+  assert.equal(fixture.handle.preview.acceptNativeSnapshotDescriptor({
+    owner: 'azhou-codex-startup', version: 1, runId: 1, runNonce: 'run-native-skip',
+    snapshotID: '1:run-native-skip', status: 'valid', byteLength: 1,
+    chunkSize: NATIVE_SNAPSHOT_CHUNK_BYTES, chunkCount: 1, sha256: '0'.repeat(64),
+  }), false);
+});
+
+test('the native snapshot bridge binds the token, enforces total bounds, and clears pending transfer on skip', async () => {
+  const identity = Object.freeze({ runNonce: 'run-native-skip' });
+  const bridge = animationContext.createNativeSnapshotBridge({
+    crypto: webcrypto, atob: globalThis.atob, btoa: globalThis.btoa, TextDecoder: globalThis.TextDecoder,
+  }, identity);
+  assert.equal(bridge.beginSnapshotTransfer({
+    owner: 'azhou-codex-startup', version: 1, runId: 2, runNonce: 'other-run',
+    snapshotID: '2:other-run', status: 'valid', byteLength: 1,
+    chunkSize: NATIVE_SNAPSHOT_CHUNK_BYTES, chunkCount: 1, sha256: '0'.repeat(64),
+  }), false);
+  assert.equal(bridge.beginSnapshotTransfer({
+    owner: 'azhou-codex-startup', version: 1, runId: 2, runNonce: identity.runNonce,
+    snapshotID: `2:${identity.runNonce}`, status: 'valid', byteLength: MAX_NATIVE_SNAPSHOT_BYTES + 1,
+    chunkSize: NATIVE_SNAPSHOT_CHUNK_BYTES, chunkCount: 1, sha256: '0'.repeat(64),
+  }), false);
+
+  const controller = new AbortController();
+  const waiting = bridge.readStartupSnapshot({ runId: identity.runNonce, signal: controller.signal });
+  await assert.rejects(bridge.readStartupSnapshot({ runId: identity.runNonce, signal: controller.signal }), /snapshot-unavailable/);
+  controller.abort();
+  await assert.rejects(waiting, /snapshot-cancelled/);
+  assert.equal(bridge.beginSnapshotTransfer({
+    owner: 'azhou-codex-startup', version: 1, runId: 2, runNonce: identity.runNonce,
+    snapshotID: `2:${identity.runNonce}`, status: 'valid', byteLength: 1,
+    chunkSize: NATIVE_SNAPSHOT_CHUNK_BYTES, chunkCount: 1, sha256: '0'.repeat(64),
+  }), false, 'skip cancellation permanently closes the one-run bridge');
+});
+
+test('the native snapshot bridge rejects out-of-order chunks and a digest mismatch', async () => {
+  const identity = Object.freeze({ runNonce: 'run-native-digest' });
+  const bridge = animationContext.createNativeSnapshotBridge({
+    crypto: webcrypto, atob: globalThis.atob, btoa: globalThis.btoa, TextDecoder: globalThis.TextDecoder,
+  }, identity);
+  const controller = new AbortController();
+  const waiting = bridge.readStartupSnapshot({ runId: identity.runNonce, signal: controller.signal });
+  const snapshotBytes = new TextEncoder().encode(JSON.stringify({
+    status: 'valid', settings: {}, explicitText: {},
+  }));
+  assert.equal(bridge.beginSnapshotTransfer({
+    owner: 'azhou-codex-startup', version: 1, runId: 3, runNonce: identity.runNonce,
+    snapshotID: `3:${identity.runNonce}`, status: 'valid', byteLength: snapshotBytes.length,
+    chunkSize: NATIVE_SNAPSHOT_CHUNK_BYTES, chunkCount: 1, sha256: '0'.repeat(64),
+  }), true);
+  assert.equal(bridge.appendSnapshotChunk(identity.runNonce, 1, Buffer.from(snapshotBytes).toString('base64')), false);
+  assert.equal(bridge.appendSnapshotChunk(identity.runNonce, 0, Buffer.from(snapshotBytes).toString('base64')), true);
+  assert.equal(bridge.finishSnapshotTransfer(identity.runNonce), true);
+  await assert.rejects(waiting, /snapshot-transfer-invalid/);
+  assert.equal(bridge.beginSnapshotTransfer({
+    owner: 'azhou-codex-startup', version: 1, runId: 3, runNonce: identity.runNonce,
+    snapshotID: `3:${identity.runNonce}`, status: 'valid', byteLength: snapshotBytes.length,
+    chunkSize: NATIVE_SNAPSHOT_CHUNK_BYTES, chunkCount: 1, sha256: '0'.repeat(64),
+  }), false, 'a failed digest permanently closes the one-run bridge');
+});
+
 test('playing completes naturally and keyboard shortcuts skip only a supported preview target', async () => {
   const fixture = createFixture({ intent: 'play', settings: false, makeBitmap: false });
   await waitReady(fixture);
@@ -560,6 +763,21 @@ test('playing completes naturally and keyboard shortcuts skip only a supported p
   });
   assert.equal(preview.handle.preview.report().skipped, true);
   assert.equal(preview.handle.dispose(), true);
+});
+
+test('external DSH gate prewarms a full 12-second player and waits for beginLaunch', async () => {
+  const fixture = createFixture({ intent: 'play', settings: false, externalStartGate: true });
+  await waitReady(fixture);
+  assert.equal(fixture.messages.find(item => item.action === 'ready').duration, 12_000);
+  assert.equal(fixture.root.dataset.prewarmed, 'true');
+  assert.equal(fixture.handle.preview.report().resources.liveRAF, 0,
+    'external owner can confirm the first rendered frame while playback remains held');
+  assert.equal(fixture.handle.preview.beginLaunch(), true);
+  assert.equal(fixture.handle.preview.report().resources.liveRAF, 1);
+  fixture.handle.preview.skip();
+  assert.equal(fixture.handle.preview.report().skipped, true);
+  assert.equal(fixture.messages.filter(item => item.action === 'complete').length, 1);
+  assert.equal(fixture.handle.dispose(), true);
 });
 
 test('continuous playback keeps the scattered transition smooth and caches truly static frames', async () => {
@@ -607,6 +825,109 @@ test('startup failures send a fixed asset reason and partial mounts are cleaned 
   assert.equal(noLocalization.messages[0].action, 'assetError');
   assert.equal(noLocalization.messages[0].reason, 'localization-unavailable');
   assert.equal(noLocalization.handle.dispose(), false);
+});
+
+test('required startup snapshot is applied before decoding and preserves explicit text semantics', async () => {
+  const assets = {
+    avatar: 'data:image/png;base64,AA==', artwork: 'data:image/png;base64,AA==',
+    contours: [[[10, 10], [40, 20], [80, 15], [110, 45]]],
+  };
+  let request;
+  let calls = 0;
+  const fixture = createFixture({ intent: 'play', assets, snapshotMode: true,
+    snapshotReader: input => {
+      calls++;
+      request = input;
+      return Promise.resolve(startupSnapshot(assets, { explicitText: {
+        introTitle: false, introCaption: true, artworkSubtitle: false,
+      } }));
+    } });
+
+  await waitReady(fixture);
+  assert.equal(calls, 1);
+  assert.equal(request.runId, 'unit-run');
+  assert.equal(request.signal.aborted, false);
+  assert.equal(fixture.settingsInstance, null, 'snapshot mode must not construct the local settings/IndexedDB adapter');
+  assert.ok(fixture.drawnTexts.identity.includes('Azhou AI Lab'), 'non-explicit title stays localized');
+  assert.ok(fixture.drawnTexts.identity.includes('Snapshot caption'), 'explicit caption comes from the snapshot');
+  assert.ok(!fixture.drawnTexts.identity.includes('Snapshot title'));
+  fixture.handle.preview.seek(8);
+  assert.ok(fixture.drawnTexts.stage.includes('Let’s make ideas real with Azhou.'),
+    'non-explicit subtitle stays localized');
+  assert.ok(!fixture.drawnTexts.stage.includes('Snapshot subtitle'));
+  assert.equal(fixture.messages.some(message => message.action === 'assetError'), false);
+  fixture.handle.dispose();
+});
+
+test('required startup snapshot failure fails closed without local fallback', async t => {
+  await t.test('failed snapshot result', async () => {
+    const fixture = createFixture({ intent: 'play', snapshotMode: true,
+      snapshotReader: async () => ({ status: 'failure', reason: 'settings-unavailable' }) });
+    await waitForMessage(fixture, 'assetError');
+    assert.equal(fixture.messages.some(message => message.action === 'ready'), false);
+    assert.equal(fixture.settingsInstance, null);
+    assert.equal(fixture.images.length, 0, 'no fallback assets are decoded after snapshot failure');
+    assert.equal(fixture.messages.find(message => message.action === 'assetError').reason, 'asset-invalid');
+    fixture.handle.dispose();
+  });
+
+  await t.test('missing required reader', async () => {
+    const fixture = createFixture({ intent: 'play', snapshotMode: true });
+    await waitForMessage(fixture, 'assetError');
+    assert.equal(fixture.messages.some(message => message.action === 'ready'), false);
+    assert.equal(fixture.settingsInstance, null);
+    assert.equal(fixture.images.length, 0);
+    fixture.handle.dispose();
+  });
+});
+
+test('snapshot read is aborted by skip and a late result cannot revive the animation', async () => {
+  const assets = {
+    avatar: 'data:image/png;base64,AA==', artwork: 'data:image/png;base64,AA==',
+    contours: [[[10, 10], [40, 20], [80, 15], [110, 45]]],
+  };
+  let request;
+  let resolveSnapshot;
+  const fixture = createFixture({ intent: 'play', assets, snapshotMode: true,
+    snapshotReader: input => {
+      request = input;
+      return new Promise(resolve => { resolveSnapshot = resolve; });
+    } });
+  await waitForFixture(() => request !== undefined, 'the pending snapshot request');
+  assert.equal(fixture.messages.some(message => message.action === 'ready'), false);
+  assert.equal(fixture.images.length, 0, 'assets are not decoded while the snapshot is incomplete');
+  fixture.handle.preview.skip();
+  assert.equal(request.signal.aborted, true);
+  resolveSnapshot(startupSnapshot(assets));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(fixture.messages.some(message => message.action === 'ready'), false);
+  assert.equal(fixture.messages.some(message => message.action === 'assetError'), false);
+  assert.equal(fixture.handle.preview.report().skipped, true);
+  assert.equal(fixture.images.length, 0);
+  assert.equal(fixture.handle.preview.report().resources.liveImages, 0);
+  fixture.handle.dispose();
+});
+
+test('calls without required snapshot mode keep the existing settings load path', async () => {
+  let loadCount = 0;
+  let receivedDefaults;
+  const settingsAdapter = {
+    load(defaults) {
+      loadCount++;
+      receivedDefaults = defaults;
+      return Promise.resolve({ settings: startupSnapshot(defaults).settings,
+        baseline: undefined, reason: '' });
+    },
+    dispose() {}, refreshAppearance() {}, isSettingsOpen() { return false; },
+    isBusy() { return false; }, openSettings() { return false; }, cancelSettings() { return false; },
+  };
+  const fixture = createFixture({ intent: 'play', settingsAdapter });
+  await waitReady(fixture);
+  assert.equal(loadCount, 1);
+  assert.equal(receivedDefaults, fixture.payload);
+  assert.equal(fixture.settingsInstance, settingsAdapter);
+  assert.equal(fixture.messages.some(message => message.action === 'assetError'), false);
+  fixture.handle.dispose();
 });
 
 test('a pending native image decode can recover from a pixel-checked bitmap', async () => {

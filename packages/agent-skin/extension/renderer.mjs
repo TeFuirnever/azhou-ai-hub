@@ -1,6 +1,8 @@
 const GLOBAL_NAME = '__azhouStartup';
 const WALLPAPER_GLOBAL = '__azhouWallpaper';
 const OWNER = 'azhou-codex-startup';
+const DSH_OWNER = 'azhou-dsh-startup';
+const DSH_GATE_OWNER = 'azhou-dsh-startup-gate-v1';
 const VERSION = 1;
 // Frozen installed-state identity inherited from codex-startup-animation;
 // installed wallpaper controllers still answer to this exact owner string.
@@ -39,12 +41,51 @@ const WALLPAPER_FAILURE_STAGES = Object.freeze({
   'retry-timeout': 'apply',
 });
 const WALLPAPER_RETRY_TIMEOUT_MS = 10_000;
+const SETTINGS_SNAPSHOT_MAX_BYTES = 24 * 1024 * 1024 + 4 * 1024;
+const SETTINGS_SNAPSHOT_CHUNK_BYTES = 64 * 1024;
+const SETTINGS_SNAPSHOT_TIMEOUT_MS = 30_000;
+const SETTINGS_SNAPSHOT_RUN_NONCE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 let nextRunId = 1;
 
 function dataProperty(object, name) {
   if (!object || (typeof object !== 'object' && typeof object !== 'function')) return undefined;
   const descriptor = Object.getOwnPropertyDescriptor(object, name);
   return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
+}
+
+function encodeBase64(bytes) {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let output = '';
+  for (let index = 0; index < bytes.length; index += 3) {
+    const first = bytes[index];
+    const hasSecond = index + 1 < bytes.length;
+    const hasThird = index + 2 < bytes.length;
+    const second = hasSecond ? bytes[index + 1] : 0;
+    const third = hasThird ? bytes[index + 2] : 0;
+    output += alphabet[first >> 2]
+      + alphabet[((first & 3) << 4) | (second >> 4)]
+      + (hasSecond ? alphabet[((second & 15) << 2) | (third >> 6)] : '=')
+      + (hasThird ? alphabet[third & 63] : '=');
+  }
+  return output;
+}
+
+function encodedSnapshotByteLength(byteLength) {
+  const fullChunks = Math.floor(byteLength / SETTINGS_SNAPSHOT_CHUNK_BYTES);
+  const remainder = byteLength % SETTINGS_SNAPSHOT_CHUNK_BYTES;
+  const fullChunkLength = 4 * Math.ceil(SETTINGS_SNAPSHOT_CHUNK_BYTES / 3);
+  return fullChunks * fullChunkLength + (remainder ? 4 * Math.ceil(remainder / 3) : 0);
+}
+
+function monotonicNow(host) {
+  const performance = host?.performance ?? globalThis.performance;
+  if (!performance || typeof performance.now !== 'function') return null;
+  try {
+    const value = performance.now.call(performance);
+    return Number.isFinite(value) ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function wallpaperFailure(value) {
@@ -95,6 +136,13 @@ function existingController(host, owner = OWNER) {
   };
 }
 
+function dshStartupGate(host) {
+  const gate = dataProperty(host, '__azhouDshStartupGate');
+  return dataProperty(gate, 'owner') === DSH_GATE_OWNER
+    && ['claim', 'ready', 'release', 'onExpire'].every(name => typeof dataProperty(gate, name) === 'function')
+    ? gate : null;
+}
+
 function wallpaperRecord(host, owner = LEGACY_WALLPAPER_OWNER) {
   const descriptor = Object.getOwnPropertyDescriptor(host, WALLPAPER_GLOBAL);
   if (!descriptor) return { present: false, supported: false, api: null };
@@ -114,7 +162,7 @@ function wallpaperRecord(host, owner = LEGACY_WALLPAPER_OWNER) {
 // Only the mounting parent, the frame styling and the accessibility label
 // differ; the overlay's full-viewport behavior is pinned by its tests.
 function buildPanel(host, payload, runId, intent, assets, receive, appearance, pageAdapter,
-  controllerMetadata, parent, cssText, labelKey = 'overlayLabel') {
+  controllerMetadata, parent, cssText, labelKey = 'overlayLabel', externalStartGate = false) {
   const document = host.document;
   if (!document?.documentElement || typeof document.createElement !== 'function' || !document.body) {
     throw new TypeError('startup overlay host is unavailable');
@@ -153,7 +201,7 @@ function buildPanel(host, payload, runId, intent, assets, receive, appearance, p
   // Preserve the exact legacy factory when no host namespace was supplied.
   const createSettings = environment.settingsNamespace === undefined || typeof settingsFactory !== 'function'
     ? settingsFactory : input => settingsFactory({ ...input, settingsNamespace: environment.settingsNamespace });
-  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, appearance });
+  const frameSpec = Object.freeze({ runId, intent, protocolVersion: 1, assets, appearance, externalStartGate });
   // Preserve the result so the settings panel can report wallpaper failures.
   const SEND = (data) => receive({ source: frame.contentWindow, data });
   return {
@@ -172,11 +220,14 @@ function buildPanel(host, payload, runId, intent, assets, receive, appearance, p
   };
 }
 
-function mountOverlay(host, payload, runId, intent, assets, receive, appearance, pageAdapter, controllerMetadata) {
+function mountOverlay(host, payload, runId, intent, assets, receive, appearance, pageAdapter,
+  controllerMetadata, externalStartGate = false) {
   const parent = typeof host.document?.body?.appendChild === 'function'
     ? host.document.body : host.document?.documentElement;
+  const zIndex = externalStartGate ? '2147483646' : '2147483647';
   return buildPanel(host, payload, runId, intent, assets, receive, appearance, pageAdapter, controllerMetadata,
-    parent, 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483647;background:transparent');
+    parent, `position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:${zIndex};background:transparent`,
+    'overlayLabel', externalStartGate);
 }
 
 // Settings-section embed: the same panel document placed inside a host-provided
@@ -213,8 +264,11 @@ function settingsEmbedAdmitted(pageAdapter) {
 }
 
 class PageController {
-  constructor(host, payload, pageAdapter, owner, metadata) {
+  constructor(host, payload, pageAdapter, owner, metadata, identification, playbackOwner) {
     this.owner = owner;
+    this.playbackOwner = playbackOwner;
+    this.startupGate = null;
+    this.startupGateUnsubscribe = null;
     this.wallpaperOwner = dataProperty(dataProperty(pageAdapter, 'controllerWallpaper'), 'owner')
       ?? LEGACY_WALLPAPER_OWNER;
     this.metadata = metadata;
@@ -222,6 +276,7 @@ class PageController {
     this.document = host.document;
     this.payload = payload;
     this.pageAdapter = pageAdapter;
+    this.documentToken = dataProperty(identification, 'documentToken');
     this.assets = dataProperty(payload, 'assets') ?? null;
     this.wallpaperApply = dataProperty(payload, 'applyWallpaper');
     this.frame = null;
@@ -244,8 +299,18 @@ class PageController {
     this.appearanceObserver = null;
     this.settingsEmbedAdmitted = settingsEmbedAdmitted(pageAdapter);
     this.settingsEmbeds = new Set();
+    this.settingsSnapshot = null;
+    this.settingsSnapshotRunID = 0;
+    this.dshWallpaperPreparation = null;
+    this.pageHidden = false;
     this.motionQuery = null;
     this.onMotionChange = () => this.#updateAppearance();
+    this.onPageHide = () => {
+      this.pageHidden = true;
+      this.#clearSettingsSnapshot();
+      if (this.playbackOwner === 'dsh-gated') this.#cancelDSHWallpaperPreparation();
+    };
+    this.onPageShow = () => { this.pageHidden = false; };
     this.appearance = this.pageAdapter.observeAppearance(host);
     this.savedFocus = this.document?.activeElement ?? null;
     this.intent = 'play';
@@ -266,6 +331,11 @@ class PageController {
       ...this.metadata,
       install: (nextPayload) => this.#install(nextPayload),
       status: () => this.#status(),
+      beginSettingsSnapshot: (request) => this.#beginSettingsSnapshot(request),
+      prepareWorkspace: (request) => this.#prepareWorkspace(request),
+      cancelWorkspace: (request) => this.#cancelWorkspace(request),
+      readSettingsSnapshotChunk: (request) => this.#readSettingsSnapshotChunk(request),
+      disposeSettingsSnapshot: (request) => this.#disposeSettingsSnapshot(request),
       openSettings: () => this.#openSettings(),
       mountSettings: (target, options) => this.#mountSettings(target, options),
       retryWallpaper: () => this.#retryWallpaper(),
@@ -284,17 +354,50 @@ class PageController {
       return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
     }
     this.wallpaperAPI = wallpaper.api;
+    if (this.playbackOwner === 'dsh-gated') this.startupGate = dshStartupGate(this.host);
     this.installed = true;
+    this.host.addEventListener('pagehide', this.onPageHide);
+    this.host.addEventListener('pageshow', this.onPageShow);
     this.#observeAppearance();
-    if (!this.#beginRun('play')) {
+    if (!this.#beginRun(['native', 'dsh-gated'].includes(this.playbackOwner) ? 'prepare' : 'play')) {
       this.installed = false;
       return { installed: false, alreadyActive: false, reason: PAGE_REASON };
     }
+    let claimed = false;
+    try {
+      if (this.playbackOwner === 'dsh-gated') {
+        claimed = dataProperty(this.startupGate, 'claim')?.call(this.startupGate) === true;
+      }
+    } catch {}
+    if (claimed) {
+      if (this.#beginRun('play')) this.#watchStartupGateExpiry(this.state.runId);
+    } else if (this.playbackOwner === 'dsh-gated') this.#prepareDSHWallpaper();
     return { installed: true, alreadyActive: false };
+  }
+
+  #watchStartupGateExpiry(runId) {
+    const onExpire = dataProperty(this.startupGate, 'onExpire');
+    if (typeof onExpire !== 'function') return false;
+    const handleExpire = () => {
+      if (this.disposed || runId !== this.state.runId || !['loading', 'playing'].includes(this.state.phase)) return;
+      this.#fail('startup-gate-expired', runId);
+    };
+    let unsubscribe;
+    try { unsubscribe = onExpire.call(this.startupGate, handleExpire); } catch {}
+    if (typeof unsubscribe === 'function') this.startupGateUnsubscribe = unsubscribe;
+    if (this.disposed || runId !== this.state.runId || !['loading', 'playing'].includes(this.state.phase)) {
+      this.#unsubscribeStartupGateExpiry();
+    }
+    return typeof unsubscribe === 'function';
   }
 
   #beginRun(intent) {
     if (this.disposed) return false;
+    this.#clearSettingsSnapshot();
+    this.nativeWorkspace?.cancel?.();
+    this.nativeWorkspace = null;
+    this.#cancelDSHWallpaperPreparation();
+    this.settingsSnapshotRunID = 0;
     if (intent === 'play') {
       this.startupWallpaperFailure = null;
       this.startupWallpaperNoticeDismissed = false;
@@ -318,6 +421,33 @@ class PageController {
     this.appearanceEntry?.update(false);
     if (intent === 'settings') this.#isolateHostPage();
     const runId = this.state.runId;
+    if (intent === 'prepare') {
+      this.state.phase = 'prepared';
+      this.state.overlay = false;
+      if (!this.document?.body) {
+        this.#fail(PAGE_REASON, runId);
+        return false;
+      }
+      try {
+        if (!this.appearanceEntry) {
+          this.appearanceEntry = this.pageAdapter.mountEntry(this.document, () => this.#openSettings(),
+            this.assets, dataProperty(this.payload, 'createLocalization'), this.appearance, this.host,
+            () => this.#retryWallpaper(), () => { this.startupWallpaperNoticeDismissed = true; });
+        }
+        const entryElement = dataProperty(this.appearanceEntry, 'element');
+        if (!entryElement && this.playbackOwner !== 'dsh-gated') throw new TypeError('appearance entry unavailable');
+        if (this.metadata && typeof entryElement.setAttribute === 'function') {
+          entryElement.setAttribute('data-agent-skin-controller-instance', this.metadata.controllerInstanceID);
+        }
+        const revealEntry = dataProperty(this.appearanceEntry, 'update');
+        if (typeof revealEntry === 'function') revealEntry.call(this.appearanceEntry, true);
+        this.#refreshWallpaper();
+        return true;
+      } catch {
+        this.#fail(ASSET_REASON, runId);
+        return false;
+      }
+    }
     this.host.addEventListener('message', this.onMessage);
     this.watchdog = this.host.setTimeout(() => this.expire(runId), 25_000);
     if (this.document?.body) {
@@ -363,7 +493,7 @@ class PageController {
       }
       this.frame = mountOverlay(
         this.host, this.payload, runId, this.intent, this.assets, this.onMessage, this.appearance,
-        this.pageAdapter, this.metadata,
+        this.pageAdapter, this.metadata, this.playbackOwner === 'dsh-gated' && this.intent === 'play',
       );
       this.frameObserver = observePanelConnection(this.host, this.frame, () => this.#checkFrameConnection());
       const instance = this.frame.start();
@@ -433,6 +563,521 @@ class PageController {
 
   #isLoading(runId) {
     return !this.disposed && runId === this.state.runId && this.state.phase === 'loading';
+  }
+
+  #snapshotFailure(reason) {
+    return { ok: false, reason };
+  }
+
+  #snapshotPageIsCurrent(runId, allowTerminalRecovery = false) {
+    if (this.disposed || !this.installed || this.pageHidden || runId !== this.state.runId
+      || (!['loading', 'playing', 'settings', 'complete', 'prepared'].includes(this.state.phase)
+        && !(allowTerminalRecovery && ['failed', 'timeout'].includes(this.state.phase)))
+      || this.host.document !== this.document || !this.#ownsStartupController()) return false;
+    const identify = dataProperty(this.pageAdapter, 'identify');
+    if (typeof identify !== 'function') return false;
+    try {
+      const identification = identify.call(this.pageAdapter, this.host);
+      return dataProperty(identification, 'kind') === 'matched'
+        && dataProperty(identification, 'documentToken') === this.documentToken;
+    } catch {
+      return false;
+    }
+  }
+
+  #snapshotEntryIsCurrent(entry) {
+    if (!entry || entry.cancelled || this.settingsSnapshot !== entry) return false;
+    const now = monotonicNow(this.host);
+    if (now === null || now >= entry.expiresAt) {
+      this.#clearSettingsSnapshot(entry, 'snapshot-timeout');
+      return false;
+    }
+    return this.settingsSnapshot === entry
+      && entry.owner === this.owner && entry.controller === this.api
+      && entry.document === this.document && entry.documentToken === this.documentToken
+      && this.#snapshotPageIsCurrent(entry.runId);
+  }
+
+  #disposeSnapshotSettings(entry) {
+    const settings = entry?.settingsAPI;
+    entry.settingsAPI = null;
+    const dispose = dataProperty(settings, 'dispose');
+    if (typeof dispose === 'function') {
+      try { dispose.call(settings); } catch {}
+    }
+  }
+
+  #clearSettingsSnapshot(expectedEntry, reason = 'snapshot-cancelled', settledResult) {
+    const entry = expectedEntry ?? this.settingsSnapshot;
+    if (!entry || (this.settingsSnapshot !== entry && !entry.cancelled)) return false;
+    if (this.settingsSnapshot === entry) this.settingsSnapshot = null;
+    entry.cancelled = true;
+    entry.cancelResult = settledResult ?? this.#snapshotFailure(reason);
+    if (entry.timer !== null) {
+      try { this.host.clearTimeout(entry.timer); } catch {}
+      entry.timer = null;
+    }
+    const resolveTimeout = entry.resolveTimeout;
+    entry.resolveTimeout = null;
+    try { resolveTimeout?.(entry.cancelResult); } catch {}
+    if (entry.bytes) entry.bytes.fill(0);
+    entry.bytes = null;
+    entry.descriptor = null;
+    entry.promise = null;
+    this.#disposeSnapshotSettings(entry);
+    return true;
+  }
+
+  #beginSettingsSnapshot(request) {
+    const owner = dataProperty(request, 'owner');
+    const runId = dataProperty(request, 'runId');
+    const runNonce = dataProperty(request, 'runNonce');
+    if (owner !== this.owner || !Number.isSafeInteger(runId) || runId !== this.state.runId
+      || typeof runNonce !== 'string' || !SETTINGS_SNAPSHOT_RUN_NONCE.test(runNonce)) {
+      return Promise.resolve(this.#snapshotFailure('snapshot-request-invalid'));
+    }
+    if (!this.#snapshotPageIsCurrent(runId)) {
+      this.#clearSettingsSnapshot();
+      return Promise.resolve(this.#snapshotFailure('snapshot-stale'));
+    }
+
+    const current = this.settingsSnapshot;
+    if (current) {
+      if (!this.#snapshotEntryIsCurrent(current)) {
+        return Promise.resolve(current.cancelResult ?? this.#snapshotFailure('snapshot-stale'));
+      }
+      if (current.runId === runId && current.runNonce === runNonce) {
+        return current.promise ?? Promise.resolve(current.descriptor
+          ?? this.#snapshotFailure('snapshot-unavailable'));
+      }
+      return Promise.resolve(this.#snapshotFailure('snapshot-busy'));
+    }
+    if (this.settingsSnapshotRunID === runId) {
+      return Promise.resolve(this.#snapshotFailure('snapshot-already-used'));
+    }
+
+    this.settingsSnapshotRunID = runId;
+    const startedAt = monotonicNow(this.host);
+    if (startedAt === null) return Promise.resolve(this.#snapshotFailure('snapshot-unavailable'));
+    const entry = {
+      owner: this.owner,
+      runId,
+      runNonce,
+      snapshotID: `${runId}:${runNonce}`,
+      controller: this.api,
+      document: this.document,
+      documentToken: this.documentToken,
+      settingsAPI: null,
+      bytes: null,
+      status: null,
+      sha256: '',
+      nextIndex: 0,
+      nextOffset: 0,
+      descriptor: null,
+      promise: null,
+      cancelled: false,
+      cancelResult: null,
+      timer: null,
+      resolveTimeout: null,
+      expiresAt: startedAt + SETTINGS_SNAPSHOT_TIMEOUT_MS,
+    };
+    this.settingsSnapshot = entry;
+    const timeoutPromise = new Promise(resolve => { entry.resolveTimeout = resolve; });
+    try {
+      entry.timer = this.host.setTimeout(() => {
+        this.#clearSettingsSnapshot(entry, 'snapshot-timeout');
+      }, SETTINGS_SNAPSHOT_TIMEOUT_MS);
+    } catch {
+      this.#clearSettingsSnapshot(entry, 'snapshot-unavailable');
+      return Promise.resolve(entry.cancelResult);
+    }
+    const loadPromise = this.#loadSettingsSnapshot(entry);
+    entry.promise = Promise.race([loadPromise, timeoutPromise]).then(
+      result => {
+        if (entry.cancelled) return entry.cancelResult ?? result;
+        if (!this.#snapshotEntryIsCurrent(entry)) {
+          const stale = this.#snapshotFailure('snapshot-stale');
+          this.#clearSettingsSnapshot(entry, 'snapshot-stale', stale);
+          return stale;
+        }
+        if (result.ok) entry.descriptor = result;
+        else this.#clearSettingsSnapshot(entry, result.reason ?? 'snapshot-unavailable', result);
+        entry.promise = null;
+        return result;
+      }, () => {
+        const failure = this.#snapshotFailure('snapshot-unavailable');
+        this.#clearSettingsSnapshot(entry, 'snapshot-unavailable', failure);
+        return failure;
+      },
+    );
+    return entry.promise;
+  }
+
+  #snapshotSettingsAPI(appearance) {
+    const createSettings = dataProperty(this.payload, 'createImageSettings');
+    const settingsEnvironment = dataProperty(this.pageAdapter, 'settingsEnvironment');
+    if (typeof createSettings !== 'function' || typeof settingsEnvironment !== 'function') {
+      throw new TypeError('settings unavailable');
+    }
+    const injected = settingsEnvironment.call(this.pageAdapter, this.host);
+    if (!injected || typeof injected !== 'object') throw new TypeError('settings unavailable');
+    const createLocalization = dataProperty(this.payload, 'createLocalization');
+    const localization = typeof createLocalization === 'function'
+      ? createLocalization({ locale: appearance.locale, themeConfig: this.assets?.themeConfig }) : null;
+    const factoryInput = {
+      document: this.document,
+      Image: this.host.Image,
+      URL: this.host.URL ?? URL,
+      indexedDB: dataProperty(injected, 'indexedDB'),
+      performance: this.host.performance,
+      setTimeout: typeof this.host.setTimeout === 'function' ? this.host.setTimeout.bind(this.host) : undefined,
+      clearTimeout: typeof this.host.clearTimeout === 'function' ? this.host.clearTimeout.bind(this.host) : undefined,
+      localization,
+      appearanceAvatar: this.assets?.entryAvatar,
+      themeConfig: this.assets?.themeConfig,
+      getAppearance: () => ({ ...appearance, source: 'official' }),
+    };
+    const namespace = dataProperty(injected, 'settingsNamespace');
+    const settingsAPI = namespace === undefined
+      ? createSettings(factoryInput) : createSettings({ ...factoryInput, settingsNamespace: namespace });
+    if (!settingsAPI || typeof settingsAPI !== 'object') throw new TypeError('settings unavailable');
+    return settingsAPI;
+  }
+
+  #prepareWorkspace(request) {
+    const runId = dataProperty(request, 'runId');
+    const nonce = dataProperty(request, 'runNonce');
+    const expiresAt = dataProperty(request, 'expiresAt');
+    const startedAt = monotonicNow(this.host);
+    if (startedAt === null || typeof expiresAt !== 'number' || !Number.isFinite(expiresAt)
+      || expiresAt <= startedAt) return this.#snapshotFailure('snapshot-timeout');
+    if (this.playbackOwner !== 'native' || this.state.phase !== 'prepared'
+      || dataProperty(request, 'owner') !== this.owner || runId !== this.state.runId
+      || typeof nonce !== 'string' || !SETTINGS_SNAPSHOT_RUN_NONCE.test(nonce)
+      || !this.#snapshotPageIsCurrent(runId)) return this.#snapshotFailure('snapshot-stale');
+    if (this.nativeWorkspace) return this.nativeWorkspace.nonce === nonce
+      ? { ok: true, accepted: true } : this.#snapshotFailure('owner-conflict');
+    const operation = { nonce, runId, active: true, settingsAPI: null, timer: null, result: null,
+      expiresAt: Math.min(expiresAt, startedAt + WALLPAPER_RETRY_TIMEOUT_MS), cancelled: false };
+    this.nativeWorkspace = operation;
+    const current = () => operation.active && this.nativeWorkspace === operation
+      && monotonicNow(this.host) !== null && monotonicNow(this.host) < operation.expiresAt
+      && this.state.phase === 'prepared' && this.#snapshotPageIsCurrent(runId);
+    const finish = () => {
+      if (operation.active && !operation.result && monotonicNow(this.host) >= operation.expiresAt) {
+        operation.result = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
+      }
+      operation.active = false;
+      if (operation.timer !== null) this.host.clearTimeout(operation.timer);
+      try { operation.settingsAPI?.dispose?.(); } catch {}
+      operation.settingsAPI = null;
+    };
+    operation.cancel = () => {
+      if (!operation.active) return;
+      this.wallpaperGeneration += 1;
+      operation.cancelled = true;
+      operation.result = this.#setWallpaperFailure('apply-failed');
+      finish();
+    };
+    operation.timer = this.host.setTimeout(() => {
+      if (operation.active && this.nativeWorkspace === operation) {
+        this.wallpaperGeneration += 1;
+        operation.result = this.#setWallpaperFailure('apply-failed');
+      }
+      finish();
+    }, operation.expiresAt - startedAt);
+    Promise.resolve().then(async () => {
+      if (!current()) return;
+      const settingsAPI = this.#snapshotSettingsAPI(this.pageAdapter.observeAppearance(this.host));
+      operation.settingsAPI = settingsAPI;
+      const result = await settingsAPI.loadSnapshot(this.assets);
+      if (!current()) return;
+      if (!['valid', 'missing'].includes(dataProperty(result, 'status'))) {
+        operation.result = this.#setWallpaperFailure('apply-failed', 'storage-unavailable');
+        return;
+      }
+      const settings = dataProperty(result, 'settings');
+      const resultWallpaper = await this.#applyWallpaper({ image: dataProperty(settings, 'artwork'),
+        strength: dataProperty(settings, 'wallpaperStrength') }, runId, null);
+      if (current()) operation.result = resultWallpaper;
+    }).catch(() => {
+      if (current()) operation.result = this.#setWallpaperFailure('apply-failed');
+    }).finally(finish);
+    return { ok: true, accepted: true };
+  }
+
+  #cancelWorkspace(request) {
+    const operation = this.nativeWorkspace;
+    if (this.playbackOwner !== 'native' || dataProperty(request, 'owner') !== this.owner
+      || dataProperty(request, 'runId') !== this.state.runId
+      || !this.#snapshotPageIsCurrent(this.state.runId)
+      || !operation || operation.runId !== this.state.runId
+      || dataProperty(request, 'runNonce') !== operation.nonce) return this.#snapshotFailure('snapshot-stale');
+    operation.cancel();
+    return { ok: true, cancelled: operation.cancelled };
+  }
+
+  #cancelDSHWallpaperPreparation() {
+    const operation = this.dshWallpaperPreparation;
+    if (!operation?.active) return false;
+    operation.cancelled = true;
+    operation.finish();
+    return true;
+  }
+
+  #prepareDSHWallpaper(recovery = false) {
+    const phase = this.state.phase;
+    const earlyExit = this.intent === 'play' && !this.state.ready
+      && (['failed', 'timeout'].includes(phase)
+        || (phase === 'complete' && this.state.completion?.cause === 'skip'
+          && this.state.completion?.beforeReady === true));
+    const admitted = recovery ? earlyExit : phase === 'prepared' && this.intent === 'prepare';
+    if (this.playbackOwner !== 'dsh-gated' || this.disposed || !admitted || this.dshWallpaperPreparation
+      || (recovery && (this.state.wallpaper.applied || this.wallpaperRequest))) return false;
+    const createSettings = dataProperty(this.payload, 'createImageSettings');
+    if (typeof createSettings !== 'function' || typeof this.wallpaperApply !== 'function') return false;
+    const startedAt = monotonicNow(this.host);
+    const AbortControllerCtor = this.host.AbortController
+      ?? (typeof AbortController === 'function' ? AbortController : null);
+    if (startedAt === null || typeof this.host.setTimeout !== 'function'
+      || typeof this.host.clearTimeout !== 'function'
+      || typeof AbortControllerCtor !== 'function') return false;
+    let abortController;
+    try { abortController = new AbortControllerCtor(); } catch { return false; }
+    const operation = {
+      identity: Symbol('dsh-wallpaper-prepare'),
+      runId: this.state.runId,
+      phase,
+      intent: this.intent,
+      recovery,
+      expiresAt: startedAt + WALLPAPER_RETRY_TIMEOUT_MS,
+      active: true,
+      cancelled: false,
+      settingsAPI: null,
+      abortController,
+      timer: null,
+      finish: null,
+    };
+    this.dshWallpaperPreparation = operation;
+    const ownerCurrent = () => operation.active && this.dshWallpaperPreparation === operation
+      && operation.identity === this.dshWallpaperPreparation?.identity
+      && this.playbackOwner === 'dsh-gated' && this.state.phase === operation.phase
+      && this.intent === operation.intent && this.state.runId === operation.runId
+      && (!operation.recovery || (!this.state.ready && !this.state.wallpaper.applied))
+      && this.#snapshotPageIsCurrent(operation.runId, operation.recovery);
+    const current = () => ownerCurrent() && monotonicNow(this.host) !== null
+      && monotonicNow(this.host) < operation.expiresAt;
+    operation.finish = () => {
+      if (!operation.active) return;
+      const now = monotonicNow(this.host);
+      if (!operation.cancelled && ownerCurrent() && now !== null && now >= operation.expiresAt) {
+        this.#setWallpaperFailure('retry-timeout');
+      }
+      operation.active = false;
+      if (operation.timer !== null) this.host.clearTimeout(operation.timer);
+      operation.timer = null;
+      try { operation.abortController.abort(); } catch {}
+      try { operation.settingsAPI?.dispose?.(); } catch {}
+      operation.settingsAPI = null;
+      if (this.dshWallpaperPreparation === operation) this.dshWallpaperPreparation = null;
+      this.#updateStartupWallpaperNotice();
+    };
+    operation.timer = this.host.setTimeout(() => {
+      if (current()) this.#setWallpaperFailure('retry-timeout');
+      operation.finish();
+    }, operation.expiresAt - startedAt);
+    Promise.resolve().then(async () => {
+      if (!current()) return;
+      const settingsAPI = this.#snapshotSettingsAPI(this.pageAdapter.observeAppearance(this.host));
+      operation.settingsAPI = settingsAPI;
+      const result = await settingsAPI.loadSnapshot(this.assets);
+      if (!current()) return;
+      if (!['valid', 'missing'].includes(dataProperty(result, 'status'))) {
+        this.#setWallpaperFailure('apply-failed', 'storage-unavailable');
+        return;
+      }
+      const settings = dataProperty(result, 'settings');
+      await this.#applyWallpaper({ image: dataProperty(settings, 'artwork'),
+        strength: dataProperty(settings, 'wallpaperStrength') }, operation.runId, null,
+      false, null, operation);
+    }).catch(() => {
+      if (current()) this.#setWallpaperFailure('apply-failed');
+    }).finally(() => operation.finish());
+    return true;
+  }
+
+  async #loadSettingsSnapshot(entry) {
+    let snapshot = null;
+    let localBytes = null;
+    try {
+      const appearance = this.pageAdapter.observeAppearance(this.host);
+      const snapshotAppearance = Object.freeze({
+        locale: dataProperty(appearance, 'locale'), theme: dataProperty(appearance, 'theme'),
+      });
+      if (!['en', 'zh-CN'].includes(snapshotAppearance.locale)
+        || !['light', 'dark'].includes(snapshotAppearance.theme)) return this.#snapshotFailure('snapshot-invalid');
+      const settingsAPI = this.#snapshotSettingsAPI(appearance);
+      entry.settingsAPI = settingsAPI;
+      if (!this.#snapshotEntryIsCurrent(entry)) return this.#snapshotFailure('snapshot-stale');
+      const loadSnapshot = dataProperty(settingsAPI, 'loadSnapshot');
+      if (typeof loadSnapshot !== 'function') return this.#snapshotFailure('snapshot-unavailable');
+      snapshot = await loadSnapshot.call(settingsAPI, this.assets);
+      if (!this.#snapshotEntryIsCurrent(entry)) return this.#snapshotFailure('snapshot-stale');
+
+      const status = dataProperty(snapshot, 'status');
+      if (status === 'failure') {
+        const reason = dataProperty(snapshot, 'reason');
+        const stableReason = typeof reason === 'string' && /^[a-z0-9-]{1,64}$/.test(reason)
+          ? reason : 'read-failed';
+        return this.#snapshotFailure(stableReason.startsWith('settings-')
+          ? stableReason : `settings-${stableReason}`);
+      }
+      if (status !== 'missing' && status !== 'valid') return this.#snapshotFailure('snapshot-invalid');
+      const source = dataProperty(snapshot, 'settings');
+      const sourceText = dataProperty(snapshot, 'explicitText');
+      if (!source || typeof source !== 'object' || !sourceText || typeof sourceText !== 'object') {
+        return this.#snapshotFailure('snapshot-invalid');
+      }
+      const settings = Object.freeze({
+        schemaVersion: dataProperty(source, 'schemaVersion'),
+        avatar: dataProperty(source, 'avatar'),
+        artwork: dataProperty(source, 'artwork'),
+        contours: dataProperty(source, 'contours'),
+        introTitle: dataProperty(source, 'introTitle'),
+        introCaption: dataProperty(source, 'introCaption'),
+        artworkSubtitle: dataProperty(source, 'artworkSubtitle'),
+        wallpaperStrength: dataProperty(source, 'wallpaperStrength'),
+      });
+      const explicitText = Object.freeze({
+        introTitle: dataProperty(sourceText, 'introTitle'),
+        introCaption: dataProperty(sourceText, 'introCaption'),
+        artworkSubtitle: dataProperty(sourceText, 'artworkSubtitle'),
+      });
+      if (settings.schemaVersion !== 1 || typeof settings.avatar !== 'string'
+        || settings.avatar.length > 2 * 1024 * 1024
+        || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(settings.avatar)
+        || typeof settings.artwork !== 'string' || settings.artwork.length > 12 * 1024 * 1024
+        || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(settings.artwork)
+        || !Array.isArray(settings.contours) || settings.contours.length > 1200
+        || typeof settings.introTitle !== 'string' || settings.introTitle.length > 16
+        || typeof settings.introCaption !== 'string' || settings.introCaption.length > 48
+        || typeof settings.artworkSubtitle !== 'string' || settings.artworkSubtitle.length > 60
+        || !Number.isInteger(settings.wallpaperStrength) || settings.wallpaperStrength < 0
+        || settings.wallpaperStrength > 75
+        || Object.values(explicitText).some(value => typeof value !== 'boolean')) {
+        return this.#snapshotFailure('snapshot-invalid');
+      }
+      const serialized = JSON.stringify({ status, settings, explicitText, appearance: snapshotAppearance });
+      if (typeof serialized !== 'string' || serialized.length > SETTINGS_SNAPSHOT_MAX_BYTES) {
+        return this.#snapshotFailure('snapshot-too-large');
+      }
+      const Encoder = this.host.TextEncoder ?? globalThis.TextEncoder;
+      if (typeof Encoder !== 'function') return this.#snapshotFailure('snapshot-unavailable');
+      localBytes = new Encoder().encode(serialized);
+      snapshot = null;
+      if (localBytes.byteLength > SETTINGS_SNAPSHOT_MAX_BYTES) return this.#snapshotFailure('snapshot-too-large');
+      if (!this.#snapshotEntryIsCurrent(entry)) return this.#snapshotFailure('snapshot-stale');
+      const cryptoObject = this.host.crypto ?? globalThis.crypto;
+      const subtle = cryptoObject?.subtle;
+      if (!subtle || typeof subtle.digest !== 'function') return this.#snapshotFailure('snapshot-unavailable');
+      const digestBytes = localBytes;
+      entry.bytes = digestBytes;
+      localBytes = null;
+      const digest = new Uint8Array(await subtle.digest('SHA-256', digestBytes));
+      if (!this.#snapshotEntryIsCurrent(entry)) return this.#snapshotFailure('snapshot-stale');
+      const sha256 = Array.from(digest, value => value.toString(16).padStart(2, '0')).join('');
+      entry.status = status;
+      entry.sha256 = sha256;
+      this.#disposeSnapshotSettings(entry);
+      return {
+        ok: true,
+        owner: entry.owner,
+        runId: entry.runId,
+        runNonce: entry.runNonce,
+        snapshotID: entry.snapshotID,
+        status: entry.status,
+        byteLength: entry.bytes.byteLength,
+        encodedByteLength: encodedSnapshotByteLength(entry.bytes.byteLength),
+        chunkSize: SETTINGS_SNAPSHOT_CHUNK_BYTES,
+        chunkCount: Math.ceil(entry.bytes.byteLength / SETTINGS_SNAPSHOT_CHUNK_BYTES),
+        digestAlgorithm: 'sha-256',
+        sha256: entry.sha256,
+      };
+    } catch {
+      return this.#snapshotFailure('snapshot-unavailable');
+    } finally {
+      snapshot = null;
+      if (localBytes) localBytes.fill(0);
+      this.#disposeSnapshotSettings(entry);
+    }
+  }
+
+  #readSettingsSnapshotChunk(request) {
+    const owner = dataProperty(request, 'owner');
+    const runId = dataProperty(request, 'runId');
+    const runNonce = dataProperty(request, 'runNonce');
+    const snapshotID = dataProperty(request, 'snapshotID');
+    const index = dataProperty(request, 'index');
+    const offset = dataProperty(request, 'offset');
+    const entry = this.settingsSnapshot;
+    if (!entry || owner !== entry.owner || runId !== entry.runId || runNonce !== entry.runNonce
+      || snapshotID !== entry.snapshotID) return this.#snapshotFailure('snapshot-not-found');
+    if (!this.#snapshotEntryIsCurrent(entry)) {
+      if (!entry.cancelled) this.#clearSettingsSnapshot(entry, 'snapshot-stale');
+      return entry.cancelResult ?? this.#snapshotFailure('snapshot-stale');
+    }
+    if (!entry.descriptor) return this.#snapshotFailure('snapshot-not-ready');
+    if (!entry.bytes || !Number.isSafeInteger(index) || !Number.isSafeInteger(offset)) {
+      return this.#snapshotFailure('snapshot-not-ready');
+    }
+    if (index !== entry.nextIndex || offset !== entry.nextOffset) {
+      this.#clearSettingsSnapshot(entry);
+      return this.#snapshotFailure('snapshot-order-invalid');
+    }
+    const byteLength = Math.min(SETTINGS_SNAPSHOT_CHUNK_BYTES, entry.bytes.byteLength - offset);
+    if (byteLength <= 0) {
+      this.#clearSettingsSnapshot(entry);
+      return this.#snapshotFailure('snapshot-order-invalid');
+    }
+    const dataBase64 = encodeBase64(entry.bytes.subarray(offset, offset + byteLength));
+    const result = {
+      ok: true,
+      owner: entry.owner,
+      runId: entry.runId,
+      runNonce: entry.runNonce,
+      snapshotID: entry.snapshotID,
+      index,
+      offset,
+      byteLength,
+      totalBytes: entry.bytes.byteLength,
+      chunkCount: Math.ceil(entry.bytes.byteLength / SETTINGS_SNAPSHOT_CHUNK_BYTES),
+      status: entry.status,
+      digestAlgorithm: 'sha-256',
+      sha256: entry.sha256,
+      dataBase64,
+    };
+    entry.nextIndex += 1;
+    entry.nextOffset += byteLength;
+    if (entry.nextOffset === entry.bytes.byteLength) this.#clearSettingsSnapshot(entry);
+    return result;
+  }
+
+  #disposeSettingsSnapshot(request) {
+    const owner = dataProperty(request, 'owner');
+    const runId = dataProperty(request, 'runId');
+    const runNonce = dataProperty(request, 'runNonce');
+    const snapshotID = dataProperty(request, 'snapshotID');
+    if (owner !== this.owner || !Number.isSafeInteger(runId) || runId !== this.state.runId
+      || typeof runNonce !== 'string' || !SETTINGS_SNAPSHOT_RUN_NONCE.test(runNonce)) {
+      return this.#snapshotFailure('snapshot-request-invalid');
+    }
+    const entry = this.settingsSnapshot;
+    if (entry && (entry.owner !== owner || entry.runId !== runId || entry.runNonce !== runNonce
+      || (snapshotID !== undefined && entry.snapshotID !== snapshotID))) {
+      return this.#snapshotFailure('snapshot-not-found');
+    }
+    if (entry) this.#clearSettingsSnapshot(entry);
+    return { ok: true, disposed: !!entry };
   }
 
   #rememberFocus(focused = this.document?.activeElement) {
@@ -575,6 +1220,20 @@ class PageController {
       if (this.state.phase !== 'loading' || this.state.ready) return;
       this.state.ready = true;
       this.state.phase = this.intent === 'play' ? 'playing' : 'settings';
+      if (this.playbackOwner === 'dsh-gated' && this.intent === 'play') {
+        const gateReady = dataProperty(this.startupGate, 'ready');
+        const preview = dataProperty(this.frameHandle, 'preview');
+        const beginLaunch = dataProperty(preview, 'beginLaunch');
+        let revealed = false;
+        try {
+          revealed = typeof gateReady === 'function' && gateReady.call(this.startupGate) === true
+            && typeof beginLaunch === 'function' && beginLaunch.call(preview) === true;
+        } catch {}
+        if (!revealed) {
+          this.#fail('startup-gate-expired', message.runId);
+          return;
+        }
+      }
       if (this.intent === 'settings') this.#focusOverlayFrame();
       if (this.intent === 'settings') this.#clearWatchdog();
       return;
@@ -591,10 +1250,15 @@ class PageController {
       this.state.completion = settingsCancel
         ? { cause: 'settings-cancel', beforeReady: false }
         : { cause: message.skipped ? 'skip' : 'natural', beforeReady: !this.state.ready };
+      this.#releaseStartupGate();
       this.#stopFrameAndRevealEntry();
       this.#updateStartupWallpaperNotice();
       this.#clearWatchdog();
       this.host.removeEventListener('message', this.onMessage);
+      if (this.playbackOwner === 'dsh-gated' && this.intent === 'play'
+        && this.state.completion?.cause === 'skip' && this.state.completion.beforeReady) {
+        this.#prepareDSHWallpaper(true);
+      }
       return;
     }
     if (message.action === 'assetError') {
@@ -638,9 +1302,18 @@ class PageController {
     return !!descriptor && Object.hasOwn(descriptor, 'value') && descriptor.value === this.api;
   }
 
+  #isDSHPrepared() {
+    return this.playbackOwner === 'dsh-gated' && this.state.phase === 'prepared' && this.intent === 'prepare';
+  }
+
+  #canRetryStartupWallpaper() {
+    return (this.state.phase === 'complete' && this.state.completed)
+      || (this.#isDSHPrepared() && !this.dshWallpaperPreparation?.active);
+  }
+
   #isCurrentRetry(runId, generation) {
     return !this.disposed && generation === this.wallpaperGeneration && runId === this.state.runId
-      && this.state.phase === 'complete' && this.state.completed && this.#ownsStartupController();
+      && this.#canRetryStartupWallpaper() && this.#ownsStartupController();
   }
 
   // Embed-sourced wallpaper applies stay current while the controller owns the
@@ -656,7 +1329,7 @@ class PageController {
     const failure = wallpaperFailure({ failureCode: code });
     if (failure) Object.assign(result, failure);
     this.state.wallpaper = result;
-    if (this.intent === 'play') {
+    if (this.intent === 'play' || this.#isDSHPrepared()) {
       this.startupWallpaperFailure = failure && this.wallpaperRequest && !this.wallpaperDisabled
         ? { ...result } : null;
       if (!this.wallpaperRetryPromise) this.startupWallpaperNoticeDismissed = false;
@@ -669,8 +1342,9 @@ class PageController {
     const cause = this.state.completion?.cause;
     const visible = !this.disposed && !this.startupWallpaperNoticeDismissed
       && !!this.startupWallpaperFailure && !!this.wallpaperRequest && !this.wallpaperDisabled
-      && this.state.phase === 'complete' && this.state.completed
-      && ['natural', 'skip', 'settings-cancel'].includes(cause);
+      && (this.#isDSHPrepared() ? !this.dshWallpaperPreparation?.active
+        : this.state.phase === 'complete' && this.state.completed
+          && ['natural', 'skip', 'settings-cancel'].includes(cause));
     this.appearanceEntry?.setWallpaperFailure(visible ? this.startupWallpaperFailure : null,
       announcementKey);
   }
@@ -699,7 +1373,7 @@ class PageController {
     if (this.disposed) return Promise.resolve(this.#retryResult(false, previousFailure, 'disposed'));
     if (this.wallpaperRetryPromise) return this.wallpaperRetryPromise;
     if (!this.#ownsStartupController()) return Promise.resolve(this.#retryResult(false, previousFailure, 'unknown-owner'));
-    if (this.state.phase !== 'complete' || !this.state.completed) {
+    if (!this.#canRetryStartupWallpaper()) {
       return Promise.resolve(this.#retryResult(false, previousFailure, 'busy'));
     }
     if (this.wallpaperDisabled || this.state.wallpaper.reason === 'disabled') {
@@ -771,7 +1445,10 @@ class PageController {
     return bounded;
   }
 
-  async #applyWallpaper(message, runId, frame, retry = false, embed = null) {
+  async #applyWallpaper(message, runId, frame, retry = false, embed = null, dshPreparation = null) {
+    if (this.dshWallpaperPreparation?.active && dshPreparation !== this.dshWallpaperPreparation) {
+      this.#cancelDSHWallpaperPreparation();
+    }
     const generation = ++this.wallpaperGeneration;
     if (typeof message.image !== 'string' || message.image.length > 16 * 1024 * 1024
       || !BACKGROUND_DATA_URL.test(message.image) || !Number.isInteger(message.strength)
@@ -802,18 +1479,30 @@ class PageController {
     const isCurrent = () => generation === this.wallpaperGeneration
       && (retry ? this.#isCurrentRetry(runId, generation)
         : embed ? this.#isSettingsEmbed(runId, embed)
-          : this.#isCurrentFrame(runId, frame) || (!this.disposed && runId === this.state.runId
-            && this.state.phase === 'complete' && ['natural', 'settings-save'].includes(this.state.completion?.cause)
-            && this.#ownsStartupController()));
+          : dshPreparation ? (this.playbackOwner === 'dsh-gated' && this.state.phase === dshPreparation.phase
+            && dshPreparation.active && this.dshWallpaperPreparation === dshPreparation
+            && this.intent === dshPreparation.intent && this.state.runId === dshPreparation.runId
+            && (!dshPreparation.recovery || (!this.state.ready && !this.state.wallpaper.applied))
+            && monotonicNow(this.host) !== null && monotonicNow(this.host) < dshPreparation.expiresAt
+            && this.#snapshotPageIsCurrent(runId, dshPreparation.recovery))
+            : (this.playbackOwner === 'native' && this.state.phase === 'prepared'
+              && this.nativeWorkspace?.active && monotonicNow(this.host) !== null
+              && monotonicNow(this.host) < this.nativeWorkspace.expiresAt && this.#snapshotPageIsCurrent(runId))
+              || this.#isCurrentFrame(runId, frame) || (!this.disposed && runId === this.state.runId
+              && this.state.phase === 'complete' && ['natural', 'settings-save'].includes(this.state.completion?.cause)
+              && this.#ownsStartupController()));
     if (typeof this.wallpaperApply !== 'function') {
       if (isCurrent()) return this.#setWallpaperFailure('apply-unavailable');
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
     }
     try {
       this.appearance = this.pageAdapter.observeAppearance(this.host);
-      const result = await this.wallpaperApply(Object.freeze({
+      const request = Object.freeze({
         image: message.image, strength: message.strength, surface: this.appearance.colors.surface,
-      }), isCurrent);
+      });
+      const result = dshPreparation
+        ? await this.wallpaperApply(request, isCurrent, dshPreparation.abortController.signal)
+        : await this.wallpaperApply(request, isCurrent);
       if (!isCurrent()) return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
       if (dataProperty(result, 'applied') === false) {
         const reason = wallpaperReason(result);
@@ -821,7 +1510,7 @@ class PageController {
         const current = wallpaperRecord(this.host, this.wallpaperOwner);
         if (current.present && !current.supported) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
-          if (this.intent === 'play') this.startupWallpaperFailure = null;
+          if (this.intent === 'play' || this.#isDSHPrepared()) this.startupWallpaperFailure = null;
           this.#updateStartupWallpaperNotice();
           return { ...this.state.wallpaper };
         }
@@ -833,7 +1522,7 @@ class PageController {
       if (!current.supported) {
         if (current.present) {
           this.state.wallpaper = { applied: false, reason: 'owner-conflict', imageDecoded: false };
-          if (this.intent === 'play') this.startupWallpaperFailure = null;
+          if (this.intent === 'play' || this.#isDSHPrepared()) this.startupWallpaperFailure = null;
           this.#updateStartupWallpaperNotice();
           return { ...this.state.wallpaper };
         }
@@ -852,10 +1541,10 @@ class PageController {
       if (this.state.wallpaper.applied) {
         const hadStartupFailure = !!this.startupWallpaperFailure;
         this.startupWallpaperFailure = null;
-        this.#updateStartupWallpaperNotice(this.intent === 'play' && retry && hadStartupFailure
+        this.#updateStartupWallpaperNotice(retry && hadStartupFailure && this.#canRetryStartupWallpaper()
           ? 'applied' : undefined);
       } else {
-        if (this.intent === 'play') {
+        if (this.intent === 'play' || this.#isDSHPrepared()) {
           const failure = wallpaperFailure(this.state.wallpaper);
           this.startupWallpaperFailure = failure && this.wallpaperRequest && !this.wallpaperDisabled
             ? { ...this.state.wallpaper } : null;
@@ -926,17 +1615,36 @@ class PageController {
 
   #fail(reason, runId = this.state.runId) {
     if (this.disposed || runId !== this.state.runId || ['complete', 'failed', 'timeout', 'disposed'].includes(this.state.phase)) return;
+    this.#clearSettingsSnapshot();
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
     this.state.phase = 'failed';
     this.state.overlay = false;
     this.state.reason = reason;
     this.host.removeEventListener('message', this.onMessage);
+    this.#releaseStartupGate();
     this.#stopFrame();
+    if (this.playbackOwner === 'dsh-gated' && this.intent === 'play' && !this.state.ready) {
+      this.#prepareDSHWallpaper(true);
+    }
+  }
+
+  #releaseStartupGate() {
+    this.#unsubscribeStartupGateExpiry();
+    const release = dataProperty(this.startupGate, 'release');
+    if (typeof release !== 'function') return;
+    try { release.call(this.startupGate); } catch {}
+  }
+
+  #unsubscribeStartupGateExpiry() {
+    const unsubscribe = this.startupGateUnsubscribe;
+    this.startupGateUnsubscribe = null;
+    try { unsubscribe?.(); } catch {}
   }
 
   expire(runId) {
     if (this.disposed || runId !== this.state.runId || !['loading', 'playing'].includes(this.state.phase)) return false;
+    this.#clearSettingsSnapshot();
     const recoverable = this.state.phase === 'playing' && this.state.ready;
     this.watchdog = null;
     this.#disconnectBodyObserver();
@@ -944,10 +1652,12 @@ class PageController {
     this.state.overlay = false;
     this.state.reason = 'overlay-timeout';
     this.host.removeEventListener('message', this.onMessage);
+    this.#releaseStartupGate();
     // A prepared run can still expose settings when playback stalls. Its timeout
     // remains authoritative; revealing the entry does not complete that run.
     if (recoverable) this.#stopFrameAndRevealEntry();
     else this.#stopFrame();
+    if (!this.state.ready) this.#prepareDSHWallpaper(true);
     return true;
   }
 
@@ -1036,7 +1746,9 @@ class PageController {
     if (this.disposed || !this.installed) return false;
     const readyTimeout = this.state.phase === 'timeout'
       && this.state.reason === 'overlay-timeout' && this.state.ready;
-    if (this.state.phase === 'complete' || readyTimeout) return this.#beginRun('settings');
+    if (this.state.phase === 'complete' || this.state.phase === 'prepared' || readyTimeout) {
+      return this.#beginRun('settings');
+    }
     if (this.state.phase === 'settings') return false;
     if (this.state.phase === 'playing') {
       this.#rememberFocus();
@@ -1052,6 +1764,7 @@ class PageController {
   #mountSettings(target, options) {
     if (!this.settingsEmbedAdmitted || this.disposed || !this.installed) return null;
     if (!target || typeof target.appendChild !== 'function') return null;
+    this.#cancelDSHWallpaperPreparation();
     const mount = {
       alive: true, runId: nextRunId++, frame: null, handle: null,
       onClose: options && typeof options.onClose === 'function' ? options.onClose : null,
@@ -1126,7 +1839,7 @@ class PageController {
   #status() {
     this.#checkFrameConnection();
     this.#refreshWallpaper();
-    return {
+    const status = {
       owner: this.owner,
       version: VERSION,
       ...this.metadata,
@@ -1139,6 +1852,25 @@ class PageController {
       wallpaper: { ...this.state.wallpaper },
       completion: this.state.completion ? { ...this.state.completion } : null,
     };
+    if (this.playbackOwner === 'native') {
+      status.playbackOwner = 'native';
+      status.prepared = this.state.phase === 'prepared';
+      const operation = this.nativeWorkspace;
+      if (status.prepared) {
+        const currentOperation = operation?.runId === this.state.runId ? operation : null;
+        status.wallpaper = currentOperation?.result ? { ...currentOperation.result }
+          : { applied: false, reason: '', imageDecoded: false };
+        if (status.wallpaper.applied && !this.state.wallpaper.applied) {
+          status.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
+        }
+        status.workspace = currentOperation ? { runId: currentOperation.runId, runNonce: currentOperation.nonce,
+          phase: currentOperation.cancelled ? 'cancelled' : currentOperation.result ? 'complete' : 'pending' } : null;
+      }
+      status.wallpaperDisposition = status.wallpaper.applied ? 'applied'
+        : status.wallpaper.reason === 'disabled' ? 'disabled'
+          : status.wallpaper.reason || status.wallpaper.failureCode ? 'degraded' : 'pending';
+    }
+    return status;
   }
 
   #disposeWallpaper() {
@@ -1151,6 +1883,10 @@ class PageController {
   #dispose() {
     if (this.disposed) return { disposed: true };
     this.disposed = true;
+    this.nativeWorkspace?.cancel?.();
+    this.nativeWorkspace = null;
+    this.#cancelDSHWallpaperPreparation();
+    this.#clearSettingsSnapshot();
     this.wallpaperRetryCancel?.();
     this.wallpaperGeneration += 1;
     this.#clearWatchdog();
@@ -1162,6 +1898,9 @@ class PageController {
     this.motionQuery = null;
     this.state.overlay = false;
     this.host.removeEventListener('message', this.onMessage);
+    this.host.removeEventListener('pagehide', this.onPageHide);
+    this.host.removeEventListener('pageshow', this.onPageShow);
+    this.#releaseStartupGate();
     for (const mount of [...this.settingsEmbeds]) this.#disposeSettingsEmbed(mount);
     this.settingsEmbeds.clear();
     this.#stopFrame();
@@ -1176,7 +1915,7 @@ class PageController {
   }
 }
 
-export function installStartup(payload, host = globalThis, pageAdapter) {
+export function installStartup(payload, host = globalThis, pageAdapter, playbackOwner = 'page') {
   // The host page strategy lives in the explicitly passed page adapter. Without a
   // bound adapter the controller cannot identify the page and refuses before any
   // DOM, database or global work.
@@ -1188,10 +1927,17 @@ export function installStartup(payload, host = globalThis, pageAdapter) {
   if (!identification || identification.kind !== 'matched') {
     return { installed: false, alreadyActive: false, reason: PAGE_REASON };
   }
+  if (!['page', 'native', 'dsh-gated'].includes(playbackOwner)) {
+    return { installed: false, alreadyActive: false, reason: 'playback-owner-invalid' };
+  }
   const ownerDescriptor = Object.getOwnPropertyDescriptor(pageAdapter, 'controllerOwner');
   const owner = ownerDescriptor ? dataProperty(pageAdapter, 'controllerOwner') : OWNER;
   if (!CONTROLLER_OWNERS.has(owner)) {
     return { installed: false, alreadyActive: false, reason: 'owner-conflict' };
+  }
+  if ((playbackOwner === 'native' && owner !== OWNER)
+      || (playbackOwner === 'dsh-gated' && owner !== DSH_OWNER)) {
+    return { installed: false, alreadyActive: false, reason: 'playback-owner-invalid' };
   }
   let metadata;
   if (dataProperty(dataProperty(pageAdapter, 'controllerWallpaper'), 'requiresControllerMetadata') === true) {
@@ -1205,7 +1951,7 @@ export function installStartup(payload, host = globalThis, pageAdapter) {
       : { installed: false, alreadyActive: false, reason: 'owner-conflict' };
   }
   if (typeof payload !== 'function') return { installed: false, alreadyActive: false, reason: ASSET_REASON };
-  const controller = new PageController(host, payload, pageAdapter, owner, metadata);
+  const controller = new PageController(host, payload, pageAdapter, owner, metadata, identification, playbackOwner);
   try {
     Object.defineProperty(host, GLOBAL_NAME, {
       value: controller.api, configurable: true, enumerable: false, writable: false,
