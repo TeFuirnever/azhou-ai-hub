@@ -256,6 +256,74 @@ class InventoryKnowledgeTest(unittest.TestCase):
             self.assertTrue(any("requires README.md" in error for error in errors))
             self.assertTrue(any("requires AGENTS.md" in error for error in errors))
 
+    def test_nested_project_inherits_and_inventories_repository_agents(self) -> None:
+        for marker_is_file in (False, True):
+            with self.subTest(marker_is_file=marker_is_file), tempfile.TemporaryDirectory() as directory:
+                repo = Path(directory) / "repo"
+                repo.mkdir()
+                marker = repo / ".git"
+                if marker_is_file:
+                    marker.write_text("gitdir: /worktree/gitdir\n", encoding="utf-8")
+                else:
+                    marker.mkdir()
+                rule = repo / "AGENTS.md"
+                rule.write_text("# Repository rules\n", encoding="utf-8")
+                project = repo / "packages" / "skin"
+                project.mkdir(parents=True)
+                (project / "README.md").write_text("# Skin\n", encoding="utf-8")
+                inventory = self.complete(MODULE.build_inventory([project], [], []))
+                self.assertIn(str(rule), {record["path"] for record in inventory["files"]})
+                self.assertEqual([], MODULE.validate_inventory(inventory))
+                inventory["files"] = [record for record in inventory["files"] if record["path"] != str(rule)]
+                self.assertTrue(any("absent from inventory" in error for error in MODULE.validate_inventory(inventory)))
+                (project / "README.md").unlink()
+                inventory = self.complete(MODULE.build_inventory([project], [], []))
+                self.assertTrue(any("requires README.md" in error for error in MODULE.validate_inventory(inventory)))
+
+    def test_inherited_rule_does_not_cross_repository_boundary(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory) / "repo"
+            repo.mkdir()
+            (repo / ".git").mkdir()
+            (repo / "AGENTS.md").write_text("# Outer rules\n", encoding="utf-8")
+            nested = repo / "nested"
+            nested.mkdir()
+            (nested / ".git").mkdir()
+            project = nested / "package"
+            project.mkdir()
+            (project / "README.md").write_text("# Package\n", encoding="utf-8")
+            inventory = self.complete(MODULE.build_inventory([project], [], []))
+            self.assertNotIn(str(repo / "AGENTS.md"), {record["path"] for record in inventory["files"]})
+            self.assertTrue(any("requires AGENTS.md" in error for error in MODULE.validate_inventory(inventory)))
+
+    def test_inherited_rule_retains_size_gate_and_repository_ownership(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            repo = self.make_project(Path(directory), "repo")
+            (repo / ".git").mkdir()
+            project = repo / "packages" / "skin"
+            project.mkdir(parents=True)
+            (project / "README.md").write_text("# Skin\n", encoding="utf-8")
+            rule = repo / "AGENTS.md"
+            rule.write_text("\n".join(f"rule {i}" for i in range(301)) + "\n", encoding="utf-8")
+            inventory = self.complete(MODULE.build_inventory([project, repo], [], []))
+            records = [record for record in inventory["files"] if record["path"] == str(rule)]
+            self.assertEqual(1, len(records))
+            self.assertEqual(str(repo), records[0]["project_root"])
+            self.assertTrue(any("size_resolution" in error for error in MODULE.validate_inventory(inventory)))
+            records[0]["size_resolution"] = "Reviewed and held for a separate reduction."
+            self.assertEqual([], MODULE.validate_inventory(inventory))
+
+    def test_global_ancestor_rule_without_repository_does_not_satisfy_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            (parent / "AGENTS.md").write_text("# User rules\n", encoding="utf-8")
+            project = parent / "package"
+            project.mkdir()
+            (project / "README.md").write_text("# Package\n", encoding="utf-8")
+            inventory = self.complete(MODULE.build_inventory([project], [], []))
+            self.assertNotIn(str(parent / "AGENTS.md"), {record["path"] for record in inventory["files"]})
+            self.assertTrue(any("requires AGENTS.md" in error for error in MODULE.validate_inventory(inventory)))
+
     def test_new_surface_requires_inventory_refresh(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = self.make_project(Path(directory))
