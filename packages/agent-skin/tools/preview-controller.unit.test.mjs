@@ -195,6 +195,7 @@ function createPreviewPage({ href, imageOk = true, cssOk = true, imageBytes = PN
   const topFade = sceneNode('top-fade');
   const composer = sceneNode('composer', { backgroundColor: composerTransparent ? 'rgba(30, 30, 34, 0)' : 'rgb(48, 48, 55)' });
   const applicationRoot = new FixtureNode('app-root');
+  applicationRoot.contains = node => [applicationRoot, frameNode, mainNode, pageSurface, workspace, footer, plate, sticky, fade, topFade, composer].includes(node);
   applicationRoot.querySelector = selector => {
     if (selector === FRAME_SELECTOR) return frameNode.getAttribute('data-app-shell-frame') !== null ? frameNode : null;
     if (selector === MAIN_SELECTOR) return mainNode;

@@ -30,6 +30,7 @@ export async function installRenderer(offered) {
   const CONTROLLER_SLOT = '__azhouWallpaper';
   const BASELINE_KEY = '__azhouWallpaperBaseline_071';
   const RELEASE_KEY = '__azhouWallpaperRelease_071';
+  const MARKER_KEY = '__azhouWallpaperMarker_090';
 
   const html = document.documentElement;
 
@@ -87,13 +88,32 @@ export async function installRenderer(offered) {
     && typeof binding.surfaces === 'function' && typeof binding.css === 'string'
     && typeof binding.scope === 'string' && !!portAttributes && typeof binding.surfaceMarker === 'string'
     && Array.isArray(binding.observeFilter);
-  if (hostAdapter && !hostBound) throw deny('invalid-host-adapter');
+  const workspaceObservation = slotValue(offered, 'workspaceObservation');
+  const onWorkspaceInvalidated = slotValue(offered, 'onWorkspaceInvalidated');
+  const workspaceCheck = slotValue(hostAdapter, 'isWorkspaceCurrent');
+  const workspaceWatch = slotValue(hostAdapter, 'watchWorkspace');
+  let workspaceInvalidated = false;
+  let workspaceLease;
+  const workspaceDeclared = hostAdapter && ['object', 'function'].includes(typeof hostAdapter) && 'workspaceContract' in hostAdapter;
+  const workspaceBound = !ports && slotValue(hostAdapter, 'workspaceContract') === 'codex-active-workspace/v1'
+    && workspaceObservation?.kind === 'observed'
+    && typeof slotValue(hostAdapter, 'observeWorkspace') === 'function' && typeof workspaceCheck === 'function'
+    && typeof workspaceWatch === 'function'
+    && Array.isArray(workspaceObservation.knownPaintPlanes) && workspaceObservation.knownPaintPlanes.length > 0;
+  const workspaceCurrent = () => {
+    try { return workspaceBound && !workspaceInvalidated && (!workspaceLease || workspaceLease.current()) && slotValue(hostAdapter, 'isWorkspaceCurrent') === workspaceCheck
+      && slotValue(hostAdapter, 'watchWorkspace') === workspaceWatch
+      && Reflect.apply(workspaceCheck, hostAdapter, [workspaceObservation, globalThis]); }
+    catch { return false; }
+  };
+  if ((workspaceDeclared && !workspaceBound) || (hostAdapter && !hostBound && !workspaceBound)) throw deny('invalid-host-adapter');
   const surfaceMarker = hostBound ? binding.surfaceMarker : null;
   if (hostBound) controllerOwner = slotValue(slotValue(hostAdapter, 'controllerWallpaper'), 'owner') ?? controllerOwner;
 
   // ── Gate 2: page identity ───────────────────────────────────────────────
   function pageAdmitted() {
     if (window.top !== window) return false;
+    if (workspaceBound) return workspaceCurrent();
     if (hostBound) return Reflect.apply(binding.validPage, ports, [globalThis]);
     const here = new URL(location.href), route = here.searchParams.get('initialRoute') || '/';
     if (here.protocol === 'app:' && here.hostname === '-' && here.pathname === '/index.html') {
@@ -149,12 +169,15 @@ export async function installRenderer(offered) {
   const shell = document.getElementById('root');
   const liveSurfaces = () => {
     if (!shell) return [];
+    if (workspaceBound) return workspaceCurrent() ? workspaceObservation.knownPaintPlanes
+      .filter(plane => plane.kind === 'surface').map(plane => plane.node) : [];
     if (!hostBound) return [...shell.querySelectorAll(directory.shellSurfaces)];
     const nominated = Reflect.apply(binding.surfaces, ports, [globalThis]);
     return Array.isArray(nominated) && nominated.length === 1 && nominated.every(node => node?.isConnected
       && shell.contains(node) && !node.closest('[role="dialog"],dialog,iframe,webview')) ? nominated : [];
   };
-  const shellUsable = () => hostBound
+  const shellUsable = () => workspaceBound ? workspaceObservation.shell === shell
+    && workspaceCurrent() && liveSurfaces().length > 0 : hostBound
     ? Reflect.apply(binding.shellState, ports, [isCurrent, globalThis]) === 'ready' && liveSurfaces().length === 1
     : !!shell?.querySelector('[data-app-shell-frame]')
       && !!shell?.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]');
@@ -197,6 +220,7 @@ export async function installRenderer(offered) {
   catch { throw deny('invalid-local-image'); }
   const sceneURL = URL.createObjectURL(new Blob([sceneBytes], { type: 'image/' + encodedScene[1] }));
   let scene, sheetCommitted = false, urlRelinquished = false;
+  let invalidateWorkspace = () => {};
   const relinquishURL = () => {
     if (urlRelinquished) return;
     urlRelinquished = true;
@@ -263,6 +287,8 @@ export async function installRenderer(offered) {
   }
 
   try {
+    if (workspaceBound) workspaceLease = Reflect.apply(workspaceWatch, hostAdapter, [workspaceObservation,
+      () => { workspaceInvalidated = true; invalidateWorkspace(); }, globalThis]);
     // ── Decode the leased scene ───────────────────────────────────────────
     scene = new Image();
     try {
@@ -314,7 +340,30 @@ export async function installRenderer(offered) {
       const shown = Math.min(100, Math.round(mix * tintRatio));
       return 'color-mix(in srgb, var(--azhou-base) ' + (100 - shown) + '%, transparent) ' + at;
     }).join(',') + ')';
+    const planeNodes = kind => workspaceObservation.knownPaintPlanes.filter(plane => plane.kind === kind).map(plane => plane.node);
+    const markerNames = { surface: 'data-azhou-wallpaper-plane', workspace: 'data-azhou-wallpaper-pseudo',
+      footer: 'data-azhou-wallpaper-decoration', fade: 'data-azhou-wallpaper-decoration', top: 'data-azhou-wallpaper-decoration' };
+    const markerTargets = new Map();
+    if (!hostBound) {
+      const planes = workspaceBound ? workspaceObservation.knownPaintPlanes : [
+        ...[shell, ...liveSurfaces()].map(node => ({ kind: 'surface', node })),
+        ...[...shell.querySelectorAll(directory.workspace)].map(node => ({ kind: 'workspace', node })),
+        ...[...shell.querySelectorAll(directory.threadFooter + ',' + directory.footerPlate + ',' + directory.footerFade + ',' + directory.topFade)]
+          .filter(node => !node.closest(directory.protectedRegions)).map(node => ({ kind: 'footer', node })),
+      ];
+      for (const { node, kind } of planes) {
+        const attribute = markerNames[kind];
+        if (!attribute || !node?.isConnected || node !== shell && !shell.contains(node)) throw deny('unsupported-shell-no-surfaces');
+        const marked = node.getAttribute(attribute);
+        if (marked !== null && (marked !== slotValue(incumbent, MARKER_KEY)
+          || !slotValue(incumbent, BASELINE_KEY)?.codexMarkers?.get(node)?.has(attribute))) throw deny('namespace-conflict');
+        if (!markerTargets.has(node)) markerTargets.set(node, new Set());
+        markerTargets.get(node).add(attribute);
+      }
+    }
     const snapshotHostState = () => ({
+      codexMarkers: new Map([...markerTargets].map(([node, attributes]) => [node,
+        new Map([...attributes].map(attribute => [attribute, node.getAttribute(attribute)]))])),
       attribute: html.getAttribute(ACTIVATION),
       // The snapshot field is named `zcodeAttributes` on purpose: replacements
       // inherit recorded baselines from live 0.9.0 ZCode installs through
@@ -331,6 +380,9 @@ export async function installRenderer(offered) {
     const inheritedSnapshot = {
       attribute: inheritedRaw.attribute,
       properties: new Map(inheritedRaw.properties),
+      codexMarkers: new Map([...entrySnapshot.codexMarkers].map(([node, attributes]) => [node,
+        new Map([...attributes].map(([attribute, value]) => [attribute,
+          inheritedRaw.codexMarkers?.get(node)?.has(attribute) ? inheritedRaw.codexMarkers.get(node).get(attribute) : value]))])),
       // Same frozen `zcodeAttributes` baseline key as above; inherited maps keep it.
       zcodeAttributes: hostBound ? new Map([...(inheritedRaw.zcodeAttributes ?? []),
         ...[...(entrySnapshot.zcodeAttributes ?? [])].filter(([node]) => !inheritedRaw.zcodeAttributes?.has(node))]) : undefined,
@@ -345,12 +397,14 @@ export async function installRenderer(offered) {
     const candidate = document.createElement('style');
     candidate.id = SHEET_ID;
     candidate.setAttribute(SHEET_OWNER_ATTRIBUTE, controllerOwner);
-    const candidateText = brief.css + (hostBound ? binding.css : '');
+    const candidateText = brief.css.replaceAll('__AZHOU_WALLPAPER_INSTANCE__', JSON.stringify(sceneURL)) + (hostBound ? binding.css : '');
     candidate.textContent = candidateText;
 
     // ── Controller state and verification probe ───────────────────────────
     let retired = false, controller, releaseAttempted = false, surfaceOwned = false;
     let restoreSnapshot = entrySnapshot;
+    const attemptCleanup = operation => { try { operation(); } catch {} };
+    const stopWatching = () => { attemptCleanup(() => workspaceLease?.dispose()); workspaceLease = null; };
     const publishSurface = value => {
       html.style.setProperty(SURFACE_PROPERTY, value);
       surfaceOwned = html.style.getPropertyValue(SURFACE_PROPERTY) === value
@@ -393,6 +447,10 @@ export async function installRenderer(offered) {
             || (requirePositioning && !['absolute', 'fixed', 'sticky'].includes(computed.position))) return;
         if (paintedPlanes(node).some(layer => !backgroundQuiet(layer) || !effectsQuiet(layer))) flagged.add(category);
       };
+      if (workspaceBound) {
+        for (const { node, category, requirePositioning } of workspaceObservation.unknownCandidates) classify(node, category, requirePositioning);
+        return [...flagged].sort();
+      }
       // The wrapper sweep intentionally ignores the selector that already
       // matched: a child renamed inside the sticky wrapper has to fail its own
       // check instead of inheriting this pass.
@@ -411,6 +469,7 @@ export async function installRenderer(offered) {
       return [...flagged].sort();
     }
     function probe() {
+      if (workspaceBound && sheetCommitted && !retired && !workspaceCurrent()) return dispose();
       if (retired) return { version: BUILD, applied: false, imageDecoded: false,
         matchedSurfaces: 0, transparentSurfaces: 0, backgroundMatched: false,
         rootClear: false, workspaceBackgroundClear: false, coverMatched: false, fixedViewport: false,
@@ -423,7 +482,7 @@ export async function installRenderer(offered) {
         const computed = getComputedStyle(node);
         return isTransparent(computed.backgroundColor) && computed.backgroundImage === 'none';
       }).length;
-      const workspacePanes = [...shell.querySelectorAll(directory.workspace)];
+      const workspacePanes = workspaceBound ? planeNodes('workspace') : [...shell.querySelectorAll(directory.workspace)];
       const workspaceBackgroundClear = workspacePanes.every(node => {
         const pseudo = getComputedStyle(node, '::before');
         return pseudo.display === 'none' || pseudo.content === 'none'
@@ -433,9 +492,9 @@ export async function installRenderer(offered) {
       // footer, and the top fade rests on the same opaque-surface premise.
       // All three groups — generated planes included — are inspected while
       // the composer stays untouched.
-      const footerSurfaces = decorativeWithin(directory.threadFooter + ',' + directory.footerPlate);
-      const footerFadeSurfaces = decorativeWithin(directory.footerFade);
-      const topFadeSurfaces = decorativeWithin(directory.topFade);
+      const footerSurfaces = workspaceBound ? planeNodes('footer') : decorativeWithin(directory.threadFooter + ',' + directory.footerPlate);
+      const footerFadeSurfaces = workspaceBound ? planeNodes('fade') : decorativeWithin(directory.footerFade);
+      const topFadeSurfaces = workspaceBound ? planeNodes('top') : decorativeWithin(directory.topFade);
       const footerBackgroundClear = backgroundsQuiet(footerSurfaces);
       const footerFadeClear = backgroundsQuiet(footerFadeSurfaces);
       const topFadeClear = backgroundsQuiet(topFadeSurfaces);
@@ -466,6 +525,8 @@ export async function installRenderer(offered) {
         version: BUILD, applied, imageDecoded, matchedSurfaces: surfaces.length,
         backgroundMatched, washMatched, coverMatched, fixedViewport, transparentSurfaces, rootClear,
         workspaceBackgroundClear,
+        ...(workspaceBound ? { coverage: workspaceObservation.coverage, fullCoverage: false,
+          workspaceEpoch: workspaceObservation.workspaceEpoch } : {}),
         footerSurfaces: footerSurfaces.length, footerBackgroundClear,
         footerFadeSurfaces: footerFadeSurfaces.length, footerFadeClear,
         topFadeSurfaces: topFadeSurfaces.length, topFadeClear, decorationEffectsClear,
@@ -479,7 +540,7 @@ export async function installRenderer(offered) {
           position: bodyLayer.backgroundPosition.split(',')[1]?.trim() },
         styleCount,
         persistentAnimation: false,
-        verificationScope: hostBound ? binding.scope
+        verificationScope: workspaceBound ? 'observed active workspace paint planes only; unknown messaging and auxiliary coverage remains unverified' : hostBound ? binding.scope
           : 'decoded image, viewport cover, matched shell, footer and top fades, decorative planes and bounded unknown-layer checks; visual inspection is separate',
       };
     }
@@ -487,12 +548,22 @@ export async function installRenderer(offered) {
     // ── Controller lifecycle ──────────────────────────────────────────────
     function dispose() {
       if (retired) return probe();
+      const ownsRootState = slotValue(globalThis, CONTROLLER_SLOT) === controller
+        || (!sheetCommitted && slotValue(globalThis, CONTROLLER_SLOT) === incumbent);
       retired = true;
+      stopWatching();
       const sheetStillAuthored = candidate.isConnected && candidate.parentNode === document.head
         && candidate.id === SHEET_ID && candidate.disabled === false
         && candidate.getAttribute(SHEET_OWNER_ATTRIBUTE) === controllerOwner
         && candidate.textContent === candidateText;
-      if (sheetStillAuthored) candidate.remove();
+      if (sheetStillAuthored) attemptCleanup(() => candidate.remove());
+      for (const [node, attributes] of restoreSnapshot.codexMarkers ?? []) {
+        for (const [attribute, previous] of attributes) attemptCleanup(() => {
+          if (node.getAttribute(attribute) !== sceneURL) return;
+          if (previous === null) node.removeAttribute(attribute);
+          else node.setAttribute(attribute, previous);
+        });
+      }
       const shellStillCurrent = !hostBound || (shell.isConnected && document.getElementById('root') === shell);
       // Restore the frozen `zcodeAttributes` baseline records exactly as captured.
       for (const [node, marked] of restoreSnapshot.zcodeAttributes ?? []) {
@@ -503,11 +574,13 @@ export async function installRenderer(offered) {
         if (marked === null) node.removeAttribute(surfaceMarker);
         else node.setAttribute(surfaceMarker, marked);
       }
-      if (document.documentElement === html) {
-        if (html.getAttribute(ACTIVATION) === 'active') {
-          if (restoreSnapshot.attribute === null) html.removeAttribute(ACTIVATION);
-          else html.setAttribute(ACTIVATION, restoreSnapshot.attribute);
-        }
+      if (document.documentElement === html && (!workspaceBound || ownsRootState)) {
+        attemptCleanup(() => {
+          if (html.getAttribute(ACTIVATION) === 'active') {
+            if (restoreSnapshot.attribute === null) html.removeAttribute(ACTIVATION);
+            else html.setAttribute(ACTIVATION, restoreSnapshot.attribute);
+          }
+        });
         for (const [name, [value, priority]] of restoreSnapshot.properties) {
           const asWritten = name === SCENE_PROPERTY ? 'url(' + JSON.stringify(sceneURL) + ')'
             : name === TINT_PROPERTY ? tintGradient : surfaceTint;
@@ -515,11 +588,13 @@ export async function installRenderer(offered) {
           const uneditedSinceCommit = html.style.getPropertyValue(name) === asWritten
             && html.style.getPropertyPriority(name) === '';
           if (!uneditedSinceCommit) continue;
-          if (value) html.style.setProperty(name, value, priority);
-          else html.style.removeProperty(name);
+          attemptCleanup(() => {
+            if (value) html.style.setProperty(name, value, priority);
+            else html.style.removeProperty(name);
+          });
         }
       }
-      relinquishURL();
+      attemptCleanup(relinquishURL);
       if (globalThis[CONTROLLER_SLOT] === controller) delete globalThis[CONTROLLER_SLOT];
       return probe();
     }
@@ -527,6 +602,14 @@ export async function installRenderer(offered) {
     // removes only what this controller verifiably still owns.
     const handOverForReplacement = () => {
       retired = true;
+      stopWatching();
+      for (const [node, attributes] of restoreSnapshot.codexMarkers ?? []) {
+        for (const [attribute, previous] of attributes) attemptCleanup(() => {
+          if (node.getAttribute(attribute) !== sceneURL) return;
+          if (previous === null) node.removeAttribute(attribute);
+          else node.setAttribute(attribute, previous);
+        });
+      }
       const sheetStillAuthored = candidate.isConnected && candidate.parentNode === document.head
         && (candidate.id === SHEET_ID && candidate.disabled === false
           || candidate.id === '' && candidate.disabled === true)
@@ -537,7 +620,7 @@ export async function installRenderer(offered) {
       if (globalThis[CONTROLLER_SLOT] === controller) delete globalThis[CONTROLLER_SLOT];
     };
     function updateSurface(value) {
-      if (retired || slotValue(globalThis, CONTROLLER_SLOT) !== controller
+      if (retired || (workspaceBound && !workspaceCurrent()) || slotValue(globalThis, CONTROLLER_SLOT) !== controller
           || document.documentElement !== html || !shell.isConnected
           || document.getElementById('root') !== shell || !colorPlausible(value)) return false;
       const valueNow = html.style.getPropertyValue(SURFACE_PROPERTY);
@@ -556,6 +639,14 @@ export async function installRenderer(offered) {
     }
     controller = { owner: controllerOwner, version: BUILD, status: probe, dispose, restore: dispose, updateSurface };
     Object.defineProperty(controller, RELEASE_KEY, { value: handOverForReplacement });
+    Object.defineProperty(controller, MARKER_KEY, { value: sceneURL });
+    invalidateWorkspace = () => {
+      if (retired || !sheetCommitted || slotValue(globalThis, CONTROLLER_SLOT) !== controller) return;
+      dispose();
+      if (typeof onWorkspaceInvalidated === 'function') attemptCleanup(() => onWorkspaceInvalidated({
+        api: controller, documentToken: workspaceObservation.documentToken, workspaceEpoch: workspaceObservation.workspaceEpoch,
+      }));
+    };
 
     // ── Transaction: one synchronous handover ─────────────────────────────
     try {
@@ -565,6 +656,7 @@ export async function installRenderer(offered) {
       // stricter content-security policy might reject.
       if (settledSheet) { settledSheet.disabled = true; settledSheet.removeAttribute('id'); }
       // Activate the surfaces recorded under the frozen `zcodeAttributes` key.
+      for (const [node, attributes] of markerTargets) for (const attribute of attributes) node.setAttribute(attribute, sceneURL);
       for (const node of entrySnapshot.zcodeAttributes?.keys() ?? []) node.setAttribute(surfaceMarker, 'active');
       html.style.setProperty(SCENE_PROPERTY, 'url(' + JSON.stringify(sceneURL) + ')');
       html.style.setProperty(TINT_PROPERTY, tintGradient);
@@ -646,6 +738,8 @@ export async function installRenderer(offered) {
       throw error;
     }
   } finally {
-    if (!sheetCommitted) relinquishURL();
+    if (!sheetCommitted) {
+      try { workspaceLease?.dispose(); } finally { relinquishURL(); }
+    }
   }
 }

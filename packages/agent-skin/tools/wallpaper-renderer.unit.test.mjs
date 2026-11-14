@@ -45,6 +45,10 @@ class Node {
     if (this.parentNode) this.parentNode.children = this.parentNode.children.filter(item => item !== this);
     this.parentNode = null;
   }
+  contains(node) {
+    return this === node || this.children.some(child => child.contains(node))
+      || Object.values(this.selectors).some(nodes => nodes.includes(node));
+  }
   closest() { return this.protected ? this : null; }
   querySelector(selector) {
     return this.selectors[selector]?.[0] || this.children.find(child => child.closest?.(selector)) || null;
@@ -1100,6 +1104,7 @@ test('failed release restores the original values and a working real controller'
   const imageBefore = page.root.style.properties.get(PROPERTY_IMAGE);
   const previous = { ...real };
   Object.defineProperty(previous, '__azhouWallpaperBaseline_071', { value: real.__azhouWallpaperBaseline_071 });
+  Object.defineProperty(previous, '__azhouWallpaperMarker_090', { value: real.__azhouWallpaperMarker_090 });
   Object.defineProperty(previous, '__azhouWallpaperRelease_071', { value() { throw new Error('release interrupted'); } });
   globalThis.__azhouWallpaper = previous;
   await assert.rejects(installRenderer(page.payload), /release interrupted/);
@@ -1195,3 +1200,193 @@ test('an incumbent that fully disposes during decode is refused, not silently re
     assert.equal(page.revoked.length, 2, 'each attempt releases its own Blob URL');
   });
 });
+
+async function onObservedPage(operation) {
+  return onPage({}, async page => {
+    const { createCodexPageAdapter } = await import('../extension/codex-page-adapter.mjs');
+    const { createWallpaperApplicator } = await import('../wallpaper/apply.js');
+    const { bootstrapStartup } = await import('../extension/bootstrap.mjs');
+    const observers = [];
+    const saved = new Map(['MutationObserver', 'ResizeObserver'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+    class Observer {
+      constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
+      observe() {}
+      takeRecords() { const records = this.records ?? []; this.records = []; return records; }
+      disconnect() { this.disconnected = true; }
+      trigger(records) { this.callback(records); }
+    }
+    globalThis.MutationObserver = Observer;
+    globalThis.ResizeObserver = Observer;
+    const surfaces = page.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'];
+    const [frame, main, pageSurface] = surfaces;
+    page.root.appendChild(page.applicationRoot);
+    page.applicationRoot.appendChild(frame);
+    frame.appendChild(main);
+    main.appendChild(pageSurface);
+    for (const [node, attribute] of [[frame, 'data-app-shell-frame'], [main, 'data-app-shell-main-surface'], [pageSurface, 'data-app-shell-page-surface']]) node.setAttribute(attribute, '');
+    const nodes = [page.root, page.applicationRoot, ...surfaces];
+    for (const node of nodes) {
+      Object.defineProperty(node, 'parentElement', { get() { return this.parentNode; } });
+      node.matches = selector => [...node.attributes.keys()].some(attribute => selector.includes(`[${attribute}]`));
+      node.closest = function(selector) {
+        for (let current = this; current; current = current.parentNode) if (current.matches?.(selector)) return current;
+        return null;
+      };
+      node.getClientRects = () => node.styles.display === 'none' ? [] : [{ width: 800, height: 600 }];
+    }
+    const originalQuery = page.applicationRoot.querySelectorAll.bind(page.applicationRoot);
+    page.applicationRoot.querySelectorAll = selector => selector === '[data-app-shell-main-surface]'
+      ? [main] : originalQuery(selector);
+    main.querySelectorAll = selector => selector === '[data-app-shell-page-surface]' ? [pageSurface] : [];
+    const adapter = createCodexPageAdapter(globalThis);
+    const installAnimation = () => {};
+    bootstrapStartup({ installStartup: () => {}, installAnimation, createLocalization: () => {}, createImageSettings: () => {},
+      createWallpaperApplicator, installRenderer, version: '0.9.0', css: CSS, assets: {}, host: globalThis, pageAdapter: adapter });
+    try { return await operation({ ...page, adapter, observers, main, frame, apply: installAnimation.applyWallpaper,
+      payload: { ...page.payload, pageAdapter: adapter, workspaceObservation: adapter.observeWorkspace() } }); }
+    finally {
+      globalThis.__azhouWallpaper?.dispose();
+      for (const [key, descriptor] of saved) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+        else delete globalThis[key];
+      }
+    }
+  });
+}
+
+test('real Codex adapter through bootstrap and applicator reaches renderer with observed scope', async () => onObservedPage(async page => {
+  const result = await page.apply({ image: GOOD_IMAGE, strength: 37, surface: '#10121c' });
+  assert.equal(result.applied, true);
+  assert.equal(result.coverage.shell, 'observed');
+  assert.equal(result.coverage.messaging, 'unknown');
+  assert.equal(result.fullCoverage, false);
+  assert.ok(result.matchedSurfaces >= 3);
+  assert.ok(page.main.getAttribute('data-azhou-wallpaper-plane'));
+  assert.equal(page.observers.filter(observer => !observer.disconnected).length, 2);
+}));
+
+test('observed workspace lost during decode cannot write styles or markers', async () => onObservedPage(async page => {
+  const decode = page.image.decode;
+  page.image.decode = async () => { await decode(); page.main.styles.display = 'none'; };
+  await assert.rejects(installRenderer(page.payload), /page-changed-during-decode/);
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), null);
+  assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+  assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+}));
+
+test('observed invalidation releases markers observers URL and activation before reporting disposed', async () => onObservedPage(async page => {
+  await installRenderer(page.payload);
+  const controller = globalThis.__azhouWallpaper;
+  page.main.styles.display = 'none';
+  page.observers[0].trigger([{ type: 'attributes', target: page.main, attributeName: 'style' }]);
+  await Promise.resolve();
+  assert.equal(controller.status().applied, false);
+  assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), null);
+  assert.ok(page.observers.every(observer => observer.disconnected));
+  assert.equal(page.styleElements.filter(style => style.isConnected).length, 0);
+  assert.equal(page.image.src, '');
+  assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+}));
+
+test('own transparent paint changes do not retire the observed controller', async () => onObservedPage(async page => {
+  await installRenderer(page.payload);
+  const controller = globalThis.__azhouWallpaper;
+  page.main.styles.backgroundColor = 'transparent';
+  page.observers[0].trigger();
+  await Promise.resolve();
+  assert.equal(globalThis.__azhouWallpaper, controller);
+  assert.equal(controller.status().applied, true);
+  assert.equal(page.revoked.length, 0);
+}));
+
+test('late observer from A cannot undo B with identical tint and surface values', async () => onObservedPage(async page => {
+  let serial = 0;
+  globalThis.URL.createObjectURL = () => `blob:observed-${++serial}`;
+  const originalStyle = globalThis.getComputedStyle;
+  globalThis.getComputedStyle = (node, pseudo) => {
+    const computed = originalStyle(node, pseudo);
+    return node === page.document.body ? { ...computed, backgroundImage: `linear-gradient(red,blue), ${page.root.style.getPropertyValue(PROPERTY_IMAGE)}` } : computed;
+  };
+  globalThis.Image = function() { return { complete: false, naturalWidth: 100, naturalHeight: 100, src: '', async decode() { this.complete = true; } }; };
+  await installRenderer(page.payload);
+  const first = globalThis.__azhouWallpaper;
+  const late = page.observers[0];
+  await installRenderer(page.payload);
+  const second = globalThis.__azhouWallpaper;
+  const secondMarker = page.main.getAttribute('data-azhou-wallpaper-plane');
+  late.trigger();
+  await Promise.resolve();
+  first.dispose();
+  assert.equal(globalThis.__azhouWallpaper, second);
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), secondMarker);
+  assert.equal(second.status().applied, true);
+  assert.equal(page.root.getAttribute(ATTRIBUTE), 'active');
+  assert.deepEqual(page.revoked, ['blob:observed-1']);
+}));
+
+test('remove and reattach before a mutation batch is delivered still cancels decode', async () => onObservedPage(async page => {
+  const decode = page.image.decode;
+  page.image.decode = async () => {
+    await decode();
+    page.observers[0].trigger([{ type: 'childList', target: page.frame, removedNodes: [page.main] }]);
+  };
+  await assert.rejects(installRenderer(page.payload), /page-changed-during-decode/);
+  assert.equal(page.main.isConnected, true, 'the final DOM has already returned to A');
+  assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), null);
+  assert.ok(page.observers.every(observer => observer.disconnected));
+}));
+
+test('message child changes and owned root style writes do not invalidate workspace', async () => onObservedPage(async page => {
+  await installRenderer(page.payload);
+  const controller = globalThis.__azhouWallpaper;
+  page.observers[0].trigger([{ type: 'childList', target: page.main, removedNodes: [new Node('message')] },
+    { type: 'attributes', target: page.root, attributeName: 'style' },
+    { type: 'attributes', target: page.main, attributeName: 'data-azhou-wallpaper-plane' }]);
+  assert.equal(controller.status().applied, true);
+  assert.equal(globalThis.__azhouWallpaper, controller);
+}));
+
+test('a throwing observer disposer does not prevent remaining resources from release', async () => onObservedPage(async page => {
+  await installRenderer(page.payload);
+  page.observers[0].disconnect = () => { throw new Error('injected observer disposal'); };
+  globalThis.__azhouWallpaper.dispose();
+  assert.equal(page.observers[1].disconnected, true);
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), null);
+  assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+  assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+}));
+
+test('observer setup failure releases its sibling observer and decoded lease', async () => onObservedPage(async page => {
+  globalThis.ResizeObserver = class { constructor() { throw new Error('injected resize setup'); } };
+  await assert.rejects(installRenderer(page.payload), /injected resize setup/);
+  assert.equal(page.observers[0].disconnected, true);
+  assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+  assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+}));
+
+test('foreign plane marker is not overwritten', async () => onObservedPage(async page => {
+  page.main.setAttribute('data-azhou-wallpaper-plane', 'another-owner');
+  await assert.rejects(installRenderer(page.payload), /namespace-conflict/);
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), 'another-owner');
+  assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
+  assert.ok(page.observers.every(observer => observer.disconnected));
+}));
+
+for (const defect of ['empty planes', 'unsupported observation', 'missing watcher', 'throwing current', 'unknown contract', 'inherited contract', 'contract accessor']) {
+  test(`production Codex ${defect} cannot enter legacy rendering`, async () => onObservedPage(async page => {
+    const payload = { ...page.payload, pageAdapter: { ...page.adapter } };
+    if (defect === 'empty planes') payload.workspaceObservation = { ...payload.workspaceObservation, knownPaintPlanes: [] };
+    if (defect === 'unsupported observation') payload.workspaceObservation = { kind: 'unsupported' };
+    if (defect === 'missing watcher') delete payload.pageAdapter.watchWorkspace;
+    if (defect === 'throwing current') payload.pageAdapter.isWorkspaceCurrent = () => { throw new Error('unknown host'); };
+    if (defect === 'unknown contract') payload.pageAdapter.workspaceContract = 'future-unknown';
+    if (defect === 'inherited contract') { delete payload.pageAdapter.workspaceContract; Object.setPrototypeOf(payload.pageAdapter, {workspaceContract:'codex-active-workspace/v1'}); }
+    if (defect === 'contract accessor') Object.defineProperty(payload.pageAdapter,'workspaceContract',{get(){throw Error('must not invoke');}});
+    await assert.rejects(installRenderer(payload));
+    assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), null);
+    assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+    assert.equal(page.observers.filter(observer => !observer.disconnected).length, 0);
+  }));
+}

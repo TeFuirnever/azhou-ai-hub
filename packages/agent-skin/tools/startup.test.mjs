@@ -2797,8 +2797,9 @@ test('mountSettings joins the controller api additively and stays inert without 
   const api = controlled.host.__azhouStartup;
   assert.deepEqual(Object.keys(api), ['owner', 'version', 'install', 'status',
     'beginSettingsSnapshot', 'prepareWorkspace', 'cancelWorkspace', 'readSettingsSnapshotChunk', 'disposeSettingsSnapshot',
-    'openSettings', 'mountSettings', 'retryWallpaper', 'dispose'],
+    'openSettings', 'mountSettings', 'workspaceContract', 'retryWallpaper', 'dispose'],
   'controller APIs are additive and remain grouped on the single owner');
+  assert.equal(api.workspaceContract, 'codex-active-workspace/v1');
   const target = { children: [], appendChild(node) { this.children.push(node); node.parentNode = this; return node; } };
   assert.equal(api.mountSettings(target), null,
     'adapters without wallpaper ports keep the overlay as their only settings UX');
@@ -3019,7 +3020,7 @@ function snapshotFixture(snapshotSource, { playbackOwner = 'page', observeAppear
   const payload = function (...args) { if (args[14]) frameSpecs.push(args[14]); };
   Object.defineProperties(payload, {
     assets: { value: assets },
-    ...(wallpaperApply ? { applyWallpaper: { value: (value, current) => wallpaperApply(value, current, controlled.host) } } : {}),
+    ...(wallpaperApply ? { applyWallpaper: { value: (value, current, signal, options) => wallpaperApply(value, current, controlled.host, signal, options) } } : {}),
     createLocalization: { value: () => ({ t: key => key, subscribe: () => () => {} }) },
     createImageSettings: { value: input => {
       factoryInputs.push(input);
@@ -3618,3 +3619,441 @@ test('page monotonic lease blocks delayed settings and apply even when watchdog 
     fixture.api.dispose();
   }
 });
+
+async function workspaceRecoveryFixture({ invalidateBeforePublish = false, coverage } = {}) {
+  const controlled = controlledHost();
+  const calls = [];
+  let workspace = { kind: 'observed', workspaceEpoch: 1 };
+  const adapter = { ...pageAdapter, observeWorkspace: () => workspace };
+  let initial;
+  const payload = (_window, _document, _location, _performance, _indexedDB,
+    _Image, _Path2D, _URL, _raf, _caf, _setTimeout, _clearTimeout, _module, send, spec) => {
+    if (spec.intent === 'play') initial = send({ type: 'azhou-startup', action: 'background', runId: spec.runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 42 });
+    send({ type: 'azhou-startup', action: 'ready', runId: spec.runId });
+    return { dispose() {} };
+  };
+  payload.applyWallpaper = (value, current, signal, options) => new Promise((resolve, reject) => {
+    const call = { value, current, signal, options, resolve, reject };
+    call.finish = () => {
+      const wallpaper = { owner: 'azhou.codex-startup-animation', version: '0.9.0',
+        status: () => ({ applied: true, imageDecoded: true, ...(coverage ? {coverage, fullCoverage:false} : {}) }), dispose() {} };
+      if (current()) controlled.host.__azhouWallpaper = wallpaper;
+      call.wallpaper = wallpaper;
+      if (invalidateBeforePublish && calls.length === 1) {
+        delete controlled.host.__azhouWallpaper;
+        options.onWorkspaceInvalidated({ api: wallpaper });
+      }
+      resolve({ applied: true, imageDecoded: true });
+    };
+    calls.push(call);
+  });
+  installStartup(payload, controlled.host, adapter);
+  calls[0].finish();
+  await initial;
+  const api = controlled.host.__azhouStartup;
+  controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: api.status().runId, skipped: false }, controlled.frames[0].contentWindow);
+  const invalidate = index => {
+    const call = calls[index];
+    if (controlled.host.__azhouWallpaper === call.wallpaper) delete controlled.host.__azhouWallpaper;
+    call.options.onWorkspaceInvalidated({ api: call.wallpaper, documentToken: 'fixture', workspaceEpoch: index + 1 });
+  };
+  return { controlled, calls, api, invalidate, nextWorkspace() { workspace = { kind: 'observed', workspaceEpoch: workspace.workspaceEpoch + 1 }; } };
+}
+
+test('workspace invalidation returns through the existing owner and restores the latest approved image', async () => {
+  const f = await workspaceRecoveryFixture();
+  try {
+    f.invalidate(0);
+    assert.equal(f.calls.length, 2);
+    assert.equal(f.api.status().wallpaper.applied, false);
+    assert.equal(f.calls[1].options.waitForWorkspace, true);
+    assert.equal(f.calls[1].current(), true);
+    assert.deepEqual(f.calls[1].value, f.calls[0].value);
+    f.calls[1].finish();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.applied, true);
+    assert.equal(f.controlled.frames.length, 1, 'recovery does not replay the animation');
+    f.calls[0].options.onWorkspaceInvalidated({ api: f.calls[0].wallpaper });
+    assert.equal(f.calls.length, 2, 'a late old owner cannot create a new recovery');
+  } finally { f.api.dispose(); }
+});
+
+for (const action of ['settings', 'dispose', 'hide']) {
+  test(`workspace recovery cannot revive after ${action}`, async () => {
+    const f = await workspaceRecoveryFixture();
+    f.invalidate(0);
+    const recovery = f.calls[1];
+    if (action === 'settings') assert.equal(f.api.openSettings(), true);
+    if (action === 'dispose') f.api.dispose();
+    if (action === 'hide') f.controlled.host.pagehide();
+    {
+      assert.equal(recovery.signal.aborted, true);
+      assert.equal(recovery.current(), false);
+      recovery.finish();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(f.controlled.host.__azhouWallpaper, undefined);
+    }
+    f.api.dispose();
+  });
+}
+
+test('workspace recovery timeout cancels one operation and does not automatically loop', async () => {
+  const f = await workspaceRecoveryFixture();
+  try {
+    f.invalidate(0);
+    const timer = f.controlled.timers.find(timer => timer.delay === 10000 && !timer.cleared);
+    assert.ok(timer);
+    timer.callback();
+    assert.equal(f.calls[1].signal.aborted, true);
+    assert.equal(f.calls[1].current(), false);
+    f.calls[1].resolve({ applied: false, reason: 'operation-cancelled' });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.failureCode, 'retry-timeout');
+    assert.equal(f.calls.length, 2);
+  } finally { f.api.dispose(); }
+});
+
+test('workspace invalidation before API publication is retained until natural completion', async () => {
+  const f = await workspaceRecoveryFixture({ invalidateBeforePublish: true });
+  try {
+    assert.equal(f.api.status().wallpaper.applied, false);
+    assert.equal(f.calls.length, 2);
+    f.calls[1].finish();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.applied, true);
+  } finally { f.api.dispose(); }
+});
+
+test('rapid known workspace changes during recovery settlement reach the newest workspace', async () => {
+  const f = await workspaceRecoveryFixture();
+  try {
+    f.nextWorkspace(); f.invalidate(0);
+    f.calls[1].finish();
+    await Promise.resolve();
+    f.nextWorkspace(); f.invalidate(1);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.calls.length, 3);
+    assert.equal(f.calls[2].current(), true);
+    f.calls[2].finish();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.applied, true);
+  } finally { f.api.dispose(); }
+});
+
+test('new saved settings supersede recovery and its late finally cannot replace them', async () => {
+  const f = await workspaceRecoveryFixture();
+  try {
+    f.invalidate(0);
+    const old = f.calls[1];
+    assert.equal(f.api.openSettings(), true);
+    const frame = f.controlled.frames.at(-1);
+    const request = f.controlled.host.send({ type: 'azhou-startup', action: 'background', runId: f.api.status().runId,
+      image: 'data:image/png;base64,bmV3', strength: 18 }, frame.contentWindow);
+    assert.equal(f.calls.length, 3);
+    assert.equal(old.signal.aborted, true);
+    old.finish();
+    await Promise.resolve();
+    assert.equal(f.calls[2].current(), true);
+    f.calls[2].finish(); await request;
+    assert.equal(f.calls[2].value.strength, 18);
+    assert.equal(f.api.status().wallpaper.applied, true);
+  } finally { f.api.dispose(); }
+});
+
+test('disabled background cancels recovery without resurrecting its approved image', async () => {
+  const f = await workspaceRecoveryFixture();
+  try {
+    f.invalidate(0);
+    const old = f.calls[1];
+    f.api.openSettings();
+    const frame = f.controlled.frames.at(-1);
+    await f.controlled.host.send({ type: 'azhou-startup', action: 'background', runId: f.api.status().runId,
+      image: 'data:image/png;base64,aGVsbG8=', strength: 0 }, frame.contentWindow);
+    old.finish(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.reason, 'disabled');
+    assert.equal(f.calls.length, 2);
+    assert.equal(f.controlled.host.__azhouWallpaper, undefined);
+  } finally { f.api.dispose(); }
+});
+
+test('an existing legacy controller is not reported as the new workspace contract after reinjection', () => {
+  const controlled = controlledHost();
+  const legacy = { ...pageAdapter };
+  delete legacy.workspaceContract;
+  delete legacy.observeWorkspace;
+  delete legacy.watchWorkspace;
+  delete legacy.isWorkspaceCurrent;
+  installStartup(() => {}, controlled.host, legacy);
+  const prior = controlled.host.__azhouStartup;
+  assert.equal(prior.workspaceContract, undefined);
+  const count = controlled.observers.length;
+  assert.deepEqual(installStartup(() => {}, controlled.host, pageAdapter), { installed: true, alreadyActive: true });
+  assert.equal(controlled.host.__azhouStartup, prior);
+  assert.equal(prior.workspaceContract, undefined, 'new source alone is not a loaded capability; reload is required');
+  assert.equal(controlled.observers.length, count);
+  prior.dispose();
+});
+
+for (const change of ['hash', 'route']) {
+  test(`known same Document ${change} navigation recovers wallpaper without rebinding snapshot authority`, async () => {
+    const f = await workspaceRecoveryFixture();
+    try {
+      f.controlled.host.location.href = change === 'hash' ? `${mainURL}#next` : 'app://-/index.html?initialRoute=%2Fthread%2Fnext';
+      f.invalidate(0);
+      assert.equal(f.calls.length, 2, 'new known URL must reach the applicator');
+      assert.equal(f.calls[1].current(), true);
+      f.calls[1].finish(); await new Promise(resolve => setImmediate(resolve));
+      assert.equal(f.api.status().wallpaper.applied, true);
+      assert.equal((await f.api.beginSettingsSnapshot(snapshotRequest(f.api))).ok, false, 'the old snapshot authority remains stale');
+    } finally { f.api.dispose(); }
+  });
+}
+
+async function nativeRecoveryFixture(beforePublication = false) {
+  const calls = [];
+  const f = snapshotFixture(snapshotResult(), { playbackOwner: 'native',
+    wallpaperApply: (value, current, host, signal, options) => new Promise(resolve => {
+      const call = { current, signal, options, resolve };
+      call.finish = () => {
+        const api = { owner: 'azhou.codex-startup-animation', version: '0.9.0',
+          status: () => ({ applied: true, imageDecoded: true }), dispose() {}, updateSurface() {} };
+        call.api = api;
+        if (current()) host.__azhouWallpaper = api;
+        if (beforePublication && calls.length === 1) {
+          delete host.__azhouWallpaper;
+          options.onWorkspaceInvalidated({ api });
+        }
+        resolve({ applied: true, imageDecoded: true });
+      };
+      calls.push(call);
+    }) });
+  const request = { ...snapshotRequest(f.api), expiresAt: 7000 };
+  f.api.prepareWorkspace(request);
+  await new Promise(resolve => setImmediate(resolve));
+  calls[0].finish(); await new Promise(resolve => setImmediate(resolve));
+  return { ...f, calls, request };
+}
+
+for (const early of [false, true]) {
+  test(`native committed wallpaper restores after ${early ? 'prepublication' : 'later'} invalidation without claiming native playback ready`, async () => {
+    const f = await nativeRecoveryFixture(early);
+    try {
+      if (!early) { delete f.host.__azhouWallpaper; f.calls[0].options.onWorkspaceInvalidated({ api: f.calls[0].api }); }
+      assert.equal(f.calls.length, 2);
+      assert.equal(f.calls[1].current(), true);
+      f.calls[1].finish(); await new Promise(resolve => setImmediate(resolve));
+      const status = f.api.status();
+      assert.equal(status.wallpaper.applied, true);
+      assert.equal(status.phase, 'prepared');
+      assert.equal(status.ready, false);
+      assert.equal(status.completed, false);
+      assert.equal(f.frames.length, 0);
+    } finally { f.api.dispose(); }
+  });
+}
+
+test('native cancellation after prepublication invalidation aborts recovery and rejects its late completion', async () => {
+  const f = await nativeRecoveryFixture(true);
+  try {
+    assert.equal(f.calls.length, 2);
+    assert.deepEqual(f.api.cancelWorkspace(f.request), { ok: true, cancelled: true });
+    assert.equal(f.calls[1].current(), false);
+    f.calls[1].finish(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.host.__azhouWallpaper, undefined);
+    assert.equal(f.api.status().wallpaper.applied, false);
+  } finally { f.api.dispose(); }
+});
+
+test('native known URL recovery leaves an existing snapshot descriptor and chunk authority stale', async () => {
+  const f = await nativeRecoveryFixture();
+  try {
+    const descriptor = await f.api.beginSettingsSnapshot(f.request);
+    assert.equal(descriptor.ok, true);
+    f.host.location.href = 'app://-/index.html?initialRoute=%2Fthread%2Fnext';
+    delete f.host.__azhouWallpaper;
+    f.calls[0].options.onWorkspaceInvalidated({ api: f.calls[0].api });
+    assert.equal(f.calls.length, 2);
+    f.calls[1].finish(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.applied, true);
+    assert.equal(f.api.readSettingsSnapshotChunk(snapshotChunkRequest(f.request, descriptor, 0, 0)).ok, false);
+    assert.equal((await f.api.beginSettingsSnapshot(f.request)).ok, false);
+  } finally { f.api.dispose(); }
+});
+
+for (const destination of ['pet', 'mini', 'other-document']) {
+  test(`workspace recovery cannot cross into ${destination}`, async () => {
+    const f = await workspaceRecoveryFixture();
+    try {
+      if (destination === 'other-document') f.controlled.host.document = { ...f.controlled.host.document };
+      else f.controlled.host.location.href = `app://-/index.html?initialRoute=${destination === 'pet' ? '/avatar' : '/mini'}`;
+      f.invalidate(0);
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(f.calls.length, 1);
+      assert.equal(f.api.status().wallpaper.applied, false);
+    } finally { f.api.dispose(); }
+  });
+}
+
+test('Native original nonce can revoke its recovery after known URL changes without reviving old snapshot reads', async () => {
+  const f = await nativeRecoveryFixture();
+  try {
+    const descriptor = await f.api.beginSettingsSnapshot(f.request);
+    f.host.location.href = 'app://-/index.html#next';
+    delete f.host.__azhouWallpaper;
+    f.calls[0].options.onWorkspaceInvalidated({ api: f.calls[0].api });
+    assert.equal(f.calls.length, 2);
+    assert.deepEqual(f.api.cancelWorkspace(f.request), { ok: true, cancelled: true });
+    assert.equal(f.calls[1].signal.aborted, true);
+    f.calls[1].finish(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.applied, false);
+    assert.equal(f.api.readSettingsSnapshotChunk(snapshotChunkRequest(f.request, descriptor, 0, 0)).ok, false);
+  } finally { f.api.dispose(); }
+});
+
+test('settings open then cancel transfers committed wallpaper recovery to the current run', async () => {
+  const f = await workspaceRecoveryFixture();
+  try {
+    f.api.openSettings();
+    await f.controlled.host.send({ type: 'azhou-startup', action: 'complete', runId: f.api.status().runId, skipped: true }, f.controlled.frames.at(-1).contentWindow);
+    f.invalidate(0);
+    assert.equal(f.calls.length, 2);
+    f.calls[1].finish(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.applied, true);
+  } finally { f.api.dispose(); }
+});
+
+test('old committed API invalidation cannot steal a newer pending settings request', async () => {
+  const f = await workspaceRecoveryFixture();
+  try {
+    f.api.openSettings();
+    const pending = f.controlled.host.send({ type: 'azhou-startup', action: 'background', runId: f.api.status().runId,
+      image: 'data:image/png;base64,bmV3', strength: 18 }, f.controlled.frames.at(-1).contentWindow);
+    assert.equal(f.calls.length, 2);
+    f.invalidate(0);
+    assert.equal(f.calls[1].current(), true);
+    assert.equal(f.calls.length, 2);
+    f.calls[1].finish(); await pending;
+    assert.equal(f.api.status().wallpaper.applied, true);
+    assert.equal(f.calls[1].value.strength, 18);
+    assert.equal(f.calls.length, 2);
+  } finally { f.api.dispose(); }
+});
+
+test('old API invalidation plus a failed newer pending request restores only that newer intent after settings close', async () => {
+  const f = await workspaceRecoveryFixture();
+  try {
+    f.api.openSettings();
+    const frame=f.controlled.frames.at(-1);
+    const pending=f.controlled.host.send({type:'azhou-startup',action:'background',runId:f.api.status().runId,
+      image:'data:image/png;base64,bmV3',strength:18},frame.contentWindow);
+    f.invalidate(0);
+    f.calls[1].resolve({applied:false,failureCode:'page-changed-during-decode'});
+    await pending;
+    assert.equal(f.calls.length,2,'no apply races the open settings transaction');
+    await f.controlled.host.send({type:'azhou-startup',action:'settings-close',runId:f.api.status().runId},frame.contentWindow);
+    assert.equal(f.calls.length,3);
+    assert.equal(f.calls[2].value.strength,18);
+    assert.equal(f.calls[2].value.image,'data:image/png;base64,bmV3');
+    f.calls[2].finish(); await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.applied,true);
+    assert.equal(f.calls.length,3,'successful recovery has no retry loop');
+  } finally {f.api.dispose();}
+});
+
+for (const outcome of ['success','unsupported','decode-failed','exception','timeout']) {
+  test(`workspace recovery ${outcome} keeps pending truthful and publishes only its settled notice`, async () => {
+    const f=await workspaceRecoveryFixture();
+    try {
+      const notice=f.controlled.controls.find(node=>node.attributes.has('data-agent-skin-wallpaper-recovery'));
+      f.invalidate(0);
+      assert.equal(f.api.status().wallpaper.applied,false);
+      assert.equal(notice.style.display,'none','normal pending recovery must not move the click target with a failure notice');
+      if(outcome==='success')f.calls[1].finish();
+      else if(outcome==='exception')f.calls[1].reject(Error('decode rejected'));
+      else if(outcome==='timeout')f.controlled.timers.find(timer=>timer.delay===10000&&!timer.cleared).callback();
+      else f.calls[1].resolve({applied:false,failureCode:outcome==='unsupported'?'shell-unsupported':'image-decode-failed'});
+      if(outcome!=='timeout') {
+        await Promise.resolve();
+        assert.equal(notice.style.display,'none','the still-running owner lease does not publish a final failure');
+      }
+      await new Promise(resolve=>setImmediate(resolve));
+      assert.equal(f.api.status().wallpaper.applied,outcome==='success');
+      assert.equal(notice.style.display,outcome==='success'?'none':'block');
+      assert.equal(f.calls.length,2,'settled failure does not create a retry loop');
+      if(outcome!=='success') {
+        f.controlled.controls.find(node=>node.attributes.has('data-agent-skin-wallpaper-close')).click();
+        f.api.status();
+        assert.equal(notice.style.display,'none','the user dismissal survives status reads');
+      }
+    } finally {f.api.dispose();}
+  });
+}
+
+test('settings cancellation resumes a retained appearance after cancelling its earlier recovery lease', async () => {
+  const f=await workspaceRecoveryFixture();
+  try {
+    f.invalidate(0);
+    const old=f.calls[1];
+    f.api.openSettings();
+    assert.equal(old.signal.aborted,true);
+    await f.controlled.host.send({type:'azhou-startup',action:'complete',runId:f.api.status().runId,skipped:true},f.controlled.frames.at(-1).contentWindow);
+    assert.equal(f.calls.length,3);
+    old.finish(); await Promise.resolve();
+    assert.equal(f.calls[2].current(),true);
+    f.calls[2].finish(); await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(f.api.status().wallpaper.applied,true);
+  } finally {f.api.dispose();}
+});
+
+test('Native revocation remains possible when a pending recovery route becomes unreadable', async () => {
+  const f=await nativeRecoveryFixture();
+  try {
+    delete f.host.__azhouWallpaper;
+    f.calls[0].options.onWorkspaceInvalidated({api:f.calls[0].api});
+    assert.equal(f.calls.length,2);
+    f.host.location.href='app://-/index.html?initialRoute=%2Favatar';
+    assert.deepEqual(f.api.cancelWorkspace(f.request),{ok:true,cancelled:true});
+    assert.equal(f.calls[1].signal.aborted,true);
+    f.calls[1].finish(); await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(f.host.__azhouWallpaper,undefined);
+    assert.equal((await f.api.beginSettingsSnapshot(f.request)).ok,false);
+  } finally {f.api.dispose();}
+});
+
+test('controller status preserves explicit unknown coverage without exposing mutable adapter data', async () => {
+  const coverage={shell:'observed',messaging:'unknown',auxiliary:'unknown'};
+  const f=await workspaceRecoveryFixture({coverage});
+  try {
+    const status=f.api.status();
+    assert.equal(status.wallpaper.fullCoverage,false);
+    assert.deepEqual(status.wallpaper.coverage,coverage);
+    status.wallpaper.coverage.auxiliary='observed';
+    assert.equal(coverage.auxiliary,'unknown');
+    assert.equal(f.api.status().wallpaper.coverage.auxiliary,'unknown');
+  } finally {f.api.dispose();}
+});
+
+test('controller does not promote malformed coverage or invoke accessor claims', async () => {
+  const coverage={messaging:'unknown',auxiliary:'unknown'};
+  Object.defineProperty(coverage,'shell',{get(){throw Error('untrusted claim');}});
+  const f=await workspaceRecoveryFixture({coverage});
+  try {
+    assert.equal(f.api.status().wallpaper.coverage,undefined);
+    assert.equal(f.api.status().wallpaper.fullCoverage,false);
+  } finally {f.api.dispose();}
+});
+
+for (const defect of ['observeWorkspace','isWorkspaceCurrent','watchWorkspace','label-only','unknown-label','getter-function','inherited-function']) {
+  test(`public workspace capability does not admit ${defect}`, () => {
+    const f=controlledHost();const adapter={...pageAdapter};let getters=0;
+    if(['observeWorkspace','isWorkspaceCurrent','watchWorkspace'].includes(defect))delete adapter[defect];
+    if(defect==='label-only')for(const key of ['observeWorkspace','isWorkspaceCurrent','watchWorkspace'])delete adapter[key];
+    if(defect==='unknown-label')adapter.workspaceContract='future-unknown';
+    if(defect==='getter-function')Object.defineProperty(adapter,'observeWorkspace',{get(){getters++;return pageAdapter.observeWorkspace;}});
+    if(defect==='inherited-function'){delete adapter.watchWorkspace;Object.setPrototypeOf(adapter,{watchWorkspace:pageAdapter.watchWorkspace});}
+    installStartup(()=>{},f.host,adapter);
+    try {assert.equal(f.host.__azhouStartup.workspaceContract,undefined);assert.equal(getters,0);}
+    finally {f.host.__azhouStartup.dispose();}
+  });
+}

@@ -19,7 +19,7 @@ const WALLPAPER_STATUS_FIELDS = [
   'backgroundMatched', 'washMatched', 'coverMatched', 'fixedViewport', 'matchedSurfaces', 'transparentSurfaces',
   'rootClear', 'workspaceBackgroundClear', 'footerSurfaces', 'footerBackgroundClear',
   'footerFadeSurfaces', 'footerFadeClear', 'topFadeSurfaces', 'topFadeClear',
-  'decorationEffectsClear', 'unsupportedDecorations', 'verificationScope',
+  'decorationEffectsClear', 'unsupportedDecorations', 'verificationScope', 'fullCoverage',
 ];
 const WALLPAPER_FAILURE_STAGES = Object.freeze({
   'shell-timeout': 'shell',
@@ -288,6 +288,8 @@ class PageController {
     this.wallpaperDisabled = false;
     this.wallpaperRetryPromise = null;
     this.wallpaperRetryCancel = null;
+    this.workspaceRecovery = null;
+    this.wallpaperApplication = null;
     this.startupWallpaperFailure = null;
     this.startupWallpaperNoticeDismissed = false;
     this.installed = false;
@@ -307,6 +309,7 @@ class PageController {
     this.onMotionChange = () => this.#updateAppearance();
     this.onPageHide = () => {
       this.pageHidden = true;
+      this.#cancelWorkspaceRecovery();
       this.#clearSettingsSnapshot();
       if (this.playbackOwner === 'dsh-gated') this.#cancelDSHWallpaperPreparation();
     };
@@ -338,6 +341,9 @@ class PageController {
       disposeSettingsSnapshot: (request) => this.#disposeSettingsSnapshot(request),
       openSettings: () => this.#openSettings(),
       mountSettings: (target, options) => this.#mountSettings(target, options),
+      ...(dataProperty(pageAdapter, 'workspaceContract') === 'codex-active-workspace/v1'
+        && ['observeWorkspace', 'isWorkspaceCurrent', 'watchWorkspace'].every(key => typeof dataProperty(pageAdapter, key) === 'function')
+        ? { workspaceContract: 'codex-active-workspace/v1' } : {}),
       retryWallpaper: () => this.#retryWallpaper(),
       dispose: () => this.#dispose(),
     });
@@ -393,6 +399,7 @@ class PageController {
 
   #beginRun(intent) {
     if (this.disposed) return false;
+    const resumeAppearance = !!this.workspaceRecovery;
     this.#clearSettingsSnapshot();
     this.nativeWorkspace?.cancel?.();
     this.nativeWorkspace = null;
@@ -403,6 +410,7 @@ class PageController {
       this.startupWallpaperNoticeDismissed = false;
     }
     this.wallpaperRetryCancel?.();
+    this.#cancelWorkspaceRecovery();
     this.wallpaperGeneration += 1;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
@@ -418,6 +426,7 @@ class PageController {
     this.state.overlay = true;
     this.state.reason = '';
     this.state.completion = null;
+    if (resumeAppearance) this.#queueWorkspaceRecovery();
     this.appearanceEntry?.update(false);
     if (intent === 'settings') this.#isolateHostPage();
     const runId = this.state.runId;
@@ -771,6 +780,7 @@ class PageController {
       if (operation.timer !== null) this.host.clearTimeout(operation.timer);
       try { operation.settingsAPI?.dispose?.(); } catch {}
       operation.settingsAPI = null;
+      this.#resumeWorkspaceRecovery();
     };
     operation.cancel = () => {
       if (!operation.active) return;
@@ -810,9 +820,14 @@ class PageController {
     const operation = this.nativeWorkspace;
     if (this.playbackOwner !== 'native' || dataProperty(request, 'owner') !== this.owner
       || dataProperty(request, 'runId') !== this.state.runId
-      || !this.#snapshotPageIsCurrent(this.state.runId)
+      || this.disposed || !this.#ownsStartupController() || this.host.document !== this.document
       || !operation || operation.runId !== this.state.runId
       || dataProperty(request, 'runNonce') !== operation.nonce) return this.#snapshotFailure('snapshot-stale');
+    if (!operation.active && this.workspaceRecovery?.nativeOperation === operation) {
+      this.#cancelWorkspaceRecovery();
+      operation.cancelled = true;
+      this.#setWallpaperFailure('apply-failed', 'operation-cancelled');
+    }
     operation.cancel();
     return { ok: true, cancelled: operation.cancelled };
   }
@@ -1253,6 +1268,7 @@ class PageController {
       this.#releaseStartupGate();
       this.#stopFrameAndRevealEntry();
       this.#updateStartupWallpaperNotice();
+      this.#resumeWorkspaceRecovery();
       this.#clearWatchdog();
       this.host.removeEventListener('message', this.onMessage);
       if (this.playbackOwner === 'dsh-gated' && this.intent === 'play'
@@ -1283,6 +1299,7 @@ class PageController {
         this.state.completion = { cause: 'settings-save', beforeReady: false };
         this.#stopFrameAndRevealEntry();
         this.#updateStartupWallpaperNotice();
+        this.#resumeWorkspaceRecovery();
         this.#clearWatchdog();
         this.host.removeEventListener('message', this.onMessage);
       }
@@ -1308,7 +1325,10 @@ class PageController {
 
   #canRetryStartupWallpaper() {
     return (this.state.phase === 'complete' && this.state.completed)
-      || (this.#isDSHPrepared() && !this.dshWallpaperPreparation?.active);
+      || (this.#isDSHPrepared() && !this.dshWallpaperPreparation?.active)
+      || (this.playbackOwner === 'native' && this.state.phase === 'prepared'
+        && this.nativeWorkspace?.wallpaperCommitted === true && !this.nativeWorkspace.active
+        && !this.nativeWorkspace.cancelled && this.nativeWorkspace.runId === this.state.runId);
   }
 
   #isCurrentRetry(runId, generation) {
@@ -1341,6 +1361,7 @@ class PageController {
   #updateStartupWallpaperNotice(announcementKey) {
     const cause = this.state.completion?.cause;
     const visible = !this.disposed && !this.startupWallpaperNoticeDismissed
+      && this.workspaceRecovery?.phase !== 'running'
       && !!this.startupWallpaperFailure && !!this.wallpaperRequest && !this.wallpaperDisabled
       && (this.#isDSHPrepared() ? !this.dshWallpaperPreparation?.active
         : this.state.phase === 'complete' && this.state.completed
@@ -1445,7 +1466,93 @@ class PageController {
     return bounded;
   }
 
-  async #applyWallpaper(message, runId, frame, retry = false, embed = null, dshPreparation = null) {
+  #cancelWorkspaceRecovery() {
+    const operation = this.workspaceRecovery;
+    if (!operation) return;
+    this.workspaceRecovery = null;
+    this.wallpaperGeneration += 1;
+    operation.abort?.abort();
+    if (operation.timer != null) this.host.clearTimeout(operation.timer);
+  }
+
+  #handleWorkspaceInvalidated(notice, runId, generation, admitted = false) {
+    if (this.disposed || !this.#ownsStartupController()
+      || (admitted ? runId !== this.state.runId || generation !== this.wallpaperGeneration
+        : notice?.api !== this.wallpaperAPI)) return;
+    this.wallpaperAPI = null;
+    this.state.wallpaper = { applied: false, reason: 'workspace-changed', imageDecoded: false };
+    this.startupWallpaperFailure = null;
+    this.#updateStartupWallpaperNotice();
+    this.#queueWorkspaceRecovery();
+  }
+
+  #queueWorkspaceRecovery() {
+    if (this.disposed || !this.#ownsStartupController() || this.pageHidden
+      || this.wallpaperDisabled || !this.wallpaperRequest) return;
+    const application = this.wallpaperApplication;
+    if (application?.generation === this.wallpaperGeneration) {
+      application.workspaceChanged = true;
+      return;
+    }
+    if (this.workspaceRecovery?.phase === 'running') {
+      this.workspaceRecovery.invalidated = true;
+      return;
+    }
+    this.workspaceRecovery = { phase: 'awaiting-completion', runId: this.state.runId,
+      generation: this.wallpaperGeneration, request: this.wallpaperRequest, nativeOperation: this.nativeWorkspace };
+    this.#resumeWorkspaceRecovery();
+  }
+
+  #resumeWorkspaceRecovery() {
+    const pending = this.workspaceRecovery;
+    if (!pending || pending.phase !== 'awaiting-completion' || pending.runId !== this.state.runId
+      || pending.generation !== this.wallpaperGeneration || pending.request !== this.wallpaperRequest
+      || !this.#canRetryStartupWallpaper()
+      || this.state.overlay || this.settingsEmbeds.size || this.pageHidden) return;
+    this.#recoverWallpaperWorkspace(pending.runId);
+  }
+
+  #workspacePageIsCurrent() {
+    try { return this.host.document === this.document && this.pageAdapter.identify(this.host).kind === 'matched'; }
+    catch { return false; }
+  }
+
+  #recoverWallpaperWorkspace(runId) {
+    const operation = { phase: 'running', abort: new AbortController(), timer: null, invalidated: false,
+      nativeOperation: this.nativeWorkspace, request: this.wallpaperRequest };
+    this.workspaceRecovery = operation;
+    operation.timer = this.host.setTimeout(() => {
+      if (this.workspaceRecovery !== operation) return;
+      this.#cancelWorkspaceRecovery();
+      this.#setWallpaperFailure('retry-timeout');
+    }, WALLPAPER_RETRY_TIMEOUT_MS);
+    const work = async () => {
+      while (this.workspaceRecovery === operation && operation.request === this.wallpaperRequest
+        && !operation.abort.signal.aborted && !this.pageHidden
+        && !this.wallpaperDisabled && this.#canRetryStartupWallpaper() && this.#workspacePageIsCurrent()) {
+        const before = this.pageAdapter.observeWorkspace(this.host);
+        operation.invalidated = false;
+        const result = await this.#applyWallpaper({ ...this.wallpaperRequest }, runId, null, true, null, null, operation);
+        if (this.workspaceRecovery !== operation || (result.applied && !operation.invalidated)) return;
+        const changedWhilePreparing = result.reason === 'operation-cancelled' || result.failureCode === 'page-changed-during-decode';
+        if (!operation.invalidated && !changedWhilePreparing) return;
+        const after = this.pageAdapter.observeWorkspace(this.host);
+        if (before === after || before.kind === 'unsupported' && after.kind === 'unsupported') return;
+      }
+    };
+    work().catch(() => {
+      if (this.workspaceRecovery === operation) this.#setWallpaperFailure('apply-failed');
+    }).finally(() => {
+      if (this.workspaceRecovery !== operation) return;
+      this.workspaceRecovery = null;
+      if (operation.timer !== null) this.host.clearTimeout(operation.timer);
+      if (this.state.wallpaper.reason === 'workspace-changed') this.#setWallpaperFailure('shell-unsupported');
+      else this.#updateStartupWallpaperNotice();
+    });
+  }
+
+  async #applyWallpaper(message, runId, frame, retry = false, embed = null, dshPreparation = null, workspaceRecovery = null) {
+    if (this.workspaceRecovery && workspaceRecovery !== this.workspaceRecovery) this.#cancelWorkspaceRecovery();
     if (this.dshWallpaperPreparation?.active && dshPreparation !== this.dshWallpaperPreparation) {
       this.#cancelDSHWallpaperPreparation();
     }
@@ -1477,7 +1584,9 @@ class PageController {
     // The workspace may mount after the overlay closes. Skip, replacement and
     // disposal still cancel work, while completed playback or saving can finish.
     const isCurrent = () => generation === this.wallpaperGeneration
-      && (retry ? this.#isCurrentRetry(runId, generation)
+      && (workspaceRecovery ? this.workspaceRecovery === workspaceRecovery && !workspaceRecovery.abort.signal.aborted
+        && !this.pageHidden && this.#isCurrentRetry(runId, generation) && this.#workspacePageIsCurrent()
+        : retry ? this.#isCurrentRetry(runId, generation)
         : embed ? this.#isSettingsEmbed(runId, embed)
           : dshPreparation ? (this.playbackOwner === 'dsh-gated' && this.state.phase === dshPreparation.phase
             && dshPreparation.active && this.dshWallpaperPreparation === dshPreparation
@@ -1495,15 +1604,36 @@ class PageController {
       if (isCurrent()) return this.#setWallpaperFailure('apply-unavailable');
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
     }
+    const application = { generation, runId, request: this.wallpaperRequest, workspaceChanged: false };
+    this.wallpaperApplication = application;
     try {
       this.appearance = this.pageAdapter.observeAppearance(this.host);
       const request = Object.freeze({
         image: message.image, strength: message.strength, surface: this.appearance.colors.surface,
       });
-      const result = dshPreparation
-        ? await this.wallpaperApply(request, isCurrent, dshPreparation.abortController.signal)
-        : await this.wallpaperApply(request, isCurrent);
+      let accepted = false;
+      let pendingWorkspaceNotice = null;
+      const workspaceOptions = typeof dataProperty(this.pageAdapter, 'observeWorkspace') === 'function' ? {
+        waitForWorkspace: !!workspaceRecovery,
+        onWorkspaceInvalidated: notice => {
+          if (!accepted) pendingWorkspaceNotice = notice;
+          else this.#handleWorkspaceInvalidated(notice, runId, generation);
+        },
+      } : undefined;
+      const signal = workspaceRecovery?.abort.signal ?? dshPreparation?.abortController.signal;
+      const result = workspaceOptions
+        ? await this.wallpaperApply(request, isCurrent, signal, workspaceOptions)
+        : signal ? await this.wallpaperApply(request, isCurrent, signal) : await this.wallpaperApply(request, isCurrent);
       if (!isCurrent()) return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
+      accepted = true;
+      if (pendingWorkspaceNotice && dataProperty(result, 'applied') === true
+        && dataProperty(pendingWorkspaceNotice.api, 'owner') === this.wallpaperOwner
+        && !wallpaperRecord(this.host, this.wallpaperOwner).present) {
+        if (this.playbackOwner === 'native' && this.nativeWorkspace?.active
+          && this.nativeWorkspace.runId === runId) this.nativeWorkspace.wallpaperCommitted = true;
+        this.#handleWorkspaceInvalidated(pendingWorkspaceNotice, runId, generation, true);
+        return { ...this.state.wallpaper };
+      }
       if (dataProperty(result, 'applied') === false) {
         const reason = wallpaperReason(result);
         const failure = wallpaperFailure(result) ?? wallpaperFailure({ failureCode: 'apply-failed' });
@@ -1529,6 +1659,10 @@ class PageController {
         return this.#setWallpaperFailure('apply-unavailable');
       }
       this.wallpaperAPI = current.api;
+      if (this.playbackOwner === 'native' && this.nativeWorkspace?.active
+        && this.nativeWorkspace.runId === runId && this.#wallpaperStatus(current.api).applied) {
+        this.nativeWorkspace.wallpaperCommitted = true;
+      }
       this.appearance = this.pageAdapter.observeAppearance(this.host);
       const updateWallpaperSurface = dataProperty(current.api, 'updateSurface');
       if (typeof updateWallpaperSurface === 'function') {
@@ -1556,6 +1690,13 @@ class PageController {
         const failure = wallpaperFailure(error) ?? wallpaperFailure({ failureCode: 'apply-failed' });
         return this.#setWallpaperFailure(failure.failureCode);
       }
+    } finally {
+      if (this.wallpaperApplication === application) {
+        this.wallpaperApplication = null;
+        if (application.workspaceChanged && application.generation === this.wallpaperGeneration
+          && application.runId === this.state.runId && application.request === this.wallpaperRequest
+          && !this.state.wallpaper.applied && !this.wallpaperDisabled) this.#queueWorkspaceRecovery();
+      }
     }
     return { ...this.state.wallpaper };
   }
@@ -1574,6 +1715,11 @@ class PageController {
       };
       const failure = !value.applied ? wallpaperFailure(value) : null;
       if (failure) Object.assign(result, failure);
+      const coverage = dataProperty(value, 'coverage');
+      const coverageKeys = ['shell', 'messaging', 'auxiliary'];
+      if (coverage && coverageKeys.every(key => ['observed', 'unknown'].includes(dataProperty(coverage, key)))) {
+        result.coverage = Object.fromEntries(coverageKeys.map(key => [key, dataProperty(coverage, key)]));
+      }
       for (const field of WALLPAPER_STATUS_FIELDS) {
         const fieldValue = value[field];
         if (typeof fieldValue === 'boolean' || (Number.isSafeInteger(fieldValue) && fieldValue >= 0)
@@ -1618,6 +1764,7 @@ class PageController {
     this.#clearSettingsSnapshot();
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
+    this.#cancelWorkspaceRecovery();
     this.state.phase = 'failed';
     this.state.overlay = false;
     this.state.reason = reason;
@@ -1648,6 +1795,7 @@ class PageController {
     const recoverable = this.state.phase === 'playing' && this.state.ready;
     this.watchdog = null;
     this.#disconnectBodyObserver();
+    this.#cancelWorkspaceRecovery();
     this.state.phase = 'timeout';
     this.state.overlay = false;
     this.state.reason = 'overlay-timeout';
@@ -1858,7 +2006,8 @@ class PageController {
       const operation = this.nativeWorkspace;
       if (status.prepared) {
         const currentOperation = operation?.runId === this.state.runId ? operation : null;
-        status.wallpaper = currentOperation?.result ? { ...currentOperation.result }
+        status.wallpaper = currentOperation?.wallpaperCommitted && !currentOperation.active ? { ...this.state.wallpaper }
+          : currentOperation?.result ? { ...currentOperation.result }
           : { applied: false, reason: '', imageDecoded: false };
         if (status.wallpaper.applied && !this.state.wallpaper.applied) {
           status.wallpaper = { applied: false, reason: 'wallpaper-unsupported', imageDecoded: false };
@@ -1888,6 +2037,7 @@ class PageController {
     this.#cancelDSHWallpaperPreparation();
     this.#clearSettingsSnapshot();
     this.wallpaperRetryCancel?.();
+    this.#cancelWorkspaceRecovery();
     this.wallpaperGeneration += 1;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();

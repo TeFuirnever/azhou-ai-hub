@@ -13,7 +13,8 @@ export function bootstrapStartup({
   playbackOwner = 'page',
 }) {
   const wallpaperOptions = { version, css };
-  if (pageAdapter?.wallpaper) wallpaperOptions.pageAdapter = pageAdapter;
+  const workspaceDeclared = pageAdapter && ['object', 'function'].includes(typeof pageAdapter) && 'workspaceContract' in pageAdapter;
+  if (workspaceDeclared || pageAdapter?.wallpaper || typeof pageAdapter?.observeWorkspace === 'function') wallpaperOptions.pageAdapter = pageAdapter;
   const applyWallpaper = createWallpaperApplicator(installRenderer, wallpaperOptions, host);
   // Static properties below carry animation-owned factories only. The host page
   // strategy (pageAdapter) is passed explicitly to installStartup and must never
