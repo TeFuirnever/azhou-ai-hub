@@ -175,7 +175,7 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **候选版**：Codex／Claude 原生插件、zcode 仅含 commands 的插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力。2026-11-14 的 GUI 探针验证了 zcode 命令面，且当日恢复共享根技能链接后其引用技能已加载并驱动会话；完整只读 pstack 任务运行、hook 信任与发布批准仍需独立证据。 |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.38 **候选版**：Codex／Claude 原生插件、自带 commands 与捆绑 skills 的 zcode 插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力。2026-11-14 的 GUI 探针验证了 zcode 命令面，且当日共享根技能链接在位时其引用技能已加载并驱动会话；捆绑构建在重装验证后即可退役这些链接。完整只读 pstack 任务运行、hook 信任与发布批准仍需独立证据。 |
 
 ![Agent Skin 效果图](assets/github/integration-agent-skin-effect.png)
 
@@ -197,7 +197,7 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
-2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码与 23 项补丁队列均未改变。
+2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码未变，补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
 
 通过 Hub 移除 pstack 期间，请确保目标 `CODEX_HOME` 没有其他原生插件或 marketplace 变更；计划会提示此要求，但无法验证其他进程。
 

@@ -54,34 +54,24 @@ plugin manager for such a home; see the
 [measured Desktop receipt](../../evidence/chatgpt-desktop-native-plugin-install-2026-11-04.md).
 A successful plugin listing is not a live invocation or hook trust receipt.
 
-**ZCode** uses two different surfaces. The generated `zcode-plugin/`
-marketplace contains 41 commands and **no skills or hooks**. With the
-ZCode CLI on PATH, install that commands-only plugin through the native
-manager:
+**ZCode** installs one plugin surface. The generated `zcode-plugin/`
+marketplace carries 41 commands **and the 68 bundled skills**, declared by
+the `skills` manifest pointer using the same root-level convention as the
+host's official github, zcode-guide and visualize plugins, so no
+shared-root or project-local skill links are needed on ZCode. With the
+ZCode CLI on PATH, install through the native manager:
 
 ```sh
 : "${PSTACK_PACKAGE:?Set PSTACK_PACKAGE to the absolute Hub package directory}"
 zcode plugins marketplace add "$PSTACK_PACKAGE/harness/pstack/zcode-plugin"
 zcode plugins install pstack-azhouzhou@azhou-hub
 zcode commands list
+zcode skills list
 ```
 
-The 68 skills are supplied separately by the shared user root
-`~/.agents/skills`, or by project-scoped links when an isolated
-project requires them. The plugin must not duplicate those skills.
-For a project-local install, from that project root, preserve any existing
-entry (file, directory or symlink):
-
-```sh
-SRC="$PSTACK_PACKAGE/harness/pstack/zcode/skills"
-test -d "$SRC" || { printf '%s\n' "no zcode skills at $SRC" >&2; exit 2; }
-mkdir -p .agents/skills
-for source in "$SRC"/*/; do
-  skill="${source%/}"; target=".agents/skills/${skill##*/}"
-  [ -e "$target" ] || [ -L "$target" ] || ln -s "$skill" "$target"
-done
-zcode skills list --cwd "$(pwd -P)"
-```
+Installs made before 0.15.38 served the 68 skills through the shared user
+root `~/.agents/skills`; the bundled build removes that dependency, and
+those links can be deleted once the reinstall is verified.
 
 Native command listing and skill discovery do not yet prove GUI invocation;
 ZCode plugin SessionStart hook delivery is not claimed.
