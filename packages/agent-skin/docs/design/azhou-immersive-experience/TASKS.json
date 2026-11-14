@@ -9,7 +9,7 @@
       "id": "NH-00",
       "pr": "P01",
       "status": "planned_unverified",
-      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。",
+      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。记录协议草案，仅先冻结无时长依赖的安全不变量。P02参考实录与原型审阅后冻结NH-10完整协议。",
       "evidence": "P01 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/docs/design/azhou-immersive-experience/*"
@@ -17,10 +17,10 @@
     },
     {
       "id": "NH-10",
-      "pr": "P01",
+      "pr": "P02",
       "status": "planned_unverified",
-      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。",
-      "evidence": "P01 checklist and acceptance receipts",
+      "completion": "P01核对原约束后，在P02参考实录与原型审阅后冻结时间轴、音轨、入口、状态和性能协议。缺证据不得称冻结完成。",
+      "evidence": "P02 frozen protocol and operator review",
       "files": [
         "packages/agent-skin/docs/design/azhou-immersive-experience/*"
       ]
@@ -29,7 +29,7 @@
       "id": "ALIGN-00",
       "pr": "P01",
       "status": "planned_unverified",
-      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。",
+      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。记录协议草案，仅先冻结无时长依赖的安全不变量。P02参考实录与原型审阅后冻结NH-10完整协议。",
       "evidence": "P01 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/docs/design/azhou-immersive-experience/*"
@@ -39,7 +39,7 @@
       "id": "ALIGN-01",
       "pr": "P01",
       "status": "planned_unverified",
-      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。",
+      "completion": "核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。记录协议草案，仅先冻结无时长依赖的安全不变量。P02参考实录与原型审阅后冻结NH-10完整协议。",
       "evidence": "P01 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/docs/design/azhou-immersive-experience/*"
@@ -49,7 +49,7 @@
       "id": "ALIGN-02",
       "pr": "P02",
       "status": "planned_unverified",
-      "completion": "先审角色参考页，再审场景母版、关键帧和壁纸。只在授权及人工通过后提交生产资产，联动素材清单、许可与生产验证。",
+      "completion": "先原型审阅角色、构图、12秒与约14秒分镜、音轨与入口范围。取得参考组合实录或明确缺口裁决后冻结NH-10，再生成已批准生产资产及许可清单。",
       "evidence": "P02 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/assets/azhou/*",
@@ -61,7 +61,7 @@
       "id": "ALIGN-03",
       "pr": "P02",
       "status": "planned_unverified",
-      "completion": "先审角色参考页，再审场景母版、关键帧和壁纸。只在授权及人工通过后提交生产资产，联动素材清单、许可与生产验证。",
+      "completion": "先原型审阅角色、构图、12秒与约14秒分镜、音轨与入口范围。取得参考组合实录或明确缺口裁决后冻结NH-10，再生成已批准生产资产及许可清单。",
       "evidence": "P02 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/assets/azhou/*",
@@ -73,7 +73,7 @@
       "id": "ALIGN-04",
       "pr": "P02",
       "status": "planned_unverified",
-      "completion": "先审角色参考页，再审场景母版、关键帧和壁纸。只在授权及人工通过后提交生产资产，联动素材清单、许可与生产验证。",
+      "completion": "先原型审阅角色、构图、12秒与约14秒分镜、音轨与入口范围。取得参考组合实录或明确缺口裁决后冻结NH-10，再生成已批准生产资产及许可清单。",
       "evidence": "P02 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/assets/azhou/*",
@@ -115,7 +115,7 @@
       "id": "ALIGN-05",
       "pr": "P04",
       "status": "planned_unverified",
-      "completion": "把已审场景放入 12 秒编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
+      "completion": "把已审场景放入 P02已裁决时间轴编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
       "evidence": "P04 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/animation.js",
@@ -130,7 +130,7 @@
       "id": "ALIGN-06",
       "pr": "P04",
       "status": "planned_unverified",
-      "completion": "把已审场景放入 12 秒编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
+      "completion": "把已审场景放入 P02已裁决时间轴编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
       "evidence": "P04 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/animation.js",
@@ -145,7 +145,7 @@
       "id": "ALIGN-07",
       "pr": "P04",
       "status": "planned_unverified",
-      "completion": "把已审场景放入 12 秒编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
+      "completion": "把已审场景放入 P02已裁决时间轴编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。",
       "evidence": "P04 checklist and acceptance receipts",
       "files": [
         "packages/agent-skin/animation.js",
@@ -209,21 +209,151 @@
         "README.md",
         "README.zh-CN.md"
       ]
+    },
+    {
+      "id": "ALIGN-09",
+      "pr": "P07",
+      "status": "planned_unverified",
+      "completion": "实现按主题保存、切换、0至100背景透明度与跟随主题。保持文字图标不变淡。删除需确认且移入废纸篓，保护当前主题、并发切换、原包和偏好。日常恢复官方外观与升级保留数据必须有入口。",
+      "evidence": "REFERENCE-COVERAGE corresponding rows and acceptance receipts",
+      "files": [
+        "packages/agent-skin/image-settings.js",
+        "packages/agent-skin/extension/*",
+        "packages/agent-skin/docs/*",
+        "packages/agent-skin/tools/*"
+      ]
+    },
+    {
+      "id": "ALIGN-10",
+      "pr": "P08",
+      "status": "planned_unverified",
+      "completion": "冻结本地主题包格式和注册部件边界，验证ZIP、manifest、图像与SafeCSS。导入不自动应用，应用失败恢复last-known-good。在线Gallery与Studio作为明确范围裁决，不擅自传图或创建账户。",
+      "evidence": "REFERENCE-COVERAGE corresponding rows and acceptance receipts",
+      "files": [
+        "packages/agent-skin/image-settings.js",
+        "packages/agent-skin/extension/*",
+        "packages/agent-skin/tools/*",
+        "packages/agent-skin/docs/*"
+      ]
+    },
+    {
+      "id": "ALIGN-11",
+      "pr": "P08",
+      "status": "planned_unverified",
+      "completion": "冻结本地主题包格式和注册部件边界，验证ZIP、manifest、图像与SafeCSS。导入不自动应用，应用失败恢复last-known-good。在线Gallery与Studio作为明确范围裁决，不擅自传图或创建账户。",
+      "evidence": "REFERENCE-COVERAGE corresponding rows and acceptance receipts",
+      "files": [
+        "packages/agent-skin/image-settings.js",
+        "packages/agent-skin/extension/*",
+        "packages/agent-skin/tools/*",
+        "packages/agent-skin/docs/*"
+      ]
+    },
+    {
+      "id": "ALIGN-12",
+      "pr": "P09",
+      "status": "planned_unverified",
+      "completion": "执行P02已冻结的时长、音轨和入口范围。不得在P09才决定前序编排。若选可选监视器，先审登录项权限、所有权和卸载，不能静默安装。区分原生版fill和轻量版fit，不混报参考。",
+      "evidence": "REFERENCE-COVERAGE corresponding rows and acceptance receipts",
+      "files": [
+        "packages/agent-skin/Native/*",
+        "packages/agent-skin/animation.js",
+        "packages/agent-skin/theme-config.json",
+        "packages/agent-skin/tools/*",
+        "packages/agent-skin/docs/*"
+      ]
+    },
+    {
+      "id": "ALIGN-13",
+      "pr": "P09",
+      "status": "planned_unverified",
+      "completion": "执行P02已冻结的时长、音轨和入口范围。不得在P09才决定前序编排。若选可选监视器，先审登录项权限、所有权和卸载，不能静默安装。区分原生版fill和轻量版fit，不混报参考。",
+      "evidence": "REFERENCE-COVERAGE corresponding rows and acceptance receipts",
+      "files": [
+        "packages/agent-skin/Native/*",
+        "packages/agent-skin/animation.js",
+        "packages/agent-skin/theme-config.json",
+        "packages/agent-skin/tools/*",
+        "packages/agent-skin/docs/*"
+      ]
+    },
+    {
+      "id": "ALIGN-08",
+      "pr": "P04",
+      "status": "planned_unverified",
+      "completion": "Cover REF-01 through REF-08 across native controls, routes and display modes",
+      "evidence": "three-way reference/trunk/candidate screenshots and interactions",
+      "files": [
+        "packages/agent-skin/wallpaper/*",
+        "packages/agent-skin/extension/*",
+        "packages/agent-skin/tools/*"
+      ]
+    },
+    {
+      "id": "ALIGN-14",
+      "pr": "P10",
+      "status": "planned_unverified",
+      "completion": "P02 freezes the protocol before P10 production work. Deliver versioned adapters, capability binding, selector isolation, fail-safe cleanup, Codex live gates and DSH contract fault fixtures. P05 owns the real rc.1-to-rc.3 DSH lane; no full-host success until it passes.",
+      "evidence": "HOST-BOUNDARY.md gates and per-host live receipts",
+      "files": [
+        "packages/agent-skin/Native/SkinHostContract.swift",
+        "packages/agent-skin/extension/*",
+        "packages/agent-skin/wallpaper/apply.js",
+        "packages/agent-skin/tools/*",
+        "docs/support-matrix.md"
+      ]
     }
   ],
   "pr_dependencies": {
     "P01": "None",
     "P02": "P01",
-    "P03": "P01",
-    "P04": "P02, P03",
-    "P05": "P01, P03",
-    "P06": "P04; P05 resolved as completed or evidenced blocked"
+    "P03": "P01, P02, P10",
+    "P04": "P02, P03, P10",
+    "P05": "P01, P03, P10",
+    "P06": "P04, P07, P08; P05 and P09 independently resolved with scope decisions",
+    "P07": "P01, P04",
+    "P08": "P01, P07",
+    "P09": "P01, P02, P03",
+    "P10": "P01, P02"
   },
   "product_execution": "requires_explicit_go",
   "visual_review_required": [
     "P02",
     "P03",
     "P04",
-    "P05 when interaction changes"
-  ]
+    "P05 when interaction changes",
+    "P07",
+    "P08",
+    "P09",
+    "P10"
+  ],
+  "reference_coverage": "REFERENCE-COVERAGE.md",
+  "reference_live_validation": "not_run",
+  "unresolved_scope": [
+    "12s versus reference ~14s storyboard",
+    "audio and default volume",
+    "official-icon monitor authorization and implementation",
+    "online Gallery/Studio ecosystem",
+    "Windows DWM versus macOS fade"
+  ],
+  "dsh_upgrade_case": {
+    "installed_version": "0.2.2-rc.1",
+    "target_version": "0.2.2-rc.3",
+    "channel": "nightly",
+    "prerelease": true,
+    "source_modified": false,
+    "downloaded": false,
+    "installed_target": false,
+    "runtime_verified": false,
+    "shared_payload_requires_isolation": true,
+    "plan": "DSH-UPGRADE-CASE.md"
+  },
+  "readiness": {
+    "discovery": "ready_to_plan_and_inspect_without_mutation",
+    "production_implementation": "not_ready",
+    "host_upgrade": "not_authorized_by_document_save",
+    "report": "READINESS.md",
+    "visual_freeze_owner": "P02",
+    "original_requirements": "not_recovered"
+  }
 }

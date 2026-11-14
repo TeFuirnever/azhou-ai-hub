@@ -2,7 +2,8 @@
 
 按顺序交付阿舟连续启动与工作区体验，保留 Azhou IP、最新已保存设置与原生控件。
 本计划是设计资产，不是执行授权或已通过回执。
-P01 冻结基线，P02 与 P03 可并行，P04 集成视觉，P05 独立完成 DSH，P06 分端收尾。
+P01调查基线与约束，P02冻结视觉与协议后P10隔离宿主边界，P03在P02和P10后，P04 集成整窗视觉，P05 独立完成 DSH。
+P07 管理主题，P08 安全导入，P09 完成入口及音频选择，P06 最后分端收尾。
 
 ## How to read this
 
@@ -25,9 +26,9 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 ### Spawn owners
 
 - [ ] 按 TASKS.json 核对原编号与 PR 依赖。一个 PR 一个 owner、独立 Treehouse 租约与分支，记录在私有任务证据。
-- [ ] P01 先行。P02 和 P03 在 P01 后独立。P04 在 P02 与 P03 后。P05 在 P01 与 P03 后。P06 等 P04 完成且 P05 有独立结果。
+- [ ] P01调查先行，P02结束冻结视觉及NH-10完整协议。P02在P01后，P10正式任务在P02后；P01后可先只读调查宿主边界，P03在P02和P10后。P04 在 P02 与 P03 后。P05在P01、P03与P10后。P07在P04后，P08在P07后，P09在P02与P03后。P06等P04、P07、P08完成且P05、P09有独立结果。
 - [ ] 保持每节列出的文件边界。共享文件只允许一个 writer，依赖 PR 合入或明确堆叠后才写。
-- [ ] P02、P03、P04 及实际改变交互的 P05 在截图和视频审阅前不得合并。P05 仅记能力缺口时重新记录其无交互范围。
+- [ ] P02、P03、P04、P07、P08、P09、P10 及实际改变交互的 P05 在截图和视频审阅前不得合并。P05 仅记能力缺口时重新记录其无交互范围。
 
 ### PR mechanics, for every PR
 
@@ -51,7 +52,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] 用当前可用真实 UI 控制工具操作宿主。没有驱动能力时留下具体验收步骤并标记 blocked，不改用 mock 宣称 live pass。
 - [ ] 每条 lane 保存截图到私有证据目录的对应相对路径，保存完整显示器视频与事件日志。先检查画面无敏感内容，公开 PR 只放脱敏素材。
 
-## 冻结来源、所有权与协议 (P01)
+## 核对来源、所有权与待决约束 (P01)
 
 **Depends on.** None.
 
@@ -61,7 +62,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 **Build.**
 
-- [ ] 核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。冻结首帧、设置和对比协议。 以 NH-00, NH-10, ALIGN-00, ALIGN-01 的对应产物作为完成证据。
+- [ ] 核对原需求包、修复分支当前差异、运行输入指纹和安装所有权。记录引用及未证明项，不重做已有代码。记录首帧、设置和对比协议草案。只有与视觉时长无关的安全不变量可先冻结，NH-10完整协议在P02原型及参考实录后冻结。 以 NH-00, ALIGN-00, ALIGN-01 的对应产物作为完成证据。
 
 **You see.**
 
@@ -109,7 +110,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 **Build.**
 
-- [ ] 先审角色参考页，再审场景母版、关键帧和壁纸。只在授权及人工通过后提交生产资产，联动素材清单、许可与生产验证。 以 ALIGN-02, ALIGN-03, ALIGN-04 的对应产物作为完成证据。
+- [ ] 先做角色和构图原型，再比较12秒与约14秒分镜、音轨默认、fit/fill入口和参考组合实录。在P02审阅结束冻结选择及NH-10协议，然后生成生产资产，联动素材许可和验证。未冻结只可做原型，不提交最终生产素材。 以 NH-10, ALIGN-02, ALIGN-03, ALIGN-04 的对应产物作为完成证据。
 
 **You see.**
 
@@ -149,7 +150,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## 完成原生快照与交接 (P03)
 
-**Depends on.** P01.
+**Depends on.** P01, P02, P10.
 
 **Files.**
 
@@ -190,7 +191,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Metric. 首个自有帧、动画持续时间、工作区交互就绪、峰值 RSS 与结束后 60 秒静置 CPU。
 - [ ] Probe. 按 ACCEPTANCE.md 在同设备以相同设置交错测 trunk 和 head，各至少五次，保留故障样本。
 - [ ] Baseline. 先记录 trunk 原始值、p50、最坏值及录屏开销，缺失功能单列。
-- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；12 秒播放和 60 秒总预算不变。未测基线不得判通过。
+- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；原12秒生产约束由P01核对，再在P02对照约14秒分镜后冻结，60秒总预算不变。未测基线不得判通过。
 
 **Review gate.** The operator reviews before merge.
 
@@ -202,7 +203,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## 衔接阿舟动画与分层工作区 (P04)
 
-**Depends on.** P02, P03.
+**Depends on.** P02, P03, P10.
 
 **Files.**
 
@@ -215,7 +216,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 **Build.**
 
-- [ ] 把已审场景放入 12 秒编排并匹配末帧与壁纸焦点。实现首页与任务页的可读层级。保持原生控件、preview 和既有 Pet，不改 Pet 安装。 以 ALIGN-05, ALIGN-06, ALIGN-07 的对应产物作为完成证据。
+- [ ] 把已审场景放入经NH-00裁决的编排并匹配末帧与壁纸焦点。按REF-01至REF-08实现整窗、所有列明控件、工作面和各显示模式。保持原生控件、preview 和既有 Pet，不改 Pet 安装。 以 ALIGN-05, ALIGN-06, ALIGN-07 的对应产物作为完成证据。
 
 **You see.**
 
@@ -243,7 +244,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Metric. 首个自有帧、动画持续时间、工作区交互就绪、峰值 RSS 与结束后 60 秒静置 CPU。
 - [ ] Probe. 按 ACCEPTANCE.md 在同设备以相同设置交错测 trunk 和 head，各至少五次，保留故障样本。
 - [ ] Baseline. 先记录 trunk 原始值、p50、最坏值及录屏开销，缺失功能单列。
-- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；12 秒播放和 60 秒总预算不变。未测基线不得判通过。
+- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；原12秒生产约束由P01核对，再在P02对照约14秒分镜后冻结，60秒总预算不变。未测基线不得判通过。
 
 **Review gate.** The operator reviews before merge.
 
@@ -255,7 +256,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## 证明并接入 DSH 首帧能力 (P05)
 
-**Depends on.** P01, P03.
+**Depends on.** P01, P03, P10.
 
 **Files.**
 
@@ -294,7 +295,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Metric. 首个自有帧、动画持续时间、工作区交互就绪、峰值 RSS 与结束后 60 秒静置 CPU。
 - [ ] Probe. 按 ACCEPTANCE.md 在同设备以相同设置交错测 trunk 和 head，各至少五次，保留故障样本。
 - [ ] Baseline. 先记录 trunk 原始值、p50、最坏值及录屏开销，缺失功能单列。
-- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；12 秒播放和 60 秒总预算不变。未测基线不得判通过。
+- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；原12秒生产约束由P01核对，再在P02对照约14秒分镜后冻结，60秒总预算不变。未测基线不得判通过。
 
 **Review gate.** The operator reviews before merge.
 
@@ -306,7 +307,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## 完成分端验收与支持文档 (P06)
 
-**Depends on.** P04; P05 resolved as completed or evidenced blocked.
+**Depends on.** P04, P07, P08; P05 and P09 resolved as completed or evidenced blocked with scope decision.
 
 **Files.**
 
@@ -354,6 +355,214 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 - [ ] 独立 root verdict 对应精确 head SHA，所有检查与线程解决。由操作者 squash 合并，保留实际合并结果及恢复点后才考虑释放租约。
 
+## 实现本地主题库与透明度 (P07)
+
+**Depends on.** P01, P04.
+
+**Files.**
+
+- [ ] 仅修改 `packages/agent-skin/image-settings.js` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/extension/*` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/docs/*` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/tools/*` 内本任务文件，保存精确diff。
+
+**Build.**
+
+- [ ] 实现按主题保存、切换、0至100背景透明度与跟随主题。保持文字图标不变淡。删除需确认且移入废纸篓，保护当前主题、并发切换、原包和偏好。日常恢复官方外观与升级保留数据必须有入口。 以 ALIGN-09 和 REFERENCE-COVERAGE.md 的对应行关闭作为证据。
+
+**You see.**
+
+- [ ] 在本 PR 回执中展示对应可观察结果。未实现、blocked 与未运行分别列出，不以文档或编译成功代替用户可见结果。
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] 运行 `python3 scripts/verify.py` 并保存结果。按文件边界运行 `packages/agent-skin/docs/testing.md` 中对应生产入口和状态测试；无产品代码时检查链接、依赖和禁止数据扫描。
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `gpt-6-luna` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. 主题切换后的真实工作区。Save `p07/lane-1.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 2. 透明度0与100。Save `p07/lane-2.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 3. 中间透明度且文字不变淡。Save `p07/lane-3.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 4. 跟随主题清除覆盖。Save `p07/lane-4.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 5. 切走再切回及重启记忆。Save `p07/lane-5.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 6. 删除确认与取消。Save `p07/lane-6.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 7. 活动主题保护。Save `p07/lane-7.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 8. 导入切换删除并发。Save `p07/lane-8.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 9. 废纸篓恢复。Save `p07/lane-9.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 10. 恢复官方外观与升级保留。Save `p07/lane-10.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. 首个自有帧、动画持续时间、工作区交互就绪、峰值 RSS 与结束后 60 秒静置 CPU。
+- [ ] Probe. 按 ACCEPTANCE.md 在同设备以相同设置交错测 trunk 和 head，各至少五次，保留故障样本。
+- [ ] Baseline. 先记录 trunk 原始值、p50、最坏值及录屏开销，缺失功能单列。
+- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；原12秒生产约束由P01核对，再在P02对照约14秒分镜后冻结，60秒总预算不变。未测基线不得判通过。
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] 将本节 screenshot 与 30 至 60 秒 video 发给 operator，记录其对精确候选的审阅。未批准停在 merge-ready。
+
+**Merge.**
+
+- [ ] 独立 root verdict 对应精确 head SHA，所有检查与线程解决。由操作者 squash 合并，保留实际合并结果及恢复点后才考虑释放租约。
+
+
+## 建立安全主题导入与应用事务 (P08)
+
+**Depends on.** P01, P07.
+
+**Files.**
+
+- [ ] 仅修改 `packages/agent-skin/image-settings.js` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/extension/*` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/tools/*` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/docs/*` 内本任务文件，保存精确diff。
+
+**Build.**
+
+- [ ] 冻结本地主题包格式和注册部件边界，验证ZIP、manifest、图像与SafeCSS。导入不自动应用，应用失败恢复last-known-good。在线Gallery与Studio作为明确范围裁决，不擅自传图或创建账户。 以 ALIGN-10, ALIGN-11 和 REFERENCE-COVERAGE.md 的对应行关闭作为证据。
+
+**You see.**
+
+- [ ] 在本 PR 回执中展示对应可观察结果。未实现、blocked 与未运行分别列出，不以文档或编译成功代替用户可见结果。
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] 运行 `python3 scripts/verify.py` 并保存结果。按文件边界运行 `packages/agent-skin/docs/testing.md` 中对应生产入口和状态测试；无产品代码时检查链接、依赖和禁止数据扫描。
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `gpt-6-luna` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. 合法本地主题导入但不自动应用。Save `p08/lane-1.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 2. 缺件空件与不支持格式。Save `p08/lane-2.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 3. 路径穿越链接和压缩炸弹。Save `p08/lane-3.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 4. 重复路径及同ID更新。Save `p08/lane-4.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 5. CSS越界与远程载荷。Save `p08/lane-5.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 6. 静态背景10MiB边界与Hub20MiB记录隔离。Save `p08/lane-6.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 7. 应用失败保留旧主题。Save `p08/lane-7.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 8. 每次应用重新校验。Save `p08/lane-8.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 9. 本地图库预览应用。Save `p08/lane-9.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 10. 线上生态范围与权限核对。Save `p08/lane-10.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. 首个自有帧、动画持续时间、工作区交互就绪、峰值 RSS 与结束后 60 秒静置 CPU。
+- [ ] Probe. 按 ACCEPTANCE.md 在同设备以相同设置交错测 trunk 和 head，各至少五次，保留故障样本。
+- [ ] Baseline. 先记录 trunk 原始值、p50、最坏值及录屏开销，缺失功能单列。
+- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；原12秒生产约束由P01核对，再在P02对照约14秒分镜后冻结，60秒总预算不变。未测基线不得判通过。
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] 将本节 screenshot 与 30 至 60 秒 video 发给 operator，记录其对精确候选的审阅。未批准停在 merge-ready。
+
+**Merge.**
+
+- [ ] 独立 root verdict 对应精确 head SHA，所有检查与线程解决。由操作者 squash 合并，保留实际合并结果及恢复点后才考虑释放租约。
+
+
+## 完成入口与音频模式的已选方案 (P09)
+
+**Depends on.** P01, P02, P03.
+
+**Files.**
+
+- [ ] 仅修改 `packages/agent-skin/Native/*` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/animation.js` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/theme-config.json` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/tools/*` 内本任务文件，保存精确diff。
+- [ ] 仅修改 `packages/agent-skin/docs/*` 内本任务文件，保存精确diff。
+
+**Build.**
+
+- [ ] 执行P02已经冻结的时长、音轨及入口范围，不在P09才决定前序素材和编排。若选可选监视器，先审登录项权限、所有权和卸载，不能静默安装。区分原生版fill和轻量版fit，不混报参考。 以 ALIGN-12, ALIGN-13 和 REFERENCE-COVERAGE.md 的对应行关闭作为证据。
+
+**You see.**
+
+- [ ] 在本 PR 回执中展示对应可观察结果。未实现、blocked 与未运行分别列出，不以文档或编译成功代替用户可见结果。
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] 运行 `python3 scripts/verify.py` 并保存结果。按文件边界运行 `packages/agent-skin/docs/testing.md` 中对应生产入口和状态测试；无产品代码时检查链接、依赖和禁止数据扫描。
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `gpt-6-luna` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. 从自有入口冷启。Save `p09/lane-1.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 2. 官方图标触发或明确缺口。Save `p09/lane-2.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 3. 已运行宿主激活不重播。Save `p09/lane-3.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 4. 选定fit或fill在窄宽窗表现。Save `p09/lane-4.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 5. 鼠标屏与目标窗口屏差异。Save `p09/lane-5.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 6. Esc按钮及Command+.。Save `p09/lane-6.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 7. 有声音量和静音记忆。Save `p09/lane-7.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 8. 跳过后音频与窗口终止。Save `p09/lane-8.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 9. 监视器启停及卸载保留配置。Save `p09/lane-9.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+- [ ] Lane 10. 选定时长分镜与参考逐段对照。Save `p09/lane-10.png`. Pass when 参考、trunk与候选的对应REF要求有独立结果；缺少参考实录或未裁定范围时明确不算parity通过。
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. 首个自有帧、动画持续时间、工作区交互就绪、峰值 RSS 与结束后 60 秒静置 CPU。
+- [ ] Probe. 按 ACCEPTANCE.md 在同设备以相同设置交错测 trunk 和 head，各至少五次，保留故障样本。
+- [ ] Baseline. 先记录 trunk 原始值、p50、最坏值及录屏开销，缺失功能单列。
+- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；原12秒生产约束由P01核对，再在P02对照约14秒分镜后冻结，60秒总预算不变。未测基线不得判通过。
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] 将本节 screenshot 与 30 至 60 秒 video 发给 operator，记录其对精确候选的审阅。未批准停在 merge-ready。
+
+**Merge.**
+
+- [ ] 独立 root verdict 对应精确 head SHA，所有检查与线程解决。由操作者 squash 合并，保留实际合并结果及恢复点后才考虑释放租约。
+
+
+## 隔离宿主变化并验证安全降级 (P10)
+
+**Depends on.** P01, P02.
+
+**Files.**
+
+- [ ] 仅修改 `packages/agent-skin/Native/SkinHostContract.swift`、宿主适配器、`wallpaper/apply.js`及必要消费者和测试。
+- [ ] 更新 `docs/support-matrix.md` 的精确宿主兼容记录，不改变pstack。
+
+**Build.**
+
+- [ ] 按HOST-BOUNDARY.md扩展现有能力契约，集中宿主选择器、路由、token、存储和生命周期。迁移所有消费者后移除核心fallback。实现版本及代际绑定、局部停用、幂等恢复和独立watchdog。按DSH-UPGRADE-CASE.md建立DSH契约与故障fixture；rc.1到rc.3真实升级lane由P05完成，不修改官方源码或共享插件实体。P10只可声明已验证的Codex子集，不能提前声明全端完成。
+
+**You see.**
+
+- [ ] 在本 PR 回执中展示对应可观察结果。未实现、blocked 与未运行分别列出，不以文档或编译成功代替用户可见结果。
+
+**Verify, unit.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] 运行 `python3 scripts/verify.py` 并保存结果。按文件边界运行 `packages/agent-skin/docs/testing.md` 中对应生产入口和状态测试；无产品代码时检查链接、依赖和禁止数据扫描。
+
+**Verify, live.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked. Ten lanes on `gpt-6-luna` at the PR head, per the boot recipe.
+
+- [ ] Lane 1. Regression lane against trunk. 同一宿主构建比较trunk与候选并确认原生输入。Save `p10/lane-1.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 2. 宿主升级到未知build。Save `p10/lane-2.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 3. 关键选择器删除及重命名。Save `p10/lane-3.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 4. 多主页面和Pet路由。Save `p10/lane-4.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 5. CSP拒绝及无效颜色token。Save `p10/lane-5.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 6. 未知设置schema与大快照中断。Save `p10/lane-6.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 7. 旧ready旧回执与晚到事件。Save `p10/lane-7.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 8. 升级中重连及页面替换。Save `p10/lane-8.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 9. 另一主题冲突和重复安装停用。Save `p10/lane-9.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+- [ ] Lane 10. 失败释放后输入导航发送菜单及回退。Save `p10/lane-10.png`. Pass when 能力状态和版本绑定正确，失效不扩大注入，清理只动自有资源且原生操作仍正常。
+
+**Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
+
+- [ ] Metric. 首个自有帧、动画持续时间、工作区交互就绪、峰值 RSS 与结束后 60 秒静置 CPU。
+- [ ] Probe. 按 ACCEPTANCE.md 在同设备以相同设置交错测 trunk 和 head，各至少五次，保留故障样本。
+- [ ] Baseline. 先记录 trunk 原始值、p50、最坏值及录屏开销，缺失功能单列。
+- [ ] Rule. 使用 NH-10 冻结门禁。初始提案为首帧 500 ms、就绪 p50 不超过可比 trunk 1.10 倍、RSS 不超过 1.20 倍；原12秒生产约束由P01核对，再在P02对照约14秒分镜后冻结，60秒总预算不变。未测基线不得判通过。
+
+**Review gate.** The operator reviews before merge.
+
+- [ ] 将本节 screenshot 与 30 至 60 秒 video 发给 operator，记录其对精确候选的审阅。未批准停在 merge-ready。
+
+**Merge.**
+
+- [ ] 独立 root verdict 对应精确 head SHA，所有检查与线程解决。由操作者 squash 合并，保留实际合并结果及恢复点后才考虑释放租约。
+
+
+
 ## Close the program
 
 - [ ] 每个完成项都有对应证据，未完成项明确保留，不能为收尾而勾选。
@@ -365,7 +574,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## Appendix B. Alternatives rejected
 
-不采用新通用 Coordinator、第二原生设置权威、宿主未启动即播放未知最新设置、用 DOM-ready 冒充首帧、复制 Dragon 角色、自动重装 Pet或缩短至 2.8 秒。理由见 DESIGN.md 与 NH-DESIGN.md。
+不采用新通用 Coordinator、第二原生设置权威、宿主未启动即播放未知最新设置、用 DOM-ready 冒充首帧、复制 Dragon 角色、自动重装 Pet或缩短至 2.8 秒。12秒与参考约14秒、音频及官方图标入口不属于已否决选项。理由见 DESIGN.md 与 NH-DESIGN.md。
 
 ## Appendix C. Risks
 
@@ -375,4 +584,4 @@ P01 的原包缺失阻止需求映射冻结。P03 面临宿主页换代和多显
 
 ## Appendix D. Links and reading list
 
-先读 [README](README.md)、[DESIGN](DESIGN.md)、[ASSETS](ASSETS.md)、[ACCEPTANCE](ACCEPTANCE.md)、[NH-CONTRACT](NH-CONTRACT.md)及仓库 AGENTS。P03 与 P05 在改变架构前读取 `packages/pstack-agent-harness/harness/pstack/codex/skills/how/SKILL.md` 和 architect。设计有争议时读取 interrogate。各阶段按 show-me-your-work 保存私有决策轨迹，仓库只保留脱敏设计决定。
+先读 [开发就绪结论](READINESS.md)、[DSH升级案例](DSH-UPGRADE-CASE.md)、[宿主防腐层](HOST-BOUNDARY.md)、[参考覆盖矩阵](REFERENCE-COVERAGE.md)、[README](README.md)、[DESIGN](DESIGN.md)、[ASSETS](ASSETS.md)、[ACCEPTANCE](ACCEPTANCE.md)、[NH-CONTRACT](NH-CONTRACT.md)及仓库 AGENTS。P03 与 P05 在改变架构前读取 `packages/pstack-agent-harness/harness/pstack/codex/skills/how/SKILL.md` 和 architect。设计有争议时读取 interrogate。各阶段按 show-me-your-work 保存私有决策轨迹，仓库只保留脱敏设计决定。
