@@ -85,3 +85,9 @@ After a workspace lease is revoked, the existing startup owner attempts bounded 
 ### Theme draft round trips and defaults
 
 Within an open settings panel, Existing appearance and the Azhou theme retain their own artwork/contour drafts; switching between them does not overwrite an unsaved custom image or transparency edit. Cancel discards both draft states. Disabling a theme normally preserves its remembered transparency, while Restore all defaults explicitly resets that preference to Follow theme when saved. Restoring defaults and then cancelling does not change saved images or preferences. Both records still share the same conflict-checked save transaction.
+
+### Skip 与已准入的背景解码
+
+Skip 立即退出启动层，不等待背景解码。仅在 Skip 之前已由版本化适配器取得固定工作区 observation 与有效 lease、并进入图片解码的同一请求，可以继续收尾。此权限绑定原请求、代际、文档 token 和工作区 epoch；不会在 Skip 后获取新工作区。仍在等待外壳、未报告准入的旧适配器、取消设置、页面隐藏、节点替换、卸载及新请求继续使旧工作失效。动画 ready 不是背景准入。
+
+该边界由生成载荷的受控 decode、真实 Skip 点击及取消/替换负例检查；不代表真实宿主视觉衔接已经验收。

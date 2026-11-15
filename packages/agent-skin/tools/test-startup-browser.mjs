@@ -783,13 +783,15 @@ try {
     unknownDecoration.id = 'fixture-unknown';
     unknownDecoration.style.cssText = 'position:fixed;right:12px;top:80px;width:18px;height:18px;pointer-events:none;background-image:linear-gradient(red,blue)';
     document.getElementById('root').appendChild(unknownDecoration);
-    if (url.searchParams.has('hold-decode')) {
+    if (url.searchParams.has('hold-decode') || url.searchParams.has('hold-mask-decode')) {
       const original = HTMLImageElement.prototype.decode;
       const decodeGates = [], pendingGates = new Set();
       HTMLImageElement.prototype.decode = function () {
+        if (url.searchParams.has('hold-mask-decode') && !this.src.startsWith('data:image/svg+xml,')) return original.call(this);
         return original.call(this).then(() => new Promise(resolve => {
           const index = decodeGates.length;
           decodeGates.push({ resolve, source: this.src });
+          outerWindow.__decodeGateSources = decodeGates.map(gate => gate.source);
           pendingGates.add(index);
           outerWindow.__decodeGateCount = decodeGates.length;
           outerWindow.__decodePending = pendingGates.size > 0;
@@ -7232,6 +7234,106 @@ try {
     assert.equal(result.remainingObservers, 0);
     assert.equal(result.remainingMarkers, 0);
     return result;
+  });
+
+  await check('generated early Skip preserves pending wallpaper across appearance change', async () => {
+    const results=[];
+    for (const changeTheme of [false,true]) {
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-decode=1');
+      await awaitGeneratedReady('generated ready before wallpaper decode release');
+      await until(()=>cdp.evaluate('window.__decodePending===true'),10000,'pending real wallpaper decode');
+      const before=await cdp.evaluate('({controller:__startupAPI.status(),gates:__decodeGateCount,owner:!!window.__azhouWallpaper})');
+      const point=await cdp.evaluate(`(()=>{const f=document.querySelector('iframe[aria-label]'),b=f.contentDocument.querySelector('[data-agent-skin-skip]'),r=b.getBoundingClientRect(),fr=f.getBoundingClientRect();return {x:fr.x+r.x+r.width/2,y:fr.y+r.y+r.height/2};})()`);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+      await until(()=>cdp.evaluate("__startupAPI.status().completion?.cause==='skip'&&!document.querySelector('iframe[aria-label]')"),5000,'actual Skip releases overlay');
+      if(changeTheme)await cdp.evaluate("document.documentElement.dataset.theme='light'");
+      const skipped=await cdp.evaluate('({controller:__startupAPI.status(),owner:!!window.__azhouWallpaper,theme:document.documentElement.dataset.theme})');
+      await cdp.evaluate('window.__releaseDecode()');
+      let failure=null;
+      try {await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied===true&&__startupAPI.status().wallpaper.applied===true'),5000,'pending wallpaper remains valid after Skip');} catch(error){failure=String(error);}
+      const after=await cdp.evaluate('({controller:__startupAPI.status(),owner:window.__azhouWallpaper?.status()??null,pending:__decodePending,blobs:__fixtureBlobCount})');
+      results.push({changeTheme,before,skipped,after,failure});
+    }
+    await writeFile(join(options.out,'early-skip-observations.json'),JSON.stringify(results,null,2));
+    assert.ok(results.every(r=>!r.failure),'Skip closes startup but must preserve current same-run wallpaper: '+JSON.stringify(results));
+    return {results,scope:'generated payload with real gated decode and CDP Skip; synthetic host'};
+  });
+  await check('generated decode admission cannot outlive cancellation or workspace replacement', async () => {
+    const results=[];
+    for(const mode of ['already-applied','natural','settings-cancel','unmount','dispose','skip-workspace-replaced']) {
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-decode=1');
+      await awaitGeneratedReady('ready with pending scene for '+mode);
+      await until(()=>cdp.evaluate('window.__decodePending===true'),10000,'real pending scene');
+      const before=await cdp.evaluate('({state:__startupAPI.status(),pending:__decodePending})');
+      const click=async selector=>{
+        const point=await cdp.evaluate(`(()=>{const f=document.querySelector('iframe[aria-label]'),d=f.contentDocument,b=${selector},r=b.getBoundingClientRect(),fr=f.getBoundingClientRect();b.scrollIntoView({block:'center'});return {x:fr.x+r.x+r.width/2,y:fr.y+r.y+r.height/2};})()`);
+        await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+        await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+      };
+      if(['already-applied','natural'].includes(mode)) {
+        await cdp.evaluate('__releaseDecode()');await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied'),5000,'applied before completion');
+        if(mode==='already-applied')await click("d.querySelector('[data-agent-skin-skip]')");
+        await until(()=>cdp.evaluate("__startupAPI.status().phase==='complete'"),20000,'completion');
+      } else if(mode==='settings-cancel') {
+        assert.equal(await cdp.evaluate('__startupAPI.openSettings()'),true);
+        await until(()=>cdp.evaluate("!!document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-settings]')"),5000,'settings');
+        await click("[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim()))");
+      } else if(mode==='unmount')await cdp.evaluate("document.querySelector('iframe[aria-label]').remove()");
+      else if(mode==='dispose')await cdp.evaluate('__startupAPI.dispose()');
+      else {await click("d.querySelector('[data-agent-skin-skip]')");await cdp.evaluate("(()=>{const n=document.querySelector('[data-app-shell-main-surface]');n.replaceWith(n.cloneNode(true));})()");}
+      if(!['already-applied','natural'].includes(mode)) {
+        await cdp.evaluate('__releaseDecode()');
+        await until(()=>cdp.evaluate('!window.__decodePending&&window.__fixtureBlobCount===0'),5000,'released rejected decode');
+      }
+      const after=await cdp.evaluate('({state:__startupAPI.status(),wallpaper:window.__azhouWallpaper?.status()??null,blobs:__fixtureBlobCount,overlay:!!document.querySelector("iframe[aria-label]")})');
+      assert.equal(after.overlay,false,mode+' must release overlay');
+      assert.equal(after.wallpaper?.applied===true,['already-applied','natural'].includes(mode),mode);
+      results.push({mode,before,after});
+    }
+    await writeFile(join(options.out,'decode-admission-boundaries.json'),JSON.stringify(results,null,2));
+    return {results};
+  });
+  await check('generated selected theme mask decode preserves only its admitted workspace after Skip', async () => {
+    const results=[];
+    try {
+    for(const replaceWorkspace of [false,true]) {
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+      await awaitGeneratedReady('theme setup');
+      await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied'),10000,'setup background');
+      await cdp.evaluate("document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()");
+      await until(()=>cdp.evaluate("__startupAPI.status().phase==='complete'"),5000,'setup skip');
+      assert.equal(await cdp.evaluate('__startupAPI.openSettings()'),true);
+      await until(()=>cdp.evaluate("!!document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-theme-choice]')"),5000,'theme controls');
+      await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;for(const [sel,val,event] of [['[data-agent-skin-theme-choice]','azhou-q-v3','change'],['[data-agent-skin-theme-alpha-mode]','override','change'],['[data-agent-skin-theme-transparency]','50','input']]){const e=d.querySelector(sel);e.value=val;e.dispatchEvent(new d.defaultView.Event(event,{bubbles:true}));}[...d.querySelectorAll('button')].find(b=>/^(保存|Save)$/.test(b.textContent.trim())).click();})()`);
+      await until(()=>cdp.evaluate("!document.querySelector('iframe[aria-label]')&&window.__azhouWallpaper?.status().themeApplied===true"),10000,'saved selected theme');
+      await navigate('/fixture.html?generated-payload=1&hold-mask-decode=1');
+      await awaitGeneratedReady('selected theme ready before mask decode finishes');
+      await until(()=>cdp.evaluate('window.__decodePending===true'),10000,'actual mask gate');
+      const before=await cdp.evaluate('({state:__startupAPI.status(),sources:__decodeGateSources,owner:!!window.__azhouWallpaper})');
+      assert.equal(before.sources.length,1);assert.ok(before.sources[0].startsWith('data:image/svg+xml,'));
+      assert.ok(decodeURIComponent(before.sources[0]).includes('fill-opacity="0.5"'),'gate holds the selected T50 mask, not scene or host color');
+      const point=await cdp.evaluate(`(()=>{const f=document.querySelector('iframe[aria-label]'),b=f.contentDocument.querySelector('[data-agent-skin-skip]'),r=b.getBoundingClientRect(),fr=f.getBoundingClientRect();return {x:fr.x+r.x+r.width/2,y:fr.y+r.y+r.height/2};})()`);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+      await until(()=>cdp.evaluate("__startupAPI.status().completion?.cause==='skip'&&!document.querySelector('iframe[aria-label]')"),5000,'Skip before mask release');
+      if(replaceWorkspace)await cdp.evaluate("(()=>{const n=document.querySelector('[data-app-shell-main-surface]');n.replaceWith(n.cloneNode(true));})()");
+      await cdp.evaluate('__releaseDecode()');let failure=null;
+      try{await until(()=>cdp.evaluate(replaceWorkspace ? '!window.__azhouWallpaper&&__fixtureBlobCount===0' : 'window.__azhouWallpaper?.status().themeApplied===true'),5000,'admitted mask outcome');}catch(error){failure=String(error);}
+      const after=await cdp.evaluate('({state:__startupAPI.status(),owner:window.__azhouWallpaper?.status()??null,pending:__decodePending,blobs:__fixtureBlobCount})');
+      results.push({replaceWorkspace,before,after,failure});
+    }
+    await writeFile(join(options.out,'mask-admission-observations.json'),JSON.stringify(results,null,2));
+    assert.ok(results.every(row=>!row.failure),'mask admission boundary failed: '+JSON.stringify(results));return {results};
+    } finally {
+      await navigateFreshRecoveryFixture('/fixture.html?animation=1&no-initial-wallpaper=1');
+      await awaitGeneratedReady('fresh defaults after selected-theme regression');
+      const fresh = await cdp.evaluate('({state:__startupAPI.status(),owner:!!window.__azhouWallpaper})');
+      await cdp.evaluate('__startupAPI.dispose()');
+      await writeFile(join(options.out,'mask-regression-cleanup.json'),JSON.stringify(fresh,null,2));
+      assert.equal(fresh.state.wallpaper.reason,'disabled','the regression removes its saved theme and restores fresh defaults');
+      assert.equal(fresh.owner,false);
+    }
   });
 
   report.finishedAt = new Date().toISOString();

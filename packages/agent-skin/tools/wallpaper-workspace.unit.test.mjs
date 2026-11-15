@@ -114,3 +114,14 @@ for (const defect of ['observeWorkspace','isWorkspaceCurrent','watchWorkspace','
     assert.equal(getters,0);
   });
 }
+
+test('decode admission callback reaches only the renderer after fixed workspace preparation', async () => {
+  const scene=fixture({deferDigest:true});let notices=0;
+  const onDecodeAdmitted=()=>{notices++;};
+  const pending=scene.apply(VALUE,()=>true,undefined,{onDecodeAdmitted});
+  await Promise.resolve();assert.equal(notices,0);assert.equal(scene.calls.length,0);
+  scene.finishDigest();await pending;
+  assert.equal(notices,0,'shell observation does not itself grant decode completion');
+  assert.equal(scene.calls[0].workspaceObservation,scene.observation);
+  assert.equal(scene.calls[0].onDecodeAdmitted,onDecodeAdmitted);
+});

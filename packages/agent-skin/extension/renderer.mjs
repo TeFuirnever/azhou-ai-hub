@@ -1589,9 +1589,10 @@ class PageController {
       this.wallpaperRequest = { image: message.image, strength: message.strength, themeState: message.themeState ?? null };
       this.wallpaperDisabled = false;
     }
-    // The workspace may mount after the overlay closes. Skip, replacement and
-    // disposal still cancel work, while completed playback or saving can finish.
-    const isCurrent = () => generation === this.wallpaperGeneration
+    // Shell acquisition keeps startup authority. Only an already-admitted fixed
+    // decode lease can survive Skip; it cannot acquire a replacement workspace.
+    let decodeAdmission = null, admissionAttempted = false;
+    const strictCurrent = () => generation === this.wallpaperGeneration
       && (workspaceRecovery ? this.workspaceRecovery === workspaceRecovery && !workspaceRecovery.abort.signal.aborted
         && !this.pageHidden && this.#isCurrentRetry(runId, generation) && this.#workspacePageIsCurrent()
         : retry ? this.#isCurrentRetry(runId, generation)
@@ -1608,8 +1609,17 @@ class PageController {
               || this.#isCurrentFrame(runId, frame) || (!this.disposed && runId === this.state.runId
               && this.state.phase === 'complete' && ['natural', 'settings-save'].includes(this.state.completion?.cause)
               && this.#ownsStartupController()));
+    const isCurrent = () => {
+      if (strictCurrent()) return true;
+      if (!decodeAdmission || this.disposed || this.pageHidden || this.wallpaperDisabled
+        || this.intent !== 'play' || this.state.phase !== 'complete' || this.state.completion?.cause !== 'skip'
+        || runId !== this.state.runId || generation !== this.wallpaperGeneration
+        || application.request !== this.wallpaperRequest || application.abort.signal.aborted
+        || !this.#ownsStartupController()) return false;
+      try { return decodeAdmission.current() === true; } catch { return false; }
+    };
     if (typeof this.wallpaperApply !== 'function') {
-      if (isCurrent()) return this.#setWallpaperFailure('apply-unavailable');
+      if (strictCurrent()) return this.#setWallpaperFailure('apply-unavailable');
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
     }
     const application = { generation, runId, request: this.wallpaperRequest, workspaceChanged: false, abort: new AbortController() };
@@ -1628,6 +1638,22 @@ class PageController {
       let pendingWorkspaceNotice = null;
       const workspaceOptions = typeof dataProperty(this.pageAdapter, 'observeWorkspace') === 'function' ? {
         waitForWorkspace: !!workspaceRecovery,
+        onDecodeAdmitted: notice => {
+          if (admissionAttempted) { decodeAdmission = null; return; }
+          admissionAttempted = true;
+          if (retry || embed || dshPreparation || workspaceRecovery || this.intent !== 'play'
+            || !this.#isCurrentFrame(runId, frame) || !strictCurrent() || this.pageHidden
+            || this.wallpaperDisabled || this.wallpaperApplication !== application
+            || application.request !== this.wallpaperRequest || application.abort.signal.aborted
+            || !this.#ownsStartupController()) return;
+          const contract = dataProperty(notice, 'contract'), documentToken = dataProperty(notice, 'documentToken');
+          const workspaceEpoch = dataProperty(notice, 'workspaceEpoch'), current = dataProperty(notice, 'current');
+          if (contract !== 'codex-workspace-decode/v1' || typeof documentToken !== 'string' || !documentToken
+            || !Number.isSafeInteger(workspaceEpoch) || workspaceEpoch < 1 || typeof current !== 'function') return;
+          try {
+            if (current() === true) decodeAdmission = Object.freeze({ contract, documentToken, workspaceEpoch, current });
+          } catch {}
+        },
         onWorkspaceInvalidated: notice => {
           if (!accepted) pendingWorkspaceNotice = notice;
           else this.#handleWorkspaceInvalidated(notice, runId, generation);

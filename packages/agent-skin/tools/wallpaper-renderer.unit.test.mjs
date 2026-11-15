@@ -1551,3 +1551,23 @@ test('aborting initial theme decode immediately releases images timers and liste
     assert.equal(globalThis.__azhouWallpaper,successor);assert.equal(successor.status().applied,true);
   }finally{globalThis.setTimeout=originalSet;globalThis.clearTimeout=originalClear;}
 }));
+
+test('decode admission reports the fixed actual workspace lease before scene decoding', async () => {
+  await onObservedPage(async page => {
+    let notice, deliveries=0, callerChecks=0;
+    const strictCurrent=()=>{callerChecks++;return true;};
+    const decode=page.image.decode.bind(page.image);
+    page.image.decode=async function(){
+      assert.equal(deliveries,1,'admission occurs before the actual scene decode');
+      assert.equal(notice.contract,'codex-workspace-decode/v1');
+      assert.equal(notice.documentToken,page.payload.workspaceObservation.documentToken);
+      assert.equal(notice.workspaceEpoch,page.payload.workspaceObservation.workspaceEpoch);
+      const before=callerChecks;assert.equal(notice.current(),true);
+      assert.equal(callerChecks,before,'workspace lease validity must not call the caller isCurrent');
+      await decode();
+    };
+    const result=await installRenderer({...page.payload,isCurrent:strictCurrent,onDecodeAdmitted:value=>{notice=value;deliveries++;}});
+    assert.equal(result.applied,true);assert.equal(notice.current(),true);
+    globalThis.__azhouWallpaper.dispose();assert.equal(notice.current(),false);
+  });
+});

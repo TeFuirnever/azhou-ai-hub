@@ -1992,6 +1992,31 @@ test('body wait expiry uses the same run transition and cannot mount later', () 
   assert.equal(controlled.frames.length, 0);
 });
 
+test('only a synchronously admitted current decode lease can outlive explicit Skip', async () => {
+  for (const mode of ['skip', 'late', 'duplicate', 'lease-lost', 'hidden', 'replacement', 'settings-cancel', 'dispose', 'bad-token', 'throwing-lease']) {
+    const controlled=controlledHost(); let finish, current, admission; let leaseCurrent=true; let calls=0;
+    const payload=(...args)=>{const send=args[13],spec=args[14];send({type:'azhou-startup',action:'background',runId:spec.runId,image:'data:image/png;base64,aGVsbG8=',strength:42});return {dispose(){}};};
+    payload.applyWallpaper=(_request,isCurrent,_signal,options)=>new Promise(resolve=>{finish=resolve;current=isCurrent;admission=options?.onDecodeAdmitted;});
+    installStartup(payload,controlled.host,pageAdapter); const api=controlled.host.__azhouStartup,source=controlled.frames[0].contentWindow,runId=api.status().runId;
+    assert.equal(typeof admission,'function');
+    const capability=Object.freeze({contract:'codex-workspace-decode/v1',documentToken:mode==='bad-token'?'':'fixture-document',workspaceEpoch:1,current(){calls++;if(mode==='throwing-lease')throw Error('lease failed');return leaseCurrent;}});
+    if(mode!=='late')admission(capability);
+    if(mode==='duplicate')admission(Object.freeze({...capability,workspaceEpoch:2}));
+    controlled.host.send({type:'azhou-startup',action:'ready',runId},source);
+    if(mode==='settings-cancel')controlled.host.send({type:'azhou-startup',action:'settings-open',runId},source);
+    controlled.host.send({type:'azhou-startup',action:'complete',runId,skipped:true},source);
+    if(mode==='late')admission(capability);
+    if(mode==='lease-lost')leaseCurrent=false;
+    if(mode==='hidden')controlled.host.pagehide();
+    if(mode==='replacement')Object.defineProperty(controlled.host,'__azhouStartup',{value:{owner:'foreign'},configurable:true});
+    if(mode==='dispose')api.dispose();
+    assert.equal(current(),mode==='skip',mode);
+    assert.ok(calls<10,'lease current must not recurse into caller current');
+    finish({applied:false,reason:'wallpaper-unsupported',failureCode:'shell-timeout'});
+    await Promise.resolve();await Promise.resolve();api.dispose();
+  }
+});
+
 test('wallpaper can finish after natural playback but is cancelled by skip or disposal', async () => {
   for (const completion of ['natural', 'skip', 'dispose']) {
     const controlled = controlledHost();

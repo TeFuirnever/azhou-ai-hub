@@ -200,7 +200,8 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         ...(themeState ? { themeState } : {}),
         ...(binding.ports || binding.observation ? { pageAdapter } : {}),
         ...(binding.observation ? { workspaceObservation: binding.observation,
-          ...(typeof onWorkspaceInvalidated === 'function' ? { onWorkspaceInvalidated } : {}) } : {}),
+          ...(typeof onWorkspaceInvalidated === 'function' ? { onWorkspaceInvalidated } : {}),
+          ...(typeof workspaceOptions?.onDecodeAdmitted === 'function' ? { onDecodeAdmitted: workspaceOptions.onDecodeAdmitted } : {}) } : {}),
       });
     } finally { binding.workspaceLease?.dispose(); }
   };

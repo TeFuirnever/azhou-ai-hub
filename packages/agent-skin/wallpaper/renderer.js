@@ -92,6 +92,7 @@ export async function installRenderer(offered) {
     && Array.isArray(binding.observeFilter);
   const workspaceObservation = slotValue(offered, 'workspaceObservation');
   const onWorkspaceInvalidated = slotValue(offered, 'onWorkspaceInvalidated');
+  const onDecodeAdmitted = slotValue(offered, 'onDecodeAdmitted');
   const workspaceCheck = slotValue(hostAdapter, 'isWorkspaceCurrent');
   const workspaceWatch = slotValue(hostAdapter, 'watchWorkspace');
   let workspaceInvalidated = false;
@@ -341,6 +342,13 @@ export async function installRenderer(offered) {
       () => { workspaceInvalidated = true; cancelMasks(); invalidateWorkspace(); }, globalThis,
       brief.themeState ? { onThemeGeometry: geometry => { geometrySubscribed = true; geometryChanged(geometry); } } : {}]);
     if (brief.themeState && !geometrySubscribed) throw deny('theme-surface-unsupported');
+    if (workspaceBound && typeof onDecodeAdmitted === 'function') {
+      if (!workspaceLease || !workspaceCurrent() || (typeof isCurrent === 'function' && !isCurrent())) throw deny('operation-cancelled');
+      const admittedLease = workspaceLease;
+      onDecodeAdmitted(Object.freeze({ contract: 'codex-workspace-decode/v1',
+        documentToken: workspaceObservation.documentToken, workspaceEpoch: workspaceObservation.workspaceEpoch,
+        current: () => workspaceLease === admittedLease && workspaceCurrent() }));
+    }
     // ── Decode the leased scene ───────────────────────────────────────────
     scene = new Image();
     try {
