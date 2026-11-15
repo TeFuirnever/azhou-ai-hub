@@ -16,6 +16,16 @@
 
 适配依赖包括ModuleLoader.load、own DSH boot标记、唯一main slot、主题属性、dsw颜色token、pageBar、composerSeat与page类名模式。settings.section、slots及ctx.effect清理也是契约，不只测试壁纸出现。
 
+## 准备前只读静态前检
+
+`tools/dsh-isolation-preflight.py`检查显式 JSON 计划，不创建目录、不写入或复制任何载荷，也不启动、安装或更新 DSH。计划包含 `schema_version: 1`、`preparation_root`、`candidate {root, summary_sha256}`、四个 `paths` 角色（`dsh_home`、`electron_user_data`、`profile`、`plugin`，每个字段为 `path` 与 `expected_state: absent|empty_directory`）、`protected_roots`，以及 `host {target, evidence_record}`。host 两条记录的 `bundle_id`、`version`、`build` 必须一致；evidence record 的 `source` 必须非空，但它由调用者提供，工具不认证来源，也不据此证明当前安装或加载身份。
+
+全部计划路径须为绝对路径。DSH_HOME 和 Electron userData 位于 preparation root 下；profile 与 plugin 位于 DSH_HOME 下，二者互不重叠，Electron userData 与它们分离。计划目标及 candidate 不得等于、包含或位于任何 protected production root；candidate 也不得与 preparation root 或目标数据路径重叠。planned targets 按 owned preparation root 的相对路径检查；遇到符号链接节点即阻断并剪枝，不跟随它扫描后代。逃逸路径、非空历史条目或状态声明不符也会阻断。容器目录可包含计划明确声明的空子目录；除此之外的任何条目均按历史数据阻断。只检查声明目录树的名字和文件类型，不读取 profile、userData 或 protected root 中的文件内容。已存在的候选载荷独立计算摘要，不作为历史数据目录处理；若 candidate 树无法完整枚举，摘要不可用并阻断，不接受部分摘要。
+
+`summary_sha256` 是本工具专用的 candidate tree 摘要，不是 build、签名或安装回执摘要。算法为 SHA-256，初始字节是 `azhou-dsh-candidate-tree-v1\0`；遍历 candidate 下全部常规文件，按相对 POSIX 路径的 UTF-8 字节升序。每个文件写入 `file\0`、8 字节大端路径长度、路径字节、8 字节大端文件大小和文件字节。空树、符号链接及特殊文件拒绝。该摘要不包括目录、权限、时间戳或绝对根路径。
+
+结果仅为 `blocked` 或 `static_preflight_passed`，附带原因码和重算出的摘要。`runtime_isolation_verified` 与 `write_authorized` 始终为 `false`。前检是调用时的只读路径/内容快照，不消除 TOCTOU，不证明宿主进程、安装、签名、插件实际加载或运行时数据隔离。DSH rc.1 到 rc.3 的真实升级和运行验证仍未完成。运行方式为 `python3 -B tools/dsh-isolation-preflight.py plan.json`，夹具测试为 `python3 -B tools/test-production-dsh-isolation-preflight.py`。
+
 ## 执行步骤
 
 1. 记录实际运行bundle、profile、插件实体、来源、签名、version、build与摘要，分别报告installed和loaded。
