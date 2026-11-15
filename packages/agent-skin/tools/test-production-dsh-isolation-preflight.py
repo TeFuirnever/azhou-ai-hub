@@ -8,6 +8,7 @@ import io
 import json
 import importlib.util
 from pathlib import Path
+import runpy
 import tempfile
 import unittest
 from unittest import mock
@@ -341,6 +342,287 @@ class DSHIsolationPreflightTests(unittest.TestCase):
         result = json.loads(output.getvalue())
         self.assertEqual(exit_code, 1)
         self.assertEqual(result["status"], "blocked")
+        self.assertEqual(result["reasons"], ["plan_unreadable"])
+        self.assertIs(result["runtime_isolation_verified"], False)
+        self.assertIs(result["write_authorized"], False)
+
+    def test_blocks_missing_empty_file_and_symlink_candidate_roots(self):
+        empty = Path(self.temporary.name) / "empty-candidate"
+        empty.mkdir()
+        not_a_directory = Path(self.temporary.name) / "candidate-file"
+        not_a_directory.write_bytes(b"fixture-only")
+        symlink = Path(self.temporary.name) / "candidate-link"
+        symlink.symlink_to(self.candidate, target_is_directory=True)
+        missing = Path(self.temporary.name) / "missing-candidate"
+
+        for label, root in (
+            ("missing", missing),
+            ("empty", empty),
+            ("file", not_a_directory),
+            ("symlink", symlink),
+        ):
+            with self.subTest(label=label):
+                plan = copy.deepcopy(self.plan)
+                plan["candidate"]["root"] = str(root)
+
+                result = load_tool().preflight(plan)
+
+                self.assertEqual(result["status"], "blocked")
+                self.assertIn("candidate_summary_unavailable", result["reasons"])
+                self.assertIsNone(result["candidate_summary_sha256"])
+
+    def test_rejects_a_symlinked_candidate_directory_without_following_it(self):
+        linked_directory = self.candidate / "linked-directory"
+        linked_directory.symlink_to(self.production, target_is_directory=True)
+
+        result = load_tool().preflight(self.plan)
+
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("candidate_summary_unavailable", result["reasons"])
+        self.assertIsNone(result["candidate_summary_sha256"])
+
+    def test_blocks_candidate_if_a_file_changes_after_its_size_is_read(self):
+        tool = load_tool()
+        candidate_file = self.candidate / "plugin.json"
+        original_open = Path.open
+
+        def truncate_candidate(path, mode="r", *args, **kwargs):
+            if path == candidate_file and mode == "rb":
+                return io.BytesIO(b"")
+            return original_open(path, mode, *args, **kwargs)
+
+        with mock.patch.object(Path, "open", new=truncate_candidate):
+            result = tool.preflight(self.plan)
+
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("candidate_summary_unavailable", result["reasons"])
+        self.assertIsNone(result["candidate_summary_sha256"])
+
+    def test_host_record_shape_and_required_fields_fail_closed(self):
+        malformed_hosts = (
+            None,
+            "not-an-object",
+            {"target": None, "evidence_record": {}},
+            {"target": {}, "evidence_record": None},
+            {"target": self.plan["host"]["target"], "evidence_record": {"source": " "}},
+        )
+        for host in malformed_hosts:
+            with self.subTest(host=host):
+                plan = copy.deepcopy(self.plan)
+                plan["host"] = host
+
+                result = load_tool().preflight(plan)
+
+                self.assertEqual(result["status"], "blocked")
+                self.assertIn("host_target_evidence_mismatch", result["reasons"])
+                self.assertIs(result["host_target_matches_evidence_record"], False)
+
+        for field_value in ("", 7):
+            with self.subTest(bundle_id=field_value):
+                plan = copy.deepcopy(self.plan)
+                plan["host"]["target"]["bundle_id"] = field_value
+
+                result = load_tool().preflight(plan)
+
+                self.assertEqual(result["status"], "blocked")
+                self.assertIn("host_target_evidence_mismatch", result["reasons"])
+
+    def test_invalid_plan_candidate_and_path_schema_are_blocked(self):
+        result = load_tool().preflight(None)
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("invalid_plan", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["candidate"] = []
+        result = load_tool().preflight(plan)
+        self.assertIn("candidate_root_invalid", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["candidate"]["root"] = "relative-candidate"
+        result = load_tool().preflight(plan)
+        self.assertIn("candidate_root_invalid", result["reasons"])
+        self.assertIsNone(result["candidate_summary_sha256"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["preparation_root"] = "relative-preparation-root"
+        result = load_tool().preflight(plan)
+        self.assertIn("preparation_root_invalid", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["protected_roots"] = []
+        result = load_tool().preflight(plan)
+        self.assertIn("protected_roots_invalid", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["protected_roots"] = ["relative-protected-root"]
+        result = load_tool().preflight(plan)
+        self.assertIn("protected_root_invalid", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["paths"] = None
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_paths_invalid", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["profile"] = None
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_path_invalid:profile", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["profile"]["expected_state"] = "nonempty"
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_path_invalid:profile", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["profile"]["path"] = "relative-profile"
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_path_invalid:profile", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["profile"]["path"] = str(self.preparation_root)
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_path_outside_preparation_root:profile", result["reasons"])
+
+    def test_canonical_path_failure_and_invalid_raw_paths_fail_closed(self):
+        tool = load_tool()
+        path_type = type(self.candidate)
+        original_resolve = path_type.resolve
+
+        def fail_candidate_resolve(path, *args, **kwargs):
+            if path == self.candidate:
+                raise RuntimeError("fixture symlink loop")
+            return original_resolve(path, *args, **kwargs)
+
+        with mock.patch.object(path_type, "resolve", new=fail_candidate_resolve):
+            self.assertIsNone(tool._canonical_plan_path(str(self.candidate)))
+
+        for value in (None, "", "relative", "/tmp/../escape"):
+            with self.subTest(path=value):
+                self.assertIsNone(tool._raw_plan_path(value))
+
+    def test_missing_empty_directory_target_and_non_directory_target_block(self):
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["profile"]["expected_state"] = "empty_directory"
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_path_state_mismatch:profile", result["reasons"])
+
+        self.preparation_root.mkdir()
+        dsh_home = self.preparation_root / "dsh"
+        dsh_home.mkdir()
+        profiles = dsh_home / "profiles"
+        profiles.mkdir()
+        (profiles / "default").write_bytes(b"fixture-only not-a-profile-directory")
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["dsh_home"]["expected_state"] = "empty_directory"
+        plan["paths"]["profile"]["expected_state"] = "empty_directory"
+
+        result = load_tool().preflight(plan)
+
+        self.assertEqual(result["status"], "blocked")
+        self.assertIn("planned_path_state_mismatch:profile", result["reasons"])
+
+    def test_lstat_and_scandir_errors_block_planned_target_inspection(self):
+        self.preparation_root.mkdir()
+        tool = load_tool()
+        original_lstat = Path.lstat
+
+        def fail_preparation_lstat(path, *args, **kwargs):
+            if path == self.preparation_root:
+                raise PermissionError("fixture target metadata unavailable")
+            return original_lstat(path, *args, **kwargs)
+
+        with mock.patch.object(Path, "lstat", new=fail_preparation_lstat):
+            result = tool.preflight(self.plan)
+        self.assertIn("planned_directory_unreadable", result["reasons"])
+
+        original_scandir = tool.os.scandir
+
+        def fail_preparation_scandir(path):
+            if Path(path) == self.preparation_root:
+                raise PermissionError("fixture target directory unreadable")
+            return original_scandir(path)
+
+        with mock.patch.object(tool.os, "scandir", side_effect=fail_preparation_scandir):
+            result = tool.preflight(self.plan)
+        self.assertIn("planned_directory_unreadable", result["reasons"])
+
+    def test_relationship_overlaps_are_rejected(self):
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["profile"]["path"] = str(self.preparation_root / "profile-outside-dsh")
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_path_relationship_invalid:profile", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["plugin"]["path"] = plan["paths"]["profile"]["path"]
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_path_relationship_invalid:plugin", result["reasons"])
+
+        plan = copy.deepcopy(self.plan)
+        plan["paths"]["electron_user_data"]["path"] = plan["paths"]["profile"]["path"]
+        result = load_tool().preflight(plan)
+        self.assertIn("planned_path_relationship_invalid:profile", result["reasons"])
+
+    def test_candidate_overlapping_owned_roots_is_blocked_before_hashing(self):
+        plan = copy.deepcopy(self.plan)
+        plan["candidate"]["root"] = str(self.preparation_root)
+        result = load_tool().preflight(plan)
+        self.assertIn("candidate_overlaps_preparation_root", result["reasons"])
+        self.assertIsNone(result["candidate_summary_sha256"])
+
+        dsh_home = self.preparation_root / "dsh"
+        dsh_home.mkdir(parents=True)
+        (dsh_home / "fixture.txt").write_text("candidate overlaps planned DSH_HOME", encoding="utf-8")
+        plan = copy.deepcopy(self.plan)
+        plan["candidate"]["root"] = str(dsh_home)
+        result = load_tool().preflight(plan)
+        self.assertIn("candidate_overlaps_planned_path", result["reasons"])
+        self.assertIsNone(result["candidate_summary_sha256"])
+
+    def test_target_scanner_skips_protected_nodes_before_metadata_or_enumeration(self):
+        root = self.preparation_root
+        root.mkdir()
+        protected = root / "dsh/profiles"
+        protected.mkdir(parents=True)
+        tool = load_tool()
+        original_scandir = tool.os.scandir
+        original_lstat = Path.lstat
+        protected_scandir = []
+        protected_lstat = []
+
+        def watch_scandir(path):
+            if Path(path) == protected or protected in Path(path).parents:
+                protected_scandir.append(Path(path))
+            return original_scandir(path)
+
+        def watch_lstat(path, *args, **kwargs):
+            if path == protected or protected in path.parents:
+                protected_lstat.append(path)
+            return original_lstat(path, *args, **kwargs)
+
+        with (
+            mock.patch.object(tool.os, "scandir", side_effect=watch_scandir),
+            mock.patch.object(Path, "lstat", new=watch_lstat),
+        ):
+            reasons = tool._target_tree_reasons(
+                root,
+                {"profile": protected / "default"},
+                {"profile": "absent"},
+                [protected],
+            )
+
+        self.assertEqual(reasons, set())
+        self.assertEqual(protected_scandir, [])
+        self.assertEqual(protected_lstat, [])
+
+    def test_actual_module_entry_point_handles_missing_plan(self):
+        plan_file = Path(self.temporary.name) / "not-created-plan.json"
+        output = io.StringIO()
+        with mock.patch("sys.argv", [str(TOOL), str(plan_file)]), contextlib.redirect_stdout(output):
+            with self.assertRaises(SystemExit) as exit_info:
+                runpy.run_path(str(TOOL), run_name="__main__")
+
+        result = json.loads(output.getvalue())
+        self.assertEqual(exit_info.exception.code, 1)
         self.assertEqual(result["reasons"], ["plan_unreadable"])
         self.assertIs(result["runtime_isolation_verified"], False)
         self.assertIs(result["write_authorized"], False)
