@@ -61,6 +61,11 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
             for key in ("foregroundPIDBefore", "foregroundPID", "probePID"):
                 if type(row.get(key)) is not int or row[key] <= 0:
                     raise ValueError(f"unavailable {key}")
+            if type(row.get("coverLevel")) is not int or row["coverLevel"] != (0 if control else 3) \
+                    or type(row.get("hostLevel")) is not int or row["hostLevel"] != 0:
+                raise ValueError("actual window levels do not match normal control or floating cover")
+            if row.get("applicationActiveBeforeHostOrder") is not False or row.get("applicationActive") is not False:
+                raise ValueError("window probe must remain inactive")
             if row["foregroundPID"] != row["foregroundPIDBefore"]:
                 raise ValueError("probe changed foreground application")
             if not isinstance(row.get("webViewID"), str) or not row["webViewID"] \

@@ -6022,7 +6022,9 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             let host = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
             host.isReleasedWhenClosed = false
             defer { presentation.discardColdPlayer(); host.orderOut(nil); host.close() }
-            host.orderFront(nil)
+            let activeBeforeHostOrder = NSApp.isActive
+            expect(!activeBeforeHostOrder, "synthetic host ordering is exercised while the probe is inactive")
+            host.orderFrontRegardless()
             let windowNumber = cover.windowNumber
             guard let content = cover.contentView, content.subviews.count == 1,
                   let coverView = content.subviews.first else {
@@ -6057,9 +6059,15 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     "webViewID": String(describing: ObjectIdentifier(webView)),
                     "webViewCount": mounted.count, "webViewMounted": mounted.first === webView,
                     "webViewHidden": webView.isHidden, "coverPresent": coverPresent,
+                    "coverLevel": cover.level.rawValue, "hostLevel": host.level.rawValue,
+                    "applicationActiveBeforeHostOrder": activeBeforeHostOrder,
+                    "applicationActive": NSApp.isActive,
                     "coverIsKey": cover.isKeyWindow,
                     "canJoinAllSpaces": cover.collectionBehavior.contains(.canJoinAllSpaces),
                     "moveToActiveSpace": cover.collectionBehavior.contains(.moveToActiveSpace)])
+                expect(cover.level == (normalControl ? .normal : .floating) && host.level == .normal,
+                    "real window levels distinguish the normal control and production floating cover")
+                expect(!NSApp.isActive, "host ordering and reveal do not activate the probe")
                 expect(normalControl ? hostIndex < coverIndex : coverIndex < hostIndex,
                     "real AppKit ordering distinguishes the normal-level negative control from the cold fix before and after reveal")
                 expect(cover.windowNumber == windowNumber && foregroundPID == beforePID && !cover.isKeyWindow,

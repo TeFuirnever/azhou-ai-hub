@@ -32,6 +32,8 @@ def observations():
                 "control": control, "revealed": revealed, "coverWindowID": 101, "hostWindowID": 102,
                 "coverIndex": 3 if control else 1, "hostIndex": 1 if control else 3,
                 "foregroundPIDBefore": 42, "foregroundPID": 42, "probePID": 99,
+                "coverLevel": 0 if control else 3, "hostLevel": 0,
+                "applicationActiveBeforeHostOrder": False, "applicationActive": False,
                 "webViewID": "view-1", "webViewCount": 1, "webViewMounted": True,
                 "webViewHidden": not revealed, "coverPresent": not revealed,
                 "coverIsKey": False, "canJoinAllSpaces": False, "moveToActiveSpace": False})
@@ -50,6 +52,18 @@ class WindowEvidenceTests(unittest.TestCase):
         rows = observations()
         self.assertEqual(rows, native.validate_window_observations(stream(rows), 0))
         self.assertEqual(rows[::-1], native.validate_window_observations(stream(rows[::-1]), 0))
+
+    def test_requires_inactive_probe_and_actual_expected_window_levels(self):
+        for index in (0, 1, 3, 4):
+            for field, bad in (("coverLevel", None), ("coverLevel", True),
+                    ("coverLevel", 7), ("hostLevel", 3), ("hostLevel", False),
+                    ("applicationActiveBeforeHostOrder", True),
+                    ("applicationActiveBeforeHostOrder", None),
+                    ("applicationActive", True), ("applicationActive", 0)):
+                rows = observations()
+                rows[index][field] = bad
+                with self.subTest(index=index, field=field, bad=bad), self.assertRaises(ValueError):
+                    native.validate_window_observations(stream(rows), 0)
 
     def test_rejects_noop_summary_partial_duplicate_and_nonzero_output(self):
         valid = observations()
