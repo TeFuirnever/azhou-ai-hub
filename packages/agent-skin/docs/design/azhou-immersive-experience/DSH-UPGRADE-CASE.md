@@ -26,13 +26,26 @@
 
 结果仅为 `blocked` 或 `static_preflight_passed`，附带原因码和重算出的摘要。`runtime_isolation_verified` 与 `write_authorized` 始终为 `false`。前检是调用时的只读路径/内容快照，不消除 TOCTOU，不证明宿主进程、安装、签名、插件实际加载或运行时数据隔离。DSH rc.1 到 rc.3 的真实升级和运行验证仍未完成。运行方式为 `python3 -B tools/dsh-isolation-preflight.py plan.json`，夹具测试为 `python3 -B tools/test-production-dsh-isolation-preflight.py`。
 
+## Desktop 运行隔离仍须证明
+
+以下入口依据 rc.1 源码 `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159`，属于源码机制证据，不是正式应用运行隔离结果；rc.3 须重新核对。
+
+- `packages/util/home-paths/src/index.ts:125–136`：DSH_HOME 优先采用显式配置，其次环境变量，默认用户目录下的 `.dsh`；空值会回退默认，不能用空环境变量隔离。
+- 同文件 `:140–152`：DSH_AGENTS_HOME 是独立配置根，默认用户目录下的 `.agents`，不能假设随 DSH_HOME 一起迁移。
+- `apps/desktop/src/paths.ts:16–20`：Desktop profile 固定为 `$DSH_HOME/profiles/desktop`。`apps/cli/src/args.ts:168` 的 `--profile` 属于 CLI，不能据此声称 Desktop 支持任意命名 profile。
+- `apps/desktop/src/settings.ts:11`、`apps/desktop/src/main.ts:83`：模块加载早期读取 Electron `app.getPath('userData')`，其数据根独立于 DSH_HOME。`apps/desktop/scripts/development-app.ts:63–76`、`apps/desktop/scripts/dev.ts:88` 仅证明开发启动器传递 `--user-data-dir`；正式签名包是否实际采用指定目录仍须验证。
+- `apps/desktop/src/main.ts:93–95`：默认调用 `app.setAppLogsPath()`，macOS 日志可能写到隔离根之外，运行前须界定日志写入范围。
+- `apps/desktop/src/single-instance.ts:20–29`：单实例锁可能使新启动退出并聚焦既有实例。独立启动必须证明没有转发、退出或接管既有实例，不能只检查命令行参数。
+
+现有四路径静态前检不覆盖 agents 和日志范围，也不认证 Electron userData 参数、单实例隔离或实际加载身份；`static_preflight_passed` 不是完整隔离。阶段 A 的独立插件构建及产物校验不启动 DSH、不填充 profile，`runtime_isolation_verified` 仍为 `false`。后续运行证据须绑定新进程及应用身份、实际生效的数据根、profile/plugin 实体、候选载荷、日志和端口，并确认既有实例未受影响。UI 聚合浏览器门禁的 BLOCKED 状态独立保留，不由此构建或静态前检解除。
+
 ## 执行步骤
 
 1. 记录实际运行bundle、profile、插件实体、来源、签名、version、build与摘要，分别报告installed和loaded。
 2. 保留rc.1应用及插件恢复依据，确认全部共用profile和安装owner。不得关闭用户活跃会话来取得测试结果。
 3. 冻结rc.1能力报告与现有缺陷。核对早期hook、CSP、设置入口、生命周期及真实工作区。基线缺陷不算升级回归。
 4. 复核官方feed与目标。下载后校验SHA-512、签名、arm64架构和实际build。下载成功不等于可运行或兼容。
-5. 选择官方支持的独立测试安装或profile方式。没有安全隔离方法则保持blocked，不覆盖共享实体。实际安装、启动及数据操作另走授权和本地安装SOP。
+5. 按上节 Desktop 运行隔离门槛，选择官方支持的独立测试安装或profile方式。没有安全隔离方法则保持blocked，不覆盖共享实体。实际安装、启动及数据操作另走授权和本地安装SOP。
 6. 同一冻结Agent Skin候选分别探测rc.1与rc.3。证据绑定version、build、adapter revision、schema和page generation。旧ready失效。必要修正只在Hub宿主适配器，不修改DSH官方源码，不让核心猜选择器。
 7. 两版分别执行 [防腐层故障矩阵](HOST-BOUNDARY.md)、冷启、设置、整窗外观、路由、跳过及原生输入发送。静态fixture不能代替真实版本验收。
 8. 演练缺hook、CSP拒绝、未知schema及另一主题冲突。只停受影响皮肤能力，解除自有遮挡，保留原生操作和用户数据。
