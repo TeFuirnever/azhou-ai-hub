@@ -1234,21 +1234,54 @@ private final class NativeBrandCoverView: NSView {
 @MainActor
 final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     private let nonce: String
+    private let expectedApplication: HostApplicationKey
     private let runtime: any NativeAppRuntime
     private let presentation: any NativePlayerPresentation
     private let event: (CodexNativePresentationEvent) -> Void
+    private let workspaceNotifications: NotificationCenter
+    private var workspaceObservers: [NSObjectProtocol] = []
     private var released = false
     private var attached = false
     private var root: URL?
     private var evaluations: [UUID: (Error) -> Void] = [:]
 
-    init(nonce: String, runtime: any NativeAppRuntime, presentation: any NativePlayerPresentation,
+    init(nonce: String, expectedApplication: HostApplicationKey, runtime: any NativeAppRuntime,
+         presentation: any NativePlayerPresentation,
+         workspaceNotifications: NotificationCenter = NSWorkspace.shared.notificationCenter,
          event: @escaping (CodexNativePresentationEvent) -> Void) {
-        self.nonce = nonce; self.runtime = runtime; self.presentation = presentation; self.event = event
+        self.nonce = nonce; self.expectedApplication = expectedApplication
+        self.runtime = runtime; self.presentation = presentation; self.event = event
+        self.workspaceNotifications = workspaceNotifications
     }
     func showCover() throws -> NativeCoverReceipt {
         guard !released else { throw CancellationError() }
+        guard workspaceObservers.isEmpty else { throw StartupFailure(reason: "protocol-error", message: "原生启动窗口不可重复创建。") }
+        workspaceObservers = [
+            workspaceNotifications.addObserver(forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil, queue: .main) { [weak self] notification in
+                MainActor.assumeIsolated {
+                    guard let self, let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+                    self.applicationActivated(self.runtime.application(processIdentifier: application.processIdentifier))
+                }
+            },
+            workspaceNotifications.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification,
+                object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.interrupt() }
+            }
+        ]
         return try presentation.showColdCover(locale: runtime.systemFallbackLocale(), runNonce: nonce, delegate: self)
+    }
+    func applicationActivated(_ application: (any NativeApplication)?) {
+        guard !released else { return }
+        if application?.processIdentifier == Int32(runtime.processIdentifier) { return }
+        if let application, application.bundleIdentifier == expectedApplication.bundleIdentifier,
+           application.bundleURL.map(PathCanonicalization.resolved) == expectedApplication.bundleURL { return }
+        interrupt()
+    }
+    private func interrupt() {
+        guard !released else { return }
+        event(.interrupted)
+        releaseCover()
     }
     func play(_ snapshot: StartupSettingsSnapshot, deadline: TimeInterval) async throws {
         guard !released, !attached, snapshot.runNonce == nonce, let resources = runtime.resourceURL else { throw CancellationError() }
@@ -1295,6 +1328,8 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
     func releaseCover() {
         guard !released else { return }
         released = true
+        workspaceObservers.forEach { workspaceNotifications.removeObserver($0) }
+        workspaceObservers.removeAll()
         presentation.discardColdPlayer()
         let pending = Array(evaluations.values)
         evaluations.removeAll()
@@ -1558,6 +1593,7 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
         cover.autoresizingMask = [.width, .height]
         self.cover = cover
         window.contentView?.addSubview(cover)
+        window.level = .floating
         // These calls do not activate the application, hide another app, or opt
         // into every Space. Draw/commit is not evidence of screen visibility.
         orderCover(window)
@@ -2641,7 +2677,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
         if nativeColdLaunch && !exitLedger.promoted {
             assembly.nativePresentation = { [weak self] nonce, event in
                 guard let self else { throw CancellationError() }
-                let player = NativeColdPlayer(nonce: nonce, runtime: self.runtime,
+                let player = NativeColdPlayer(nonce: nonce, expectedApplication: expectedApplication, runtime: self.runtime,
                     presentation: self.stage.presentation ?? AppKitNativePlayerPresentation(), event: event)
                 self.nativePlayer = player
                 return player
