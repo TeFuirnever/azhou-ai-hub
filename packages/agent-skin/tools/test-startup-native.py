@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import platform
+import os
+import tempfile
 import threading
 from pathlib import Path
 import subprocess
@@ -193,9 +195,23 @@ def main() -> int:
     if compiled.returncode:
         return compiled.returncode
     binary_before = hashlib.sha256(output.read_bytes()).hexdigest() if args.window_ordering else None
-    tested = subprocess.run([str(output)], cwd=ROOT, check=False)
-    if tested.returncode:
-        return tested.returncode
+    with tempfile.TemporaryDirectory(prefix="azhou-theme-bridge-") as temporary:
+        environment = dict(os.environ,
+            AZHOU_THEME_BRIDGE_INPUT=str(Path(temporary) / "input.json"),
+            AZHOU_THEME_BRIDGE_OUTPUT=str(Path(temporary) / "output.json"))
+        environment.pop("NODE_TEST_CONTEXT", None)
+        prepared = subprocess.run(["node", "--test", "--test-name-pattern=native theme bridge prepares",
+            "tools/image-settings.test.mjs"], cwd=ROOT, env=environment, check=False)
+        if prepared.returncode:
+            return prepared.returncode
+        tested = subprocess.run([str(output)], cwd=ROOT, env=environment, check=False)
+        if tested.returncode:
+            return tested.returncode
+        consumed = subprocess.run(["node", "--test", "--test-name-pattern=native theme bridge consumes",
+            "tools/animation.unit.test.mjs"], cwd=ROOT, env=environment, check=False)
+        if consumed.returncode:
+            return consumed.returncode
+
 
     handshake_checks(output)
 

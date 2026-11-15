@@ -1173,6 +1173,18 @@ struct StartupSettingsSnapshotPoint: Sendable, Equatable {
     let y: Double
 }
 
+struct StartupThemeState: Sendable {
+    let revision: Int
+    let transparency: Double?
+    let imagesBinding: String
+
+    var object: [String: Any] {
+        let preference: [String: Any] = transparency.map { ["mode": "override", "value": $0] } ?? ["mode": "follow"]
+        return ["schemaVersion": 1, "revision": revision, "activeThemeId": "azhou-q-v3",
+                "preferencesByTheme": ["azhou-q-v3": preference], "imagesBinding": imagesBinding]
+    }
+}
+
 struct StartupSettingsSnapshotValues: Sendable {
     let avatar: String
     let artwork: String
@@ -1182,6 +1194,7 @@ struct StartupSettingsSnapshotValues: Sendable {
     let artworkSubtitle: String
     let wallpaperStrength: Int
     let explicitText: [String: Bool]
+    var themeState: StartupThemeState? = nil
 }
 
 struct StartupSettingsSnapshotAppearance: Sendable, Equatable {
@@ -1361,8 +1374,30 @@ struct StartupSettingsSnapshotReceiver {
         return appearance
     }
 
+    private static func validateThemeState(_ value: Any) throws -> StartupThemeState {
+        guard let object = value as? [String: Any],
+              Set(object.keys) == Set(["schemaVersion", "revision", "activeThemeId", "preferencesByTheme", "imagesBinding"]),
+              integer(object["schemaVersion"]) == 1,
+              let revision = integer(object["revision"]), (1...9_007_199_254_740_991).contains(revision),
+              object["activeThemeId"] as? String == "azhou-q-v3",
+              let preferences = object["preferencesByTheme"] as? [String: Any], Set(preferences.keys) == Set(["azhou-q-v3"]),
+              let preference = preferences["azhou-q-v3"] as? [String: Any],
+              let mode = preference["mode"] as? String,
+              let binding = object["imagesBinding"] as? String,
+              binding.utf8.count == 64, binding.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
+            throw invalidSnapshot()
+        }
+        if mode == "follow", Set(preference.keys) == Set(["mode"]) {
+            return StartupThemeState(revision: revision, transparency: nil, imagesBinding: binding)
+        }
+        guard mode == "override", Set(preference.keys) == Set(["mode", "value"]),
+              let transparency = finiteNumber(preference["value"]), (0...100).contains(transparency) else { throw invalidSnapshot() }
+        return StartupThemeState(revision: revision, transparency: transparency, imagesBinding: binding)
+    }
+
     private static func validateSnapshotObject(_ object: [String: Any], status: String) throws -> StartupSettingsSnapshotValues {
-        guard Set(object.keys) == Set(["status", "settings", "explicitText", "appearance"]),
+        guard (Set(object.keys) == Set(["status", "settings", "explicitText", "appearance"])
+               || Set(object.keys) == Set(["status", "settings", "explicitText", "appearance", "themeState"])),
               object["status"] as? String == status,
               let settings = object["settings"] as? [String: Any],
               Set(settings.keys) == Set(["schemaVersion", "avatar", "artwork", "contours", "introTitle",
@@ -1402,7 +1437,8 @@ struct StartupSettingsSnapshotReceiver {
             introTitle: introTitle, introCaption: introCaption, artworkSubtitle: artworkSubtitle,
             wallpaperStrength: wallpaperStrength,
             explicitText: ["introTitle": explicitTitle, "introCaption": explicitCaption,
-                           "artworkSubtitle": explicitSubtitle])
+                           "artworkSubtitle": explicitSubtitle],
+            themeState: try object["themeState"].map(validateThemeState))
     }
 
     private static func validPNGDataURL(_ value: String, maximum: Int) -> Bool {

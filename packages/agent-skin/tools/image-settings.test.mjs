@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { webcrypto } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -176,6 +177,7 @@ function makeFixture(options = {}) {
       },
     },
     indexedDB: options.indexedDB,
+    crypto: options.crypto ?? webcrypto, TextEncoder,
     settingsNamespace: options.settingsNamespace,
     localization: options.localization,
     appearanceAvatar: options.appearanceAvatar,
@@ -234,7 +236,7 @@ function makeFixture(options = {}) {
 }
 
 function makeIndexedDB(initialRecord, options = {}) {
-  const state = { record: initialRecord, puts: 0, putSuccesses: 0, completions: 0,
+  const state = { record: initialRecord, themeRecord: options.themeRecord, puts: 0, putSuccesses: 0, completions: 0,
     deletes: 0, clears: 0, opens: [], transactions: [], heldRequests: [], releaseOpen: null };
   let hasStore = false;
   const database = {
@@ -247,6 +249,7 @@ function makeIndexedDB(initialRecord, options = {}) {
       if (options.transactionFailure && mode === 'readwrite') throw options.transactionFailure;
       let pendingRequests = 0;
       let stagedRecord;
+      let stagedThemeRecord;
       let aborted = false;
       let transactionFinished = false;
       let completionQueued = false;
@@ -281,6 +284,7 @@ function makeIndexedDB(initialRecord, options = {}) {
                 transactionFinished = true;
                 transaction.completed = true;
                 if (stagedRecord !== undefined) state.record = JSON.parse(JSON.stringify(stagedRecord));
+                if (stagedThemeRecord !== undefined) state.themeRecord = JSON.parse(JSON.stringify(stagedThemeRecord));
                 state.completions++;
                 transaction.oncomplete?.({ target: transaction });
               });
@@ -295,15 +299,16 @@ function makeIndexedDB(initialRecord, options = {}) {
           assert.equal(name, 'settings');
           return {
             get(key) {
-              assert.equal(key, 'images');
+              assert.ok(['images', 'themeState'].includes(key));
               return transaction.request('get', request => {
-                request.result = state.record === undefined ? undefined : JSON.parse(JSON.stringify(state.record));
+                const record = key === 'images' ? state.record : state.themeRecord;
+                request.result = record === undefined ? undefined : JSON.parse(JSON.stringify(record));
                 request.onsuccess?.({ target: request });
               });
             },
             put(value, key) {
               assert.equal(mode, 'readwrite');
-              assert.equal(key, 'images');
+              assert.ok(['images', 'themeState'].includes(key));
               state.puts++;
               return transaction.request('put', request => {
                 if (options.putError) {
@@ -312,7 +317,8 @@ function makeIndexedDB(initialRecord, options = {}) {
                   try { transaction.abort(); } catch {}
                   return;
                 }
-                stagedRecord = JSON.parse(JSON.stringify(value));
+                if (key === 'images') stagedRecord = JSON.parse(JSON.stringify(value));
+                else stagedThemeRecord = JSON.parse(JSON.stringify(value));
                 request.result = key;
                 request.onsuccess?.({ target: request });
               });
@@ -761,7 +767,7 @@ test('loadSnapshot reports a pending read timeout as failure, not as a missing r
   for (let attempt = 0; attempt < 10 && storage.state.heldRequests.length === 0; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
-  assert.equal(storage.state.heldRequests.length, 1, 'the readonly settings read is pending');
+  assert.equal(storage.state.heldRequests.length, 2, 'both readonly settings reads are pending');
 
   fixture.advance(5_000);
   const snapshot = await loading;
@@ -772,7 +778,7 @@ test('loadSnapshot reports a pending read timeout as failure, not as a missing r
   assert.equal(Object.hasOwn(snapshot, 'baseline'), false);
   assert.equal(storage.state.transactions[0].aborted, true);
   assert.equal(storage.state.puts, 0);
-  assert.deepEqual(storage.state.releaseHeldRequests(true), [true]);
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true]);
   fixture.api.dispose();
 });
 
@@ -1567,7 +1573,7 @@ test('a write timeout aborts the unfinished transaction and a late baseline call
   assert.equal(storage.state.puts, 0);
   assert.equal(storage.state.record, undefined);
 
-  assert.deepEqual(storage.state.releaseHeldRequests(true), [true]);
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true]);
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(storage.state.puts, 0);
   assert.equal(write.completed, false);
@@ -1597,7 +1603,7 @@ test('external dispose aborts a pending save and ignores its late request callba
   assert.equal(write.aborted, true);
   assert.equal(storage.state.record, undefined);
 
-  assert.deepEqual(storage.state.releaseHeldRequests(true), [true]);
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true]);
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(storage.state.puts, 0);
   assert.equal(write.completed, false);
@@ -1631,7 +1637,7 @@ test('load total timeout returns safe defaults, preserves the baseline, and leav
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(storage.state.transactions.length, 1);
   fixture.advance(4_500);
-  assert.deepEqual(storage.state.releaseHeldRequests(), [true]);
+  assert.deepEqual(storage.state.releaseHeldRequests(), [true, true]);
   for (let attempt = 0; attempt < 10 && fixture.images.length < 2; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
@@ -1703,7 +1709,7 @@ test('database open and read each time out after their five-second budget', asyn
     for (let attempt = 0; attempt < 10 && storage.state.heldRequests.length === 0; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
-    assert.equal(storage.state.heldRequests.length, 1, 'the read-only get remains pending');
+    assert.equal(storage.state.heldRequests.length, 2, 'both read-only gets remain pending');
     const transaction = storage.state.transactions[0];
     assert.equal(transaction.mode, 'readonly');
 
@@ -1716,7 +1722,7 @@ test('database open and read each time out after their five-second budget', asyn
     assert.equal(loaded.settings.introTitle, 'Safe default');
     assert.equal(transaction.aborted, true);
 
-    assert.deepEqual(storage.state.releaseHeldRequests(true), [true]);
+    assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true]);
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(transaction.completed, false, 'the late get cannot complete the aborted transaction');
     assert.equal(storage.state.record, undefined);
@@ -1836,7 +1842,7 @@ test('an injected settings namespace replaces database name, version, store and 
   const objectStore = {
     get(key) {
       seen.keys.push({ operation: 'get', key });
-      const request = { result: JSON.parse(JSON.stringify(record)), error: null };
+      const request = { result: key === 'images-v3' ? JSON.parse(JSON.stringify(record)) : undefined, error: null };
       queueMicrotask(() => request.onsuccess?.({ target: request }));
       return request;
     },
@@ -1880,7 +1886,7 @@ test('an injected settings namespace replaces database name, version, store and 
     'an injected namespace replaces the database name and version');
   assert.ok(seen.stores.length > 0 && seen.stores.every(store => store === 'synthetic-settings'),
     'an injected namespace replaces the object store');
-  assert.ok(seen.keys.length > 0 && seen.keys.every(({ key }) => key === 'images-v3'),
+  assert.ok(seen.keys.length === 2 && seen.keys.some(({ key }) => key === 'images-v3') && seen.keys.some(({ key }) => key === 'images-v3:themeState'),
     'an injected namespace replaces the record key');
   fixture.api.dispose();
 });
@@ -1896,5 +1902,253 @@ test('invalid injected namespace values fall back to the verbatim defaults', asy
   });
   assert.deepEqual(storage.state.opens, [{ name: 'azhou-codex-startup', version: 1 }],
     'out-of-contract namespace fields keep the default namespace instead of inventing one');
+  fixture.api.dispose();
+});
+
+test('theme selection rejects unknown catalog entries before persisting images', async () => {
+  const storage = makeIndexedDB(undefined);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB,
+    imageDimensions: [[512, 512], [1536, 1024]] });
+  const loaded = await fixture.api.load({
+    avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB',
+    contours: [[[0, 0], [1, 1]]], wallpaperStrength: 42,
+  });
+  await assert.rejects(fixture.api.save(loaded.settings, {
+    activeThemeId: 'unapproved-theme', surfaceTransparency: { mode: 'follow' },
+  }), error => error.reason === 'settings-invalid');
+  assert.equal(storage.state.puts, 0);
+  fixture.api.dispose();
+});
+
+ test('approved theme saves and reloads with an images digest binding', async () => {
+  const storage = makeIndexedDB(undefined);
+  const fixture = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
+  const defaults = { avatar: 'data:image/png;base64,AAAA', artwork: 'data:image/png;base64,BBBB', contours: [[[0,0],[1,1]]], wallpaperStrength: 42 };
+  const loaded = await fixture.api.load(defaults);
+  await fixture.api.save(loaded.settings, {activeThemeId: 'azhou-q-v3', surfaceTransparency: {mode: 'override', value: 30}});
+  assert.equal(storage.state.themeRecord.activeThemeId, 'azhou-q-v3');
+  assert.match(storage.state.themeRecord.imagesBinding, /^[a-f0-9]{64}$/);
+  fixture.api.dispose();
+  const fresh = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
+  const snapshot = await fresh.api.loadSnapshot(defaults);
+  assert.equal(snapshot.themeState.preferencesByTheme['azhou-q-v3'].value, 30);
+  fresh.api.dispose();
+});
+
+for (const scenario of ['old-writer', 'abort']) test('theme transaction protects '+scenario, async () => {
+  const options = {};
+  const storage = makeIndexedDB(undefined, options);
+  const setup = () => makeFixture({indexedDB: storage.indexedDB, imageDimensions: [[512,512],[1536,1024],[512,512],[1536,1024]]});
+  const fixture = setup();
+  const defaults = {avatar:'data:image/png;base64,AAAA', artwork:'data:image/png;base64,BBBB', contours:[[[0,0],[1,1]]],wallpaperStrength:42};
+  const loaded = await fixture.api.load(defaults);
+  const selection = {activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'follow'}};
+  await fixture.api.save(loaded.settings, selection);
+  const before = JSON.stringify([storage.state.record, storage.state.themeRecord]);
+  if (scenario === 'abort') {
+    options.putError = {name:'QuotaExceededError'};
+    await assert.rejects(fixture.api.save({...loaded.settings, wallpaperStrength:30}, selection), error => error.reason === 'settings-quota');
+    assert.equal(JSON.stringify([storage.state.record, storage.state.themeRecord]), before);
+  } else {
+    storage.state.record.wallpaperStrength = 30;
+    await assert.rejects(fixture.api.save(loaded.settings, selection), error => error.reason === 'settings-conflict');
+    const fresh = setup();
+    const snapshot = await fresh.api.loadSnapshot(defaults);
+    assert.equal(snapshot.themeState, null);
+    assert.equal(snapshot.settings.wallpaperStrength, 30);
+    fresh.api.dispose();
+  }
+  fixture.api.dispose();
+});
+
+for (const themeRecord of [{schemaVersion: 2}, {schemaVersion: 1, imagesBinding: 'broken'}]) {
+  test('invalid theme state preserves legacy settings and remains recoverable '+themeRecord.schemaVersion, async () => {
+    const record = {schemaVersion:1, avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],introTitle:'Legacy',introCaption:'',artworkSubtitle:'',wallpaperStrength:42};
+    const storage = makeIndexedDB(record, {themeRecord});
+    const fixture = makeFixture({indexedDB:storage.indexedDB,imageDimensions:[[512,512],[1536,1024],[512,512],[1536,1024]]});
+    const snapshot = await fixture.api.loadSnapshot(record);
+    assert.equal(snapshot.status,'valid');
+    assert.equal(snapshot.settings.introTitle,'Legacy');
+    assert.equal(snapshot.themeState,null);
+    assert.equal(snapshot.themeReason,'settings-invalid');
+    await fixture.api.save({...record,introTitle:'Recovered'});
+    assert.equal(storage.state.record.introTitle,'Recovered');
+    assert.equal(storage.state.themeRecord,null);
+    fixture.api.dispose();
+  });
+}
+
+test('theme controls save a committed preference and cancel never rolls it back', async () => {
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({indexedDB:storage.indexedDB,imageDimensions:[[512,512],[1536,1024],[512,512],[1536,1024]]});
+  await fixture.api.load({avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],wallpaperStrength:42});
+  let applied;
+  fixture.api.openSettings({onApply: async value => { applied=value; return {applied:false,reason:'wallpaper-unsupported'}; }});
+  const control = attr => fixture.elements.find(element => element.getAttribute(attr) === '');
+  const choice = control('data-agent-skin-theme-choice');
+  choice.value='azhou-q-v3'; choice.listeners.get('change')[0]();
+  const mode=control('data-agent-skin-theme-alpha-mode');
+  mode.value='override'; mode.listeners.get('change')[0]();
+  const alpha=control('data-agent-skin-theme-transparency');
+  alpha.value='65'; alpha.listeners.get('input')[0]();
+  const save=fixture.elements.find(element => element.tagName==='BUTTON' && element.textContent==='保存');
+  await save.listeners.get('click')[0]();
+  assert.equal(applied.themeState.preferencesByTheme['azhou-q-v3'].value,65);
+  const committed=JSON.stringify(storage.state.themeRecord);
+  fixture.api.cancelSettings();
+  assert.equal(JSON.stringify(storage.state.themeRecord),committed);
+  fixture.api.openSettings();
+  assert.equal(alpha.value,'65');
+  choice.value=''; choice.listeners.get('change')[0]();
+  fixture.api.cancelSettings();
+  assert.equal(JSON.stringify(storage.state.themeRecord),committed);
+  fixture.api.dispose();
+});
+
+test('maximum theme revision cannot persist an unreadable increment and legacy recovery remains available', async () => {
+  const storage=makeIndexedDB();
+  const fixture=makeFixture({indexedDB:storage.indexedDB,imageDimensions:[[512,512],[1536,1024],[512,512],[1536,1024]]});
+  const loaded=await fixture.api.load({avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],wallpaperStrength:42});
+  const selection={activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'follow'}};
+  await fixture.api.save(loaded.settings,selection);
+  fixture.api.dispose();
+  storage.state.themeRecord.revision=Number.MAX_SAFE_INTEGER;
+  const fresh=makeFixture({indexedDB:storage.indexedDB,imageDimensions:[[512,512],[1536,1024],[512,512],[1536,1024]]});
+  await fresh.api.load(loaded.settings);
+  const before=JSON.stringify(storage.state.themeRecord);
+  await assert.rejects(fresh.api.save(loaded.settings,selection), error=>error.reason==='settings-invalid');
+  assert.equal(JSON.stringify(storage.state.themeRecord),before);
+  await fresh.api.save(loaded.settings);
+  assert.equal(storage.state.themeRecord.activeThemeId,null);
+  assert.equal(storage.state.themeRecord.preferencesByTheme['azhou-q-v3'].mode,'follow');
+  fresh.api.dispose();
+});
+
+for (const revision of ['bad', -3, 1.5]) test('invalid raw theme revision recovers to a readable record '+revision, async () => {
+  const storage=makeIndexedDB(undefined,{themeRecord:{schemaVersion:9,revision}});
+  const setup=()=>makeFixture({indexedDB:storage.indexedDB,imageDimensions:[[512,512],[1536,1024]]});
+  const fixture=setup();
+  const defaults={avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],wallpaperStrength:42};
+  const loaded=await fixture.api.load(defaults);
+  await fixture.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:65}});
+  assert.equal(storage.state.themeRecord.revision,1);
+  fixture.api.dispose();
+  const fresh=setup();
+  const snapshot=await fresh.api.loadSnapshot(defaults);
+  assert.equal(snapshot.themeState.preferencesByTheme['azhou-q-v3'].value,65);
+  fresh.api.dispose();
+});
+
+test('legacy appearance keeps theme preference across restart and reselection', async () => {
+  const storage=makeIndexedDB();
+  const setup=()=>makeFixture({indexedDB:storage.indexedDB,imageDimensions:Array.from({length:6},(_,i)=>i%2?[1536,1024]:[512,512])});
+  const first=setup();
+  const defaults={avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],wallpaperStrength:42};
+  const loaded=await first.api.load(defaults);
+  await first.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:65}});
+  await first.api.save(loaded.settings);
+  assert.equal(storage.state.themeRecord.activeThemeId,null);
+  assert.equal(storage.state.themeRecord.preferencesByTheme['azhou-q-v3'].value,65);
+  first.api.dispose();
+  const fresh=setup();
+  const snapshot=await fresh.api.loadSnapshot(defaults);
+  assert.equal(snapshot.themeState,null);
+  fresh.api.openSettings();
+  const control=attr=>fresh.elements.find(el=>el.getAttribute(attr)==='');
+  const choice=control('data-agent-skin-theme-choice');
+  assert.equal(choice.value,'');
+  choice.value='azhou-q-v3';choice.listeners.get('change')[0]();
+  assert.equal(control('data-agent-skin-theme-transparency').value,'65');
+  const save=fresh.elements.find(el=>el.tagName==='BUTTON'&&el.textContent==='保存');
+  await save.listeners.get('click')[0]();
+  assert.equal(storage.state.themeRecord.activeThemeId,'azhou-q-v3');
+  assert.equal(storage.state.themeRecord.preferencesByTheme['azhou-q-v3'].value,65);
+  fresh.api.dispose();
+});
+
+function themeDraftFixture(storage=makeIndexedDB()) {
+  const fixture=makeFixture({indexedDB:storage.indexedDB,imageDimensions:Array.from({length:40},(_,i)=>i%2?[1536,1024]:[512,512])});
+  const defaults={avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],wallpaperStrength:42};
+  const control=attr=>fixture.elements.find(el=>el.getAttribute(attr)==='');
+  const choose=value=>{const el=control('data-agent-skin-theme-choice');el.value=value;el.listeners.get('change')[0]();};
+  const click=label=>fixture.elements.find(el=>el.tagName==='BUTTON'&&el.textContent===label).listeners.get('click')[0]();
+  return {fixture,defaults,storage,control,choose,click};
+}
+
+test('Restore all defaults resets remembered theme preference only after save',async()=>{
+  const f=themeDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+  await f.fixture.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:65}});
+  f.fixture.api.openSettings();f.click('恢复全部默认');await f.click('保存');
+  assert.equal(f.storage.state.themeRecord.activeThemeId,null);
+  assert.deepEqual(f.storage.state.themeRecord.preferencesByTheme['azhou-q-v3'],{mode:'follow'});
+  f.fixture.api.dispose();
+});
+
+test('existing custom appearance survives a theme draft round trip and save',async()=>{
+  const f=themeDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+  const custom={...loaded.settings,artwork:'data:image/png;base64,CCCC',contours:[[[2,2],[3,3]]]};
+  await f.fixture.api.save(custom);
+  f.fixture.api.openSettings();f.choose('azhou-q-v3');f.choose('');await f.click('保存');
+  assert.equal(f.storage.state.record.artwork,custom.artwork);
+  assert.deepEqual(f.storage.state.record.contours,custom.contours);
+  f.fixture.api.dispose();
+});
+
+test('theme draft opacity survives inactive round trip without replacing saved preference',async()=>{
+  const f=themeDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+  await f.fixture.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:65}});
+  f.fixture.api.openSettings();const alpha=f.control('data-agent-skin-theme-transparency');alpha.value='80';alpha.listeners.get('input')[0]();
+  f.choose('');f.choose('azhou-q-v3');
+  assert.equal(f.control('data-agent-skin-theme-transparency').value,'80');
+  f.click('取消');assert.equal(f.storage.state.themeRecord.preferencesByTheme['azhou-q-v3'].value,65);
+  f.fixture.api.dispose();
+});
+
+test('restore-all cancellation preserves both saved custom appearance and theme preference',async()=>{
+  const f=themeDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+  const custom={...loaded.settings,artwork:'data:image/png;base64,CCCC',contours:[[[2,2],[3,3]]]};
+  await f.fixture.api.save(custom,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:65}});
+  const before=JSON.stringify({images:f.storage.state.record,theme:f.storage.state.themeRecord});
+  f.fixture.api.openSettings();f.click('恢复全部默认');f.click('取消');
+  assert.equal(JSON.stringify({images:f.storage.state.record,theme:f.storage.state.themeRecord}),before);
+  f.fixture.api.openSettings();assert.equal(f.control('data-agent-skin-theme-transparency').value,'65');f.click('取消');
+  f.fixture.api.dispose();
+});
+
+test('inactive save retains edited theme preference and round-trip image without activation',async()=>{
+  const f=themeDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+  const custom={...loaded.settings,artwork:'data:image/png;base64,CCCC',contours:[[[2,2],[3,3]]]};
+  await f.fixture.api.save(custom);
+  f.fixture.api.openSettings();f.choose('azhou-q-v3');
+  const mode=f.control('data-agent-skin-theme-alpha-mode');mode.value='override';mode.listeners.get('change')[0]();
+  const alpha=f.control('data-agent-skin-theme-transparency');alpha.value='80';alpha.listeners.get('input')[0]();
+  f.choose('');await f.click('保存');
+  assert.equal(f.storage.state.themeRecord.activeThemeId,null);
+  assert.equal(f.storage.state.themeRecord.preferencesByTheme['azhou-q-v3'].value,80);
+  assert.equal(f.storage.state.record.artwork,custom.artwork);
+  f.fixture.api.dispose();
+});
+
+test('restore-all conflict leaves winner images and theme preference unchanged',async()=>{
+  const f=themeDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+  await f.fixture.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:65}});
+  f.fixture.api.openSettings();f.click('恢复全部默认');
+  f.storage.state.record={...f.storage.state.record,introTitle:'Other page'};
+  const winner=JSON.stringify({images:f.storage.state.record,theme:f.storage.state.themeRecord});
+  await f.click('保存');
+  assert.equal(f.fixture.api.isSettingsOpen(),true);
+  assert.equal(JSON.stringify({images:f.storage.state.record,theme:f.storage.state.themeRecord}),winner);
+  f.click('取消');f.fixture.api.dispose();
+});
+
+test('native theme bridge prepares a production settings snapshot', {skip: !process.env.AZHOU_THEME_BRIDGE_INPUT}, async () => {
+  const {writeFile}=await import('node:fs/promises');
+  const storage=makeIndexedDB();
+  const fixture=makeFixture({indexedDB:storage.indexedDB,imageDimensions:Array.from({length:6},(_,i)=>i%2?[1536,1024]:[512,512])});
+  const png='data:image/png;base64,iVBORw0KGgo=';
+  const loaded=await fixture.api.load({avatar:png,artwork:png,contours:[[[0,0],[100,100]]],wallpaperStrength:42});
+  await fixture.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:65}});
+  const snapshot=await fixture.api.loadSnapshot(loaded.settings);
+  await writeFile(process.env.AZHOU_THEME_BRIDGE_INPUT,JSON.stringify({status:snapshot.status,settings:snapshot.settings,explicitText:snapshot.explicitText,appearance:{locale:'en',theme:'dark'},themeState:snapshot.themeState}));
   fixture.api.dispose();
 });

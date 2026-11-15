@@ -131,6 +131,7 @@ function installAnimation(
     if (!startupSnapshotRequired && typeof createImageSettingsFactory === 'function') {
       imageSettings = createImageSettingsFactory({
         document, Image, URL, indexedDB, performance, setTimeout, clearTimeout,
+        crypto: window.crypto, TextEncoder: window.TextEncoder,
         localization, appearanceAvatar: frameSpec?.assets?.entryAvatar,
         themeConfig: assets?.themeConfig,
         getAppearance: () => ({ ...appearance, reducedMotion: reduced,
@@ -1423,6 +1424,7 @@ function installAnimation(
 
     return Object.freeze({
       status: snapshot.status,
+      themeState: snapshot.themeState ?? null,
       appearance: Object.freeze({ locale: snapshotAppearance.locale, theme: snapshotAppearance.theme }),
       settings: Object.freeze({
         schemaVersion: 1,
@@ -1620,6 +1622,7 @@ function installAnimation(
       result = message('background', {
         image,
         strength: Number.isInteger(saved?.wallpaperStrength) ? saved.wallpaperStrength : 42,
+        themeState: saved?.themeState ?? null,
       });
     } catch {
       return Promise.resolve({ applied: false, reason: 'apply-failed' });
@@ -1639,13 +1642,13 @@ function installAnimation(
       if (disposed || currentGeneration !== generation || !snapshot) return;
       settingsLoadReason = '';
       updateAppearance(snapshot.appearance);
-      applySettingsRecord(snapshot.settings, undefined, snapshot.explicitText);
+      applySettingsRecord({ ...snapshot.settings, themeState: snapshot.themeState }, undefined, snapshot.explicitText);
     } else if (imageSettings) {
       try {
         const loadedSettings = await imageSettings.load(defaultAssets);
         if (disposed || currentGeneration !== generation) return;
         settingsLoadReason = typeof loadedSettings?.reason === 'string' ? loadedSettings.reason : '';
-        applySettingsRecord(loadedSettings.settings, loadedSettings.baseline);
+        applySettingsRecord({ ...loadedSettings.settings, themeState: loadedSettings.themeState }, loadedSettings.baseline);
       } catch {
         if (disposed || currentGeneration !== generation) return;
         settingsLoadReason = 'settings-unavailable';
@@ -1723,6 +1726,7 @@ function installAnimation(
         message('background', {
           image: rawArtwork,
           strength: Number.isInteger(assets?.wallpaperStrength) ? assets.wallpaperStrength : 42,
+          themeState: assets?.themeState ?? null,
         });
       } catch {}
     }
@@ -2206,8 +2210,20 @@ function createNativeSnapshotBridge(environment, identity) {
       try { value = JSON.parse(new environment.TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
       catch { bytes.fill(0); fail('snapshot-transfer-invalid'); return; }
       bytes.fill(0);
-      if (!value || Object.keys(value).length !== 4 || value.status !== current.descriptor.status
-          || !value.settings || !value.explicitText || !value.appearance) {
+      const exact = (object, keys) => object && typeof object === 'object' && !Array.isArray(object)
+        && Object.keys(object).length === keys.length && keys.every(key => Object.hasOwn(object, key));
+      const theme = value?.themeState;
+      const preference = theme?.preferencesByTheme?.['azhou-q-v3'];
+      const validTheme = exact(theme, ['schemaVersion', 'revision', 'activeThemeId', 'preferencesByTheme', 'imagesBinding'])
+        && theme.schemaVersion === 1 && Number.isSafeInteger(theme.revision) && theme.revision >= 1
+        && theme.activeThemeId === 'azhou-q-v3' && exact(theme.preferencesByTheme, ['azhou-q-v3'])
+        && typeof theme.imagesBinding === 'string' && /^[a-f0-9]{64}$/.test(theme.imagesBinding)
+        && ((exact(preference, ['mode']) && preference.mode === 'follow')
+          || (exact(preference, ['mode', 'value']) && preference.mode === 'override'
+            && Number.isFinite(preference.value) && preference.value >= 0 && preference.value <= 100));
+      if ((!exact(value, ['status', 'settings', 'explicitText', 'appearance'])
+            && !(exact(value, ['status', 'settings', 'explicitText', 'appearance', 'themeState']) && validTheme))
+          || value.status !== current.descriptor.status || !value.settings || !value.explicitText || !value.appearance) {
         fail('snapshot-transfer-invalid'); return;
       }
       snapshot = value;

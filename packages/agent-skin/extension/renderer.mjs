@@ -20,6 +20,7 @@ const WALLPAPER_STATUS_FIELDS = [
   'rootClear', 'workspaceBackgroundClear', 'footerSurfaces', 'footerBackgroundClear',
   'footerFadeSurfaces', 'footerFadeClear', 'topFadeSurfaces', 'topFadeClear',
   'decorationEffectsClear', 'unsupportedDecorations', 'verificationScope', 'fullCoverage',
+  'themeApplied', 'themePending', 'themeFailure', 'fallbackApplied',
 ];
 const WALLPAPER_FAILURE_STAGES = Object.freeze({
   'shell-timeout': 'shell',
@@ -411,6 +412,7 @@ class PageController {
     }
     this.wallpaperRetryCancel?.();
     this.#cancelWorkspaceRecovery();
+    this.wallpaperApplication?.abort?.abort();
     this.wallpaperGeneration += 1;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();
@@ -735,6 +737,7 @@ class PageController {
       ? createLocalization({ locale: appearance.locale, themeConfig: this.assets?.themeConfig }) : null;
     const factoryInput = {
       document: this.document,
+      crypto: this.host.crypto, TextEncoder: this.host.TextEncoder,
       Image: this.host.Image,
       URL: this.host.URL ?? URL,
       indexedDB: dataProperty(injected, 'indexedDB'),
@@ -784,6 +787,7 @@ class PageController {
     };
     operation.cancel = () => {
       if (!operation.active) return;
+      this.wallpaperApplication?.abort?.abort();
       this.wallpaperGeneration += 1;
       operation.cancelled = true;
       operation.result = this.#setWallpaperFailure('apply-failed');
@@ -791,6 +795,7 @@ class PageController {
     };
     operation.timer = this.host.setTimeout(() => {
       if (operation.active && this.nativeWorkspace === operation) {
+        this.wallpaperApplication?.abort?.abort();
         this.wallpaperGeneration += 1;
         operation.result = this.#setWallpaperFailure('apply-failed');
       }
@@ -808,7 +813,7 @@ class PageController {
       }
       const settings = dataProperty(result, 'settings');
       const resultWallpaper = await this.#applyWallpaper({ image: dataProperty(settings, 'artwork'),
-        strength: dataProperty(settings, 'wallpaperStrength') }, runId, null);
+        strength: dataProperty(settings, 'wallpaperStrength'), themeState: dataProperty(result, 'themeState') }, runId, null);
       if (current()) operation.result = resultWallpaper;
     }).catch(() => {
       if (current()) operation.result = this.#setWallpaperFailure('apply-failed');
@@ -913,7 +918,7 @@ class PageController {
       }
       const settings = dataProperty(result, 'settings');
       await this.#applyWallpaper({ image: dataProperty(settings, 'artwork'),
-        strength: dataProperty(settings, 'wallpaperStrength') }, operation.runId, null,
+        strength: dataProperty(settings, 'wallpaperStrength'), themeState: dataProperty(result, 'themeState') }, operation.runId, null,
       false, null, operation);
     }).catch(() => {
       if (current()) this.#setWallpaperFailure('apply-failed');
@@ -982,7 +987,7 @@ class PageController {
         || Object.values(explicitText).some(value => typeof value !== 'boolean')) {
         return this.#snapshotFailure('snapshot-invalid');
       }
-      const serialized = JSON.stringify({ status, settings, explicitText, appearance: snapshotAppearance });
+      const serialized = JSON.stringify({ status, settings, explicitText, ...(dataProperty(snapshot, 'themeState') ? { themeState: dataProperty(snapshot, 'themeState') } : {}), appearance: snapshotAppearance });
       if (typeof serialized !== 'string' || serialized.length > SETTINGS_SNAPSHOT_MAX_BYTES) {
         return this.#snapshotFailure('snapshot-too-large');
       }
@@ -1445,6 +1450,7 @@ class PageController {
         if (!this.#isCurrentRetry(runId, generation)) {
           return this.#retryResult(false, previousFailure, 'operation-cancelled');
         }
+        this.wallpaperApplication?.abort?.abort();
         this.wallpaperGeneration += 1;
         this.#setWallpaperFailure('retry-timeout');
         return this.#retryResult(true, previousFailure, 'timeout');
@@ -1470,6 +1476,7 @@ class PageController {
     const operation = this.workspaceRecovery;
     if (!operation) return;
     this.workspaceRecovery = null;
+    this.wallpaperApplication?.abort?.abort();
     this.wallpaperGeneration += 1;
     operation.abort?.abort();
     if (operation.timer != null) this.host.clearTimeout(operation.timer);
@@ -1556,6 +1563,7 @@ class PageController {
     if (this.dshWallpaperPreparation?.active && dshPreparation !== this.dshWallpaperPreparation) {
       this.#cancelDSHWallpaperPreparation();
     }
+    this.wallpaperApplication?.abort?.abort();
     const generation = ++this.wallpaperGeneration;
     if (typeof message.image !== 'string' || message.image.length > 16 * 1024 * 1024
       || !BACKGROUND_DATA_URL.test(message.image) || !Number.isInteger(message.strength)
@@ -1578,7 +1586,7 @@ class PageController {
       return { ...this.state.wallpaper };
     }
     if (!retry) {
-      this.wallpaperRequest = { image: message.image, strength: message.strength };
+      this.wallpaperRequest = { image: message.image, strength: message.strength, themeState: message.themeState ?? null };
       this.wallpaperDisabled = false;
     }
     // The workspace may mount after the overlay closes. Skip, replacement and
@@ -1604,12 +1612,17 @@ class PageController {
       if (isCurrent()) return this.#setWallpaperFailure('apply-unavailable');
       return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
     }
-    const application = { generation, runId, request: this.wallpaperRequest, workspaceChanged: false };
+    const application = { generation, runId, request: this.wallpaperRequest, workspaceChanged: false, abort: new AbortController() };
+    const upstreamSignal = workspaceRecovery?.abort.signal ?? dshPreparation?.abortController.signal;
+    const onAbort = () => application.abort.abort();
+    upstreamSignal?.addEventListener('abort', onAbort, { once: true });
+    if (upstreamSignal?.aborted) onAbort();
     this.wallpaperApplication = application;
     try {
       this.appearance = this.pageAdapter.observeAppearance(this.host);
       const request = Object.freeze({
         image: message.image, strength: message.strength, surface: this.appearance.colors.surface,
+        themeState: message.themeState ?? null,
       });
       let accepted = false;
       let pendingWorkspaceNotice = null;
@@ -1620,7 +1633,7 @@ class PageController {
           else this.#handleWorkspaceInvalidated(notice, runId, generation);
         },
       } : undefined;
-      const signal = workspaceRecovery?.abort.signal ?? dshPreparation?.abortController.signal;
+      const signal = application.abort.signal;
       const result = workspaceOptions
         ? await this.wallpaperApply(request, isCurrent, signal, workspaceOptions)
         : signal ? await this.wallpaperApply(request, isCurrent, signal) : await this.wallpaperApply(request, isCurrent);
@@ -1691,6 +1704,7 @@ class PageController {
         return this.#setWallpaperFailure(failure.failureCode);
       }
     } finally {
+      upstreamSignal?.removeEventListener('abort', onAbort);
       if (this.wallpaperApplication === application) {
         this.wallpaperApplication = null;
         if (application.workspaceChanged && application.generation === this.wallpaperGeneration
@@ -2038,6 +2052,7 @@ class PageController {
     this.#clearSettingsSnapshot();
     this.wallpaperRetryCancel?.();
     this.#cancelWorkspaceRecovery();
+    this.wallpaperApplication?.abort?.abort();
     this.wallpaperGeneration += 1;
     this.#clearWatchdog();
     this.#disconnectBodyObserver();

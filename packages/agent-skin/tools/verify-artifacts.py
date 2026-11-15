@@ -1000,7 +1000,7 @@ def verify_dsh_plugin(path):
             or '((controllerMetadata) => {' in client
             or re.search(r'^\s*(?:import|export)\s', client, re.M)
             or re.search(r'\b(?:fixture|preview)\s*:\s*true\b', client)
-            or re.search(r'''["'`](?:https?:)?//[^\s"'`]+''', client)
+            or has_external_resource_literal(client)
             or re.search(r'\b(?:fetch|XMLHttpRequest)\s*\(', client)):
         raise RuntimeError('DSH 插件 client.js 含有外来适配器、模块导入或外部资源访问。')
 
@@ -1166,6 +1166,13 @@ def _payload_theme_config(path, version: str, build: str):
     return validate_embedded_theme_config(assets['themeConfig'], version, build)
 
 
+def has_external_resource_literal(script):
+    # The fixed opening SVG namespace is vocabulary, not a resource request.
+    # Do not exempt the URI elsewhere (e.g. Image.src), other namespaces or href.
+    resource_script = script.replace('<svg xmlns="http://www.w3.org/2000/svg"', '<svg xmlns="urn:azhou:svg"')
+    return re.search(r'''["'`](?:https?:)?//[^\s"'`]+''', resource_script) is not None
+
+
 def verify_startup(path, info, marker, *, current_source=True):
     """Validate startup files against their source marker; staged builds can require current inputs."""
     if current_source and not set(STARTUP_REQUIRED_INPUTS).issubset(INPUT_FILES):
@@ -1198,7 +1205,7 @@ def verify_startup(path, info, marker, *, current_source=True):
         raise RuntimeError('startup/install.js 必须是 UTF-8。') from exc
     if (re.search(r'^\s*(?:import|export)\s', script, re.M)
             or re.search(r'\b(?:fixture|preview)\s*:\s*true\b', script)
-            or re.search(r'''["'`](?:https?:)?//[^\s"'`]+''', script)
+            or has_external_resource_literal(script)
             or re.search(r'\b(?:fetch|XMLHttpRequest)\s*\(', script)):
         raise RuntimeError('startup/install.js 含有模块导入、fixture/preview 开关或外部资源访问。')
 
@@ -1296,7 +1303,7 @@ def verify_startup(path, info, marker, *, current_source=True):
             raise RuntimeError('startup/prepare.js 必须是 UTF-8。') from exc
         if (re.search(r'^\s*(?:import|export)\s', preparation_script, re.M)
                 or re.search(r'\b(?:fixture|preview)\s*:\s*true\b', preparation_script)
-                or re.search(r'''["'`](?:https?:)?//[^\s"'`]+''', preparation_script)
+                or has_external_resource_literal(preparation_script)
                 or re.search(r'\b(?:fetch|XMLHttpRequest)\s*\(', preparation_script)):
             raise RuntimeError('startup/prepare.js 含有模块导入、fixture/preview 开关或外部资源访问。')
         preparation_entry = preparation_script.rsplit('return bootstrapStartup({', 1)

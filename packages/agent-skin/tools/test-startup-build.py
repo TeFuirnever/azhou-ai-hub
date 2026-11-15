@@ -57,12 +57,16 @@ BUILD_FILES = (
     "tools/build-preflight.py",
     "tools/build-wallpaper.py",
     "tools/test-startup-browser.mjs",
+    "tools/theme-measurement-evidence.mjs",
+    "tools/test-startup-payload-browser.py",
     "tools/test-startup-browser-cdp.mjs",
     "tools/test-startup-browser-process.mjs",
     "tools/test-synthetic-legacy-wallpaper.mjs",
     "tools/test-animation-preview-final-text-browser.mjs",
     "tools/startup-browser-selection.mjs",
     "tools/test-startup-native.py",
+    "tools/image-settings.test.mjs",
+    "tools/animation.unit.test.mjs",
     "tools/build-startup.py",
     "tools/build-dsh-plugin.py",
     "tools/build-startup-assets.swift",
@@ -1047,6 +1051,35 @@ class StartupBuildTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "fixture|preview|生产"):
             self.verifier.verify_startup(clone, self.info, self.marker)
+
+    def test_svg_namespace_does_not_exempt_network_resources(self):
+        self.verifier.verify_startup(self.bundle, self.info, self.marker)
+        snippets = [
+            'new Image().src="http://www.w3.org/2000/svg";',
+            'fetch("http://www.w3.org/2000/svg");',
+            'const svg=\'<svg xmlns="http://www.w3.org/2000/svg"><use href="http://www.w3.org/2000/svg"/></svg>\';',
+            'const css=\'@import "http://www.w3.org/2000/svg";\';',
+            'const css=\'background:url("http://www.w3.org/2000/svg")\';',
+            'import "http://www.w3.org/2000/svg";',
+            'const svg=\'<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/a.png"/></svg>\';',
+            'const svg=\'<svg xmlns="http://www.w3.org/2000/svg/changed">\';',
+            'const svg=\'<svg xmlns="https://example.com/svg">\';',
+            'fetch("data:image/svg+xml,test");',
+            'new XMLHttpRequest("data:image/svg+xml,test");',
+        ]
+        for index, (relative, snippet) in enumerate((path, snippet) for path in ("startup/install.js", "startup/prepare.js") for snippet in snippets):
+            with self.subTest(relative=relative, snippet=snippet):
+                clone = Path(self.temporary.name) / f"svg-network-{index}"
+                shutil.copytree(self.bundle, clone)
+                resources = clone / "Contents/Resources"
+                script = resources / relative
+                script.write_text(script.read_text(encoding="utf-8") + "\n" + snippet, encoding="utf-8")
+                manifest_path = resources / "startup/manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["outputs"][relative] = hashlib.sha256(script.read_bytes()).hexdigest()
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "外部资源"):
+                    self.verifier.verify_startup(clone, self.info, self.marker)
 
     def test_missing_private_default_input_fails_before_writing_outputs(self):
         root = (Path(self.temporary.name) / "missing-private-source").resolve()

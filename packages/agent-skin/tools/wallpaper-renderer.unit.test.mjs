@@ -241,6 +241,7 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
         backgroundPosition: 'center, center',
         getPropertyValue: name => name === '--azhou-style-ready' && effective && activeStyle ? ' ready ' : '',
       };
+      if (node.getAttribute?.('data-azhou-theme-readability') === objectURL && activeStyle?.textContent.includes('data-azhou-theme-readability')) return {backgroundColor:'#202024',backgroundImage:`linear-gradient(red,blue), url("${objectURL}")`,backgroundSize:'100% 100%, cover'};
       if (node === applicationRoot) return { backgroundColor: 'transparent', backgroundImage: 'none' };
       if (node === workspace && pseudo === '::before') return { display: 'none', content: 'none', backgroundColor: 'transparent', backgroundImage: 'none' };
       return node.styles;
@@ -1207,6 +1208,8 @@ async function onObservedPage(operation) {
     const { createWallpaperApplicator } = await import('../wallpaper/apply.js');
     const { bootstrapStartup } = await import('../extension/bootstrap.mjs');
     const observers = [];
+    let imageCount=0;
+    globalThis.Image=function(){if(imageCount++===0)return page.image;return {src:'',complete:false,naturalWidth:page.image.naturalWidth,naturalHeight:page.image.naturalHeight,async decode(){this.complete=true;}};};
     const saved = new Map(['MutationObserver', 'ResizeObserver'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
     class Observer {
       constructor(callback) { this.callback = callback; this.disconnected = false; observers.push(this); }
@@ -1233,6 +1236,7 @@ async function onObservedPage(operation) {
         return null;
       };
       node.getClientRects = () => node.styles.display === 'none' ? [] : [{ width: 800, height: 600 }];
+      node.getBoundingClientRect = () => ({x:0,y:0,width:800,height:600});
     }
     const originalQuery = page.applicationRoot.querySelectorAll.bind(page.applicationRoot);
     page.applicationRoot.querySelectorAll = selector => selector === '[data-app-shell-main-surface]'
@@ -1390,3 +1394,160 @@ for (const defect of ['empty planes', 'unsupported observation', 'missing watche
     assert.equal(page.observers.filter(observer => !observer.disconnected).length, 0);
   }));
 }
+
+for (const value of [0,30,100]) test('theme readability uses one scene with a bounded color-only mask at '+value, async () => {
+  await onObservedPage(async page => {
+    await installRenderer({...page.payload, themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value}}}});
+    const wash = document.documentElement.style.getPropertyValue(PROPERTY_WASH);
+    assert.ok(wash.startsWith('url("data:image/svg+xml,'));
+    const svg=decodeURIComponent(JSON.parse(wash.slice(4,-1)).split(',')[1]);
+    assert.ok(svg.includes('viewBox="0 0 1512 889"'));
+    assert.ok(svg.includes('x="0" y="0" width="800" height="600"'));
+    assert.ok(svg.includes('fill-opacity="'+((100-value)/100)+'"'));
+    assert.ok(!svg.includes('<image'), 'mask never embeds artwork');
+    assert.doesNotMatch(svg, /<(?:script|foreignObject)|(?:href|src)\s*=|url\((?!#)/i, 'mask has no active or external resources');
+    assert.deepEqual([...new Set([...svg.matchAll(/<([A-Za-z]+)/g)].map(match=>match[1]))].sort(),['defs','linearGradient','mask','rect','stop','svg']);
+    assert.ok(svg.includes('linearGradient'), 'outside treatment retains legacy ramp');
+    assert.equal(globalThis.__azhouWallpaper.status().themeApplied,true);
+  });
+});
+test('theme refuses missing named surface capability without claiming applied', async () => {
+  await onPage({}, async page => {
+    await assert.rejects(installRenderer({...page.payload,themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'follow'}}}}), /theme-surface-unsupported/);
+  });
+});
+
+ test('theme to legacy handover removes only prior theme marker and old cleanup cannot retire successor', async () => onObservedPage(async page => {
+  globalThis.Image = function () { return {src:'', complete:false, naturalWidth:page.image.naturalWidth, naturalHeight:page.image.naturalHeight, async decode(){this.complete=true;}}; };
+  const themeState={schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value:30}}};
+  await installRenderer({...page.payload,themeState});
+  const prior=globalThis.__azhouWallpaper;
+  assert.equal(page.main.getAttribute('data-azhou-theme-readability'),null);
+  assert.ok(page.root.style.getPropertyValue(PROPERTY_WASH).includes('data:image/svg+xml'));
+  await installRenderer({...page.payload,workspaceObservation:page.adapter.observeWorkspace()});
+  const next=globalThis.__azhouWallpaper;
+  assert.notEqual(next,prior);
+  assert.equal(page.main.getAttribute('data-azhou-theme-readability'),null);
+  prior.dispose();
+  assert.equal(next.status().applied,true);
+  next.dispose();
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'),null);
+  assert.equal(page.main.getAttribute('data-azhou-theme-readability'),null);
+}));
+
+test('legacy workspace adapters without complete theme geometry stay usable but cannot admit themes',async()=>onObservedPage(async page=>{
+  const old={...page.adapter};delete old.readThemeGeometry;
+  await installRenderer({...page.payload,pageAdapter:old});
+  const incumbent=globalThis.__azhouWallpaper;
+  await assert.rejects(installRenderer({...page.payload,pageAdapter:old,themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'follow'}}}}),/theme-surface-unsupported/);
+  assert.equal(globalThis.__azhouWallpaper,incumbent);assert.equal(incumbent.status().applied,true);
+}));
+
+function controlledThemeImages(page) {
+  const masks=[];
+  globalThis.Image=function(){
+    this.src='';this.complete=false;this.naturalWidth=page.image.naturalWidth;this.naturalHeight=page.image.naturalHeight;
+    this.decode=()=>{
+      if(!this.src.startsWith('data:image/svg+xml,')){this.complete=true;return Promise.resolve();}
+      return new Promise((resolve,reject)=>masks.push({image:this,resolve:()=>{this.complete=true;resolve();},reject}));
+    };
+  };
+  return masks;
+}
+const activeTheme={schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value:30}}};
+async function settleMicrotasks(){for(let i=0;i<12;i++)await Promise.resolve();}
+
+test('theme geometry decodes under the original owner and stale work cannot replace a newer mask',async()=>onObservedPage(async page=>{
+  const masks=controlledThemeImages(page);
+  const pending=installRenderer({...page.payload,themeState:activeTheme});await settleMicrotasks();
+  assert.equal(masks.length,1);masks[0].resolve();await pending;
+  const owner=globalThis.__azhouWallpaper;
+  let y=20;page.main.getBoundingClientRect=()=>({x:0,y,width:800,height:600});
+  page.observers[1].trigger([]);await settleMicrotasks();
+  assert.equal(owner.status().themePending,true);assert.equal(owner.status().fallbackApplied,true);
+  assert.ok(page.root.style.getPropertyValue(PROPERTY_WASH).includes('90deg'));
+  assert.equal(masks.length,2);
+  y=30;page.observers[1].trigger([]);await settleMicrotasks();
+  assert.equal(masks[1].image.src,'');assert.equal(masks.length,3);
+  masks[1].resolve();await settleMicrotasks();assert.equal(owner.status().themePending,true);
+  masks[2].resolve();await settleMicrotasks();
+  assert.equal(globalThis.__azhouWallpaper,owner);assert.equal(owner.status().themeApplied,true);
+  const svg=decodeURIComponent(JSON.parse(page.root.style.getPropertyValue(PROPERTY_WASH).slice(4,-1)).split(',')[1]);
+  assert.ok(svg.includes('y="30"'));
+  y=40;page.observers[1].trigger([]);await settleMicrotasks();
+  owner.dispose();masks[3].resolve();await settleMicrotasks();
+  assert.equal(globalThis.__azhouWallpaper,undefined);assert.equal(page.root.getAttribute(ATTRIBUTE),'baseline');
+  assert.ok(masks.every(mask=>mask.image.src===''));
+  assert.equal(page.revoked.length,1,'mask images do not allocate another scene Blob URL');
+}));
+
+test('a runtime mask decode failure leaves the legacy treatment usable and reports theme failure',async()=>onObservedPage(async page=>{
+  const masks=controlledThemeImages(page);const pending=installRenderer({...page.payload,themeState:activeTheme});
+  await settleMicrotasks();masks[0].resolve();await pending;
+  const owner=globalThis.__azhouWallpaper;
+  page.main.getBoundingClientRect=()=>({x:0,y:10,width:800,height:600});page.observers[1].trigger([]);await settleMicrotasks();
+  masks[1].reject(Error('synthetic CSP'));await settleMicrotasks();
+  const status=owner.status();assert.equal(status.themeApplied,false);assert.equal(status.themePending,false);
+  assert.equal(status.themeFailure,'theme-mask-decode-failed');assert.equal(status.fallbackApplied,true);
+  assert.equal(globalThis.__azhouWallpaper,owner);assert.ok(page.root.style.getPropertyValue(PROPERTY_WASH).includes('90deg'));
+}));
+
+test('appearance updates rebuild the color-only mask and do not overwrite a foreign wash',async()=>onObservedPage(async page=>{
+  const masks=controlledThemeImages(page);const pending=installRenderer({...page.payload,themeState:activeTheme});
+  await settleMicrotasks();masks[0].resolve();await pending;
+  const owner=globalThis.__azhouWallpaper;assert.equal(owner.updateSurface('#eeeeee'),true);
+  await settleMicrotasks();assert.equal(masks.length,2);masks[1].resolve();await settleMicrotasks();
+  assert.ok(decodeURIComponent(page.root.style.getPropertyValue(PROPERTY_WASH)).includes('#eeeeee'));
+  page.root.style.setProperty(PROPERTY_WASH,'host-wash','important');
+  page.main.getBoundingClientRect=()=>({x:0,y:10,width:800,height:600});page.observers[1].trigger([]);await settleMicrotasks();
+  assert.equal(owner.status().themeFailure,'theme-owner-lost');assert.equal(masks.length,2);
+  owner.dispose();assert.equal(page.root.style.getPropertyValue(PROPERTY_WASH),'host-wash');
+  assert.equal(page.root.style.getPropertyPriority(PROPERTY_WASH),'important');
+}));
+
+test('initial mask decode cannot mutate the page after its geometry becomes stale',async()=>onObservedPage(async page=>{
+  const masks=controlledThemeImages(page);const pending=installRenderer({...page.payload,themeState:activeTheme});
+  await settleMicrotasks();page.main.getBoundingClientRect=()=>({x:0,y:25,width:800,height:600});
+  masks[0].resolve();await assert.rejects(pending,/theme-mask-stale/);
+  assert.equal(page.root.getAttribute(ATTRIBUTE),'baseline');assert.equal(globalThis.__azhouWallpaper,undefined);
+  assert.equal(page.revoked.length,1);
+}));
+
+test('theme mask uses the existing decode anti-hang ceiling and releases a timed-out attempt',async()=>onObservedPage(async page=>{
+  const originalSet=globalThis.setTimeout,originalClear=globalThis.clearTimeout, timers=new Map();let next=0;
+  globalThis.setTimeout=(callback,delay)=>{const id=++next;timers.set(id,{callback,delay});return id;};
+  globalThis.clearTimeout=id=>timers.delete(id);
+  try{
+    const masks=controlledThemeImages(page),pending=installRenderer({...page.payload,themeState:activeTheme});
+    await settleMicrotasks();assert.equal(masks.length,1);
+    const deadline=[...timers.values()].find(timer=>timer.delay===4000);assert.ok(deadline);
+    deadline.callback();await assert.rejects(pending,/theme-mask-decode-timeout/);
+    assert.equal(masks[0].image.src,'');assert.equal(timers.size,0);assert.equal(page.revoked.length,1);
+    assert.equal(page.root.getAttribute(ATTRIBUTE),'baseline');
+  }finally{globalThis.setTimeout=originalSet;globalThis.clearTimeout=originalClear;}
+}));
+
+test('a half-upgraded workspace watcher cannot silently admit a theme without its geometry callback',async()=>onObservedPage(async page=>{
+  const old={...page.adapter,watchWorkspace:()=>({current:()=>true,dispose(){}})};
+  await installRenderer({...page.payload,pageAdapter:old});const incumbent=globalThis.__azhouWallpaper;
+  await assert.rejects(installRenderer({...page.payload,pageAdapter:old,themeState:activeTheme}),/theme-surface-unsupported/);
+  assert.equal(globalThis.__azhouWallpaper,incumbent);assert.equal(incumbent.status().applied,true);
+}));
+
+test('aborting initial theme decode immediately releases images timers and listener without harming a successor',async()=>onObservedPage(async page=>{
+  const originalSet=globalThis.setTimeout,originalClear=globalThis.clearTimeout,timers=new Map();let next=0;
+  globalThis.setTimeout=(callback,delay)=>{const id=++next;timers.set(id,{callback,delay});return id;};
+  globalThis.clearTimeout=id=>timers.delete(id);
+  const abort=new AbortController(),listeners=new Set();
+  const signal={get aborted(){return abort.signal.aborted;},addEventListener(type,fn,options){listeners.add(fn);abort.signal.addEventListener(type,fn,options);},removeEventListener(type,fn){listeners.delete(fn);abort.signal.removeEventListener(type,fn);}};
+  try{
+    const masks=controlledThemeImages(page),pending=installRenderer({...page.payload,themeState:activeTheme,signal});
+    await settleMicrotasks();assert.equal(masks.length,1);assert.equal(listeners.size,1);
+    const rejected=assert.rejects(pending,/theme-mask-cancelled/);abort.abort();
+    assert.equal(masks[0].image.src,'');assert.equal(timers.size,0,'release does not wait for the deadline');
+    await rejected;assert.equal(listeners.size,0);assert.equal(page.revoked.length,1);
+    await installRenderer(page.payload);const successor=globalThis.__azhouWallpaper;
+    masks[0].resolve();await settleMicrotasks();abort.abort();
+    assert.equal(globalThis.__azhouWallpaper,successor);assert.equal(successor.status().applied,true);
+  }finally{globalThis.setTimeout=originalSet;globalThis.clearTimeout=originalClear;}
+}));

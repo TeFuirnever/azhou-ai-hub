@@ -16,6 +16,7 @@ export async function installRenderer(offered) {
   'use strict';
 
   const BUILD = '0.9.0';
+  const DECODE_TIMEOUT_MS = 4000; // Existing decode anti-hang ceiling, not a presentation or recovery SLO.
   const SUPERSEDED = new Set(['0.8.0', '0.7.1']);
   let controllerOwner = 'azhou.codex-startup-animation';
 
@@ -74,6 +75,7 @@ export async function installRenderer(offered) {
   // foreign installation, so the whole adapter is refused rather than patched.
   const previewFlag = offered?.preview;
   const isCurrent = slotValue(offered, 'isCurrent');
+  const signal = slotValue(offered, 'signal');
   const hostAdapter = slotValue(offered, 'pageAdapter');
   const ports = slotValue(hostAdapter, 'wallpaper');
   const portAttributes = slotValue(ports, 'attributes');
@@ -134,6 +136,7 @@ export async function installRenderer(offered) {
   const brief = {
     version: offered?.version, css: offered?.css, image: offered?.image,
     imageSHA256: offered?.imageSHA256, strength: offered?.strength, surface: offered?.surface,
+    themeState: offered?.themeState,
   };
   const rejectedColorShapes = [
     /[;{}]/,                                                         // style delimiters
@@ -182,6 +185,24 @@ export async function installRenderer(offered) {
     : !!shell?.querySelector('[data-app-shell-frame]')
       && !!shell?.querySelector('[data-app-shell-main-surface],[data-app-shell-page-surface]');
   if (!document.body || !shell || !shellUsable()) throw deny('unsupported-shell-no-surfaces');
+  const geometryReader = slotValue(hostAdapter, 'readThemeGeometry');
+  const readThemeGeometry = () => {
+    try {
+    if (!workspaceBound || slotValue(hostAdapter, 'themeGeometryContract') !== 'codex-theme-geometry/v1'
+      || typeof geometryReader !== 'function' || slotValue(hostAdapter, 'readThemeGeometry') !== geometryReader) return null;
+    const geometry = Reflect.apply(geometryReader, hostAdapter, [workspaceObservation, globalThis]);
+    if (geometry?.kind !== 'observed' || geometry.contract !== 'codex-theme-geometry/v1'
+      || geometry.documentToken !== workspaceObservation.documentToken
+      || geometry.workspaceEpoch !== workspaceObservation.workspaceEpoch) return null;
+    const rect = geometry.rect, viewport = geometry.viewport;
+    if (!rect || !viewport || ![rect.x, rect.y, rect.width, rect.height, viewport.width, viewport.height].every(Number.isFinite)
+      || rect.width <= 0 || rect.height <= 0 || viewport.width <= 0 || viewport.height <= 0
+      || viewport.width !== innerWidth || viewport.height !== innerHeight
+      || Object.values(rect).some(value => Math.abs(value) > 10000000)) return null;
+    return geometry;
+    } catch { return null; }
+  };
+  if (brief.themeState && !readThemeGeometry()) throw deny('theme-surface-unsupported');
 
   // ── Gate 5: incumbent controller ────────────────────────────────────────
   const acceptsVersion = version => version === BUILD || (!hostBound && SUPERSEDED.has(version));
@@ -221,9 +242,32 @@ export async function installRenderer(offered) {
   const sceneURL = URL.createObjectURL(new Blob([sceneBytes], { type: 'image/' + encodedScene[1] }));
   let scene, sheetCommitted = false, urlRelinquished = false;
   let invalidateWorkspace = () => {};
+  let themeGeometry = null, geometrySubscribed = false;
+  let geometryChanged = geometry => { themeGeometry = geometry; };
+  let maskGeneration = 0;
+  let cancelScene = () => {};
+  const abortPending = () => { cancelScene(); cancelMasks(); };
+  const maskJobs = new Set();
+  const cancelMasks = () => { maskGeneration++; for (const cancel of [...maskJobs]) { try { cancel(); } catch {} } };
+  const decodeMask = source => new Promise((resolve, reject) => {
+    const image = new Image();
+    let settled = false, timer;
+    const finish = failure => {
+      if (settled) return;
+      settled = true; clearTimeout(timer); maskJobs.delete(cancel);
+      try { image.src = ''; } catch {}
+      if (failure) reject(failure); else resolve(source);
+    };
+    const cancel = () => finish(deny('theme-mask-cancelled'));
+    maskJobs.add(cancel);
+    timer = setTimeout(() => finish(deny('theme-mask-decode-timeout')), DECODE_TIMEOUT_MS);
+    try { image.src = source; Promise.resolve(image.decode()).then(() => finish(), () => finish(deny('theme-mask-decode-failed'))); }
+    catch { finish(deny('theme-mask-decode-failed')); }
+  });
   const relinquishURL = () => {
     if (urlRelinquished) return;
     urlRelinquished = true;
+    cancelMasks();
     URL.revokeObjectURL(sceneURL);
     if (scene) scene.src = '';
   };
@@ -260,11 +304,13 @@ export async function installRenderer(offered) {
       const decide = (failure = null) => {
         if (decided) return;
         decided = true;
+        cancelScene = () => {};
         clearTimeout(crossCheck);
         clearTimeout(deadline);
         if (failure) reject(failure);
         else resolve(true);
       };
+      cancelScene = () => { decide(deny('operation-cancelled')); try { element.src = ''; } catch {} };
       let native;
       try { native = element.decode(); }
       catch (failure) { native = Promise.reject(failure); }
@@ -282,13 +328,19 @@ export async function installRenderer(offered) {
           }, () => {});
         }, 250);
       }
-      deadline = setTimeout(() => decide(deny('image-decode-timeout')), 4000);
+      deadline = setTimeout(() => decide(deny('image-decode-timeout')), DECODE_TIMEOUT_MS);
     });
   }
 
   try {
+    if (signal) {
+      if (typeof signal.addEventListener !== 'function' || typeof signal.removeEventListener !== 'function' || signal.aborted) throw deny('operation-cancelled');
+      signal.addEventListener('abort', abortPending, { once: true });
+    }
     if (workspaceBound) workspaceLease = Reflect.apply(workspaceWatch, hostAdapter, [workspaceObservation,
-      () => { workspaceInvalidated = true; invalidateWorkspace(); }, globalThis]);
+      () => { workspaceInvalidated = true; cancelMasks(); invalidateWorkspace(); }, globalThis,
+      brief.themeState ? { onThemeGeometry: geometry => { geometrySubscribed = true; geometryChanged(geometry); } } : {}]);
+    if (brief.themeState && !geometrySubscribed) throw deny('theme-surface-unsupported');
     // ── Decode the leased scene ───────────────────────────────────────────
     scene = new Image();
     try {
@@ -330,16 +382,30 @@ export async function installRenderer(offered) {
     }
 
     // ── Compose: wash, snapshots, candidate sheet ─────────────────────────
+    let themeAlpha = null;
+    if (brief.themeState != null) {
+      const state = brief.themeState;
+      const preference = state?.preferencesByTheme?.['azhou-q-v3'];
+      const capability = workspaceObservation?.themeSurfaces;
+      if (!workspaceBound || capability?.contract !== 'codex-theme-surfaces/v1'
+        || capability.workspaceReadability !== workspaceObservation.activeMain
+        || state.schemaVersion !== 1 || state.activeThemeId !== 'azhou-q-v3'
+        || !preference || !['follow', 'override'].includes(preference.mode)
+        || (preference.mode === 'override' && (!Number.isFinite(preference.value)
+          || preference.value < 0 || preference.value > 100))) throw deny('theme-surface-unsupported');
+      themeAlpha = preference.mode === 'follow' ? .7 : (100 - preference.value) / 100;
+    }
     const tint = brief.strength ?? 42;
     const tintRatio = tint / 42;
     const tintRamp = [
       { mix: 24, at: '0%' }, { mix: 18, at: '22%' }, { mix: 12, at: '36%' },
       { mix: 16, at: '62%' }, { mix: 30, at: '73%' }, { mix: 65, at: '87%' }, { mix: 70, at: '100%' },
     ];
-    const tintGradient = 'linear-gradient(90deg,' + tintRamp.map(({ mix, at }) => {
+    let tintGradient = 'linear-gradient(90deg,' + tintRamp.map(({ mix, at }) => {
       const shown = Math.min(100, Math.round(mix * tintRatio));
       return 'color-mix(in srgb, var(--azhou-base) ' + (100 - shown) + '%, transparent) ' + at;
     }).join(',') + ')';
+    const legacyGradient = tintGradient;
     const planeNodes = kind => workspaceObservation.knownPaintPlanes.filter(plane => plane.kind === kind).map(plane => plane.node);
     const markerNames = { surface: 'data-azhou-wallpaper-plane', workspace: 'data-azhou-wallpaper-pseudo',
       footer: 'data-azhou-wallpaper-decoration', fade: 'data-azhou-wallpaper-decoration', top: 'data-azhou-wallpaper-decoration' };
@@ -360,6 +426,34 @@ export async function installRenderer(offered) {
         if (!markerTargets.has(node)) markerTargets.set(node, new Set());
         markerTargets.get(node).add(attribute);
       }
+    }
+    let themeApplied = themeAlpha === null, themePending = false, themeFailure = '';
+    const geometryKey = geometry => JSON.stringify([geometry.rect, geometry.viewport]);
+    const maskSource = (geometry, color) => {
+      if (!colorPlausible(color)) throw deny('theme-color-unsupported');
+      const escaped = color.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
+      const { rect, viewport } = geometry;
+      const attributes = 'x="' + rect.x + '" y="' + rect.y + '" width="' + rect.width + '" height="' + rect.height + '"';
+      const stops = tintRamp.map(({ mix, at }) => '<stop offset="' + at + '" stop-color="' + escaped
+        + '" stop-opacity="' + (1 - Math.min(100, Math.round(mix * tintRatio)) / 100) + '"/>').join('');
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + viewport.width + '" height="' + viewport.height
+        + '" viewBox="0 0 ' + viewport.width + ' ' + viewport.height + '"><defs><linearGradient id="g">' + stops
+        + '</linearGradient><mask id="m"><rect width="100%" height="100%" fill="white"/><rect ' + attributes
+        + ' fill="black"/></mask></defs><rect width="100%" height="100%" fill="url(#g)" mask="url(#m)"/><rect '
+        + attributes + ' fill="' + escaped + '" fill-opacity="' + themeAlpha + '"/></svg>';
+      return 'data:image/svg+xml,' + encodeURIComponent(svg);
+    };
+    const maskColor = () => surfaceTint ?? getComputedStyle(document.body).backgroundColor;
+    if (themeAlpha !== null) {
+      themeGeometry = readThemeGeometry();
+      if (!themeGeometry) throw deny('theme-surface-unsupported');
+      const admittedGeometry = geometryKey(themeGeometry);
+      const source = await decodeMask(maskSource(themeGeometry, maskColor()));
+      const fresh = readThemeGeometry();
+      if (!fresh || admittedGeometry !== geometryKey(fresh) || !workspaceCurrent()
+        || (typeof isCurrent === 'function' && !isCurrent()) || seatedController().seated !== activeNow) throw deny('theme-mask-stale');
+      tintGradient = 'url(' + JSON.stringify(source) + ')';
+      themeApplied = true;
     }
     const snapshotHostState = () => ({
       codexMarkers: new Map([...markerTargets].map(([node, attributes]) => [node,
@@ -478,7 +572,9 @@ export async function installRenderer(offered) {
         reason: 'disposed', imageSHA256: brief.imageSHA256 };
       const surfaces = liveSurfaces().filter(node => node.isConnected);
       const bodyLayer = getComputedStyle(document.body);
-      const transparentSurfaces = surfaces.filter(node => {
+      const themeMatched = themeAlpha === null || themeApplied;
+      const clearSurfaces = surfaces;
+      const transparentSurfaces = clearSurfaces.filter(node => {
         const computed = getComputedStyle(node);
         return isTransparent(computed.backgroundColor) && computed.backgroundImage === 'none';
       }).length;
@@ -516,14 +612,15 @@ export async function installRenderer(offered) {
       const styleCount = document.querySelectorAll('#' + SHEET_ID).length;
       const applied = pageAdmitted() && imageDecoded && candidate.isConnected && styleCount === 1
         && html.getAttribute(ACTIVATION) === 'active'
-        && surfaces.length > 0 && transparentSurfaces === surfaces.length
+        && surfaces.length > 0 && transparentSurfaces === clearSurfaces.length && themeMatched
         && rootClear && workspaceBackgroundClear && footerBackgroundClear && backgroundMatched
         && washMatched
         && footerFadeClear && topFadeClear && decorationEffectsClear && unknownLayers.length === 0
         && coverMatched && fixedViewport;
       return {
         version: BUILD, applied, imageDecoded, matchedSurfaces: surfaces.length,
-        backgroundMatched, washMatched, coverMatched, fixedViewport, transparentSurfaces, rootClear,
+        backgroundMatched, washMatched, coverMatched, fixedViewport, transparentSurfaces, rootClear, themeMatched,
+        ...(themeAlpha !== null ? { themeApplied, themePending, themeFailure, fallbackApplied: !themeApplied && backgroundMatched && washMatched } : {}),
         workspaceBackgroundClear,
         ...(workspaceBound ? { coverage: workspaceObservation.coverage, fullCoverage: false,
           workspaceEpoch: workspaceObservation.workspaceEpoch } : {}),
@@ -552,6 +649,7 @@ export async function installRenderer(offered) {
         || (!sheetCommitted && slotValue(globalThis, CONTROLLER_SLOT) === incumbent);
       retired = true;
       stopWatching();
+      cancelMasks();
       const sheetStillAuthored = candidate.isConnected && candidate.parentNode === document.head
         && candidate.id === SHEET_ID && candidate.disabled === false
         && candidate.getAttribute(SHEET_OWNER_ATTRIBUTE) === controllerOwner
@@ -603,6 +701,7 @@ export async function installRenderer(offered) {
     const handOverForReplacement = () => {
       retired = true;
       stopWatching();
+      cancelMasks();
       for (const [node, attributes] of restoreSnapshot.codexMarkers ?? []) {
         for (const [attribute, previous] of attributes) attemptCleanup(() => {
           if (node.getAttribute(attribute) !== sceneURL) return;
@@ -619,6 +718,37 @@ export async function installRenderer(offered) {
       relinquishURL();
       if (globalThis[CONTROLLER_SLOT] === controller) delete globalThis[CONTROLLER_SLOT];
     };
+    const refreshTheme = geometry => {
+      if (themeAlpha === null || retired || !sheetCommitted || slotValue(globalThis, CONTROLLER_SLOT) !== controller) return;
+      if (!workspaceCurrent() || !geometry) { invalidateWorkspace(); return; }
+      cancelMasks();
+      const generation = maskGeneration;
+      const ownsWash = html.style.getPropertyValue(TINT_PROPERTY) === tintGradient
+        && html.style.getPropertyPriority(TINT_PROPERTY) === '';
+      if (!ownsWash) { themeApplied = false; themePending = false; themeFailure = 'theme-owner-lost'; return; }
+      tintGradient = legacyGradient;
+      html.style.setProperty(TINT_PROPERTY, tintGradient);
+      themeApplied = false; themePending = true; themeFailure = '';
+      const key = geometryKey(geometry);
+      let source;
+      try { source = maskSource(geometry, maskColor()); }
+      catch { themePending = false; themeFailure = 'theme-color-unsupported'; return; }
+      decodeMask(source).then(decoded => {
+        const fresh = readThemeGeometry();
+        if (retired || generation !== maskGeneration || slotValue(globalThis, CONTROLLER_SLOT) !== controller
+          || !workspaceCurrent() || !fresh || geometryKey(fresh) !== key) return;
+        if (html.style.getPropertyValue(TINT_PROPERTY) !== tintGradient || html.style.getPropertyPriority(TINT_PROPERTY) !== '') {
+          themePending = false; themeFailure = 'theme-owner-lost'; return;
+        }
+        tintGradient = 'url(' + JSON.stringify(decoded) + ')';
+        html.style.setProperty(TINT_PROPERTY, tintGradient);
+        themeApplied = true; themePending = false; themeFailure = '';
+      }, failure => {
+        if (retired || generation !== maskGeneration) return;
+        themeApplied = false; themePending = false; themeFailure = failure?.code ?? 'theme-mask-decode-failed';
+      });
+    };
+    geometryChanged = geometry => { themeGeometry = geometry; refreshTheme(geometry); };
     function updateSurface(value) {
       if (retired || (workspaceBound && !workspaceCurrent()) || slotValue(globalThis, CONTROLLER_SLOT) !== controller
           || document.documentElement !== html || !shell.isConnected
@@ -634,6 +764,7 @@ export async function installRenderer(offered) {
       if (next !== surfaceTint || !surfaceOwned) {
         publishSurface(next);
         surfaceTint = next;
+        if (themeAlpha !== null) refreshTheme(readThemeGeometry());
       }
       return surfaceOwned;
     }
@@ -738,6 +869,7 @@ export async function installRenderer(offered) {
       throw error;
     }
   } finally {
+    try { signal?.removeEventListener('abort', abortPending); } catch {}
     if (!sheetCommitted) {
       try { workspaceLease?.dispose(); } finally { relinquishURL(); }
     }

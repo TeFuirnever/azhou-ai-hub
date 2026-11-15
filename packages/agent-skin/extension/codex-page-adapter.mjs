@@ -838,6 +838,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         && sameNodes(workspaceObservation.layoutTargets, layoutTargets) && sameUnknown) return workspaceObservation;
       workspaceObservation = Object.freeze({ kind: 'observed', documentToken: identity.documentToken,
         workspaceEpoch: ++workspaceEpoch, shell, activeMain,
+        themeSurfaces: Object.freeze({ contract: 'codex-theme-surfaces/v1',
+          workspaceReadability: activeMain, fullCoverage: false }),
         layoutTargets: Object.freeze(layoutTargets), layoutAncestors: Object.freeze(layoutAncestors), knownPaintPlanes: Object.freeze(knownPaintPlanes),
         unknownCandidates: Object.freeze(unknownCandidates),
         coverage: Object.freeze({ shell: 'observed', messaging: visible(workspaceSelectors.messaging).length ? 'observed' : 'unknown',
@@ -848,18 +850,69 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     }
   }
 
-  function watchWorkspace(observation, invalidate, host = hostEnvironment) {
+  function readThemeGeometry(observation, host = hostEnvironment) {
+    const unsupported = () => Object.freeze({ kind: 'unsupported', reason: 'theme-geometry-unsupported' });
+    try {
+      if (observation?.kind !== 'observed' || observeWorkspace(host) !== observation
+        || observation.themeSurfaces?.workspaceReadability !== observation.activeMain) return unsupported();
+      const width = host.innerWidth, height = host.innerHeight;
+      if (![width, height].every(value => Number.isFinite(value) && value > 0 && value <= 32768)) return unsupported();
+      const nodes = new Set([host.document.documentElement, host.document.body]);
+      for (let node = observation.activeMain; node; node = node.parentElement) nodes.add(node);
+      for (const node of nodes) {
+        const style = host.getComputedStyle(node);
+        if (!style || ['transform', 'filter', 'backdropFilter', 'perspective', 'clipPath', 'maskImage']
+          .some(key => style[key] && style[key] !== 'none')
+          || style.contain && style.contain !== 'none'
+          || style.clip && style.clip !== 'auto'
+          || /transform|filter|perspective|contain/.test(style.willChange ?? '')) return unsupported();
+      }
+      const style = host.getComputedStyle(observation.activeMain);
+      if (style.borderRadius && !/^0(?:px|%|em|rem)?(?:\s+0(?:px|%|em|rem)?)*$/.test(style.borderRadius)) return unsupported();
+      const bounds = observation.activeMain.getBoundingClientRect();
+      const rect = Object.fromEntries(['x', 'y', 'width', 'height'].map(key => [key, bounds[key]]));
+      if (!Object.values(rect).every(value => Number.isFinite(value) && Math.abs(value) <= 10000000)
+        || rect.width <= 0 || rect.height <= 0 || rect.x >= width || rect.y >= height
+        || rect.x + rect.width <= 0 || rect.y + rect.height <= 0) return unsupported();
+      // Theme paint is a viewport background, not a descendant of these clips.
+      // Admit only clips proven to contain the whole main rectangle.
+      for (const node of nodes) {
+        const clipping = host.getComputedStyle(node);
+        if (clipping.overflowClipMargin && !/^(?:content-box\s+)?0px$/.test(clipping.overflowClipMargin)) return unsupported();
+        if (node === observation.activeMain) continue;
+        const axes = ['X', 'Y'].map(axis => clipping['overflow' + axis] || clipping.overflow || 'visible');
+        if (axes.some(value => !['visible','hidden','clip','auto','scroll'].includes(value))) return unsupported();
+        if (!axes.some(value => value !== 'visible')) continue;
+        if (clipping.borderRadius && !/^0(?:px|%|em|rem)?(?:\s+0(?:px|%|em|rem)?)*$/.test(clipping.borderRadius)) return unsupported();
+        if (['Top','Right','Bottom','Left'].some(side => Number.parseFloat(clipping['border' + side + 'Width'] || '0') !== 0)) return unsupported();
+        const box = node.getBoundingClientRect();
+        if (!['x','y','width','height'].every(key => Number.isFinite(box[key]))) return unsupported();
+        // Reserved scrollbars and CSS zoom need a separate proven mapping.
+        if (![node.offsetWidth,node.clientWidth,node.offsetHeight,node.clientHeight].every(Number.isFinite)
+          || node.offsetWidth !== node.clientWidth || node.offsetHeight !== node.clientHeight) return unsupported();
+        if (axes[0] !== 'visible' && (rect.x < box.x || rect.x + rect.width > box.x + box.width)) return unsupported();
+        if (axes[1] !== 'visible' && (rect.y < box.y || rect.y + rect.height > box.y + box.height)) return unsupported();
+      }
+      return Object.freeze({ kind: 'observed', contract: 'codex-theme-geometry/v1',
+        documentToken: observation.documentToken, workspaceEpoch: observation.workspaceEpoch,
+        rect: Object.freeze(rect), viewport: Object.freeze({ width, height }) });
+    } catch { return unsupported(); }
+  }
+
+  function watchWorkspace(observation, invalidate, host = hostEnvironment, options = {}) {
     if (typeof invalidate !== 'function' || observation?.kind !== 'observed'
       || observeWorkspace(host) !== observation) throw new Error('workspace-unavailable');
     let retired = false;
     const observers = [];
     const listeners = [];
     let mutation;
+    let geometryKey = null;
+    const geometryChanged = typeof options.onThemeGeometry === 'function' ? options.onThemeGeometry : null;
     const release = () => {
       if (retired) return;
       retired = true;
       for (const observer of observers) { try { observer.disconnect(); } catch {} }
-      for (const [target, event, callback] of listeners) { try { target.removeEventListener(event, callback); } catch {} }
+      for (const [target, event, callback, capture] of listeners) { try { target.removeEventListener(event, callback, capture); } catch {} }
     };
     const activityNodes = new Set(observation.knownPaintPlanes.map(plane => plane.node));
     for (let node = observation.activeMain; node; node = node.parentElement) activityNodes.add(node);
@@ -915,10 +968,25 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       if (retired) return false;
       processRecords(mutation?.takeRecords() ?? []);
       if (!retired && observeWorkspace(host) !== observation) endObservation();
+      if (!retired && geometryChanged) {
+        const geometry = readThemeGeometry(observation, host);
+        if (geometry.kind !== 'observed') endObservation();
+        else {
+          const key = JSON.stringify([geometry.rect, geometry.viewport]);
+          if (key !== geometryKey) {
+            geometryKey = key;
+            try { geometryChanged(geometry); } catch { endObservation(); }
+          }
+        }
+      }
       return !retired;
     };
     try {
-      mutation = new host.MutationObserver(processRecords);
+      mutation = new host.MutationObserver(records => {
+        processRecords(records);
+        if (!retired && geometryChanged && records.some(record => record.type === 'attributes'
+          && (record.target === observation.activeMain || record.target.contains?.(observation.activeMain)))) current();
+      });
       observers.push(mutation);
       mutation.observe(host.document.documentElement, { subtree: true, childList: true, attributes: true, attributeOldValue: true,
         attributeFilter: ['class', 'style', 'hidden', 'data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface'] });
@@ -931,6 +999,14 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         if (typeof target.addEventListener !== 'function') continue;
         target.addEventListener(event, current);
         listeners.push([target, event, current]);
+      }
+      if (geometryChanged) {
+        for (const [target, event, capture] of [[host.document, 'scroll', true],
+          [host.visualViewport, 'resize', false], [host.visualViewport, 'scroll', false]]) {
+          if (typeof target?.addEventListener !== 'function') continue;
+          target.addEventListener(event, current, capture);
+          listeners.push([target, event, current, capture]);
+        }
       }
       current();
       return Object.freeze({ current, dispose: release });
@@ -958,8 +1034,10 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
   }
   return Object.freeze({
     workspaceContract: 'codex-active-workspace/v1',
+    themeGeometryContract: 'codex-theme-geometry/v1',
     identify,
     observeWorkspace,
+    readThemeGeometry,
     watchWorkspace,
     isWorkspaceCurrent(observation, host = hostEnvironment) {
       return observation?.kind === 'observed' && observeWorkspace(host) === observation;

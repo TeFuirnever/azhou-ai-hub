@@ -1493,10 +1493,11 @@ enum NativeStartupSnapshotTransfer {
             "introTitle": values.introTitle, "introCaption": values.introCaption,
             "artworkSubtitle": values.artworkSubtitle, "wallpaperStrength": values.wallpaperStrength,
         ]
-        let object: [String: Any] = ["status": snapshot.status, "settings": settings,
+        var object: [String: Any] = ["status": snapshot.status, "settings": settings,
                                      "explicitText": values.explicitText,
                                      "appearance": ["locale": snapshot.appearance.locale,
                                                     "theme": snapshot.appearance.theme]]
+        if let theme = values.themeState { object["themeState"] = theme.object }
         guard JSONSerialization.isValidJSONObject(object) else { throw failure("snapshot-transfer-invalid") }
         do { return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]) }
         catch { throw failure("snapshot-transfer-invalid") }

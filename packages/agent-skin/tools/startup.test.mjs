@@ -348,19 +348,22 @@ function dshSettingsStorage(record, { openFailure = false, holdFirstRead = false
   const database = {
     objectStoreNames: { contains(name) { return name === 'settings'; } },
     transaction(storeName, mode) {
+      let pending = 0;
       const transaction = {
         storeName, mode, aborted: false,
         objectStore(name) {
           assert.equal(name, 'settings');
           return { get(key) {
-            const request = { result: record };
+            pending++;
+            const request = { result: key === 'images' ? record : undefined };
             state.requests.push({ key, request, transaction });
             let delivered = false;
             const deliver = () => {
               if (delivered) return;
               delivered = true;
               request.onsuccess?.();
-              transaction.oncomplete?.();
+              pending--;
+              if (!pending && !transaction.aborted) transaction.oncomplete?.();
             };
             if (holdFirstRead && state.requests.length === 1) state.releaseFirst = deliver;
             else queueMicrotask(deliver);
@@ -526,7 +529,7 @@ test('a DSH page without the gate reads its own saved wallpaper and applies it w
   const api = fixture.host.__azhouStartup;
   await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied, 'saved DSH wallpaper was not applied');
   assert.deepEqual(fixture.storage.state.opens, [{ name: 'azhou-dsh-startup', version: 1 }]);
-  assert.equal(fixture.storage.state.requests[0].key, 'images');
+  assert.deepEqual(fixture.storage.state.requests.map(({key}) => key).sort(), ['images', 'themeState']);
   assert.equal(fixture.storage.state.transactions[0].mode, 'readonly');
   assert.deepEqual(fixture.rendererCalls, [{ image: fixture.saved.artwork, strength: 31 }]);
   assert.equal(api.status().phase, 'prepared');

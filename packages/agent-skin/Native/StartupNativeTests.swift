@@ -1479,6 +1479,45 @@ private func startupSettingsSnapshotChecks() async throws -> Int {
         }
     }
 
+    let theme: [String: Any] = ["schemaVersion": 1, "revision": 1, "activeThemeId": "azhou-q-v3",
+        "preferencesByTheme": ["azhou-q-v3": ["mode": "override", "value": 65]],
+        "imagesBinding": String(repeating: "a", count: 64)]
+    for (name, mutate, valid): (String, (inout [String: Any]) -> Void, Bool) in [
+        ("valid", { _ in }, true),
+        ("boolean revision", { $0["revision"] = true }, false),
+        ("unknown schema", { $0["schemaVersion"] = 2 }, false),
+        ("extra key", { $0["extra"] = "untrusted" }, false),
+        ("inactive", { $0["activeThemeId"] = NSNull() }, false),
+        ("invalid alpha", { $0["preferencesByTheme"] = ["azhou-q-v3": ["mode": "override", "value": 101]] }, false),
+        ("invalid binding", { $0["imagesBinding"] = "bad" }, false),
+    ] {
+        var value = theme
+        mutate(&value)
+        var object = try JSONSerialization.jsonObject(with: StartupSnapshotWorld.makePayload()) as! [String: Any]
+        object["themeState"] = value
+        if valid, let path = ProcessInfo.processInfo.environment["AZHOU_THEME_BRIDGE_INPUT"] {
+            object = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as! [String: Any]
+        }
+        let world = StartupSnapshotWorld(payload: try JSONSerialization.data(withJSONObject: object))
+        let transport = try opened(world)
+        defer { transport.close() }
+        do {
+            let received = try await StartupSettingsSnapshotReceiver.receive(
+                transport: transport, page: page, request: request, deadline: 50, now: { world.time() })
+            expect(valid, "malformed theme must reject: \(name)")
+            if valid, let path = ProcessInfo.processInfo.environment["AZHOU_THEME_BRIDGE_OUTPUT"] {
+                var expressions: [String] = []
+                try await NativeStartupSnapshotTransfer.send(snapshot: received, runNonce: request.runNonce,
+                    deadline: 110, now: { 100 }, evaluate: { expression, _ in expressions.append(expression); return true })
+                try JSONSerialization.data(withJSONObject: expressions).write(to: URL(fileURLWithPath: path))
+            }
+            expect(received.values.themeState?.transparency == 65, "theme alpha survives receiver")
+            expect(received.values.themeState?.imagesBinding == (object["themeState"] as? [String: Any])?["imagesBinding"] as? String, "theme binding survives receiver without becoming authorization")
+        } catch let failure as StartupFailure {
+            expect(!valid && failure.reason == "snapshot-invalid", "theme validation rejects only malformed values: \(name)")
+        }
+    }
+
     let digestMismatch = StartupSnapshotWorld()
     digestMismatch.mutateDescriptor = { $0["sha256"] = String(repeating: "0", count: 64) }
     digestMismatch.mutateChunk = { chunk, _ in chunk["sha256"] = String(repeating: "0", count: 64) }

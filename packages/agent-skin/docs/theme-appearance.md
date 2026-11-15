@@ -63,3 +63,25 @@ Codex 页面适配器的 `codex-active-workspace/v1` 能力按当前 Document、
 
 
 工作区重新观察期间对外仍是 `applied: false`，但不会把正常的有界恢复立即作为失败通知插入导航；只有恢复已结束且失败、结构不支持或超时才显示错误。当前仍会对已观察祖先的宿主 class/style 变化保守地撤销并重新解码背景，例如侧栏网格宽度变化。此策略的可见闪烁、首帧连续性与代价尚须同版真实宿主视觉和独占性能验收；功能测试通过不表示这些指标已通过。
+
+## P07 theme foundation candidate
+
+This engineering subset adds one bundled Azhou theme and per-theme readability preferences. It does not deliver the full theme library, imported themes, or full Dream Skin parity. The Codex adapter grants only the named `workspaceReadability` capability. Menus, composer, dialogs, sidebars and other UI surfaces remain outside this capability. Unknown capabilities reject theme application without expanding selectors or changing native controls. A successful settings transaction is not proof of successful appearance application. DSH theme surfaces are not yet admitted.
+
+Legacy wallpaper strength keeps its 0–75 semantics. The theme readability treatment replaces, rather than stacks with, the legacy wash. It does not lower text opacity. Real-host visual continuity, keyboard/IME interaction, reduced-motion flows and performance remain unverified until separately exercised against the exact loaded candidate.
+
+The candidate keeps the scene image in its existing single body background plane. A color-only SVG replaces the wash inside the adapter-authorized workspace rectangle; it contains no artwork, text, or external resources and creates no foreground layer. Geometry is versioned and bound to the document/workspace epoch. The existing workspace observer and lease deliver resize and captured-scroll geometry; a second controller or observer is not introduced. Unknown geometry, transforms, masks, or adapter contracts refuse the theme rather than guessing.
+
+Mask decoding shares the existing 4000 ms anti-hang ceiling with scene decoding. This is not a performance or recovery SLO: on a geometry or appearance change, the owner restores the legacy treatment synchronously before awaiting a fresh mask. `themePending`, `themeApplied`, `themeFailure`, and `fallbackApplied` distinguish a pending/degraded theme from a persisted settings record. A late decode cannot overwrite a newer generation or a foreign wash. Native-host rendering, responsiveness, and the full theme surface library still require separate acceptance.
+
+### Geometry and pending decode boundary
+
+The current Codex adapter admits only finite, axis-aligned workspace geometry. Ordinary ancestor overflow clips must demonstrably contain the entire workspace rectangle; partial clips, reserved scrollbar ambiguity, rounded ancestor clips, extended overflow clip margins, transforms and complex clipping are not supported for theme treatment. Same-size ancestor style changes invalidate the existing lease. This restores native presentation, not a claim that the previous wallpaper survives; a later supported workspace may be admitted by the existing recovery flow. Legacy wallpaper admission is unchanged.
+
+Every pending startup wallpaper application has an abort signal owned by the existing PageController generation. Disable, replacement and disposal cancel initial scene/mask decoding and release its timers and image references; the four-second deadline is only an anti-hang ceiling, not a recovery or performance target. Settled owners retain their existing disposal and handover lifecycle. Synthetic Chrome proves the cancellation path and native input, not installed Codex or DSH visual acceptance.
+
+After a workspace lease is revoked, the existing startup owner attempts bounded recovery once the startup/overlay gate permits it. If clipping remains unsupported, this attempt ends with the existing apply-failed notice and Retry action. Restoring supported geometry alone does not start indefinite polling: the user can choose Retry to apply the saved theme. Saved settings are not erased by this failure. The current notice is the generic background-application failure, not a claim that saving failed.
+
+### Theme draft round trips and defaults
+
+Within an open settings panel, Existing appearance and the Azhou theme retain their own artwork/contour drafts; switching between them does not overwrite an unsaved custom image or transparency edit. Cancel discards both draft states. Disabling a theme normally preserves its remembered transparency, while Restore all defaults explicitly resets that preference to Follow theme when saved. Restoring defaults and then cancelling does not change saved images or preferences. Both records still share the same conflict-checked save transaction.

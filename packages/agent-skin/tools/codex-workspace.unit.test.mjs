@@ -203,3 +203,81 @@ for (const boundary of ['abort', 'timeout', 'resize-setup-failure', 'throwing-di
     assert.ok(timers.every(timer=>timer.cleared));
   });
 }
+
+function themeGeometryScene() {
+  const f=scene();
+  const neutral={transform:'none',filter:'none',backdropFilter:'none',perspective:'none',contain:'none',clipPath:'none',maskImage:'none',borderRadius:'0px',willChange:'auto'};
+  for(let node=f.main;node;node=node.parentElement)Object.assign(node.style,neutral);
+  f.host.document.body={style:{...neutral}};
+  f.host.innerWidth=1000;f.host.innerHeight=700;
+  f.rect={x:200,y:50,width:800,height:650};f.main.getBoundingClientRect=()=>({...f.rect});
+  return f;
+}
+
+test('theme geometry is a finite versioned capability tied to the current workspace',()=>{
+  const f=themeGeometryScene(),observation=f.adapter.observeWorkspace();
+  const geometry=f.adapter.readThemeGeometry(observation);
+  assert.equal(geometry.kind,'observed');assert.equal(geometry.contract,'codex-theme-geometry/v1');
+  assert.equal(geometry.documentToken,observation.documentToken);assert.equal(geometry.workspaceEpoch,observation.workspaceEpoch);
+  assert.deepEqual(geometry.rect,f.rect);assert.deepEqual(geometry.viewport,{width:1000,height:700});
+  assert.ok(Object.isFrozen(geometry.rect));
+  f.rect.width=NaN;assert.equal(f.adapter.readThemeGeometry(observation).kind,'unsupported');
+});
+
+test('unknown transformed theme geometry fails closed without rejecting legacy workspace',()=>{
+  const f=themeGeometryScene(),observation=f.adapter.observeWorkspace();f.frame.style.transform='matrix(1,0,0,1,1,0)';
+  assert.equal(f.adapter.readThemeGeometry(observation).kind,'unsupported');
+  assert.equal(f.adapter.observeWorkspace(),observation);
+});
+
+test('theme geometry reuses the workspace observer and captured scroll lease and releases it',()=>{
+  const f=themeGeometryScene(),listeners=new Map(),resizes=[];let mutations=0;
+  for(const target of [f.host,f.host.document]){
+    target.addEventListener=(name,fn,capture)=>listeners.set(target===f.host?'window:'+name:'document:'+name,{fn,capture});
+    target.removeEventListener=(name,fn,capture)=>{const key=(target===f.host?'window:':'document:')+name;assert.equal(listeners.get(key)?.capture,capture);listeners.delete(key);};
+  }
+  f.host.MutationObserver=class{constructor(){mutations++;}observe(){}disconnect(){}takeRecords(){return [];}};
+  f.host.ResizeObserver=class{constructor(fn){resizes.push(fn);}observe(){}disconnect(){}};
+  const geometries=[];let invalidated=0;
+  const lease=f.adapter.watchWorkspace(f.adapter.observeWorkspace(),()=>invalidated++,f.host,{onThemeGeometry:g=>geometries.push(g)});
+  assert.equal(mutations,1);assert.equal(resizes.length,1);assert.equal(geometries.length,1);
+  f.rect.y=-70;listeners.get('document:scroll').fn();assert.equal(geometries.at(-1).rect.y,-70);
+  resizes[0]();assert.equal(geometries.length,2,'unchanged rect does not emit again');
+  f.rect.width=Infinity;listeners.get('document:scroll').fn();assert.equal(invalidated,1);assert.equal(lease.current(),false);
+  lease.dispose();assert.equal(listeners.size,0);
+});
+
+for (const overflow of ['hidden','clip','auto','scroll']) {
+  test(`theme rejects partially clipped ${overflow} ancestor without rejecting legacy`,()=>{
+    const f=themeGeometryScene(),observation=f.adapter.observeWorkspace();
+    f.frame.style.overflowX=overflow;f.frame.style.overflowY=overflow;
+    f.frame.getBoundingClientRect=()=>({x:200,y:50,width:400,height:300});
+    f.frame.clientWidth=400;f.frame.clientHeight=300;
+    f.frame.offsetWidth=400;f.frame.offsetHeight=300;
+    assert.equal(f.adapter.readThemeGeometry(observation).kind,'unsupported');
+    assert.equal(f.adapter.observeWorkspace(),observation);
+  });
+}
+
+test('same-size ancestor clipping change invalidates theme through the mutation lease',()=>{
+  const f=themeGeometryScene();let mutation,invalidated=0;
+  f.host.MutationObserver=class{constructor(fn){mutation=fn;}observe(){}disconnect(){}takeRecords(){return [];}};
+  f.host.ResizeObserver=class{observe(){}disconnect(){}};
+  const observation=f.adapter.observeWorkspace();
+  const lease=f.adapter.watchWorkspace(observation,()=>invalidated++,f.host,{onThemeGeometry(){}});
+  f.frame.style.overflow='hidden';f.frame.getBoundingClientRect=()=>({x:200,y:50,width:400,height:300});
+  f.frame.offsetWidth=f.frame.clientWidth=400;f.frame.offsetHeight=f.frame.clientHeight=300;
+  mutation([{type:'attributes',target:f.frame,attributeName:'style',oldValue:''}]);
+  assert.equal(invalidated,1);assert.equal(lease.current(),false);
+  f.frame.style.overflow='visible';
+  assert.equal(f.adapter.readThemeGeometry(f.adapter.observeWorkspace()).kind,'observed');
+});
+
+test('containing ordinary overflow is admitted but extended or rounded clips are not',()=>{
+  const f=themeGeometryScene();f.frame.style.overflow='hidden';
+  f.frame.getBoundingClientRect=()=>({x:0,y:0,width:1000,height:700});
+  f.frame.offsetWidth=f.frame.clientWidth=1000;f.frame.offsetHeight=f.frame.clientHeight=700;
+  const observation=f.adapter.observeWorkspace();assert.equal(f.adapter.readThemeGeometry(observation).kind,'observed');
+  f.frame.style.overflowClipMargin='1px';assert.equal(f.adapter.readThemeGeometry(observation).kind,'unsupported');
+  f.frame.style.overflowClipMargin='0px';f.frame.style.borderRadius='12px';assert.equal(f.adapter.readThemeGeometry(observation).kind,'unsupported');
+});

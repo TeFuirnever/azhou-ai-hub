@@ -76,6 +76,13 @@ function createImageSettings(environment) {
     'settings.introTitle.label': '启动标题（最多 {limit} 个字符）',
     'settings.introCaption.label': '标题说明（最多 {limit} 个字符）',
     'settings.artworkSubtitle.label': '背景字幕（最多 {limit} 个字符）',
+    'settings.themeControl.choice': '主题',
+    'settings.themeControl.legacy': '原有外观',
+    'settings.themeControl.azhou': '阿舟 · Q 场景',
+    'settings.themeControl.mode': '工作区阅读底色透明度模式',
+    'settings.themeControl.follow': '跟随主题',
+    'settings.themeControl.override': '自定义透明度',
+    'settings.themeControl.transparency': '工作区阅读底色透明度',
     'settings.wallpaperStrength.label': '背景强度（{min}–{max}）',
     'settings.button.restore': '恢复全部默认',
     'settings.button.cancel': '取消',
@@ -133,6 +140,9 @@ function createImageSettings(environment) {
   let disposed = false;
   let currentSettings = null;
   let currentBaseline;
+  let currentThemeBaseline;
+  let currentThemeState = null;
+  let currentThemeReason = '';
   let defaultRecord = null;
   let defaultTextFallbacks = Object.create(null);
   let loadReason = '';
@@ -140,6 +150,9 @@ function createImageSettings(environment) {
   let panelFocusSheet = null;
   let panelControls = null;
   let draft = null;
+  let draftTheme = null;
+  let draftThemePreference = null;
+  let draftAppearances = null;
   let panelOpen = false;
   let panelGeneration = 0;
   let panelCallbacks = null;
@@ -443,6 +456,8 @@ function createImageSettings(environment) {
       let request;
       let value;
       let sawResult = false;
+      let themeValue;
+      let sawTheme = false;
       let settled = false;
       let timer = null;
       let failure = null;
@@ -467,13 +482,17 @@ function createImageSettings(environment) {
           try { transaction.abort(); } catch {}
           finish(false, failure);
         }, 5_000);
-        request = transaction.objectStore(STORE_NAME).get(SETTINGS_KEY);
+        const store = transaction.objectStore(STORE_NAME);
+        const themeRequest = store.get(THEME_KEY);
+        themeRequest.onsuccess = () => { themeValue = themeRequest.result; sawTheme = true; };
+        themeRequest.onerror = () => { failure = storageError('settings-unavailable', 'theme-read-failed'); };
+        request = store.get(SETTINGS_KEY);
         request.onsuccess = () => { value = request.result; sawResult = true; };
         request.onerror = () => { failure = storageError('settings-unavailable', 'database-read-failed'); };
         transaction.oncomplete = () => {
           if (task && task.transaction === transaction) task.transaction = null;
-          finish(sawResult, sawResult
-            ? value : (failure || storageError('settings-unavailable', 'database-read-failed')));
+          finish(sawResult && sawTheme, sawResult && sawTheme
+            ? { images: value, theme: themeValue } : (failure || storageError('settings-unavailable', 'database-read-failed')));
         };
         transaction.onerror = () => { failure ||= storageError('settings-unavailable', 'database-read-failed'); };
         transaction.onabort = () => {
@@ -586,7 +605,16 @@ function createImageSettings(environment) {
       try {
         const db = await openDatabase();
         if (!isCurrent(task)) throw makeError('operation-cancelled');
-        baseline = await readStoredRecord(db, task);
+        const stored = await readStoredRecord(db, task);
+        baseline = stored.images;
+        let resolvedTheme = null;
+        let themeReason = '';
+        try { resolvedTheme = await resolveTheme(stored.theme, baseline); }
+        catch (error) { themeReason = error?.reason || 'settings-invalid'; }
+        if (!isCurrent(task)) throw makeError('operation-cancelled');
+        currentThemeBaseline = stored.theme;
+        currentThemeState = resolvedTheme;
+        currentThemeReason = themeReason;
         if (!isCurrent(task)) throw makeError('operation-cancelled');
         task.baseline = baseline;
         task.baselineKnown = true;
@@ -607,7 +635,7 @@ function createImageSettings(environment) {
         currentSettings = settings;
         currentBaseline = baseline;
         loadReason = reason;
-        finish(task, true, { settings, baseline, reason });
+        finish(task, true, { settings, baseline, reason, themeState: currentThemeState?.activeThemeId ? structuredCloneTheme(currentThemeState) : null });
       } catch (error) {
         if (task.settled) return;
         if (error?.reason === 'operation-cancelled') {
@@ -667,10 +695,59 @@ function createImageSettings(environment) {
         status: loaded.baseline === undefined ? 'missing' : 'valid',
         settings,
         explicitText,
+        themeState: currentThemeState?.activeThemeId ? structuredCloneTheme(currentThemeState) : null,
+        themeReason: currentThemeReason,
       });
     } catch {
       return Object.freeze({ status: 'failure', reason: 'settings-invalid' });
     }
+  }
+
+  const THEME_KEY = SETTINGS_KEY === 'images' ? 'themeState' : SETTINGS_KEY + ':themeState';
+  const APPROVED_THEME_ID = 'azhou-q-v3';
+
+  async function imagesBinding(record) {
+    if (!environment.crypto?.subtle || typeof environment.TextEncoder !== 'function') {
+      throw storageError('settings-unavailable', 'digest-unavailable');
+    }
+    const bytes = new environment.TextEncoder().encode(JSON.stringify(record));
+    const digest = await environment.crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  function exactKeys(value, keys) {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      && Object.keys(value).length === keys.length && keys.every(key => own(value, key));
+  }
+
+  function validTransparency(preference) {
+    return (exactKeys(preference, ['mode']) && preference.mode === 'follow')
+      || (exactKeys(preference, ['mode', 'value']) && preference.mode === 'override'
+        && Number.isFinite(preference.value) && preference.value >= 0 && preference.value <= 100);
+  }
+
+  function validThemeSelection(selection) {
+    return exactKeys(selection, ['activeThemeId', 'surfaceTransparency'])
+      && (selection.activeThemeId === APPROVED_THEME_ID || selection.activeThemeId === null)
+      && validTransparency(selection.surfaceTransparency);
+  }
+
+  async function resolveTheme(record, images) {
+    if (record === undefined || record === null) return null;
+    if (!exactKeys(record, ['schemaVersion', 'revision', 'activeThemeId', 'preferencesByTheme', 'imagesBinding'])
+      || record.schemaVersion !== 1 || !Number.isSafeInteger(record.revision)
+      || record.revision < 1 || (record.activeThemeId !== null && record.activeThemeId !== APPROVED_THEME_ID)
+      || !exactKeys(record.preferencesByTheme, [APPROVED_THEME_ID])
+      || !validTransparency(record.preferencesByTheme[APPROVED_THEME_ID])
+      || typeof record.imagesBinding !== 'string' || !/^[a-f0-9]{64}$/.test(record.imagesBinding)) {
+      throw makeError('settings-invalid');
+    }
+    if (images === undefined || await imagesBinding(images) !== record.imagesBinding) return { ...structuredCloneTheme(record), activeThemeId: null };
+    return structuredCloneTheme(record);
+  }
+
+  function structuredCloneTheme(value) {
+    return value === null ? null : JSON.parse(JSON.stringify(value));
   }
 
   function recordEquals(left, right) {
@@ -687,7 +764,7 @@ function createImageSettings(environment) {
     return storageError('settings-unavailable', operation + '-failed');
   }
 
-  function saveInTransaction(task, db, candidate) {
+  function saveInTransaction(task, db, candidate, themeCandidate) {
     let transaction;
     let failure = null;
     let timer = null;
@@ -706,22 +783,28 @@ function createImageSettings(environment) {
         finish(task, false, failure);
       }, 5_000);
       const store = transaction.objectStore(STORE_NAME);
+      let imageReady = false, themeReady = false;
+      const themeRequest = store.get(THEME_KEY);
       const baselineRequest = store.get(SETTINGS_KEY);
-      baselineRequest.onerror = () => {
-        failure = storageFailureFrom(baselineRequest.error, 'database-read');
-      };
-      baselineRequest.onsuccess = () => {
+      const tryWrite = () => {
+        if (!imageReady || !themeReady) return;
+
         if (!isCurrent(task)) {
           failure = makeError('operation-cancelled');
           try { transaction.abort(); } catch {}
           return;
         }
-        if (!recordEquals(baselineRequest.result, currentBaseline)) {
+        if (!recordEquals(baselineRequest.result, currentBaseline)
+          || !recordEquals(themeRequest.result, currentThemeBaseline)) {
           failure = makeError('settings-conflict', 'baseline-changed');
           try { transaction.abort(); } catch {}
           return;
         }
         try {
+          if (themeCandidate !== undefined) {
+            const themePut = store.put(themeCandidate, THEME_KEY);
+            themePut.onerror = () => { failure = storageFailureFrom(themePut.error, 'theme-write'); };
+          }
           const putRequest = store.put(candidate, SETTINGS_KEY);
           putRequest.onerror = () => { failure = storageFailureFrom(putRequest.error, 'database-write'); };
         } catch (error) {
@@ -729,6 +812,10 @@ function createImageSettings(environment) {
           try { transaction.abort(); } catch {}
         }
       };
+      baselineRequest.onerror = () => { failure = storageFailureFrom(baselineRequest.error, 'database-read'); };
+      themeRequest.onerror = () => { failure = storageFailureFrom(themeRequest.error, 'theme-read'); };
+      baselineRequest.onsuccess = () => { imageReady = true; tryWrite(); };
+      themeRequest.onsuccess = () => { themeReady = true; tryWrite(); };
       transaction.oncomplete = () => {
         clear();
         task.transactionFinished = true;
@@ -736,6 +823,10 @@ function createImageSettings(environment) {
         if (task.settled || !isCurrent(task)) return;
         currentSettings = candidate;
         currentBaseline = candidate;
+        if (themeCandidate !== undefined) {
+          currentThemeBaseline = themeCandidate;
+          currentThemeState = themeCandidate;
+        }
         loadReason = '';
         finish(task, true, candidate);
       };
@@ -755,7 +846,7 @@ function createImageSettings(environment) {
     }
   }
 
-  function save(candidate) {
+  function save(candidate, themeSelection) {
     if (disposed) return Promise.reject(makeError('operation-cancelled'));
     if (active) return Promise.reject(makeError('operation-busy'));
     if (!indexedDB || typeof indexedDB.open !== 'function') {
@@ -769,11 +860,23 @@ function createImageSettings(environment) {
         const record = normalizeStoredRecord(candidate, base);
         if (!record || !['avatar', 'artwork', 'contours', ...Object.keys(TEXT_LIMITS), 'wallpaperStrength']
           .every(key => own(candidate, key))) throw makeError('settings-invalid');
+        const revision = currentThemeState?.revision ?? 0;
+        if (themeSelection !== undefined && (!validThemeSelection(themeSelection)
+          || (themeSelection?.activeThemeId !== null && revision >= Number.MAX_SAFE_INTEGER))) throw makeError('settings-invalid');
+        const themeCandidate = themeSelection === undefined && !currentThemeState
+          ? (currentThemeBaseline === undefined ? undefined : null) : {
+            schemaVersion: 1, revision: revision < Number.MAX_SAFE_INTEGER ? revision + 1 : 1,
+            activeThemeId: themeSelection?.activeThemeId ?? null,
+            preferencesByTheme: themeSelection
+              ? { [APPROVED_THEME_ID]: { ...themeSelection.surfaceTransparency } }
+              : structuredCloneTheme(currentThemeState.preferencesByTheme),
+            imagesBinding: await imagesBinding(record),
+          };
         await validateRecordImages(task, record);
         if (!isCurrent(task)) throw makeError('operation-cancelled');
         const db = await openDatabase();
         if (!isCurrent(task)) throw makeError('operation-cancelled');
-        saveInTransaction(task, db, record);
+        saveInTransaction(task, db, record, themeCandidate);
       } catch (error) {
         if (!task.settled) finish(task, false,
           error?.reason === 'operation-timeout' || error?.reason === 'operation-cancelled'
@@ -781,6 +884,10 @@ function createImageSettings(environment) {
       }
     });
     return promise;
+  }
+
+  function appearanceDraft(value) {
+    return { artwork: value.artwork, contours: cloneSettings(value).contours };
   }
 
   function cloneSettings(value) {
@@ -931,7 +1038,7 @@ function createImageSettings(environment) {
     panelControls.workspacePreviewImage.style.setProperty('display', hasVisibleImage ? 'block' : 'none');
     panelControls.workspacePreviewImage.style.setProperty('object-position', cropPosition);
     panelControls.workspacePreviewWash.style.setProperty('background-image', hasVisibleImage
-      ? workspaceWashGradient(strength, surface) : 'none');
+      ? (draftTheme ? 'linear-gradient(color-mix(in srgb, ' + surface + ' ' + (draftTheme.surfaceTransparency.mode === 'follow' ? 70 : 100 - draftTheme.surfaceTransparency.value) + '%, transparent), color-mix(in srgb, ' + surface + ' ' + (draftTheme.surfaceTransparency.mode === 'follow' ? 70 : 100 - draftTheme.surfaceTransparency.value) + '%, transparent))' : workspaceWashGradient(strength, surface)) : 'none');
     panelControls.workspacePreviewWash.style.setProperty('display', hasVisibleImage ? 'block' : 'none');
     return true;
   }
@@ -950,7 +1057,9 @@ function createImageSettings(environment) {
       const isCancel = control === panelControls.cancelButton;
       control.disabled = Boolean(active)
         || (panelApplying && !isCancel)
-        || (Boolean(panelCommit) && !panelApplying && !isSave && !isCancel);
+        || (Boolean(panelCommit) && !panelApplying && !isSave && !isCancel)
+        || (control === panelControls.themeMode && !draftTheme)
+        || (control === panelControls.themeTransparency && (!draftTheme || draftTheme.surfaceTransparency.mode !== 'override'));
       if (control.style && typeof control.style.setProperty === 'function') {
         control.style.setProperty('opacity', control.disabled ? '.58' : '1');
         control.style.setProperty('cursor', busy && control.disabled ? 'wait'
@@ -1049,6 +1158,9 @@ function createImageSettings(environment) {
   function updatePanelFields() {
     if (!panelControls || !draft) return;
     for (const [key, control] of Object.entries(panelControls.fields)) control.value = draft[key] ?? '';
+    panelControls.themeChoice.value = draftTheme?.activeThemeId || '';
+    panelControls.themeMode.value = draftTheme?.surfaceTransparency.mode || 'follow';
+    panelControls.themeTransparency.value = String(draftTheme?.surfaceTransparency.value ?? 30);
     panelControls.strength.value = String(draft.wallpaperStrength);
     updateStrengthValue(draft.wallpaperStrength);
     panelControls.workspacePreviewHasImage = Boolean(draft.artwork);
@@ -1388,6 +1500,53 @@ function createImageSettings(environment) {
     workspacePanel.appendChild(strengthRow);
     controls.push(strength);
 
+    const themeChoice = document.createElement('select');
+    themeChoice.setAttribute('data-agent-skin-theme-choice', '');
+    themeChoice.setAttribute('aria-label', translate('settings.themeControl.choice'));
+    for (const [value, label] of [['', 'legacy'], [APPROVED_THEME_ID, 'azhou']]) {
+      const option = document.createElement('option'); option.value = value; option.textContent = translate('settings.themeControl.' + label);
+      labels['settings.themeControl.' + label] = {element: option};
+      themeChoice.appendChild(option);
+    }
+    const themeMode = document.createElement('select');
+    themeMode.setAttribute('data-agent-skin-theme-alpha-mode', '');
+    themeMode.setAttribute('aria-label', translate('settings.themeControl.mode'));
+    for (const [value, label] of [['follow', 'follow'], ['override', 'override']]) {
+      const option = document.createElement('option'); option.value = value; option.textContent = translate('settings.themeControl.' + label);
+      labels['settings.themeControl.' + label] = {element: option};
+      themeMode.appendChild(option);
+    }
+    const themeTransparency = document.createElement('input');
+    themeTransparency.type = 'range'; themeTransparency.min = '0'; themeTransparency.max = '100';
+    themeTransparency.step = '1';
+    themeTransparency.setAttribute('data-agent-skin-theme-transparency', '');
+    themeTransparency.setAttribute('aria-label', translate('settings.themeControl.transparency'));
+    themeChoice.addEventListener('change', () => {
+      if (!draft || active || panelApplying) return;
+      const previous = draftTheme ? 'theme' : 'existing';
+      draftAppearances[previous] = appearanceDraft(draft);
+      if (draftTheme) draftThemePreference = { ...draftTheme.surfaceTransparency };
+      draftTheme = themeChoice.value === APPROVED_THEME_ID
+        ? {activeThemeId: APPROVED_THEME_ID, surfaceTransparency: { ...draftThemePreference }} : null;
+      const appearance = draftAppearances[draftTheme ? 'theme' : 'existing'];
+      draft.artwork = appearance.artwork;
+      draft.contours = cloneSettings(appearance).contours;
+      updatePanelFields();
+      updatePanelBusy();
+    });
+    const changeTransparency = () => {
+      if (!draftTheme || active || panelApplying) return;
+      draftTheme.surfaceTransparency = themeMode.value === 'override'
+        ? {mode: 'override', value: Number(themeTransparency.value)} : {mode: 'follow'};
+      updatePanelBusy();
+      refreshAppearance();
+    };
+    themeMode.addEventListener('change', changeTransparency);
+    themeTransparency.addEventListener('input', changeTransparency);
+    workspacePanel.append(themeChoice, themeMode, themeTransparency);
+    controls.push(themeChoice, themeMode, themeTransparency);
+    for (const [control, key] of [[themeChoice, 'choice'], [themeMode, 'mode'], [themeTransparency, 'transparency']]) ariaLabels.push({control, key: 'settings.themeControl.' + key});
+
     addSection('startup', 'settings.startup.note');
     addFile('avatar', 'settings.button.choosePortrait');
     for (const [key, limit, labelKey] of [
@@ -1481,6 +1640,9 @@ function createImageSettings(environment) {
     restore.addEventListener('click', () => {
       if (active || !panelOpen) return;
       draft = cloneSettings(defaultRecord || currentSettings);
+      draftTheme = null;
+      draftThemePreference = { mode: 'follow' };
+      draftAppearances = { existing: appearanceDraft(draft), theme: appearanceDraft(draft) };
       updatePanelFields();
       setPanelStatus('settings.status.defaultsRestored');
     });
@@ -1502,7 +1664,9 @@ function createImageSettings(environment) {
       if (!draft) return;
       for (const key of Object.keys(TEXT_LIMITS)) draft[key] = truncateText(draft[key], TEXT_LIMITS[key]);
       const panelAtStart = panelGeneration;
-      const saving = save(cloneSettings(draft));
+      const themeSelection = draftTheme || (currentThemeState || draftThemePreference.mode !== 'follow'
+        ? { activeThemeId: null, surfaceTransparency: { ...draftThemePreference } } : undefined);
+      const saving = save(cloneSettings(draft), themeSelection);
       updatePanelBusy();
       let saved;
       try {
@@ -1514,7 +1678,7 @@ function createImageSettings(environment) {
       }
       if (!panelOpen || panelAtStart !== panelGeneration) return;
       panelCommit = {
-        saved: cloneSettings(saved),
+        saved: { ...cloneSettings(saved), themeState: currentThemeState?.activeThemeId ? structuredCloneTheme(currentThemeState) : null },
         onApply: typeof panelCallbacks?.onApply === 'function' ? panelCallbacks.onApply : null,
         failed: false,
       };
@@ -1539,7 +1703,7 @@ function createImageSettings(environment) {
     });
     dialog.addEventListener('keydown', containPanelTab, true);
     panelControls = {
-      controls, status, fields, strength, strengthValue, heading, close: null, categoryNav, labels,
+      controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
       workspacePreviewSurface, workspacePreviewImage: backgroundImage, workspacePreviewWash: backgroundWash,
       workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel, footer: actions,
@@ -1557,6 +1721,10 @@ function createImageSettings(environment) {
   function openSettings(callbacks = {}) {
     if (disposed || panelOpen || !currentSettings || active || !buildSettingsPanel()) return false;
     draft = cloneSettings(currentSettings);
+    draftThemePreference = { ...(currentThemeState?.preferencesByTheme?.[APPROVED_THEME_ID] || { mode: 'follow' }) };
+    draftTheme = currentThemeState?.activeThemeId ? { activeThemeId: currentThemeState.activeThemeId,
+      surfaceTransparency: { ...draftThemePreference } } : null;
+    draftAppearances = { existing: appearanceDraft(draft), theme: appearanceDraft(draftTheme ? draft : defaultRecord || draft) };
     panelCallbacks = callbacks && typeof callbacks === 'object' ? callbacks : {};
     panelCommit = null;
     panelApplying = false;
@@ -1589,6 +1757,9 @@ function createImageSettings(environment) {
     panelOpen = false;
     panelGeneration++;
     draft = null;
+    draftTheme = null;
+    draftThemePreference = null;
+    draftAppearances = null;
     panelCommit = null;
     panelApplying = false;
     panelCallbacks = null;
@@ -1622,6 +1793,9 @@ function createImageSettings(environment) {
       panelApplying = false;
       panelCallbacks = null;
       draft = null;
+      draftTheme = null;
+      draftThemePreference = null;
+      draftAppearances = null;
     }
     try { dialog?.remove(); } catch {}
     if (panelFocusSheet) {

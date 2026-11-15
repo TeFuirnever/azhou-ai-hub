@@ -1519,3 +1519,15 @@ test('explicit exits release the scene without relying on a final render', async
     });
   }
 });
+
+test('native theme bridge consumes production Swift transfer expressions', {skip: !process.env.AZHOU_THEME_BRIDGE_OUTPUT}, async () => {
+  const expressions=JSON.parse(await readFile(process.env.AZHOU_THEME_BRIDGE_OUTPUT,'utf8'));
+  const nativeStartup=Object.freeze({owner:'azhou-agent-skin-native',version:1,runNonce:'test-run-1',appearance:Object.freeze({locale:'en',theme:'dark'})});
+  const fixture=createFixture({native:true,nativeMode:'launch',nativeFormal:true,nativeStartup});
+  for(const expression of expressions) assert.equal(vm.runInNewContext(expression,{window:fixture.window}),true);
+  await waitReady(fixture);
+  const background=fixture.messages.find(item=>item.action==='background');
+  assert.equal(background.themeState.preferencesByTheme['azhou-q-v3'].value,65);
+  assert.equal(background.strength,42);
+  fixture.handle.dispose();
+});
