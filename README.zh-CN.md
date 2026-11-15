@@ -123,7 +123,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 
 ![Archify 效果图](assets/skills/super-archify-effect.png)
 
-候选[工作区主题切片](packages/agent-skin/docs/theme-appearance.md)提供一套批准的阿舟主题与工作区阅读底色透明度，保存与应用分别反馈。完整主题库、DSH 主题支持及真实宿主视觉验收仍未完成。 Skip 仅允许已准入的背景解码在原工作区收尾，仍在等待新外壳的请求继续取消。
+候选[工作区主题切片](packages/agent-skin/docs/theme-appearance.md)提供一套批准的阿舟主题与工作区阅读底色透明度，保存与应用分别反馈。完整主题库、DSH 主题支持及真实宿主视觉验收仍未完成。 Skip 仅允许已准入的背景解码在原工作区收尾，仍在等待新外壳的请求继续取消。 主题设置提供可见标签、原生键盘控件，并明确显示遮罩数值或跟随主题。
 
 <sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100 与 Archify：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
 

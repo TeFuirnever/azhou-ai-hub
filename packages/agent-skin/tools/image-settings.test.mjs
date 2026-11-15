@@ -2152,3 +2152,80 @@ test('native theme bridge prepares a production settings snapshot', {skip: !proc
   await writeFile(process.env.AZHOU_THEME_BRIDGE_INPUT,JSON.stringify({status:snapshot.status,settings:snapshot.settings,explicitText:snapshot.explicitText,appearance:{locale:'en',theme:'dark'},themeState:snapshot.themeState}));
   fixture.api.dispose();
 });
+
+test('theme fields expose visible labels, truthful values and independent strength', async () => {
+  const f = themeDraftFixture();
+  await f.fixture.api.load(f.defaults);
+  f.fixture.api.openSettings();
+  const choice = f.control('data-agent-skin-theme-choice');
+  const mode = f.control('data-agent-skin-theme-alpha-mode');
+  const alpha = f.control('data-agent-skin-theme-transparency');
+  for (const [control, text] of [[choice, '主题'], [mode, '阅读遮罩设置'], [alpha, '阅读遮罩透明度']]) {
+    assert.ok(control.id, 'each theme field has a stable label target');
+    const label = f.fixture.elements.find(el => el.tagName === 'LABEL' && el.htmlFor === control.id);
+    assert.ok(label && label.textContent === text, 'visible associated label: ' + text);
+    assert.equal(control.style.getPropertyValue('width'), '100%');
+    assert.equal(control.style.getPropertyValue('margin'), '0', 'full-width native controls do not retain browser margins');
+  }
+  const value = f.control('data-agent-skin-theme-transparency-value');
+  const reason = f.control('data-agent-skin-theme-transparency-reason');
+  assert.ok(alpha.getAttribute('aria-describedby').split(' ').includes(reason.id));
+  assert.equal(reason.textContent, '选择阿舟主题后可调整');
+  assert.equal(alpha.disabled, true);
+  f.choose('azhou-q-v3');
+  assert.equal(value.textContent, '跟随主题');
+  assert.equal(alpha.getAttribute('aria-valuetext'), '跟随主题');
+  assert.equal(reason.textContent, '使用主题默认遮罩；选择自定义后可调整');
+  mode.value = 'override'; mode.listeners.get('change')[0]();
+  for (const transparency of [0, 50, 100]) {
+    alpha.value = String(transparency); alpha.listeners.get('input')[0]();
+    assert.equal(value.textContent, transparency + '%');
+    assert.equal(alpha.getAttribute('aria-valuetext'), transparency + '%');
+    assert.equal(alpha.disabled, false);
+    assert.equal(f.fixture.elements.find(el => el.id === 'agent-skin-settings-wallpaper-strength').value, '42');
+  }
+  f.fixture.api.cancelSettings(); f.fixture.api.openSettings();
+  assert.equal(value.textContent, '跟随主题');
+  assert.equal(reason.textContent, '选择阿舟主题后可调整');
+  f.fixture.api.dispose();
+});
+
+test('theme field language changes preserve visible values and saved settings', async () => {
+  const localization = createLocalization({locale:'zh-CN'});
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({localization,indexedDB:storage.indexedDB,imageDimensions:[[512,512],[1536,1024]]});
+  await fixture.api.load({avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],wallpaperStrength:42});
+  fixture.api.openSettings();
+  const control = attr => fixture.elements.find(el=>el.getAttribute(attr)==='');
+  const choice=control('data-agent-skin-theme-choice'),mode=control('data-agent-skin-theme-alpha-mode'),alpha=control('data-agent-skin-theme-transparency');
+  choice.value='azhou-q-v3';choice.listeners.get('change')[0]();
+  mode.value='override';mode.listeners.get('change')[0]();alpha.value='50';alpha.listeners.get('input')[0]();
+  localization.setLocale('en');
+  for(const [el,text] of [[choice,'Theme'],[mode,'Reading mask settings'],[alpha,'Reading mask transparency']]) {
+    assert.equal(fixture.elements.find(label=>label.tagName==='LABEL'&&label.htmlFor===el.id).textContent,text);
+  }
+  assert.equal(control('data-agent-skin-theme-transparency-value').textContent,'50%');
+  mode.value='follow';mode.listeners.get('change')[0]();
+  assert.equal(control('data-agent-skin-theme-transparency-value').textContent,'Follow theme');
+  assert.equal(control('data-agent-skin-theme-transparency-reason').textContent,'Using the theme default mask; select Custom to adjust');
+  const strength=fixture.elements.find(el=>el.id==='agent-skin-settings-wallpaper-strength');
+  strength.value='0';strength.listeners.get('input')[0]();
+  assert.equal(strength.max,'75');assert.equal(alpha.value,'50');
+  assert.equal(fixture.elements.find(el=>el.getAttribute('data-agent-skin-workspace-preview-wash')==='').style.getPropertyValue('display'),'none');
+  assert.equal(storage.state.puts,0);
+  fixture.api.dispose();
+});
+
+test('Restore All synchronizes disabled theme controls without saving or changing cancellation', async () => {
+  const f=themeDraftFixture();await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();
+  f.choose('azhou-q-v3');const mode=f.control('data-agent-skin-theme-alpha-mode'),alpha=f.control('data-agent-skin-theme-transparency');
+  mode.value='override';mode.listeners.get('change')[0]();alpha.value='80';alpha.listeners.get('input')[0]();
+  assert.equal(mode.disabled,false);assert.equal(alpha.disabled,false);
+  f.click('恢复全部默认');
+  assert.equal(f.control('data-agent-skin-theme-choice').value,'');
+  assert.equal(mode.disabled,true,'Restore All disables theme mode immediately');
+  assert.equal(alpha.disabled,true,'Restore All disables the inactive slider immediately');
+  assert.equal(f.control('data-agent-skin-theme-transparency-reason').textContent,'选择阿舟主题后可调整');
+  assert.equal(f.storage.state.puts,0);f.fixture.api.cancelSettings();f.fixture.api.openSettings();
+  assert.equal(mode.disabled,true);assert.equal(alpha.disabled,true);f.fixture.api.dispose();
+});

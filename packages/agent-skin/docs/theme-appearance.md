@@ -91,3 +91,15 @@ Within an open settings panel, Existing appearance and the Azhou theme retain th
 Skip 立即退出启动层，不等待背景解码。仅在 Skip 之前已由版本化适配器取得固定工作区 observation 与有效 lease、并进入图片解码的同一请求，可以继续收尾。此权限绑定原请求、代际、文档 token 和工作区 epoch；不会在 Skip 后获取新工作区。仍在等待外壳、未报告准入的旧适配器、取消设置、页面隐藏、节点替换、卸载及新请求继续使旧工作失效。动画 ready 不是背景准入。
 
 该边界由生成载荷的受控 decode、真实 Skip 点击及取消/替换负例检查；不代表真实宿主视觉衔接已经验收。
+
+## P07 theme-control usability slice
+
+The theme and reading-mask mode use visible, associated labels and full-width native selects within the existing settings field grid. The transparency slider spans its row; its adjacent readout and accessible value show the actual override percentage, or **Follow theme** when author-defined mask values apply. Increasing transparency clears the reading mask, not the text or icons. Existing appearance and Follow theme explain why the slider is unavailable. These labels and explanations follow the current host language, without persisting a language preference.
+
+Background strength remains a separate 0–75 setting. For the Azhou theme, nonzero strength does not replace the reading-mask preference; zero still disables the background. The UI change does not change image/theme records, draft round trips, atomic save/conflict rules, cancel behavior, or the separate embedded-settings work.
+
+Verification for this slice covers visible label association, override 0/50/100, Follow theme, disabled explanations, language changes, actual keyboard range input and Tab, narrow-window hit testing and overflow, and independent strength-zero behavior. Generated-browser fixtures are engineering evidence, not real-host acceptance. Branded artwork previews, host visual approval and performance acceptance remain separate gates; synthetic screenshots do not satisfy them.
+
+### Current verification status: BLOCKED
+
+The UI candidate passed focused layout, keyboard, Restore All and localization checks, independent review, repository validation and coverage. Its latest full generated-browser run did not pass: a transient settings-open assertion and later natural-playback, decode and CDP timeouts were observed. A bounded follow-up reproduced neither the later timeouts nor a cause; focused passes do not replace the failed aggregate gate. The settings-open check now requires a strictly newer loading-or-ready settings run and retains the subsequent open-dialog, persisted-value and resource checks. This recovery checkpoint is not a release-ready or merge-ready claim. Full aggregate validation, real-host acceptance and branded visual review remain open.

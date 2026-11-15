@@ -79,10 +79,14 @@ function createImageSettings(environment) {
     'settings.themeControl.choice': '主题',
     'settings.themeControl.legacy': '原有外观',
     'settings.themeControl.azhou': '阿舟 · Q 场景',
-    'settings.themeControl.mode': '工作区阅读底色透明度模式',
+    'settings.themeControl.mode': '阅读遮罩设置',
     'settings.themeControl.follow': '跟随主题',
     'settings.themeControl.override': '自定义透明度',
-    'settings.themeControl.transparency': '工作区阅读底色透明度',
+    'settings.themeControl.transparency': '阅读遮罩透明度',
+    'settings.themeControl.description': '数值越高，遮罩越透明，背景图片越清晰；不改变文字和图标。',
+    'settings.themeControl.chooseFirst': '选择阿舟主题后可调整',
+    'settings.themeControl.followReason': '使用主题默认遮罩；选择自定义后可调整',
+    'settings.themeControl.strengthNote': '阿舟主题使用阅读遮罩设置。背景强度保留原有外观设置，设为 0 仍关闭背景。',
     'settings.wallpaperStrength.label': '背景强度（{min}–{max}）',
     'settings.button.restore': '恢复全部默认',
     'settings.button.cancel': '取消',
@@ -988,6 +992,7 @@ function createImageSettings(environment) {
     }
     strengthLabel.textContent = translate('settings.wallpaperStrength.label', { min: 0, max: 75 });
     updateStrengthValue(panelControls.strength.value);
+    updateThemeReadout();
     status.textContent = panelStatus ? translate(panelStatus.key, panelStatusParams(panelStatus)) : '';
     status.setAttribute('role', panelStatus?.role || 'status');
     status.setAttribute('aria-live', panelStatus?.role === 'alert' ? 'assertive' : 'polite');
@@ -1173,7 +1178,20 @@ function createImageSettings(environment) {
       if (value) preview.src = value;
       else preview.removeAttribute('src');
     }
+    updateThemeReadout();
     refreshAppearance();
+  }
+
+  function updateThemeReadout() {
+    if (!panelControls) return;
+    const preference = draftTheme?.surfaceTransparency;
+    const text = preference?.mode === 'override' ? preference.value + '%' : translate('settings.themeControl.follow');
+    panelControls.themeTransparencyValue.textContent = text;
+    panelControls.themeTransparency.setAttribute('aria-valuetext', text);
+    panelControls.themeTransparencyReason.textContent = !draftTheme
+      ? translate('settings.themeControl.chooseFirst')
+      : preference.mode === 'follow' ? translate('settings.themeControl.followReason') : '';
+    panelControls.themeStrengthNote.hidden = !draftTheme;
   }
 
   function updateStrengthValue(value) {
@@ -1543,7 +1561,44 @@ function createImageSettings(environment) {
     };
     themeMode.addEventListener('change', changeTransparency);
     themeTransparency.addEventListener('input', changeTransparency);
-    workspacePanel.append(themeChoice, themeMode, themeTransparency);
+    const addThemeField = (control, key, readout = null) => {
+      control.id = 'agent-skin-settings-theme-' + key;
+      styleInput(control);
+      setStyle(control, {'min-width': '0', 'grid-column': '1 / -1', margin: '0'});
+      const row = document.createElement('div');
+      row.style.cssText = 'display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;margin-top:14px;min-width:0';
+      const label = document.createElement('label');
+      label.htmlFor = control.id;
+      label.style.cssText = 'overflow-wrap:anywhere';
+      labels['settings.themeControl.' + key] = {element: label};
+      row.appendChild(label);
+      if (readout) row.appendChild(readout);
+      row.appendChild(control);
+      workspacePanel.appendChild(row);
+    };
+    const themeTransparencyValue = document.createElement('output');
+    themeTransparencyValue.setAttribute('data-agent-skin-theme-transparency-value', '');
+    themeTransparencyValue.setAttribute('aria-hidden', 'true');
+    themeTransparencyValue.style.cssText = 'text-align:right;overflow-wrap:anywhere';
+    addThemeField(themeChoice, 'choice');
+    addThemeField(themeMode, 'mode');
+    addThemeField(themeTransparency, 'transparency', themeTransparencyValue);
+    const themeDescription = document.createElement('p');
+    themeDescription.id = 'agent-skin-theme-transparency-description';
+    themeDescription.style.cssText = 'margin:8px 0;overflow-wrap:anywhere;color:var(--agent-skin-muted,CanvasText)';
+    labels['settings.themeControl.description'] = {element: themeDescription};
+    const themeTransparencyReason = document.createElement('p');
+    themeTransparencyReason.id = 'agent-skin-theme-transparency-reason';
+    themeTransparencyReason.setAttribute('data-agent-skin-theme-transparency-reason', '');
+    themeTransparencyReason.style.cssText = themeDescription.style.cssText;
+    themeMode.setAttribute('aria-describedby', themeTransparencyReason.id);
+    themeTransparency.setAttribute('aria-describedby', themeDescription.id + ' ' + themeTransparencyReason.id);
+    const themeStrengthNote = document.createElement('p');
+    themeStrengthNote.id = 'agent-skin-theme-strength-note';
+    themeStrengthNote.style.cssText = themeDescription.style.cssText;
+    labels['settings.themeControl.strengthNote'] = {element: themeStrengthNote};
+    strength.setAttribute('aria-describedby', themeStrengthNote.id);
+    workspacePanel.append(themeDescription, themeTransparencyReason, themeStrengthNote);
     controls.push(themeChoice, themeMode, themeTransparency);
     for (const [control, key] of [[themeChoice, 'choice'], [themeMode, 'mode'], [themeTransparency, 'transparency']]) ariaLabels.push({control, key: 'settings.themeControl.' + key});
 
@@ -1644,6 +1699,7 @@ function createImageSettings(environment) {
       draftThemePreference = { mode: 'follow' };
       draftAppearances = { existing: appearanceDraft(draft), theme: appearanceDraft(draft) };
       updatePanelFields();
+      updatePanelBusy();
       setPanelStatus('settings.status.defaultsRestored');
     });
     const cancel = document.createElement('button');
@@ -1703,7 +1759,7 @@ function createImageSettings(environment) {
     });
     dialog.addEventListener('keydown', containPanelTab, true);
     panelControls = {
-      controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, heading, close: null, categoryNav, labels,
+      controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, themeTransparencyValue, themeTransparencyReason, themeStrengthNote, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
       workspacePreviewSurface, workspacePreviewImage: backgroundImage, workspacePreviewWash: backgroundWash,
       workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel, footer: actions,

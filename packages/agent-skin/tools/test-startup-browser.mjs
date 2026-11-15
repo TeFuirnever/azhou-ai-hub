@@ -247,6 +247,25 @@ async function walkGeneratedSettingsTabs() {
   return { boundaries, trace, textareaReached };
 }
 
+function settingsFocusHitEvidence(active, dialog, footer, doc, win) {
+  const box=active.getBoundingClientRect(),originalPoint={x:box.left+box.width/2,y:box.top+box.height/2};
+  const originalTarget=doc.elementFromPoint(originalPoint.x,originalPoint.y);
+  const panel=active.matches('section[role="tabpanel"]');
+  let point=originalPoint,visibleRect=null;
+  if(panel) {
+    const bounds=dialog.getBoundingClientRect(),bottom=footer.getBoundingClientRect().top;
+    visibleRect={left:Math.max(box.left,bounds.left+dialog.clientLeft,0),top:Math.max(box.top,bounds.top+dialog.clientTop,0),
+      right:Math.min(box.right,bounds.left+dialog.clientLeft+dialog.clientWidth,win.innerWidth),
+      bottom:Math.min(box.bottom,bounds.top+dialog.clientTop+dialog.clientHeight,win.innerHeight,bottom)};
+    point={x:(visibleRect.left+visibleRect.right)/2,y:(visibleRect.top+visibleRect.bottom)/2};
+  }
+  const nonempty=!visibleRect||(visibleRect.right>visibleRect.left&&visibleRect.bottom>visibleRect.top);
+  const target=nonempty?doc.elementFromPoint(point.x,point.y):null;
+  return {hit:!!active.getClientRects().length&&nonempty&&(target===active||active.contains(target)),
+    scope:panel?'visible-tabpanel':'control-center',originalPoint,originalTarget:originalTarget?.tagName??null,
+    point,visibleRect,target:target?.tagName??null,footerTarget:!!target&&footer.contains(target)};
+}
+
 function cleanup() {
   if (cleanupPromise) return cleanupPromise;
   cleanupPromise = (async () => {
@@ -3134,6 +3153,14 @@ try {
 
     const savedSettingsRuns = [{ runId: savedRun.state.runId, intent: savedRun.run.intent,
       subtitle: 'Generated fixture only', applications: 2 }];
+    const isNewSettingsRun = (state, previousRunId) => Number.isSafeInteger(state?.runId)
+      && state.runId > previousRunId && ['loading', 'settings'].includes(state.phase);
+    for (const phase of ['loading', 'settings', 'complete', 'failed']) {
+      assert.equal(isNewSettingsRun({phase, runId: savedRun.state.runId}, savedRun.state.runId), false,
+        'no-op and old-run observations cannot satisfy a new settings transition');
+    }
+    assert.equal(isNewSettingsRun({phase: 'complete', runId: savedRun.state.runId + 1}, savedRun.state.runId), false);
+    assert.equal(isNewSettingsRun(null, savedRun.state.runId), false);
     let currentSettingsRunId = savedRun.state.runId;
     let expectedSubtitle = 'Generated fixture only';
     for (let cycle = 2; cycle <= 10; cycle++) {
@@ -3142,10 +3169,8 @@ try {
       assert.equal(entryBeforeOpen?.entryHit, true, 'appearance entry remains hit-testable after save ' + cycle);
       assert.equal(entryBeforeOpen?.buttonHit, true, 'appearance button remains hit-testable after save ' + cycle);
       const openedSettings = await clickAppearanceEntry();
-      assert.equal(openedSettings?.state?.phase, 'loading',
-        'clicking the visible appearance entry starts the next settings run: ' + JSON.stringify(openedSettings));
-      assert.ok(openedSettings.state.runId > currentSettingsRunId,
-        'each appearance click creates a newer settings run');
+      assert.ok(isNewSettingsRun(openedSettings?.state, currentSettingsRunId),
+        'clicking the appearance entry starts a newer loading or already-ready settings run: ' + JSON.stringify(openedSettings));
       const nextSettings = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         const dialog=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('dialog');
@@ -6359,22 +6384,56 @@ try {
         if(metrics.scroller.clientHeight<48)scenarioIssues.push('content scroller has no usable space');
         for(let step=0;step<8;step++){
           await dispatchTab();
+          if(await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.activeElement?.matches('section[role="tabpanel"]')`))
+            await screenshot('settings-section-focus-'+scenario.name+'-'+step+'.png');
           const focus=await cdp.evaluate(`(()=>{
             const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
             const dialog=doc.querySelector('[data-agent-skin-settings]'),active=doc.activeElement;
             if(!active||!dialog.contains(active))return {inside:false};
             const box=active.getBoundingClientRect(),style=frame.contentWindow.getComputedStyle(active);
-            const hit=doc.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
             const footer=dialog.querySelector('footer'),footerBox=footer?.getBoundingClientRect();
             const dialogBox=dialog.getBoundingClientRect();
             const fitsAboveFooter=box.height<=footerBox.top-dialogBox.top+0.5;
+            const evaluateHit=${settingsFocusHitEvidence.toString()};
+            const hitEvidence=evaluateHit(active,dialog,footer,doc,frame.contentWindow);
+            let negativeControls=null;
+            if(active.matches('section[role="tabpanel"][data-agent-skin-settings-section="workspace"]')&&frame.contentWindow.innerHeight===360) {
+              const scrollBefore=dialog.scrollTop;
+              const input=active.querySelector('#agent-skin-settings-wallpaper-strength');
+              const inputBaseline=evaluateHit(input,dialog,footer,doc,frame.contentWindow);
+              const inputVisible=!!input.getClientRects().length&&input.getBoundingClientRect().width>0&&input.getBoundingClientRect().height>0;
+              const cover=doc.createElement('div');cover.style.cssText='position:fixed;inset:0;z-index:2147483647;background:black';dialog.appendChild(cover);
+              const covered=evaluateHit(active,dialog,footer,doc,frame.contentWindow);cover.remove();
+              active.hidden=true;const hidden=evaluateHit(active,dialog,footer,doc,frame.contentWindow);active.hidden=false;
+              const inputStyle=input.style.cssText,footerStyle=footer.style.cssText;
+              let footerCovered;
+              try {
+                const f=footer.getBoundingClientRect();footer.style.zIndex='1';
+                input.style.cssText='position:fixed;left:'+ (f.left+16)+'px;top:'+(f.top+8)+'px;width:60px;height:20px;z-index:0';
+                footerCovered=evaluateHit(input,dialog,footer,doc,frame.contentWindow);
+              } finally {input.style.cssText=inputStyle;footer.style.cssText=footerStyle;}
+              active.focus({preventScroll:true});dialog.scrollTop=scrollBefore;
+              negativeControls={covered,hidden,inputBaseline,inputVisible,footerCovered,focusRestored:doc.activeElement===active,restored:evaluateHit(active,dialog,footer,doc,frame.contentWindow)};
+            }
             return {inside:true,tag:active.tagName,label:active.id||active.getAttribute('aria-label')||active.textContent?.trim()||active.type,
-              hit:hit===active||active.contains(hit),visible:box.width>0&&box.height>0
+              hit:hitEvidence.hit,hitEvidence,negativeControls,visible:box.width>0&&box.height>0
               &&box.bottom>0&&box.top<frame.contentWindow.innerHeight,
               clearFooter:!footerBox||footer.contains(active)||!fitsAboveFooter||box.bottom<=footerBox.top+0.5,
               focusVisible:active.matches(':focus-visible'),outlineStyle:style.outlineStyle,
               outlineWidth:parseFloat(style.outlineWidth),outlineColor:style.outlineColor};
           })()`);
+          if(focus.negativeControls) {
+            const n=focus.negativeControls;
+            await writeFile(join(options.out,'focus-controls-'+scenario.name+'-'+step+'.json'),JSON.stringify(n,null,2));
+            assert.equal(n.covered.hit,false,'visible tabpanel fully covered must be rejected');
+            assert.equal(n.hidden.hit,false,'hidden tabpanel must be rejected');
+            assert.equal(n.inputVisible,true,'public strength range is visible before fault injection');
+            assert.equal(n.inputBaseline.hit,true,'public strength range is hit before fault injection');
+            assert.equal(n.footerCovered.hit,false,'a real input hidden by the footer must be rejected');
+            assert.equal(n.footerCovered.footerTarget,true,'negative control actually hits the footer');
+            assert.equal(n.restored.hit,true,'removing faults restores the visible tabpanel');
+            assert.equal(n.focusRestored,true,'fault injection restores the original active element');
+          }
           keyboard.push(focus);
           if(!focus.inside||!focus.visible||!focus.hit)scenarioIssues.push('keyboard focus is outside or obscured in settings: '+JSON.stringify(focus));
           if(focus.inside&&!focus.clearFooter)scenarioIssues.push('keyboard focus is clipped by the settings footer: '+JSON.stringify(focus));
@@ -7333,6 +7392,46 @@ try {
       await writeFile(join(options.out,'mask-regression-cleanup.json'),JSON.stringify(fresh,null,2));
       assert.equal(fresh.state.wallpaper.reason,'disabled','the regression removes its saved theme and restores fresh defaults');
       assert.equal(fresh.owner,false);
+    }
+  });
+
+  await check('generated theme fields remain labeled and keyboard operable in narrow layouts', async () => {
+    const cells=[];
+    try {
+      for(const locale of ['zh-CN','en']) for(const theme of ['light','dark']) {
+        await cdp.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+        await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
+        await cdp.evaluate(`document.documentElement.lang=${JSON.stringify(locale)};document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+        await awaitGeneratedReady('theme UI fixture');
+        assert.equal(await cdp.evaluate('__startupAPI.openSettings()'),true);
+        await until(()=>cdp.evaluate(`document.querySelector('iframe[aria-label]')?.contentDocument.documentElement.lang===${JSON.stringify(locale)}&&!!document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-theme-choice]')`),5000,'localized theme controls');
+        const before=await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;d.querySelector('[data-agent-skin-settings-tab=workspace]').click();const controls=['choice','alpha-mode','transparency'].map(k=>d.querySelector('[data-agent-skin-theme-'+k+']'));return controls.map(e=>({id:e.id,label:e.labels?.[0]?.textContent.trim()||'',disabled:e.disabled}));})()`);
+        assert.deepEqual(before.map(x=>x.label),locale==='en'?['Theme','Reading mask settings','Reading mask transparency']:['主题','阅读遮罩设置','阅读遮罩透明度']);
+        assert.equal(before[2].disabled,true);
+        await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;for(const [key,value,event] of [['choice','azhou-q-v3','change'],['alpha-mode','override','change'],['transparency','50','input']]){const e=d.querySelector('[data-agent-skin-theme-'+key+']');e.value=value;e.dispatchEvent(new d.defaultView.Event(event,{bubbles:true}));}const e=d.querySelector('[data-agent-skin-theme-transparency]');e.scrollIntoView({block:'center'});e.focus();})()`);
+        await cdp.call('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',code:'ArrowRight',windowsVirtualKeyCode:39});
+        await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',code:'ArrowRight',windowsVirtualKeyCode:39});
+        const after=await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,dialog=d.querySelector('dialog'),e=d.querySelector('[data-agent-skin-theme-transparency]'),r=e.getBoundingClientRect(),hit=d.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return {value:e.value,readout:d.querySelector('[data-agent-skin-theme-transparency-value]').textContent,aria:e.getAttribute('aria-valuetext'),focus:d.activeElement===e,hit:hit===e,width:r.width,viewport:d.defaultView.innerWidth,overflow:dialog.scrollWidth>dialog.clientWidth+1,strength:d.querySelector('#agent-skin-settings-wallpaper-strength').value,description:e.getAttribute('aria-describedby').split(' ').every(id=>!!d.getElementById(id)),label:d.querySelector('label[for="'+e.id+'"]').getBoundingClientRect().width};})()`);
+        assert.equal(after.value,'51');assert.equal(after.readout,'51%');assert.equal(after.aria,'51%');
+        assert.ok(after.focus&&after.hit&&after.description&&!after.overflow&&after.width>200&&after.label>0,JSON.stringify(after));
+        await dispatchTab(false);
+        assert.equal(await cdp.evaluate("document.activeElement===document.querySelector('iframe[aria-label]')"),true);
+        await screenshot('theme-fields-'+locale+'-'+theme+'-390.png',{width:390,height:844});
+        const restorePoint=await cdp.evaluate(`(()=>{const f=document.querySelector('iframe[aria-label]'),d=f.contentDocument,b=[...d.querySelectorAll('button')].find(e=>/^(恢复全部默认|Restore all defaults)$/.test(e.textContent.trim()));b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect(),fr=f.getBoundingClientRect();return {x:fr.x+r.x+r.width/2,y:fr.y+r.y+r.height/2};})()`);
+        await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...restorePoint});
+        await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...restorePoint});
+        const restored=await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,c=d.querySelector('[data-agent-skin-theme-choice]'),m=d.querySelector('[data-agent-skin-theme-alpha-mode]'),a=d.querySelector('[data-agent-skin-theme-transparency]');c.focus();return {choice:c.value,modeDisabled:m.disabled,alphaDisabled:a.disabled,reason:d.querySelector('[data-agent-skin-theme-transparency-reason]').textContent};})()`);
+        assert.equal(restored.choice,'');assert.equal(restored.modeDisabled,true);assert.equal(restored.alphaDisabled,true);
+        await dispatchTab(false);
+        assert.equal(await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;return d.activeElement.matches('[data-agent-skin-theme-alpha-mode],[data-agent-skin-theme-transparency]');})()`),false);
+        cells.push({locale,theme,before,after,restored});
+        await cdp.evaluate('__startupAPI.dispose()');
+      }
+      return {cells};
+    } finally {
+      await navigateFreshRecoveryFixture('/fixture.html?animation=1&no-initial-wallpaper=1');
+      await cdp.evaluate('__startupAPI.dispose()');
+      await cdp.call('Emulation.clearDeviceMetricsOverride');
     }
   });
 
