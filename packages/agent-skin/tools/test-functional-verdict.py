@@ -4,9 +4,13 @@ import importlib.util
 import copy
 import json
 import os
+import plistlib
 import runpy
+import sys
+import tempfile
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 SPEC = importlib.util.spec_from_file_location("installed_acceptance", Path(__file__).with_name("test-installed-acceptance.py"))
 acceptance = importlib.util.module_from_spec(SPEC)
@@ -165,12 +169,19 @@ class FunctionalVerdictTests(unittest.TestCase):
                        [{**probe, "targetBundleID": "other"}], [{**probe, "running": None}],
                        [{**probe, "targetPath": ""}]]:
             self.assertFalse(acceptance.cold_start_allowed(values))
+        for path in (True, 1, ["/Applications/Codex.app"], "relative.app", None):
+            self.assertFalse(acceptance.cold_start_allowed([{**probe, "targetPath": path}]))
 
     def test_installation_requires_current_bytes_and_one_entity_and_registration(self):
         value = {"status": "current", "installedProjectAppCount": 1, "distAppCount": 0, "registeredProjectPathCount": 1}
         self.assertTrue(acceptance.unique_installation([value]))
         for key, bad in [("status", "installed"), ("installedProjectAppCount", 2), ("distAppCount", 1), ("registeredProjectPathCount", 2)]:
             self.assertFalse(acceptance.unique_installation([{**value, key: bad}]))
+        for key in ("installedProjectAppCount", "distAppCount", "registeredProjectPathCount"):
+            self.assertFalse(acceptance.unique_installation([{**value, key: bool(value[key])}]))
+            self.assertFalse(acceptance.unique_installation([{**value, key: float(value[key])}]))
+        for values in ([], [value, value], [value, {**value, "status": "stale"}]):
+            self.assertFalse(acceptance.unique_installation(values))
 
     def test_wallpaper_never_accepts_only_historical_or_partial_success(self):
         self.assertFalse(acceptance.verified_wallpaper([{"event": "wallpaper-result", "state": "applied", "applied": True}]))
@@ -181,6 +192,103 @@ class FunctionalVerdictTests(unittest.TestCase):
         for field in ["imageDecoded", "rootClear", "decorationEffectsClear"]:
             self.assertFalse(acceptance.verified_wallpaper([{**value, field: False}]))
         self.assertFalse(acceptance.verified_wallpaper([{**value, "verificationIssues": ["unsupported"]}]))
+        self.assertTrue(acceptance.verified_wallpaper([{"event": "launcher-start"}, value]))
+        self.assertFalse(acceptance.verified_wallpaper([value, {**value, "state": "failed"}]))
+        self.assertFalse(acceptance.verified_wallpaper([value, value]))
+
+    def run_installed_check(self, root, *, cold=True, mode="valid", main=False):
+        home = root / "home"
+        theme = json.loads((acceptance.ROOT / "theme-config.json").read_text())
+        app = home / "Applications" / theme["identity"]["installationName"]
+        dock = home / "Library/Preferences/com.apple.dock.plist"
+        dock.parent.mkdir(parents=True)
+        dock.write_bytes(plistlib.dumps({"persistent-apps": [{"tile-data": {
+            "bundle-identifier": acceptance.BUNDLE_ID, "file-label": "Azhou",
+            "file-data": {"_CFURLString": app.as_uri()}}}]}))
+        launch = self.native_events()
+        for event in launch:
+            event["launcherPath"] = "/foreign/Agent Skin.app" if mode == "foreign" else str(app.resolve())
+        if mode == "missing-terminal":
+            launch.pop(3)
+        if mode == "malformed":
+            launch[3]["cover"]["runNonce"] = "other-run"
+        if mode == "hot":
+            launch.append({"event": "target-activated"})
+        wallpaper = {key: True for key in ("applied", "imageDecoded", "backgroundMatched", "coverMatched", "fixedViewport",
+            "rootClear", "workspaceBackgroundClear", "footerBackgroundClear", "footerFadeClear", "topFadeClear", "decorationEffectsClear")}
+        wallpaper.update(event="wallpaper-result", state="applied", verificationIssues=[])
+        installation = {"status": "current", "installedProjectAppCount": 1,
+                        "distAppCount": 0, "registeredProjectPathCount": 1}
+        calls = []
+        def execute(command, log, timeout=40):
+            calls.append(command)
+            if "--check" in command:
+                return mode != "install-failed", [installation]
+            if command[0] == "xcrun":
+                return True, [{"passed": True}]
+            if "--probe" in command:
+                return mode != "probe-failed", [{"event": "probe", "targetBundleID": "com.openai.codex",
+                    "targetPath": "/Applications/Codex.app", "running": [{}] if mode == "running" else []}]
+            if "--wallpaper-status" in command:
+                return True, [wallpaper]
+            self.assertEqual(command, [str(app / "Contents/MacOS/AzhouCodexStartup")])
+            return mode != "launch-failed", launch
+        out = root / "new-evidence"
+        with patch.object(acceptance.Path, "home", return_value=home), patch.object(acceptance, "execute", side_effect=execute), \
+                patch.object(acceptance.subprocess, "run") as child:
+            if main:
+                with patch.object(sys, "argv", ["acceptance", "--out", str(out), "--cold-start"]):
+                    self.assertEqual(2, acceptance.main())
+                result = json.loads((out / "report.json").read_text())
+            else:
+                result = acceptance.check(out, cold_start=cold)
+            child.assert_not_called()
+        return result, calls
+
+    def test_whole_check_keeps_valid_native_completion_pending_visual_and_main_nonzero(self):
+        for main in (False, True):
+            with tempfile.TemporaryDirectory() as temporary:
+                result, calls = self.run_installed_check(Path(temporary), main=main)
+                statuses = {case["id"]: case["status"] for case in result["cases"]}
+                self.assertEqual({"FT-INSTALL": "passed", "FT-FINDER": "passed", "FT-WALLPAPER": "passed",
+                    "FT-DOCK": "pending-visual-review", "FT-COLD": "pending-visual-review"}, statuses)
+                self.assertIs(result["passed"], False)
+                self.assertIs(result["unitCoverageInput"], False)
+                self.assertFalse(any(any(word in argument for word in ("kill", "quit", "terminate"))
+                                     for command in calls if command[0] != "xcrun" for argument in command))
+
+    def test_whole_check_rejects_foreign_hot_incomplete_and_failed_cold_runs(self):
+        for mode in ("foreign", "hot", "missing-terminal", "malformed", "launch-failed"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                result, _ = self.run_installed_check(Path(temporary), mode=mode)
+                self.assertEqual("failed", next(case["status"] for case in result["cases"] if case["id"] == "FT-COLD"))
+                self.assertIs(result["passed"], False)
+
+    def test_whole_check_never_launches_without_a_verified_cold_precondition(self):
+        for mode, cold in (("valid", False), ("running", True), ("probe-failed", True), ("install-failed", True)):
+            with self.subTest(mode=mode, cold=cold), tempfile.TemporaryDirectory() as temporary:
+                result, calls = self.run_installed_check(Path(temporary), mode=mode, cold=cold)
+                self.assertFalse(any(len(command) == 1 for command in calls))
+                self.assertEqual("pending-human-exit" if cold else "pending-not-run",
+                    next(case["status"] for case in result["cases"] if case["id"] == "FT-COLD"))
+
+    def test_existing_or_dangling_output_is_never_overwritten_or_executed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            existing = root / "existing"
+            existing.mkdir()
+            frozen = existing / "report.json"
+            frozen.write_text("frozen")
+            link = root / "link"
+            link.symlink_to(root / "absent")
+            for out in (existing, link):
+                with patch.object(acceptance, "execute") as execute:
+                    with self.assertRaises(FileExistsError):
+                        acceptance.check(out, True)
+                    with patch.object(sys, "argv", ["acceptance", "--out", str(out)]), self.assertRaises(FileExistsError):
+                        acceptance.main()
+                    execute.assert_not_called()
+            self.assertEqual("frozen", frozen.read_text())
 
     def test_dock_filter_returns_only_the_owned_entry_and_preserves_old_label(self):
         app = Path("/Users/test/Applications/阿舟 AI 实验室.app")
