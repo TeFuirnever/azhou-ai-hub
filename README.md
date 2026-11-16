@@ -12,7 +12,7 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 14 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 15 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -38,6 +38,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
 npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
+npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 ~~~
 
 Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
@@ -46,7 +47,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills-dark.jpg">
-  <img src="assets/github/readme-banner-skills.jpg" alt="14 Skills: each one independently installable" width="100%">
+  <img src="assets/github/readme-banner-skills.jpg" alt="15 Skills: each one independently installable" width="100%">
 </picture>
 
 | Skill | Real job | Verification basis |
@@ -65,6 +66,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 | [Archify](skills/super-archify/SKILL.md) | Turn systems, plans, or codebases into interactive diagram maps — ten typed-JSON modes — delivered as self-contained explorable HTML. | Synchronized to official stable v3.2.0 (<code>208acba8</code>) with SHA-256 integrity over the selected subtree; browser checks and visual review are reported separately for the actual artifact. No model-quality improvement is claimed. |
 | [Lavish](skills/super-lavish/SKILL.md) | Turn complex or visual responses into reviewable HTML artifacts the user annotates in the browser; feedback returns to the agent through the locked <code>lavish-axi</code> CLI review loop. | Adopted at the locked upstream release <code>lavish-axi-v0.1.97</code> (commit <code>79aa0a18</code>): provenance pins the upstream skill SHA-256, npm integrity and tarball digest; the CLI is invoked through the locked <code>npx</code> baseline and is not vendored. Integrity tests pin the provenance and license copy. No behavior benchmark yet. |
 | [Imagegen](skills/super-imagegen/SKILL.md) | Execute prepared local image-generation requests through the machine's installed private <code>azhou-imagegen</code> runtime: route the request, run the doctor gate, honor the runtime lock, and hand back outputs with an immutable receipt; refuses when the runtime is missing. | Contract-only package over a proprietary local runtime, with baseline hashes pinned in provenance and zero private bytes in the repository; fail-closed setup. No behavior benchmark yet. |
+| [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | Shape output for a reader with ADHD: next action first, bounded numbered steps, state restated every turn, tangents suppressed; stays on until the reader's stop phrase. | Adapted from the frozen upstream commit <code>1ecea199</code> (MIT) with the instruction body retained verbatim and both upstream SHA-256 digests pinned; integrity tests pin the provenance, license copy and the five Azhou presentation constraints. No behavior benchmark yet. |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try-dark.jpg">

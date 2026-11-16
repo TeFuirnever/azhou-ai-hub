@@ -111,6 +111,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Bundled explainer dependency: Pele `1.3.0` by kepano (MIT); its retained package license also contains the Lucide rotate-ccw ISC attribution. Preserve both bundled license texts and the package notices.
 - Local changes: frontmatter normalization to the hub contract, the carved coexistence boundary against `super-excalidraw-diagram` (recorded in both skills' descriptions), Azhou brand protocol, stable receipt restating the upstream receipt verdicts, `references/setup.md`, provenance and compatibility records
 
+## i-have-adhd
+
+`skills/super-i-have-adhd/` adapts the `i-have-adhd` Agent Skill from [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) at immutable commit [`1ecea1993b7fce257ffbd686c070948b5e07eda6`](https://github.com/ayghri/i-have-adhd/commit/1ecea1993b7fce257ffbd686c070948b5e07eda6). The upstream instruction body is retained verbatim and hash-locked for reproducibility.
+
+- Copyright: Ayoub Ghriss, 2026
+- License: [MIT](LICENSES/I-have-Adhd-MIT.txt)
+- Imported boundary: the output-shaping instruction body only; the upstream ships no runtime, scripts, or assets to vendor.
+- Local changes: neutral frontmatter (the upstream host-specific `disable-model-invocation` key is not copied), Azhou brand protocol and stable receipt, setup/provenance records, and five appended presentation constraints (conclusion source/limit proximity, decision continuity, evidence integrity, optional Review Contract, relative-path-only output).
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.
