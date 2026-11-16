@@ -42,8 +42,9 @@ function parseArgs(argv) {
     else throw new Error(`unknown flag: ${flag}`);
   }
   const known = new Set(['normal', 'dead-rAF', 'no-rAF']);
-  if (!options.gate || options.variants.some((variant) => !known.has(variant))) {
-    throw new Error('usage: test-dsh-startup-gate.mjs [--gate <path>] [--variant normal|dead-rAF|no-rAF]');
+  if (!options.gate || options.variants.some((variant) => !known.has(variant))
+    || !Number.isSafeInteger(options.maxStates) || options.maxStates <= 0) {
+    throw new Error('usage: test-dsh-startup-gate.mjs [--gate <path>] [--variant normal|dead-rAF|no-rAF] [--max-states <positive integer>]');
   }
   return options;
 }

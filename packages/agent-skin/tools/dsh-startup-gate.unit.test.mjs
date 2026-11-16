@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
@@ -6,6 +7,18 @@ import { fileURLToPath } from 'node:url';
 
 const sourcePath = fileURLToPath(new URL('../extension/hosts/dsh-startup-gate.js', import.meta.url));
 const source = readFileSync(sourcePath, 'utf8');
+
+test('checker rejects invalid state limits before reading the gate', () => {
+  const checker = fileURLToPath(new URL('./test-dsh-startup-gate.mjs', import.meta.url));
+  const missingGate = fileURLToPath(new URL('./nonexistent-startup-gate.js', import.meta.url));
+  for (const limit of ['NaN', 'Infinity', '0', '-1', '1.5', '', '9007199254740992']) {
+    const result = spawnSync(process.execPath, [checker, '--gate', missingGate, '--max-states', limit],
+      { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(result.signal, null, `limit ${JSON.stringify(limit)} terminated by signal`);
+    assert.equal(result.status, 2, `limit ${JSON.stringify(limit)}: ${result.stderr}`);
+    assert.match(result.stderr, /--max-states/);
+  }
+});
 
 function environment({ style = {}, rect, hidden = false, withRoot = true, hitTestForeign = false,
   colorScheme = 'dark', bodyTheme = null, bodyColors = {}, matchMediaAvailable = true,
