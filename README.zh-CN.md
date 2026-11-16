@@ -185,7 +185,7 @@ python scripts/azhou_hub.py verify
 |---|---|---|
 | `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码候选为 `0.9.0/build 42`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码采用 MIT，随附的阿舟素材采用 CC BY-NC-ND 4.0。 |
 
-Codex 冷启动先提交自有原生遮罩的绘制，再打开宿主、读取通过校验的外观快照，并在原生窗口播放现有 12 秒动画；播放结束且支持的工作区已被观察到后才释放遮罩。热启动仍只激活现有进程，不重播。build 42 已安装到维护者的 Mac，独立播放器、热启动和冷启动事件检查通过；冷启动的视觉连续性仍待验收。DSH 使用独立的页面启动门。2026-11-14 将合并后的 build 42 包原子更新至现有共享实体，并在 DeepSeek Harness `0.2.2-rc.1` 复查：宿主加载提示先出现，随后阿舟遮罩覆盖新会话输入区，动画收束后进入带壁纸的工作区。连续首帧录像仍待完成。macOS CI 必跑自有测试窗口的真实排序、显露和清理检查，并包含负对照；这些检查不代表已安装冷启动的视觉连续性通过。详见[启动合同](packages/agent-skin/docs/testing.md)。
+Codex 冷启动时，启动器以浮动层显示自有遮罩而不抢焦点，在原生窗口播放 12 秒动画。播放结束且工作区就绪后交接。切换到其他应用或 Space 时释放遮罩。热启动只激活现有 Codex 进程，不重播。DSH 使用独立的页面启动门。macOS CI 用负对照验证窗口排序、播放器显露和清理。已安装版本及待完成的视觉验收见[支持矩阵](docs/support-matrix.md#optional-integrations)与[启动测试](packages/agent-skin/docs/testing.md)。
 
 <sub>🦊 Foundation CLI、pstack 与 Agent Skin 效果图为生成插图，未经 Azhou Scenes 流水线，也没有色彩门禁；维护者视觉批准已于 2026-11-12 记录。</sub>
 
