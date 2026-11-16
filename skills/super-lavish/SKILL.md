@@ -1,6 +1,6 @@
 ---
 name: super-lavish
-description: "Azhou skill. Renamed from lavish (the old name still triggers this skill). Turn complex or visual agent responses into rich, reviewable HTML artifacts the user can annotate, select, and send feedback on through the lavish-axi CLI browser review loop. Use when about to give a plan, comparison, diagram, table, code diff, report, prototype, or anything easier to grasp visually than as prose; also for 把这个结果做成可审阅的 HTML. Static interactive diagram maps and one-page explainers belong to super-archify; editable Excalidraw scenes belong to super-excalidraw-diagram; a human-annotated feedback loop on a generated page belongs here."
+description: "Azhou skill. Renamed from lavish (the old name still triggers this skill). Turn complex or visual agent responses into rich, reviewable HTML artifacts the user can annotate, select, and send feedback on through the lavish-axi CLI browser review loop. Use when about to give a plan, comparison, diagram, table, code diff, report, prototype, or anything easier to grasp visually than as prose; also for 把这个结果做成可审阅的 HTML. Static interactive diagram maps and one-page explainers belong to super-archify; editable Excalidraw scenes belong to super-excalidraw-diagram; a human-annotated feedback loop on a generated page belongs here; raster images belong to super-imagegen."
 invocation: both
 ---
 
