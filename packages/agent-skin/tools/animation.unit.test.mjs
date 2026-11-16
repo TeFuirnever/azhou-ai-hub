@@ -129,7 +129,7 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   settingsAdapter = null,
   nativeFormal = false, nativeStartup = null,
   snapshotMode = false, snapshotReader = null,
-  theme = 'dark', externalStartGate = false } = {}) {
+  theme = 'dark', externalStartGate = false, presentation } = {}) {
   const raf = new Map();
   const timers = new Map();
   const windowListeners = new Map();
@@ -172,6 +172,7 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
       const element = new Element(tagName);
       if (tagName === 'dialog') {
         element.showModal = () => { if (failShowModal) throw new Error('dialog unavailable'); element.open = true; };
+        element.show = () => { element.open = true; };
         element.close = () => { element.open = false; };
       }
       return element;
@@ -343,7 +344,8 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
     environment.setTimeout, environment.clearTimeout, undefined, send,
     formalInput?.frameSpec || { runId: 'unit-run', intent, assets: payload,
       ...(snapshotMode ? { settingsSnapshot: 'required' } : {}),
-      ...(externalStartGate ? { externalStartGate: true } : {}) },
+      ...(externalStartGate ? { externalStartGate: true } : {}),
+      ...(presentation ? { presentation } : {}) },
     settingsFactory, localizationFactory, formalInput?.readStartupSnapshot || snapshotReader,
   );
   if (handle?.preview && formalInput?.nativeBridge) {
@@ -1049,6 +1051,8 @@ test('settings intent opens through the real settings panel and Escape cancels p
   const fixture = createFixture({ intent: 'settings', settings: true });
   await waitReady(fixture);
   assert.equal(fixture.document.body.querySelector('dialog')?.open, true);
+  assert.equal(fixture.root.hidden, false,
+    'the modal presentation keeps the stage visible beneath the top-layer dialog');
   assert.equal(fixture.handle.openSettings(), false, 'an already open settings panel cannot open twice');
   let prevented = false;
   fixture.dispatchWindow('keydown', { key: 'Escape', preventDefault() { prevented = true; } });
@@ -1056,6 +1060,64 @@ test('settings intent opens through the real settings panel and Escape cancels p
   assert.equal(fixture.handle.preview.report().completed, true);
   assert.equal(fixture.handle.preview.report().skipped, true);
   assert.equal(fixture.messages.some(message => message.action === 'complete'), true);
+  fixture.handle.dispose();
+});
+
+test('embedded settings intent opens the panel inline and Escape keeps the section open', async () => {
+  const fixture = createFixture({ intent: 'settings', settings: true, presentation: 'embedded' });
+  await waitReady(fixture);
+  const dialog = fixture.document.body.querySelector('dialog');
+  assert.equal(dialog?.open, true);
+  assert.equal(fixture.root.hidden, true,
+    'the opaque full-viewport stage hides so the inline panel is reachable');
+  let prevented = false;
+  fixture.dispatchWindow('keydown', { key: 'Escape', preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(dialog.open, true, 'embedded Escape keeps the section mounted');
+  assert.equal(fixture.messages.some(message => message.action === 'settings-focus-return'), true);
+  assert.equal(fixture.handle.preview.report().completed, false, 'embedded Escape never completes the run');
+  assert.equal(fixture.messages.some(message => message.action === 'complete'), false);
+  assert.equal(fixture.messages.some(message => message.action === 'settings-close'), false);
+  fixture.handle.dispose();
+});
+
+test('embedded settings save keeps the embed open: no settings-close, presentation threaded to the factory', async () => {
+  let callbacks = null;
+  let openOptions;
+  let panelOpen = false;
+  const settingsAdapter = {
+    isSettingsOpen() { return panelOpen; },
+    isBusy() { return false; },
+    openSettings(options, presentationOptions) {
+      callbacks = options;
+      openOptions = presentationOptions;
+      panelOpen = true;
+      options.onOpen();
+      return true;
+    },
+    dispose() { panelOpen = false; },
+  };
+  const fixture = createFixture({ intent: 'settings', settingsAdapter, presentation: 'embedded',
+    backgroundResult: () => Promise.resolve({ applied: true }) });
+  await waitReady(fixture);
+  // The payload runs in a vm context, so spread the frame-carried options into
+  // a local object before deep comparison.
+  assert.deepEqual({ ...openOptions }, { presentation: 'embedded' },
+    'the payload threads the embedded presentation into the settings factory');
+  const saved = {
+    avatar: 'data:image/png;base64,AA==', artwork: 'data:image/png;base64,BB==',
+    contours: [[[10, 10], [40, 20], [80, 15], [110, 45]]],
+    introTitle: '内嵌标题', introCaption: '内嵌说明', artworkSubtitle: '内嵌字幕',
+    wallpaperStrength: 42,
+  };
+  await callbacks.onApply(saved);
+  const background = fixture.messages.filter(message => message.action === 'background').at(-1);
+  assert.equal(background.image, saved.artwork, 'an embedded save still applies the wallpaper');
+  assert.equal(background.strength, saved.wallpaperStrength);
+  callbacks.onSaved(saved);
+  assert.equal(fixture.messages.some(message => message.action === 'settings-close'), false,
+    'the embedded section stays open, so no settings-close is sent');
+  assert.equal(fixture.handle.preview.report().completed, false, 'a save never completes the embedded run');
   fixture.handle.dispose();
 });
 
@@ -1182,6 +1244,47 @@ test('an open settings animation preview follows host appearance updates', async
   assert.equal(closeButton.textContent, '关闭动画预览');
   assert.equal(closeButton.getAttribute('aria-label'), '关闭动画预览');
   fixture.handle.dispose();
+});
+
+test('an embedded settings save keeps later animation previews available', async () => {
+  let callbacks = null;
+  let panelOpen = false;
+  const settingsAdapter = {
+    isSettingsOpen() { return panelOpen; },
+    isBusy() { return false; },
+    openSettings(options) {
+      callbacks = options;
+      panelOpen = true;
+      options.onOpen();
+      return true;
+    },
+    dispose() { panelOpen = false; },
+  };
+  const fixture = createFixture({ intent: 'settings', settingsAdapter, presentation: 'embedded',
+    backgroundResult: () => Promise.resolve({ applied: true }) });
+  await waitReady(fixture);
+  // startSettingsPreview requires a mounted open settings dialog; supply a
+  // minimal host so preview acceptance is observable with the fake adapter.
+  const dialogHost = fixture.document.createElement('dialog');
+  dialogHost.setAttribute('data-agent-skin-settings', '');
+  dialogHost.open = true;
+  fixture.document.body.appendChild(dialogHost);
+  const draft = {
+    avatar: 'data:image/png;base64,AA==', artwork: 'data:image/png;base64,BB==',
+    contours: [[[10, 10], [40, 20], [80, 15], [110, 45]]],
+    introTitle: '保存前草稿', introCaption: '说明', artworkSubtitle: '字幕', wallpaperStrength: 42,
+  };
+  assert.ok(callbacks.onPreview(draft) !== false, 'preview is accepted before the first embedded save');
+  const saved = { ...draft, introTitle: '已保存记录' };
+  await callbacks.onApply(saved);
+  callbacks.onSaved(saved);
+  assert.ok(fixture.handle.preview.report().resources.liveBitmaps > 0,
+    'the embedded save keeps the prepared scene alive for later previews');
+  assert.ok(callbacks.onPreview({ ...draft, introTitle: '保存后第二轮草稿' }) !== false,
+    'the still-open embedded panel keeps accepting preview requests after a save');
+  fixture.handle.dispose();
+  assert.equal(fixture.handle.preview.report().resources.liveBitmaps, 0,
+    'unmounting the embed still releases the retained scene');
 });
 
 test('settings animation preview returns to the preserved draft when it completes naturally', async () => {

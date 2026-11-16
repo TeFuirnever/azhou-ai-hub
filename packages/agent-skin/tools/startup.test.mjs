@@ -2865,6 +2865,7 @@ test('mountSettings embeds the same panel into a host element and its disposer u
   const mountSpec = specs[1].spec;
   assert.equal(specs[0].spec.intent, 'play');
   assert.equal(mountSpec.intent, 'settings', 'the embed starts straight in the settings intent');
+  assert.equal(mountSpec.presentation, 'embedded', 'the embed declares the non-modal presentation');
   assert.notEqual(mountSpec.runId, specs[0].spec.runId, 'the embed runs on its own run id');
 
   // Overlay isolation: embed traffic never moves the startup state machine.
@@ -2874,6 +2875,18 @@ test('mountSettings embeds the same panel into a host element and its disposer u
   controlled.host.send({ type: 'azhou-startup', action: 'settings-close', runId: mountSpec.runId },
     controlled.frames[0].contentWindow);
   assert.equal(closed, 0, 'a foreign source cannot drive the embed close');
+
+  let blurs = 0;
+  embed.blur = () => { blurs += 1; };
+  controlled.host.document.activeElement = embed;
+  const focusReturn = { type: 'azhou-startup', action: 'settings-focus-return', runId: mountSpec.runId };
+  controlled.host.send(focusReturn, controlled.frames[0].contentWindow);
+  assert.equal(blurs, 0, 'a foreign frame cannot move host focus');
+  controlled.host.send(focusReturn, embed.contentWindow);
+  assert.equal(blurs, 1, 'the focused embed returns focus to the host');
+  controlled.host.document.activeElement = {};
+  controlled.host.send(focusReturn, embed.contentWindow);
+  assert.equal(blurs, 1, 'late messages cannot move focus from another host control');
 
   // The panel's wallpaper request flows through the shared wallpaper pipeline.
   controlled.host.send({ type: 'azhou-startup', action: 'background', runId: mountSpec.runId,
