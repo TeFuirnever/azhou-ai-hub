@@ -3,9 +3,8 @@
 
 Read-only observer: the CLI only reads harness session stores, never writes
 into them, and never contacts the network. The Claude Code adapter parses
-``<store-root>/projects/<encoded-cwd>/*.jsonl``; the Codex and zcode adapters
-fail closed with an ``unsupported`` hold until their transcript formats are
-verified. All metrics are UTC; the scan window and recency cap anchor to the
+``<store-root>/projects/<encoded-cwd>/*.jsonl``; the Codex adapter parses dated rollout files, and the zcode adapter
+fails closed with an ``unsupported`` hold. All metrics are UTC; the scan window and recency cap anchor to the
 newest observed session timestamp in the store, never to wall-clock now, so a
 static store always yields the same aggregate. Excerpts-off aggregate runs
 reuse a disposable per-file metadata cache (mtime+size keyed, no transcript
@@ -1248,7 +1247,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     report.add_argument(
         "--out",
         default=None,
-        help="report path (default: <cwd>/.azhou/session-insights/report-<date>.md)",
+        help="report path (default: <cwd>/.azhou/super-session-insights/report-<date>.md)",
     )
     report.add_argument(
         "--include-excerpts",

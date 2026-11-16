@@ -40,7 +40,7 @@ zcode 分节恒为 `{"status": "unsupported", "hold": "zcode unsupported"}`：�
 ## 增量缓存（`super-session-insights.metadata-cache.v1`）
 
 - 只服务 `aggregate` 且仅在未开摘录时启用；`metadata`、`discover`、`--include-excerpts` 运行绕过。
-- 位置：`<cwd>/.azhou/session-insights/metadata-cache.json`（gitignored 运行时命名空间；永不写入会话 store 内部）。
+- 位置：`<cwd>/.azhou/super-session-insights/metadata-cache.json`（gitignored 运行时命名空间；永不写入会话 store 内部）。
 - 寻址：`stores[<sha256(harness + 解析后 store 根)>].files[<sha256(相对路径)>]`，条目以 `mtime_ns`+`size` 判活；不匹配即重解析该文件。扫描结束后条目集重写为当次所见文件，删除的会话自然失效。
 - 内容边界：只存逐会话元数据与聚合级字段；`first_prompt` 文本与 `project` 标签不入缓存——首条提示以 `first_prompt_sha256` 留存，`repeated_first_prompt_count` 按摘要计数，与全量解析数值一致。project 标签每次扫描现算。
 - 可丢弃性：文件缺失、损坏或 schema 不符按空缓存处理；条目即使 `mtime_ns`+`size` 命中，其 metadata 缺失任何被消费字段、类型不符或嵌套 `tool_calls` 形状损坏也按 miss 重解析该文件并由写回自愈（benchmark 投毒负控钉死）。写入为尽力而为的原子发布（临时文件 + `os.replace`），写失败静默。冷/热/删除缓存三种状态下聚合输出逐字节一致（由 benchmark 负控钉死）。
@@ -49,7 +49,7 @@ zcode 分节恒为 `{"status": "unsupported", "hold": "zcode unsupported"}`：�
 
 - `report` 只读 aggregate JSON（文件或 stdin），schema 不符即 exit 1；绝不重算任何指标。
 - `--tone report|roast`（默认 `report`）：两种语气从同一份 aggregate 渲染，机器小节逐字节一致；`roast` 只追加一个展示层小节，每条断言必须引用机器小节中出现的一个统计值——无派生数值、无虚构事件、路径与对话。收据机器字段跨语气一致，仅 artifact 摘要随正文变化。
-- 默认输出 `<cwd>/.azhou/session-insights/report-<date>.md`；`<date>` 取聚合内最新会话日期（无会话时 `empty`），保证静态 store 下产物名确定。`--out` 为用户自选交付物。
+- 默认输出 `<cwd>/.azhou/super-session-insights/report-<date>.md`；`<date>` 取聚合内最新会话日期（无会话时 `empty`），保证静态 store 下产物名确定。`--out` 为用户自选交付物。
 - 小节：概览、时段分布（UTC）、项目分布、工具调用排行、摩擦信号、可选摘录、Holds、Receipt。emoji 只出现在这些人读小节标题。
 - **摘录默认关闭**。`aggregate --include-excerpts` 才把脱敏后的首条提示存进 aggregate；`report --include-excerpts` 渲染之。脱敏规则：家目录明文替换为 `~`；密钥样式（`sk-`、`ghp_`、`github_pat_`、`AKIA`、`AIza`、PEM 标记）替换为 `[redacted-secret]`。
 - 固定页脚（逐字）：

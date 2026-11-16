@@ -62,3 +62,14 @@ Markdown 聊天宿主里，本品牌层的过程播报包一层展示皮；剥�
 > ✅ **验证通过**（checks=aggregate,report）
 > 🔒 **阿舟暂停这一项**
 ```
+
+## 反思阶段
+
+反思运行启动为 `🦊 阿舟 · Session Insights 启动（mode=reflection, scope=<selection>）`，然后按顺序播报以下事件；每个事件的 `run` 为同一个本轮 ID，字段值不含私人路径或原文。
+
+- `🧭 范围确认（run=<id>, scope=<selection>）`
+- `📥 证据整理（run=<id>, status=<status>）`
+- `📝 反思形成（run=<id>, status=<status>）`
+- `✅ 结构检查通过（run=<id>, checks=<checks>）` 或 `❌ 结构检查失败（run=<id>, check=<check>）`；授权或工具边界不足时使用 `🔒 阿舟暂停这一项（run=<id>, action=<action>）`。
+
+只有报告及收据写入并读回且相关结构检查完成时才能使用通过事件。语义审阅、效果和采纳状态必须分别报告，不得将结构通过改写为洞察正确。Markdown 聊天展示层与 Unicode 降级沿用本文件现有规则。

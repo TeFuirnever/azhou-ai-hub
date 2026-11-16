@@ -6,6 +6,6 @@ Wiring-integrity suite for the super-session-insights aggregate/report pipeline,
 - the default 30-day window trims the stale session, `--days 60` restores it, and `--max-sessions 2` keeps only the two most recent — all anchored to the newest observed session timestamp, never wall-clock now;
 - the receipt input digest is stable across two runs on untouched files and changes after a fixture file content change;
 - privacy negative controls: the report artifact contains no absolute home path, no seeded secret-shaped string, and — with excerpts off — no transcript text;
-- fail-closed negative controls: detectable Codex/zcode stores yield `unsupported` holds and no speculative report sections.
+- fail-closed negative controls: Codex fixtures are parsed and detectable zcode stores yield `unsupported` holds with no speculative report sections.
 
 Fixtures prove wiring only; they are never benchmark evidence about model behavior. No behavior benchmark yet.
