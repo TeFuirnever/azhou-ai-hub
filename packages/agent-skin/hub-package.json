@@ -169,6 +169,7 @@
     "plans/001-vivid-lab-motion.md",
     "tools/dsh-adapter.unit.test.mjs",
     "tools/dsh-startup-gate.unit.test.mjs",
+    "tools/verify-dsh-startup-gate.mjs",
     "tools/build-dsh-plugin.py",
     "tools/test-dsh-build.py"
   ]
