@@ -327,11 +327,19 @@ function applyEvent(env, model, event, source, frameMode, sink) {
     }
     label = 'animation frame delivered (reveal callback)';
   } else if (event.type === 'fireTimers') {
+    const before = gate.status();
     const parts = [];
     for (const id of event.ids) {
       const entry = env.timers.get(id);
       env.timers.delete(id);
       entry.callback();
+      if (entry.deadline === model.hardDeadline) {
+        if (ACTIVE_PHASES.has(before) && gate.status() !== 'expired') {
+          apiFailure ??= `watchdog at t=${entry.deadline} fired from phase '${before}' but the phase is now '${gate.status()}': a watchdog must expire an active gate`;
+        }
+      } else if (gate.status() !== 'released') {
+        apiFailure ??= `reveal fallback timer at t=${entry.deadline} fired from phase '${before}' but the phase is now '${gate.status()}': a delivered reveal callback must release the gate`;
+      }
       parts.push(`timer at t=${entry.deadline} fires`);
     }
     label = parts.join(', then ');
