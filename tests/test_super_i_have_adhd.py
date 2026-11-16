@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import struct
 import unittest
 from pathlib import Path
 
@@ -184,6 +185,28 @@ class SuperIHaveAdhdPackageTest(unittest.TestCase):
             self.assertIn(status, self.brand)
         self.assertIn("state_changes", self.brand)
         self.assertIn("pending_decisions", self.brand)
+
+    def test_showcase_effect_image_is_metadata_sanitized(self) -> None:
+        # The generation pipeline embeds the scene prompt, local paths and
+        # runtime identity in eXIf/iTXt/tEXt chunks; the published showcase
+        # must carry none of them (sanitized before publishing, 2026-11-17).
+        data = (ROOT / "assets" / "skills" / "super-i-have-adhd-effect.png").read_bytes()
+        pos = 8
+        present = []
+        while pos < len(data):
+            length = struct.unpack(">I", data[pos:pos + 4])[0]
+            present.append(data[pos + 4:pos + 8])
+            pos += 12 + length
+        for forbidden in (b"iTXt", b"tEXt", b"zTXt", b"eXIf"):
+            self.assertNotIn(forbidden, present, f"metadata chunk must stay out of the shipped image: {forbidden}")
+        self.assertIn(b"IHDR", present)
+        self.assertIn(b"IEND", present)
+
+    def test_provenance_binds_the_sanitized_shipment_and_the_approved_candidate(self) -> None:
+        self.assertIn("838bdd4bcd4d50ce4e1249c47f4ad146a279286b4fe26036b1c6fd104502a8e2", self.provenance)
+        self.assertIn("2e1cb65711936bcd3e6cb1cc95ea9bb837f36b35cd78280a19c7a104845f5676", self.provenance)
+        self.assertIn("metadata-sanitized", self.provenance)
+        self.assertIn("byte-identical", self.provenance)
 
 
 if __name__ == "__main__":
