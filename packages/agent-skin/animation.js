@@ -1839,7 +1839,14 @@ function installAnimation(
       || frameSpec?.intent === 'preview' || imageSettings.isSettingsOpen()) return false;
     const wasPlaying = rafId !== 0;
     if (wasPlaying) pause();
-    const chrome = [skipButton, stageText, progressText];
+    const embedded = frameSpec?.presentation === 'embedded';
+    // The modal presentation sits in the dialog top layer above the stage;
+    // the embedded presentation renders in normal flow, so the opaque
+    // full-viewport stage must hide with the rest of the chrome or it covers
+    // the inline panel.
+    const chrome = embedded
+      ? [root, skipButton, stageText, progressText]
+      : [skipButton, stageText, progressText];
     const priorHidden = chrome.map(element => element?.hidden);
     const restoreChrome = () => chrome.forEach((element, index) => {
       if (element) element.hidden = priorHidden[index];
@@ -1866,10 +1873,12 @@ function installAnimation(
           stopClock();
           generation++;
           preparing = false;
+          // The embedded panel needs the scene for previews until host unmount.
+          if (embedded) return;
           releaseSceneResources();
           message('settings-close');
         },
-      });
+      }, embedded ? { presentation: 'embedded' } : undefined);
     } catch (error) {
       restoreChrome();
       throw error;
@@ -1892,14 +1901,24 @@ function installAnimation(
         finishSettingsPreview(settingsPreview, settingsPreview.started);
         return;
       }
+      const embedded = frameSpec?.presentation === 'embedded';
       if (imageSettings?.isSettingsOpen()) {
         if (imageSettings.isBusy()) {
           event.stopImmediatePropagation?.();
           return;
         }
+        if (embedded) {
+          // The embedded section is not modal: Escape hands focus back to the
+          // surrounding host page instead of cancelling or tearing down.
+          const focused = document.activeElement;
+          if (focused && typeof focused.blur === 'function') focused.blur();
+          message('settings-focus-return');
+          return;
+        }
         imageSettings.cancelSettings();
         return;
       }
+      if (embedded) return;
       finish(true);
       return;
     }
