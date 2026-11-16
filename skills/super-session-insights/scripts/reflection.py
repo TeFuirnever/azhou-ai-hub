@@ -227,12 +227,19 @@ def citation_review(e, result, segments):
                        'scope': observation['scope'], 'refs': excerpts(observation['refs'])})
     for insight in result['insights']:
         claims.append({'kind': 'insight', 'id': insight['id'], 'claim': insight['claim'],
-                       'scope': insight['scope'], 'supporting_refs': excerpts(insight['supporting_refs']),
+                       'scope': insight['scope'], 'epistemic_status': insight['epistemic_status'],
+                       'alternatives': insight['alternatives'], 'revisit_condition': insight['revisit_condition'],
+                       'supporting_refs': excerpts(insight['supporting_refs']),
                        'counter_refs': excerpts(insight['counter_refs'])})
     for change in result['changes']:
         claims.append({'kind': 'change', 'claim': change['reason'], 'refs': excerpts(change['new_refs'])})
+    experiment = result.get('experiment')
+    if experiment is not None:
+        experiment = {key: experiment[key] for key in (
+            'change', 'context', 'expected_observation', 'effort', 'success_condition', 'stop_condition', 'followup_evidence')}
     return {'schema': 'super-session-insights.citation-review.v1', 'evidence_digest': e['digest'],
-            'subject': e['scope'].get('subject', UNKNOWN), 'semantic_review': 'not_reviewed', 'claims': claims}
+            'subject': e['scope'].get('subject', UNKNOWN), 'semantic_review': 'not_reviewed', 'claims': claims,
+            'limitations': result['limitations'], 'experiment': experiment}
 
 
 def report_text(e, r):

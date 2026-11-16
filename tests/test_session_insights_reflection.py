@@ -283,6 +283,53 @@ class ReflectionTest(unittest.TestCase):
         self.assertEqual(1, p.returncode)
         self.assertNotIn(self.ev['segments'][0]['text'], p.stdout + p.stderr)
 
+    def test_citation_review_includes_the_complete_reported_insight(self):
+        self.result['insights'][0]['alternatives'] = ['另一人可能负责确认']
+        self.result['insights'][0]['revisit_condition'] = '核对交接记录后再判断'
+        self.write()
+        review_result = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
+        self.assertEqual(0, review_result.returncode, review_result.stderr)
+        review = json.loads(review_result.stdout)
+        insight = next(x for x in review['claims'] if x['kind'] == 'insight')
+        expected = self.result['insights'][0]
+        self.assertEqual(expected['epistemic_status'], insight['epistemic_status'])
+        self.assertEqual(expected['alternatives'], insight['alternatives'])
+        self.assertEqual(expected['revisit_condition'], insight['revisit_condition'])
+        self.assertEqual('交付前', insight['supporting_refs'][0]['cited_text'])
+        self.assertEqual('not_reviewed', review['semantic_review'])
+        rendered = self.render()
+        self.assertEqual(0, rendered.returncode, rendered.stderr)
+        report = (self.root / 'run/report.md').read_text(encoding='utf-8')
+        self.assertIn(expected['alternatives'][0], report)
+        self.assertIn(expected['revisit_condition'], report)
+
+    def test_citation_review_exposes_report_limits_and_experiment_without_extra_metadata(self):
+        self.result['limitations'] = ['交接记录未确认']
+        self.result['experiment'] = {
+            'change': '核对样例', 'context': '交接', 'expected_observation': '确认是否完成',
+            'effort': '一次', 'success_condition': '样例可用', 'stop_condition': '无权访问时停止',
+            'followup_evidence': '交接记录', 'unverified_extra': 'do not echo extra metadata',
+        }
+        self.write()
+        reviewed = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
+        self.assertEqual(0, reviewed.returncode, reviewed.stderr)
+        review = json.loads(reviewed.stdout)
+        self.assertEqual(self.result['limitations'], review['limitations'])
+        self.assertEqual('核对样例', review['experiment']['change'])
+        self.assertEqual('交接记录', review['experiment']['followup_evidence'])
+        self.assertNotIn('unverified_extra', review['experiment'])
+        self.assertEqual('not_reviewed', review['semantic_review'])
+        rendered = self.render()
+        self.assertEqual(0, rendered.returncode, rendered.stderr)
+        report = (self.root / 'run/report.md').read_text(encoding='utf-8')
+        self.assertIn('交接记录未确认', report)
+        self.assertIn('核对样例', report)
+        del self.result['experiment']
+        self.write()
+        without_experiment = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
+        self.assertEqual(0, without_experiment.returncode, without_experiment.stderr)
+        self.assertIsNone(json.loads(without_experiment.stdout)['experiment'])
+
     def test_report_keeps_limitations_and_provenance_without_empty_sections(self):
         self.ev['scope']['subject'] = 'selected participant'
         self.ev['segments'][0]['attribution'] = 'third_party'
