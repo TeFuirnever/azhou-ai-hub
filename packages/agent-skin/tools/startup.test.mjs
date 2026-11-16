@@ -2847,6 +2847,18 @@ test('mountSettings embeds the same panel into a host element and its disposer u
     controlled.frames[0].contentWindow);
   assert.equal(closed, 0, 'a foreign source cannot drive the embed close');
 
+  let blurs = 0;
+  embed.blur = () => { blurs += 1; };
+  controlled.host.document.activeElement = embed;
+  const focusReturn = { type: 'azhou-startup', action: 'settings-focus-return', runId: mountSpec.runId };
+  controlled.host.send(focusReturn, controlled.frames[0].contentWindow);
+  assert.equal(blurs, 0, 'a foreign frame cannot move host focus');
+  controlled.host.send(focusReturn, embed.contentWindow);
+  assert.equal(blurs, 1, 'the focused embed returns focus to the host');
+  controlled.host.document.activeElement = {};
+  controlled.host.send(focusReturn, embed.contentWindow);
+  assert.equal(blurs, 1, 'late messages cannot move focus from another host control');
+
   // The panel's wallpaper request flows through the shared wallpaper pipeline.
   controlled.host.send({ type: 'azhou-startup', action: 'background', runId: mountSpec.runId,
     image: 'data:image/png;base64,AAAA', strength: 42 }, embed.contentWindow);

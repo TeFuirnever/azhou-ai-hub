@@ -1074,6 +1074,7 @@ test('embedded settings intent opens the panel inline and Escape keeps the secti
   fixture.dispatchWindow('keydown', { key: 'Escape', preventDefault() { prevented = true; } });
   assert.equal(prevented, true);
   assert.equal(dialog.open, true, 'embedded Escape keeps the section mounted');
+  assert.equal(fixture.messages.some(message => message.action === 'settings-focus-return'), true);
   assert.equal(fixture.handle.preview.report().completed, false, 'embedded Escape never completes the run');
   assert.equal(fixture.messages.some(message => message.action === 'complete'), false);
   assert.equal(fixture.messages.some(message => message.action === 'settings-close'), false);

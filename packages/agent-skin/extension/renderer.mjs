@@ -1812,6 +1812,11 @@ class PageController {
     if (message.action === 'background') {
       return this.#applyWallpaper(message, mount.runId, null, false, mount);
     }
+    if (message.action === 'settings-focus-return') {
+      const frame = mount.frame?.element;
+      if (mount.alive && this.host.document.activeElement === frame) frame.blur?.();
+      return;
+    }
     // The embed releases its panel even if the host does not close the modal.
     if (message.action === 'assetError' || message.action === 'settings-close'
         || (message.action === 'complete' && message.skipped === true)) {

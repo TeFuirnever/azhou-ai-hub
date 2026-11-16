@@ -1912,6 +1912,7 @@ function installAnimation(
           // surrounding host page instead of cancelling or tearing down.
           const focused = document.activeElement;
           if (focused && typeof focused.blur === 'function') focused.blur();
+          message('settings-focus-return');
           return;
         }
         imageSettings.cancelSettings();

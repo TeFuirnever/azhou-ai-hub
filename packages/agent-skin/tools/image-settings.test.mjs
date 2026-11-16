@@ -1108,7 +1108,7 @@ test('embedded presentation renders inline without modal traps and keeps the sec
   assert.equal(saved.length, 1);
   assert.equal(saved[0].introTitle, 'Embedded title');
   assert.equal(applied.length, 1);
-  assert.equal(status.textContent, '设置已保存，背景已应用。');
+  assert.equal(status.textContent, '设置已保存。');
   assert.equal(saveButton.textContent, '保存', 'a settled embedded save returns to the plain save action');
 
   title.value = 'Embedded title 2';
