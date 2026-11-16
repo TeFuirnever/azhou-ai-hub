@@ -101,6 +101,7 @@ PROJECT_LOCAL_SKILL_PATHS = {
     ".agents/skills/e2e-case-lifecycle/SKILL.md",
     ".agents/skills/feature-boundary-planner/SKILL.md",
     ".agents/skills/record-browser-gif/SKILL.md",
+    ".agents/skills/verify-dsh-startup-gate/SKILL.md",
 }
 ZCODE_NOTICE_SHA256 = "c946abfb46cf3920fefeb756c526620201a3ce29bf84953b540763605b33d9ea"
 ZCODE_NOTICES = {f".agents/skills/{name}/NOTICE-ZCode.md" for name in (
