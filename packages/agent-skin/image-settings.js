@@ -86,7 +86,7 @@ function createImageSettings(environment) {
     'settings.button.retryApply': '重试应用',
     'settings.button.applyingBackground': '正在应用…',
     'settings.status.applyingBackground': '设置已保存，正在应用背景…',
-    'settings.status.saved': '设置已保存，背景已应用。',
+    'settings.status.saved': '设置已保存。',
     'settings.error.backgroundApply': '设置已保存，但背景应用失败。可以重试，或关闭设置。',
     'settings.button.choosePortrait': '选择启动头像',
     'settings.button.chooseBackground': '选择背景图片',
