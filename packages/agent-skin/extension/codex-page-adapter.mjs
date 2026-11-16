@@ -14,6 +14,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
   const hostEnvironment = environment;
   const hostConfiguration = configuration;
   const hostDependencies = dependencies;
+  let pageIdentity = null;
+  let pageGeneration = 0;
 
   const WALLPAPER_FAILURE_MESSAGE_KEYS = Object.freeze({
     'shell-timeout': 'appearance.wallpaper.failure.reason.shellTimeout',
@@ -40,9 +42,9 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     const descriptor = Object.getOwnPropertyDescriptor(object, name);
     return descriptor && Object.hasOwn(descriptor, 'value') ? descriptor.value : undefined;
   }
-  function isMainPage(host) {
+  function isMainPage(href) {
     try {
-      const url = new URL(host.location.href);
+      const url = new URL(href);
       if (url.protocol !== 'app:' || url.hostname !== '-' || url.pathname !== '/index.html'
         || url.username || url.password || url.port) return false;
       const route = url.searchParams.get('initialRoute') ?? '/';
@@ -742,10 +744,24 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
   }
   return Object.freeze({
     identify(host = hostEnvironment) {
-      if (!host || !isMainPage(host)) return { kind: 'unmatched', reason: 'page-unsupported' };
-      let documentToken = '';
-      try { documentToken = String(host.location?.href ?? ''); } catch { documentToken = ''; }
-      return { kind: 'matched', documentToken };
+      let href;
+      let document;
+      try {
+        href = host?.location?.href;
+        document = host?.document;
+      } catch {
+        pageIdentity = null;
+        return { kind: 'unmatched', reason: 'page-unsupported' };
+      }
+      if (!host || !isMainPage(href)) {
+        pageIdentity = null;
+        return { kind: 'unmatched', reason: 'page-unsupported' };
+      }
+      if (!pageIdentity || pageIdentity.host !== host || pageIdentity.document !== document
+          || pageIdentity.href !== href) {
+        pageIdentity = { host, document, href, documentToken: `codex-page:${++pageGeneration}` };
+      }
+      return { kind: 'matched', documentToken: pageIdentity.documentToken };
     },
     observeAppearance(host = hostEnvironment) {
       return hostAppearance(host);
