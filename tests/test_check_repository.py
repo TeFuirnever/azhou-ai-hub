@@ -843,6 +843,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-archify" / "SKILL.md",
                 root / "skills" / "super-asd-ste100" / "SKILL.md",
                 root / "skills" / "super-lavish" / "SKILL.md",
+                root / "skills" / "super-imagegen" / "SKILL.md",
                 root / "skills" / "super-session-insights" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
