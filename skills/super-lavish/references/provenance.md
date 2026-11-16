@@ -32,6 +32,10 @@ Azhou AI Hub keeps the upstream CLI-first design: the current workflow, design d
 
 No Lavish application code, browser bundle, logos, screenshots, or runtime assets are vendored. `npx` downloads the external CLI at execution time; `skills/super-lavish/` contains the Azhou-authored orchestration layer only. The CLI's own bundled third-party components are attributed by the upstream `THIRD-PARTY-NOTICES.md` shipped inside the npm package (SHA-256 `882673c8dec1bd8ad6ab936a08e83eb0ed86cba7c79780ab9cfb055dae67aeef` at this release); they are consumed at run time through `npx`, not redistributed from this repository.
 
+## Showcase scene
+
+`assets/skills/super-lavish-effect.png` (added 2026-11-16) is the package's skill showcase scene under skill-standard §4. It was generated with the maintainer's local azhou-gen pipeline: azhou-scenes `article_16_9` mode, Qwen-Image-2.1 edit with the hash-locked canonical fox reference (SHA-256 `bb86cf0a9e80beee8647aeaae19506eb410d2fc19b4ba93c1ec0e2c4d1e0f8a2`), scene quality anchor `04-code-review-rework` recorded observation-only (`used_as_image_gen_reference=false`), final tier, seed 23, and the 1664×960 raw candidate shipped unmodified (candidate SHA-256 `d41c71a2eec7976c0cd8dd4c0e2c1fef7b19642b1528d4c924d9e06c4e491a97`). The full receipt chain (run `azhou-20261116T032044Z-lavish-circle-s2`, preflight → dispatch → postflight, `execution_scope=local_candidate_only`, `asset_status=HOLD` until the named human visual P0 approved it on 2026-11-16) and the approval record stay Git-external in the maintainer's store. Repository-wide notice: [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md).
+
 ## Reproducible source check
 
 ```bash
