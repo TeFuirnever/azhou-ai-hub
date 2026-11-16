@@ -1,6 +1,6 @@
 ---
 name: super-excalidraw-diagram
-description: Azhou skill. Renamed from excalidraw-diagram (the old name still triggers this skill). Build or edit accurate, editable Excalidraw scenes; render the real scene, inspect the image, run deterministic layout/style checks, and deliver source plus requested exports. Use for workflows, architectures, sequences, data flows, concept maps, or existing .excalidraw files; also for 画个架构图, 画流程图, 画时序图, or "draw a diagram of this". Supports native JSON, offline Mermaid/SVG conversion, official component libraries, CJK-safe SVG/PNG export, and optional interactive preview. Polished read-only interactive HTML maps without an editable scene belong to super-archify.
+description: Azhou skill. Renamed from excalidraw-diagram (the old name still triggers this skill). Build or edit accurate, editable Excalidraw scenes; render the real scene, inspect the image, run deterministic layout/style checks, and deliver source plus requested exports. Use for workflows, architectures, sequences, data flows, concept maps, or existing .excalidraw files; also for 画个架构图, 画流程图, 画时序图, or "draw a diagram of this". Supports native JSON, offline Mermaid/SVG conversion, official component libraries, CJK-safe SVG/PNG export, and optional interactive preview. Polished read-only interactive HTML maps without an editable scene belong to super-archify; raster images belong to super-imagegen.
 invocation: user-invoked orchestrator
 ---
 

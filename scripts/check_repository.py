@@ -75,6 +75,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-verify/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
+    "skills/super-imagegen/SKILL.md",
     "skills/super-lavish/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
     "skills/super-session-insights/SKILL.md",
@@ -494,6 +495,12 @@ SKILL_BRAND_CONTRACTS = {
         "display_name": "Archify",
         "motto": "一张图讲清一个系统，交给读者去探索。",
         "startup": "🦊 阿舟 · Archify 启动（mode=<diagram-type>, scope=<subject>）",
+    },
+    "skills/super-imagegen/SKILL.md": {
+        "display_name": "Imagegen",
+        "motto": "每一次生成，都带执行回执。",
+        "startup": "🦊 阿舟 · Imagegen 启动（mode=<plain|candidate|export>, scope=<short scope>）",
+        "brand_path": "skills/super-imagegen/references/brand-layer.md",
     },
 }
 
