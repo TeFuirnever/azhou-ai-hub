@@ -11,7 +11,7 @@
 // counterexample trace in the gate's own terms.
 //
 // Usage:
-//   node tools/verify-dsh-startup-gate.mjs [--gate <path>] [--variant <id>]
+//   node tools/test-dsh-startup-gate.mjs [--gate <path>] [--variant <id>]
 //        [--max-states <n>]
 //
 // Variants: normal (rAF delivered), dead-rAF (frames never fire, timers do),
@@ -43,7 +43,7 @@ function parseArgs(argv) {
   }
   const known = new Set(['normal', 'dead-rAF', 'no-rAF']);
   if (!options.gate || options.variants.some((variant) => !known.has(variant))) {
-    throw new Error('usage: verify-dsh-startup-gate.mjs [--gate <path>] [--variant normal|dead-rAF|no-rAF]');
+    throw new Error('usage: test-dsh-startup-gate.mjs [--gate <path>] [--variant normal|dead-rAF|no-rAF]');
   }
   return options;
 }
