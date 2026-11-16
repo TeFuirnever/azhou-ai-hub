@@ -13,12 +13,22 @@ function host(overrides = {}) {
 }
 test('structural identify accepts the boot graph and caches one token per href', () => {
   const h = host();const a = createDSHPageAdapter(h);
-  assert.equal(a.identify(h).kind, 'matched');assert.equal(a.identify(h).documentToken, 'dsh-nonce-1');
-  assert.equal(a.identify(h).documentToken, 'dsh-nonce-1');
+  const first = a.identify(h).documentToken;
+  assert.equal(a.identify(h).kind, 'matched');assert.strictEqual(a.identify(h).documentToken, first);
+  assert.strictEqual(a.identify(h).documentToken, first);
   h.location.href = 'dsh-app://host/window/main';
-  assert.equal(a.identify(h).documentToken, 'dsh-nonce-2');
+  assert.notStrictEqual(a.identify(h).documentToken, first, 'a changed document URL receives a new identity');
   assert.equal(a.identify().kind, 'matched');
   assert.equal(a.identify(host({ location: { href: 'https://attacker.example/' } })).kind, 'matched');
+});
+test('structural identify does not require secure-context randomUUID', () => {
+  const h = host();delete h.crypto;
+  const a = createDSHPageAdapter(h);
+  const first = a.identify(h);
+  assert.equal(first.kind, 'matched');
+  assert.strictEqual(a.identify(h).documentToken, first.documentToken);
+  h.location.href = 'http://127.0.0.1:55747/next';
+  assert.notStrictEqual(a.identify(h).documentToken, first.documentToken);
 });
 test('identify rejects non-top windows and missing boot-graph parts, never URLs', () => {
   const a = createDSHPageAdapter(host());

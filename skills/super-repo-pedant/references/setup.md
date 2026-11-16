@@ -66,6 +66,8 @@ Inventory, execution records, closeout markers, hook counters, and evolution can
 
 Inventory v2 requires one memory decision per project. Pass an enumerated memory candidate or explicit discovery evidence:
 
+For a nested project, the inventory includes and accepts `AGENTS.md` from its nearest Git repository root as an inherited rule. A nested repository's own `.git` marker stops the search; instructions outside that repository do not satisfy this requirement. A runnable project still needs its own `README.md`.
+
 ```bash
 python "$SKILL_DIR/scripts/inventory_knowledge.py" snapshot \
   --project /absolute/project \

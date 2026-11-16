@@ -1868,7 +1868,7 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
          "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(id)"]
     }
     let a = page("signature-a"), b = page("signature-b")
-    let inspected: Evaluation = .success(["href": href, "controllerPresent": false])
+    let inspected: Evaluation = .success(["href": href, "controllerPresent": false, "shellReady": true])
     let installed: Evaluation = .success(["installed": true, "alreadyActive": false])
     let ready: Evaluation = .success([
         "href": href, "missing": false,
@@ -1876,6 +1876,13 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
                    "ready": true, "completed": false, "overlay": true, "reason": "",
                    "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
                    "completion": NSNull()] as [String: Any],
+    ])
+    let completed: Evaluation = .success([
+        "href": href, "missing": false,
+        "status": ["owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 19,
+                   "ready": true, "completed": true, "overlay": false, "reason": "",
+                   "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
+                   "completion": ["cause": "natural", "beforeReady": false]] as [String: Any],
     ])
     let lost: Evaluation = .failure(StartupFailure(reason: "protocol-error", message: "fixture page retired", pageConnectionLost: true))
     let transient: Pages = .failure(WallpaperFailure(state: "endpoint-unavailable", chinese: "fixture timeout", english: "fixture timeout",
@@ -1905,6 +1912,7 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
         evaluations += [ready]
         pages += Array(repeating: transient, count: rechecks) + [.success([current])]
         if rechecks > 0 { pages += [.success([current])]; evaluations += [ready] }
+        pages += [.success([current])]; evaluations += [completed]
         let transport = FakeWallpaperStartupTransport(pageSteps: pages, targetSteps: targetSteps, evaluationSteps: evaluations)
         if refusal == 1 { fixture.commandFailures["/usr/bin/codesign"] = "inspection-failed" }
         fixture.afterCommand = { [weak fixture] file in
@@ -1924,7 +1932,7 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
             case "executable": fixture.processes[fixture.pid] = fixture.process(pid: fixture.pid, executableURL: URL(fileURLWithPath: "/tmp/other-fixture"))
             case "listener": fixture.commandResponses["/usr/sbin/lsof"] = "p\(fixture.pid)\nn127.0.0.1:49222\n"
             case "cancel": withUnsafeCurrentTask { $0?.cancel() }
-            case "budget": fixture.now = 110
+            case "budget": fixture.now = 160
             default: fatalError("unknown signature guard fixture")
             }
         }
@@ -1942,8 +1950,8 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
         if drift == "cancel" {
             // Cancellation is raised inside a child task at a scripted read,
             // never by poisoning the main test task or waiting on wall time.
-            outcome = await Task { await connector.run(payload: "signature-fixture-payload", deadline: 110) }.value
-        } else { outcome = await connector.run(payload: "signature-fixture-payload", deadline: 110) }
+            outcome = await Task { await connector.run(payload: "signature-fixture-payload", deadline: 160) }.value
+        } else { outcome = await connector.run(payload: "signature-fixture-payload", deadline: 160) }
         let payloads = transport.evaluatedSources.filter { $0.contains("signature-fixture-payload") }.count
         return Observation(outcome: outcome, fixture: fixture, system: system, transport: transport,
                            invalidated: invalidated, payloads: payloads)
@@ -1958,15 +1966,15 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
         expect(normal.outcome == .ready(runID: 19) && normal.payloads == 1 && scans(normal.fixture) == 3
                && normal.system.fullValidations == 3 && normal.system.processValidations > 0,
                "a normal startup keeps exactly entry/connect/pre-install signatures despite \(polls) discovery polls")
-        expect(normal.transport.pagesCount == polls + 3 && normal.transport.targetsCount == 0
+        expect(normal.transport.pagesCount == polls + 4 && normal.transport.targetsCount == 0
                && normal.transport.connectedURLs.map(\.lastPathComponent) == ["signature-a"],
                "discovery polls neither connect extra pages nor manufacture a replacement proof")
         let refreshed = await run(rechecks: polls); closed(refreshed)
         expect(refreshed.outcome == .ready(runID: 19) && refreshed.payloads == 1 && scans(refreshed.fixture) == 3
-               && refreshed.system.fullValidations == 3 && refreshed.transport.pagesCount == (polls == 0 ? 3 : polls + 4),
+               && refreshed.system.fullValidations == 3 && refreshed.transport.pagesCount == (polls == 0 ? 4 : polls + 5),
                "same-target transient waits do not rescan signatures or replay the payload")
         let statuses = refreshed.transport.evaluatedSources.filter { $0 == StartupConnector.statusExpression }.count
-        expect(statuses == (polls == 0 ? 1 : 2), "a waited proof still rereads the same run's current status")
+        expect(statuses == (polls == 0 ? 2 : 3), "a waited proof still rereads the same run's current status")
         let replaced = await run(discovery: polls, replacement: true, lag: polls, rechecks: polls); closed(replaced)
         expect(replaced.outcome == .ready(runID: 19) && replaced.payloads == 2 && scans(replaced.fixture) == 5
                && replaced.system.fullValidations == 5 && replaced.transport.targetsCount == polls + 1,
@@ -2009,7 +2017,7 @@ private func startupSignatureBoundaryChecks() async throws -> Int {
             expect(result.transport.connectedURLs.count == (phase == "discovery" ? 0 : 1)
                    && result.payloads == (phase == "discovery" ? 0 : 1),
                    "ownership/cancellation/deadline failure cannot connect or install a later page")
-            if drift == "budget" { expect(result.fixture.now == 110, "polling never resets or extends the original absolute deadline") }
+            if drift == "budget" { expect(result.fixture.now == 160, "polling never resets or extends the original absolute deadline") }
         }
     }
     return checks
@@ -2122,7 +2130,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
         _ transport: FakeWallpaperStartupTransport,
         port: Int = 49221,
         payload: String = "fixture-payload",
-        deadline: TimeInterval = 1,
+        deadline: TimeInterval = 45,
         now: @escaping () -> TimeInterval,
         sleep: @escaping (TimeInterval) async throws -> Void
     ) async -> StartupOutcome {
@@ -2131,14 +2139,14 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     }
 
     let disabledWallpaperStatus: [String: Any] = [
-        "owner": "azhou-codex-startup", "version": 1, "phase": "playing", "runId": 19,
-        "ready": true, "completed": false, "overlay": true, "reason": "",
+        "owner": "azhou-codex-startup", "version": 1, "phase": "complete", "runId": 19,
+        "ready": true, "completed": true, "overlay": false, "reason": "",
         "wallpaper": ["applied": false, "reason": "disabled", "imageDecoded": false],
-        "completion": NSNull(),
+        "completion": ["cause": "natural", "beforeReady": false],
     ]
     let disabledWallpaperStartup = await run(
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(pages: [page], evaluations: [
-            ["href": startupURL, "controllerPresent": false],
+            ["href": startupURL, "controllerPresent": false, "shellReady": true],
             ["installed": true, "alreadyActive": false],
             ["href": startupURL, "missing": false, "status": disabledWallpaperStatus],
         ]), now: nowAtZero, sleep: noSleep)
@@ -2182,7 +2190,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     expect(emptyPayload == .failed(reason: "asset-invalid"),
            "the startup connector rejects an empty local payload")
     let expired = await run(FakeWallpaperSystem(), FakeWallpaperStartupTransport(),
-                            now: { 1 }, sleep: noSleep)
+                            now: { 45 }, sleep: noSleep)
     expect(expired == .failed(reason: "attach-timeout"),
            "the startup connector checks its absolute deadline before process inspection")
 
@@ -2234,7 +2242,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     let listenerChangedBeforePayload = await run(
         FakeWallpaperSystem(portResponses: [[49221], [49221], [49221], []]),
         FakeWallpaperStartupTransport(
-            pages: [page], evaluations: [["href": startupURL, "controllerPresent": false]]
+            pages: [page], evaluations: [["href": startupURL, "controllerPresent": false, "shellReady": true]]
         ), now: nowAtZero, sleep: noSleep
     )
     expect(listenerChangedBeforePayload == .failed(reason: "listener-mismatch"),
@@ -2278,14 +2286,14 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
 
     let unsupportedPage = await run(
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
-            pages: [page], evaluations: [["href": "https://example.com/", "controllerPresent": false]]
+            pages: [page], evaluations: [["href": "https://example.com/", "controllerPresent": false, "shellReady": true]]
         ), now: nowAtZero, sleep: noSleep
     )
     expect(unsupportedPage == .failed(reason: "page-unsupported"),
            "startup verifies the page URL again after connecting")
     let existingController = await run(
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
-            pages: [page], evaluations: [["href": startupURL, "controllerPresent": true]]
+            pages: [page], evaluations: [["href": startupURL, "controllerPresent": true, "shellReady": true]]
         ), now: nowAtZero, sleep: noSleep
     )
     expect(existingController == .partial(reason: "startup-active"),
@@ -2295,7 +2303,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
             pages: [page],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["reason": "owner-conflict"],
             ]
         ), now: nowAtZero, sleep: noSleep
@@ -2306,7 +2314,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
             pages: [page],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": false, "reason": "storage-unavailable"],
             ]
         ), now: nowAtZero, sleep: noSleep
@@ -2317,7 +2325,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
             pages: [page],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": false, "reason": "private renderer error"],
             ]
         ), now: nowAtZero, sleep: noSleep
@@ -2327,7 +2335,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
     let missingActiveFlagTransport = FakeWallpaperStartupTransport(
         pages: [page],
         evaluations: [
-            ["href": startupURL, "controllerPresent": false],
+            ["href": startupURL, "controllerPresent": false, "shellReady": true],
             ["installed": true],
         ]
     )
@@ -2341,7 +2349,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
             pages: [page],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": true],
             ]
         ), now: nowAtZero, sleep: noSleep
@@ -2353,7 +2361,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
             pages: [page],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": "not-a-boolean"],
             ]
@@ -2371,7 +2379,7 @@ private func wallpaperStartupBoundaryChecks() async throws -> Int {
         FakeWallpaperSystem(), FakeWallpaperStartupTransport(
             pages: [page],
             evaluations: [
-                ["href": startupURL, "controllerPresent": false],
+                ["href": startupURL, "controllerPresent": false, "shellReady": true],
                 ["installed": true, "alreadyActive": false],
                 ["href": startupURL, "missing": false, "status": failedStatus],
             ]

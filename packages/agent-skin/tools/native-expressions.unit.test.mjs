@@ -43,10 +43,10 @@ if (nativeExpressionsAvailable) {
   }
 }
 
-function pageContext({ href = APP_HREF, topLevel = true } = {}) {
+function pageContext({ href = APP_HREF, topLevel = true, document } = {}) {
   const window = {};
   window.top = topLevel ? window : {};
-  return vm.createContext({ URL, location: { href }, window });
+  return vm.createContext({ URL, location: { href }, window, document });
 }
 
 function defineGlobal(context, key, descriptor) {
@@ -111,10 +111,10 @@ unitTest('fresh native output is written byte-for-byte and attributed to each ge
 });
 
 unitTest('inspect and status expressions expose the real controller status shape', async t => {
-  await t.test('missing controller is reported without reading page globals beyond the URL', () => {
+  await t.test('a missing controller and unsupported shell remain explicit', () => {
     const context = pageContext();
     assert.deepEqual(plain(evaluate('inspectExpression', context)), {
-      href: APP_HREF, controllerPresent: false,
+      href: APP_HREF, controllerPresent: false, shellReady: false,
     });
     assert.deepEqual(plain(evaluate('statusExpression', context)), { href: APP_HREF, missing: true });
   });
@@ -124,7 +124,7 @@ unitTest('inspect and status expressions expose the real controller status shape
     const api = startupAPI({ status() { receiver = this; return { phase: 'playing', runId: 4 }; } });
     const context = pageContext();
     defineDataGlobal(context, '__azhouStartup', api);
-    assert.deepEqual(plain(evaluate('inspectExpression', context)), { href: APP_HREF, controllerPresent: true });
+    assert.deepEqual(plain(evaluate('inspectExpression', context)), { href: APP_HREF, controllerPresent: true, shellReady: false });
     assert.deepEqual(plain(evaluate('statusExpression', context)), {
       href: APP_HREF, missing: false, status: { phase: 'playing', runId: 4 },
     });
@@ -138,6 +138,28 @@ unitTest('inspect and status expressions expose the real controller status shape
     defineDataGlobal(context, '__azhouStartup', api);
     assert.throws(() => evaluate('statusExpression', context), /status getter/);
   });
+});
+
+unitTest('compiled inspection admits only the supported wallpaper shell markers inside root', () => {
+  for (const { body = true, root = true, frame = true, surface = true, ready } of [
+    { body: false, ready: false }, { root: false, ready: false },
+    { frame: false, ready: false }, { surface: false, ready: false }, { ready: true },
+  ]) {
+    const document = {
+      body: body ? {} : null,
+      getElementById(id) {
+        assert.equal(id, 'root');
+        return root ? { querySelector(selector) {
+          if (selector === '[data-app-shell-frame]') return frame ? {} : null;
+          assert.equal(selector, '[data-app-shell-main-surface],[data-app-shell-page-surface]');
+          return surface ? {} : null;
+        } } : null;
+      },
+    };
+    assert.deepEqual(plain(evaluate('inspectExpression', pageContext({ document }))), {
+      href: APP_HREF, controllerPresent: false, shellReady: ready,
+    });
+  }
 });
 
 unitTest('native status binds the original controller without writing page globals', async t => {

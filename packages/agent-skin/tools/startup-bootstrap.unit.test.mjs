@@ -126,6 +126,25 @@ test('bootstrap passes the page adapter explicitly as the third installStartup a
     'the adapter is never attached to installAnimation as a static property');
 });
 
+test('bootstrap only forwards native playback ownership when the generated entry selects it', () => {
+  const calls = [];
+  const base = () => ({
+    installStartup: (...args) => { calls.push(args); return { installed: true }; },
+    installAnimation: () => {},
+    createLocalization: () => {},
+    createImageSettings: () => {},
+    createWallpaperApplicator: () => () => {},
+    installRenderer: () => {},
+    version: '1', css: '', assets: {}, host: { document: {} },
+    pageAdapter: { identify: () => ({ kind: 'matched' }) },
+  });
+  bootstrapStartup(base());
+  assert.equal(calls[0].length, 3, 'the default page entry keeps its existing three-argument install call');
+  bootstrapStartup({ ...base(), playbackOwner: 'native' });
+  assert.equal(calls[1].length, 4);
+  assert.equal(calls[1][3], 'native');
+});
+
 test('bootstrap forwards the page adapter to the applicator only when wallpaper ports exist', () => {
   const calls = [];
   const record = (...args) => { calls.push(args); return () => {}; };

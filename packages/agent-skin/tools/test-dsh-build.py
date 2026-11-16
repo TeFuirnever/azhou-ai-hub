@@ -98,6 +98,7 @@ class DshPluginBuildTests(unittest.TestCase):
             ("    installRenderer,\n    createWallpaperApplicator,\n    registerCleanup,\n  });", 1),
             ("controllerOwner: 'azhou-dsh-startup'", 1),
             ("owner: 'azhou.dsh-startup-animation'", 1),
+            ("playbackOwner: 'dsh-gated'", 1),
             ("const DEFAULT_ASSETS = Object.freeze(", 1),
             ("function apply(ctx) {", 1),
             ("const inject = ['slots'];", 1),
@@ -110,6 +111,8 @@ class DshPluginBuildTests(unittest.TestCase):
                 self.assertEqual(client.count(needle), count)
         self.assertNotIn("createCodexPageAdapter(", client)
         self.assertNotIn("((controllerMetadata) => {", client)
+        self.assertNotIn("playbackOwner: 'native'", client,
+                         "DSH never adopts the Codex native owner")
         self.assertLess(len(client.encode("utf-8")), 24 * 1024 * 1024)
 
         package_json = json.loads((self.destination / "package.json").read_text(encoding="utf-8"))
@@ -133,6 +136,24 @@ class DshPluginBuildTests(unittest.TestCase):
             syntax = subprocess.run([node, "--check", str(self.destination / "client.js")],
                                     check=False, capture_output=True, text=True)
             self.assertEqual(syntax.returncode, 0, syntax.stderr)
+            host_entry_check = subprocess.run([
+                node, "--input-type=module", "-e", """
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+const entry = await import(pathToFileURL(process.argv.at(-1)));
+let listener;
+entry.apply({ on(name, callback) { assert.equal(name, 'webserver/index-inject'); listener = callback; } });
+assert.equal(typeof listener, 'function');
+const rows = [];
+listener(rows);
+assert.equal(rows.length, 1);
+assert.deepEqual(rows[0], { kind: 'script', placement: 'head', text: rows[0].text });
+assert.match(rows[0].text, /__azhouDshStartupGateDocumentLatch/);
+assert.match(rows[0].text, /getComputedStyle/);
+listener(rows);
+assert.equal(rows.length, 1, 'duplicate host injection registers one bridge per index');
+""", str(self.destination / "index.js")], check=False, capture_output=True, text=True)
+            self.assertEqual(host_entry_check.returncode, 0, host_entry_check.stderr)
         self.artifacts.verify_dsh_plugin(self.destination)
 
     def test_manifest_binds_current_inputs_and_package_digests(self):
@@ -155,6 +176,30 @@ class DshPluginBuildTests(unittest.TestCase):
         self.build_plugin(second)
         self.assertEqual(self.snapshot(self.destination), self.snapshot(second),
                          "a second full assembly must reproduce every package byte")
+
+    def test_assembly_rejects_different_outputs_and_replaced_stages(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-safety-") as temporary:
+            root = Path(temporary)
+            first, second = root / "first", root / "second"
+            first.mkdir()
+            second.mkdir()
+            (first / "index.js").write_text("one", encoding="utf-8")
+            (second / "index.js").write_text("two", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "not deterministic"):
+                self.emitter._assert_identical(first, second)
+            (second / "index.js").unlink()
+            with self.assertRaisesRegex(RuntimeError, "not deterministic"):
+                self.emitter._assert_identical(first, second)
+
+            artifacts = mock.Mock()
+            artifacts.tree_receipt.return_value = (1, 2, None, [])
+            with self.assertRaisesRegex(RuntimeError, "暂存根已替换"):
+                self.emitter.verified_startup_stage(root, artifacts, (3, 4))
+            artifacts.DSH_STARTUP_OUTPUTS = ("startup/install.js",)
+            with self.assertRaisesRegex(RuntimeError, "未知或缺失对象"):
+                self.emitter.verified_startup_stage(root, artifacts, (1, 2))
+            with self.assertRaisesRegex(RuntimeError, "暂存根已替换"):
+                self.emitter.verified_compose_work(root, (3, 4), artifacts)
 
     def test_verify_dsh_plugin_rejects_tampering(self):
         def mutate_client(replacement):
@@ -356,6 +401,7 @@ class DshPluginBuildTests(unittest.TestCase):
         destination.mkdir()
         with self.assertRaisesRegex(RuntimeError, "Refusing to compose over an existing directory"):
             self.emitter._compose_package(destination, body="const placeholder = 1;\n",
+                                          host_entry=self.artifacts.dsh_host_entry_source(self.root),
                                           icon=b"\x89PNG\r\n\x1a\n", theme=theme,
                                           inputs=self.artifacts.source_inputs(), artifacts=self.artifacts)
         self.assertTrue(destination.is_dir())

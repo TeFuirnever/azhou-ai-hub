@@ -3,7 +3,7 @@
 export function createDSHPageAdapter(environment = globalThis, configuration = {}, dependencies = {}) {
   const namespace = Object.freeze({ databaseName: 'azhou-dsh-startup', databaseVersion: 1,
     storeName: 'settings', settingsKey: 'images' });
-  let lastDocumentURL, documentNonce;
+  let lastDocumentURL, documentToken;
   function matched(host) {
     if (host !== host.top) return false;
     if (typeof host.__ModuleLoader__?.load !== 'function') return false;
@@ -17,9 +17,10 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
     try {
       if (!matched(host)) return { kind: 'unmatched', reason: 'page-unsupported' };
       if (lastDocumentURL !== host.location.href) {
-        documentNonce = host.crypto.randomUUID();lastDocumentURL = host.location.href;
+        documentToken = Object.freeze({});
+        lastDocumentURL = host.location.href;
       }
-      return { kind: 'matched', documentToken: documentNonce };
+      return { kind: 'matched', documentToken };
     } catch { return { kind: 'unmatched', reason: 'page-unsupported' }; }
   }
   function appearance(host) {

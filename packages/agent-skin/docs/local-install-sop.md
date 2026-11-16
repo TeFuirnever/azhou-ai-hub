@@ -45,6 +45,8 @@ python3 tools/install-macos.py --check
 
 这不是普通安装器已支持的自动选项。不要伪造旧回执、修改旧来源标记来通过检查，也不要先删旧入口。恢复记录保留旧目标、新旧摘要、备份位置和结果。
 
+遇到安装范围外的 LaunchServices 登记时，`--check` 会报告路径并拒绝确认唯一入口。先记录当前应用与备份的归属和恢复用途，再由维护者处理已核实的具体登记。登记和备份文件分别核对，处理后重跑 `--check`。详见[安装生命周期](installation-lifecycle.md)。
+
 完成条件：`--check` 确认新载荷一致、实体和登记入口唯一。正在运行的 Codex 页面仍可能是旧版。
 
 ### DSH：校验实体包，再更新现有插件
@@ -77,10 +79,10 @@ python3 tools/verify-artifacts.py --verify-dsh-plugin /absolute/installed/azhou-
 Codex 的只读安装验收入口：
 
 ```sh
-python3 -B tools/test-installed-acceptance.py --out .local/local-install/codex
+python3 -B tools/test-installed-acceptance.py --out .local/local-install/codex-run-001
 ```
 
-冷启动使用同一工具的 `--cold-start`，前提是宿主已完整退出；工具不会自动退出运行中的宿主。没有 Dock 固定入口、未执行冷启动或缺少视觉审阅时保留 pending。整体非通过需要逐项解释，不能把 pending 改写成失败或全通过。
+每次使用新的输出目录；已有目录和符号链接会在执行检查前被拒绝，避免覆盖或复用旧证据。冷启动使用同一工具的 `--cold-start`，前提是宿主已完整退出；工具不会自动退出运行中的宿主。没有 Dock 固定入口、未执行冷启动或缺少视觉审阅时保留 pending。整体非通过需要逐项解释，不能把 pending 改写成失败或全通过。
 
 每轮在 Git 忽略的本地证据目录保留一份收据，至少记录：
 

@@ -37,6 +37,8 @@ html[data-azhou-wallpaper="active"] {
     [data-thread-scroll-footer] > [aria-hidden="true"].pointer-events-none:is([class^="background-"], [class*=" background-"]),
     .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
       :is([class^="_background_"], [class*=" _background_"]):is([class^="_fade_"], [class*=" _fade_"]),
+    .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
+      [aria-hidden="true"].pointer-events-none:is([class^="background-"], [class*=" background-"]):is([class^="fade-"], [class*=" fade-"]),
     :is([class^="_MainContentTopFade_"], [class*=" _MainContentTopFade_"])
   ):where(:not(
     [data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select,

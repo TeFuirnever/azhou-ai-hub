@@ -37,6 +37,7 @@ BUILD_FILES = (
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
     "extension/hosts/dsh.mjs",
+    "extension/hosts/dsh-startup-gate.js",
     "extension/bootstrap.mjs",
     "image-settings.js",
     "localization.js",
@@ -257,6 +258,11 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
         marker["inputs"].pop(name)
     for name in omit_source_inputs:
         manifest["sourceInputs"].pop(name)
+
+    manifest.pop("startupEntrypoints", None)
+    if "startup/prepare.js" in manifest["outputs"]:
+        manifest["outputs"].pop("startup/prepare.js")
+        (resources / "startup/prepare.js").unlink()
 
     marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
     manifest["inputSHA256"] = marker["inputSHA256"]
@@ -919,7 +925,9 @@ class StartupBuildTests(unittest.TestCase):
         contours_js = web / "assets/defaults/contours.js"
         manifest_path = startup / "manifest.json"
         install_js = startup / "install.js"
+        prepare_js = startup / "prepare.js"
         self.assertTrue(install_js.is_file())
+        self.assertTrue(prepare_js.is_file())
         self.assertTrue(manifest_path.is_file())
         self.assertTrue(avatar.is_file())
         self.assertTrue(entry_avatar.is_file())
@@ -931,6 +939,9 @@ class StartupBuildTests(unittest.TestCase):
         self.assertEqual(manifest["protocolVersion"], 1)
         self.assertEqual((manifest["appVersion"], manifest["appBuild"]), (APP_VERSION, APP_BUILD))
         self.assertEqual(manifest["inputSHA256"], self.marker["inputSHA256"])
+        self.assertEqual(manifest["startupEntrypoints"], {
+            "page": "startup/install.js", "native": "startup/prepare.js",
+        })
         self.assertEqual((manifest["assets"]["avatar"]["width"], manifest["assets"]["avatar"]["height"]), (512, 512))
         self.assertEqual((manifest["assets"]["entryAvatar"]["width"], manifest["assets"]["entryAvatar"]["height"]), (1254, 1254))
         self.assertEqual((manifest["assets"]["artwork"]["width"], manifest["assets"]["artwork"]["height"]), (1536, 1024))
@@ -974,6 +985,7 @@ class StartupBuildTests(unittest.TestCase):
                         "Vision paths must use top-left 1536×1024 coordinates from the exact cropped artwork")
 
         payload = install_js.read_text(encoding="utf-8")
+        preparation_payload = prepare_js.read_text(encoding="utf-8")
         source_animation = (self.root / "animation.js").read_text(encoding="utf-8")
         animation_start = source_animation.index("function installAnimation(")
         animation_end = source_animation.index("/* Local preview adapter.", animation_start)
@@ -985,10 +997,19 @@ class StartupBuildTests(unittest.TestCase):
         self.assertIn("function dataProperty", payload)
         self.assertIn("function createLocalization(", payload)
         self.assertIn("createLocalization: { value: createLocalization }", payload)
+        self.assertIn("return installStartup(installAnimation, host, pageAdapter);", payload)
+        self.assertNotIn("playbackOwner: 'native'", payload)
+        self.assertIn("playbackOwner: 'native'", preparation_payload)
+        self.assertIn("return installStartup(installAnimation, host, pageAdapter, playbackOwner);",
+                      preparation_payload)
+        preparation_prefix = "const DEFAULT_ASSETS = Object.freeze("
+        preparation_assets = json.loads(preparation_payload.split(preparation_prefix, 1)[1].split(");\n", 1)[0])
+        self.assertEqual(preparation_assets, preview_assets)
         self.assertNotIn("const settings = environment.AGENT_SKIN_ASSETS || null", payload)
         self.assertNotRegex(payload, r"\bfixture\s*:\s*true\b")
         self.assertLess(len(install_js.read_bytes()), 24 * 1024 * 1024)
         subprocess.run(["node", "--check", str(install_js)], check=True, capture_output=True, text=True)
+        subprocess.run(["node", "--check", str(prepare_js)], check=True, capture_output=True, text=True)
 
         for relative, digest in manifest["outputs"].items():
             output = self.bundle / "Contents/Resources" / relative
@@ -997,7 +1018,7 @@ class StartupBuildTests(unittest.TestCase):
 
     def test_manifest_and_actual_resources_reject_tampering(self):
         resources = self.bundle / "Contents/Resources"
-        for relative in ("startup/install.js", "web/assets/defaults/artwork.png",
+        for relative in ("startup/install.js", "startup/prepare.js", "web/assets/defaults/artwork.png",
                          "web/assets/defaults/contours.js"):
             with self.subTest(relative=relative):
                 clone = Path(self.temporary.name) / ("tamper-" + relative.replace("/", "-"))

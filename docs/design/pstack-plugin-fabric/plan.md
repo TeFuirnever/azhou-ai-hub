@@ -177,7 +177,7 @@ Each live lane runs on this maintainer machine at the PR head. There is no cloud
 **Build.**
 
 - [x] One probe first. Established that `zcode plugins marketplace add` accepts a local directory, that the marketplace entry must carry no `source` object so the installer resolves the sibling plugin directory, that the bundle must be flat, and that the `commands` manifest pointer is proven while `hooks` has no sample (receipt `evidence/zcode-plugin-fabric-2026-11-03.md`).
-- [x] One emitter in the assembler packages the payload as a zcode plugin bundle named `pstack-azhouzhou`, commands only, with skills left on the shared root. The hooks field stays out as unproven and the omission is recorded.
+- [x] One emitter in the assembler packages the payload as a zcode plugin bundle named `pstack-azhouzhou`. The 2026-11-03 shape was commands only, with skills left on the shared root; the bundled-skills payload superseded it on 2026-11-14, and `tools/build-harness.mjs` with `tests/test_pstack_distribution_contract.py` own the current composition. The hooks field stays out as unproven and the omission is recorded.
 
 **You see.**
 

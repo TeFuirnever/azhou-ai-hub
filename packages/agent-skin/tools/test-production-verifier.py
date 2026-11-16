@@ -87,6 +87,14 @@ class VerifierApiTests(unittest.TestCase):
         manifest["outputs"][relative] = hashlib.sha256(output.read_bytes()).hexdigest()
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
+    def remove_native_preparation_from_historical_bundle(self, bundle: Path) -> None:
+        manifest_path = bundle / "Contents/Resources/startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest.pop("startupEntrypoints", None)
+        manifest["outputs"].pop("startup/prepare.js", None)
+        (bundle / "Contents/Resources/startup/prepare.js").unlink()
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+
     def rewrite_defaults(self, bundle: Path, assets: dict) -> None:
         path = bundle / "Contents/Resources/web/assets/defaults/contours.js"
         path.write_text("window.AGENT_SKIN_ASSETS = Object.freeze(" + json.dumps(assets) + ");\n",
@@ -581,6 +589,8 @@ class VerifierApiTests(unittest.TestCase):
         script_path = self.bundle / "Contents/Resources/startup/install.js"
         self.assertIn("return installStartup(installAnimation, host, pageAdapter);",
                       script_path.read_text(encoding="utf-8"))
+        prepare_path = self.bundle / "Contents/Resources/startup/prepare.js"
+        self.assertIn("playbackOwner: 'native'", prepare_path.read_text(encoding="utf-8"))
         self.assertIn("const pageAdapter = createCodexPageAdapter(globalThis, undefined, {",
                       script_path.read_text(encoding="utf-8"))
 
@@ -604,6 +614,33 @@ class VerifierApiTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "未从完整 Page Controller"):
             self.verifier.verify_startup(broken, self.info, self.read_marker(broken))
 
+    def test_native_preparation_entrypoint_is_required_and_role_bound_by_manifest(self):
+        def tamper(mutator, expected):
+            path = self.copy_bundle("prepare-entrypoint-" + expected.replace(" ", "-"))
+            manifest_path = path / "Contents/Resources/startup/manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            mutator(path, manifest)
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, expected):
+                self.verifier.verify_startup(path, self.info, self.read_marker(path))
+
+        tamper(lambda _path, manifest: manifest.update(startupEntrypoints={
+            "page": "startup/prepare.js", "native": "startup/install.js",
+        }), "页面与原生入口映射无效")
+
+        def remove_preparation(path, manifest):
+            (path / "Contents/Resources/startup/prepare.js").unlink()
+
+        tamper(remove_preparation, "启动产物缺失或不是实体文件")
+
+        def change_preparation_owner(path, manifest):
+            script = path / "Contents/Resources/startup/prepare.js"
+            text = script.read_text(encoding="utf-8").replace("playbackOwner: 'native'", "playbackOwner: 'page'")
+            script.write_text(text, encoding="utf-8")
+            manifest["outputs"]["startup/prepare.js"] = hashlib.sha256(script.read_bytes()).hexdigest()
+
+        tamper(change_preparation_owner, "未绑定原生播放所有权")
+
     def test_pre_page_adapter_build25_source_set_is_read_only_and_exact(self):
         historical = frozenset(self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS)
         current = frozenset(self.verifier.STARTUP_REQUIRED_INPUTS)
@@ -621,6 +658,7 @@ class VerifierApiTests(unittest.TestCase):
         # An installed build25-style payload with that exact historical source set
         # still verifies through the not-current path.
         path = self.copy_bundle("pre-page-adapter-build25")
+        self.remove_native_preparation_from_historical_bundle(path)
         marker_path = path / self.verifier.MARKER
         marker = self.read_marker(path)
         marker["version"], marker["build"] = "0.9.0", "25"
@@ -663,6 +701,7 @@ class VerifierApiTests(unittest.TestCase):
         self.assertEqual(self.verifier.PRE_PAGE_ADAPTER_STARTUP_LAST_BUILD, 30)
         historical = frozenset(self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS)
         path = self.copy_bundle("pre-page-adapter-build30")
+        self.remove_native_preparation_from_historical_bundle(path)
         marker = self.read_marker(path)
         marker["version"], marker["build"] = "0.9.0", "30"
         marker["inputSHA256"] = self.verifier.aggregate_inputs(marker["inputs"])
@@ -888,7 +927,7 @@ class DshPluginVerifierContractTests(unittest.TestCase):
         files = {
             "package.json": (json.dumps(manifest, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8"),
             "cordis.patch.yml": self.verifier.DSH_PLUGIN_PATCH_YAML.encode("utf-8"),
-            "index.js": self.emitter.INDEX_JS.encode("utf-8"),
+            "index.js": self.verifier.dsh_host_entry_source(PACKAGE).encode("utf-8"),
             "client.js": b"/* synthetic client */\n",
             "locale/en.json": b"{}",
             "locale/zh.json": b"{}",
@@ -914,7 +953,7 @@ class DshPluginVerifierContractTests(unittest.TestCase):
                 ("package-json-array", {"package_json": "[]\n"}, "必须是 JSON 对象"),
                 ("index-not-utf8", {"index_js": b"\xff\xfe\xfd"}, "index.js 必须是 UTF-8"),
                 ("index-foreign-template",
-                 {"index_js": "/** foreign host half */\nexport function apply() {}\n"}, "官方模板"),
+                 {"index_js": "/** foreign host half */\nexport function apply() {}\n"}, "结构化启动注入入口"),
                 ("client-empty", {"client_js": b""}, "非空"),
                 ("client-not-utf8", {"client_js": b"\xff\xfe\xfd\xfc"}, "client.js 必须是 UTF-8"),
             )
@@ -1007,7 +1046,8 @@ class DshPluginVerifierContractTests(unittest.TestCase):
         verifier = self.verifier
         self.assertEqual(verifier.DSH_PLUGIN_REQUIRED_INPUTS,
                          (*verifier.STARTUP_REQUIRED_INPUTS,
-                          "extension/hosts/dsh.mjs", "tools/build-dsh-plugin.py"))
+                          "extension/hosts/dsh.mjs", "extension/hosts/dsh-startup-gate.js",
+                          "tools/build-dsh-plugin.py"))
         self.assertTrue(set(verifier.DSH_PLUGIN_REQUIRED_INPUTS) <= set(verifier.INPUT_FILES))
         self.assertEqual(verifier.DSH_PLUGIN_PACKAGE_ENTRIES,
                          (*verifier.DSH_PLUGIN_OUTPUTS, "manifest.json"))
@@ -1022,6 +1062,7 @@ class DshPluginVerifierContractTests(unittest.TestCase):
             frozen = frozenset(getattr(verifier, name))
             with self.subTest(input_set=name):
                 self.assertNotIn("extension/hosts/dsh.mjs", frozen)
+                self.assertNotIn("extension/hosts/dsh-startup-gate.js", frozen)
                 self.assertNotIn("tools/build-dsh-plugin.py", frozen)
 
     def test_verify_dsh_plugin_rejects_missing_foreign_or_linked_directories(self):

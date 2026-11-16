@@ -105,9 +105,10 @@ function createPage({ route = '/', url = 'app://-/index.html?initialRoute=%2F', 
   const stickySelector = '[data-app-shell-main-surface] .thread-scroll-container .pointer-events-none.sticky.bottom-0';
   const backgroundSelector = footerSelector + ' > :is([class^="_background_"],[class*=" _background_"])'
     + ',' + footerSelector + ' > [aria-hidden="true"].pointer-events-none:is([class^="background-"],[class*=" background-"])';
-  const fadeSelector = stickySelector + ' > :is([class^="_background_"],[class*=" _background_"]):is([class^="_fade_"],[class*=" _fade_"])';
+  const fadeSelector = stickySelector + ' > :is([class^="_background_"],[class*=" _background_"]):is([class^="_fade_"],[class*=" _fade_"])'
+    + ',' + stickySelector + ' > [aria-hidden="true"].pointer-events-none:is([class^="background-"],[class*=" background-"]):is([class^="fade-"],[class*=" fade-"])';
   const topSelector = '[data-app-shell-main-surface] :is([class^="_MainContentTopFade_"],[class*=" _MainContentTopFade_"])';
-  const scrollUnknownSelector = '[data-app-shell-main-surface] .thread-scroll-container :is(:is([class^="_background_"],[class*=" _background_"]),:is([class^="_fade_"],[class*=" _fade_"]))';
+  const scrollUnknownSelector = '[data-app-shell-main-surface] .thread-scroll-container :is(:is([class^="_background_"],[class*=" _background_"]),:is([class^="_fade_"],[class*=" _fade_"]),:is([class^="background-"],[class*=" background-"]),:is([class^="fade-"],[class*=" fade-"]))';
   const appSelectors = {
     [surfaceSelector]: [frame, main, page],
     [workspaceSelector]: [workspace],
@@ -851,7 +852,7 @@ test('decorative diagnostics skip protected, hidden, and noninteractive nodes wh
   const noRect = sceneNode('no rect', { rects: 0, backgroundColor: 'red' });
   const transparentFunction = sceneNode('transparent color function', { backgroundColor: 'color(srgb 1 0 0 / 0)' });
   await onPage({ decorations: { unknownSticky, unknownFooter, unknownScroll } }, async page => {
-    const selector = '[data-app-shell-main-surface] .thread-scroll-container :is(:is([class^="_background_"],[class*=" _background_"]),:is([class^="_fade_"],[class*=" _fade_"]))';
+    const selector = '[data-app-shell-main-surface] .thread-scroll-container :is(:is([class^="_background_"],[class*=" _background_"]),:is([class^="_fade_"],[class*=" _fade_"]),:is([class^="background-"],[class*=" background-"]),:is([class^="fade-"],[class*=" fade-"]))';
     page.applicationRoot.selectors[selector] = [unknownScroll, protectedDecoration, hidden, invisible, zeroOpacity, noRect, transparentFunction];
     await assert.rejects(installRenderer(page.payload), error => {
       assert.equal(error.code, 'styles-not-effective');

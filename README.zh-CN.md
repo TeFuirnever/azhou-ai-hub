@@ -12,7 +12,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——12 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——13 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -36,6 +36,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
 npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
+npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 ~~~
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
@@ -44,7 +45,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills.zh-CN-dark.jpg">
-  <img src="assets/github/readme-banner-skills.zh-CN.jpg" alt="12 个 Skill：每个都能独立安装" width="100%">
+  <img src="assets/github/readme-banner-skills.zh-CN.jpg" alt="13 个 Skill：每个都能独立安装" width="100%">
 </picture>
 
 | Skill | 解决的真实任务 | 验证依据 |
@@ -61,6 +62,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 | [Session Insights](skills/super-session-insights/SKILL.md) | 从本机 agent 会话存储产出事实绑定的使用洞察报告（Claude Code 与 Codex 适配器；zcode 适配器 fail closed）；只做聚合，原始转写永不出本机。 | 合成存储上的接线完整性套件：golden 聚合、隐私与 fail-closed 负控。尚无行为 benchmark。 |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的受控英语结构规则改写面向 agent 的英文；保留每个 hedge、事实和范围限定语。 | 在锁定的上游 commit 上 faithful 导入，vendored 文件钉有 SHA-256 完整性测试；`scripts/ste-lint.py` 是确定性标准库门禁，配正负测试。尚无行为 benchmark。 |
 | [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成交互图示地图——共十种 typed-JSON 模式，交付为自包含可探索 HTML。 | 同步到正式稳定版 v3.2.0（<code>208acba8</code>），选定子树有 SHA-256 完整性校验；浏览器与视觉验收按实际产物分别报告。不宣称模型质量提升。 |
+| [Lavish](skills/super-lavish/SKILL.md) | 把复杂或视觉性回答变成可审阅的 HTML 产物；用户在浏览器里圈点标注，反馈经锁定的 <code>lavish-axi</code> CLI 审阅回路回到 agent。 | 在锁定的上游正式发布 <code>lavish-axi-v0.1.97</code>（commit <code>79aa0a18</code>）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try.zh-CN-dark.jpg">
@@ -123,7 +125,13 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 
 ![Archify 效果图](assets/skills/super-archify-effect.png)
 
-<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100 与 Archify：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
+## Lavish
+
+> 🔍 在浏览器里圈出要改的地方——标注反馈回到 agent 手里。
+
+![Lavish 效果图](assets/skills/super-lavish-effect.png)
+
+<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify 与 Lavish：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust.zh-CN-dark.jpg">
@@ -175,13 +183,15 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.37 **候选版**：Codex／Claude 原生插件、zcode 仅含 commands 的插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力；ZCode 图形界面调用尚未验收，宿主调用、hook 信任和发布批准仍需独立证据。 |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.38 **候选版**：Codex／Claude 原生插件、自带 commands 与捆绑 skills 的 zcode 插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的 pstack 共享根服务随 2026-11-14 链接退役终止）。2026-11-14 的 GUI 探针验证了 zcode 命令面，且当日共享根技能链接在位时其引用技能已加载并驱动会话；捆绑构建已于 2026-11-14 装机，经插件自带技能发现验证后共享根链接同日退役，且应用重启后当天即有真实 GUI 会话从载荷加载捆绑技能（[回执](evidence/zcode-plugin-bundled-skills-2026-11-14.md)）。完整捆绑命令→技能工作流运行、完整只读 pstack 任务运行、hook 信任与发布批准仍需独立证据。 |
 
 ![Agent Skin 效果图](assets/github/integration-agent-skin-effect.png)
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码版本为 `0.9.0/build 41`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码自 #441 重写后采用 MIT；随附的阿舟素材采用 CC BY-NC-ND 4.0，新 clone 即可构建阿舟皮肤。 |
+| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码候选为 `0.9.0/build 42`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码采用 MIT，随附的阿舟素材采用 CC BY-NC-ND 4.0。 |
+
+Codex 冷启动时，启动器以浮动层显示自有遮罩而不抢焦点，在原生窗口播放 12 秒动画。播放结束且工作区就绪后交接。切换到其他应用或 Space 时释放遮罩。热启动只激活现有 Codex 进程，不重播。DSH 使用独立的页面启动门。macOS CI 用负对照验证窗口排序、播放器显露和清理。已安装版本及待完成的视觉验收见[支持矩阵](docs/support-matrix.md#optional-integrations)与[启动测试](packages/agent-skin/docs/testing.md)。
 
 <sub>🦊 Foundation CLI、pstack 与 Agent Skin 效果图为生成插图，未经 Azhou Scenes 流水线，也没有色彩门禁；维护者视觉批准已于 2026-11-12 记录。</sub>
 
@@ -195,7 +205,7 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
-2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码与 23 项补丁队列均未改变。
+2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码未变，补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
 
 通过 Hub 移除 pstack 期间，请确保目标 `CODEX_HOME` 没有其他原生插件或 marketplace 变更；计划会提示此要求，但无法验证其他进程。
 

@@ -10,6 +10,7 @@ import argparse
 import json
 from pathlib import Path
 import plistlib
+import runpy
 import subprocess
 import sys
 import time
@@ -31,28 +32,34 @@ def records(text: str) -> list[dict]:
 
 
 def unique_installation(values: list[dict]) -> bool:
-    return any(value.get("status") == "current"
-               and value.get("installedProjectAppCount") == 1
-               and value.get("distAppCount") == 0
-               and value.get("registeredProjectPathCount") == 1 for value in values)
+    if len(values) != 1 or values[0].get("status") != "current":
+        return False
+    return all(type(values[0].get(key)) is int and values[0][key] == count for key, count in (
+        ("installedProjectAppCount", 1), ("distAppCount", 0), ("registeredProjectPathCount", 1)))
 
 
 def verified_wallpaper(values: list[dict]) -> bool:
     fields = ("applied", "imageDecoded", "backgroundMatched", "coverMatched", "fixedViewport",
               "rootClear", "workspaceBackgroundClear", "footerBackgroundClear", "footerFadeClear",
               "topFadeClear", "decorationEffectsClear")
-    return any(value.get("event") == "wallpaper-result" and value.get("state") == "applied"
+    results = [value for value in values if value.get("event") == "wallpaper-result"]
+    return len(results) == 1 and all(value.get("state") == "applied"
                and all(value.get(field) is True for field in fields)
-               and value.get("verificationIssues") == [] for value in values)
+               and value.get("verificationIssues") == [] for value in results)
 
 
 def cold_start_allowed(values: list[dict]) -> bool:
     probes = [value for value in values if value.get("event") == "probe"]
     return len(probes) == 1 and probes[0].get("targetBundleID") == "com.openai.codex" \
-        and bool(probes[0].get("targetPath")) and probes[0].get("running") == []
+        and isinstance(probes[0].get("targetPath"), str) and Path(probes[0]["targetPath"]).is_absolute() \
+        and probes[0].get("running") == []
 
 
-def cold_start_observed(values: list[dict]) -> bool:
+def cold_start_observed(values: list[dict], expected_launcher_path: str | None = None) -> bool:
+    native = runpy.run_path(str(Path(__file__).with_name("startup_event_verdict.py")))["assess_native_launch"](
+        values, 0, expected_launcher_path)
+    if native is not None:
+        return native["status"] == "native-completed"
     events = {value.get("event") for value in values}
     exits = [value for value in values if value.get("event") == "launcher-exit"]
     return {"launcher-start", "target-opened", "startup-installed", "startup-ready"} <= events \
@@ -85,10 +92,10 @@ def execute(command: list[str], log: Path, timeout: int = 40) -> tuple[bool, lis
 
 
 def check(out: Path, cold_start: bool = False) -> dict:
+    out.mkdir(parents=True, exist_ok=False)
     theme = json.loads((ROOT / "theme-config.json").read_text(encoding="utf-8"))
     app = Path.home() / "Applications" / theme["identity"]["installationName"]
     executable = app / "Contents/MacOS/AzhouCodexStartup"
-    out.mkdir(parents=True, exist_ok=True)
     cases = []
     installed, installation = execute([sys.executable, "tools/install-macos.py", "--check"], out / "installation.log")
     cases.append({"id": "FT-INSTALL", "status": "passed" if installed and unique_installation(installation) else "failed"})
@@ -118,14 +125,14 @@ print(String(data: data, encoding: .utf8)!)
                   "next": "Review the actual pinned entry label after an upgrade; metadata alone is insufficient."})
     if cold_start:
         probe_ok, probe = execute([str(executable), "--probe"], out / "cold-probe.log")
-        if not installed or not probe_ok or not cold_start_allowed(probe):
+        if not installed or not unique_installation(installation) or not probe_ok or not cold_start_allowed(probe):
             cases.append({"id": "FT-COLD", "status": "pending-human-exit",
                           "next": "Finish work, quit the official host yourself, then rerun --cold-start."})
         else:
             launched, launch = execute([str(executable)], out / "cold-launch.log", timeout=75)
             # Actual cold-start events and wallpaper are checked separately.
             # Hot activation caused by a race must never count as cold success.
-            cold = launched and cold_start_observed(launch)
+            cold = launched and cold_start_observed(launch, str(app.resolve()))
             cases.append({"id": "FT-COLD", "status": "pending-visual-review" if cold else "failed",
                           "next": "Review the actual animation and workspace; preserve the event log."})
             deadline = time.monotonic() + 65
@@ -151,8 +158,9 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=ROOT / ".local/functional-acceptance")
     parser.add_argument("--cold-start", action="store_true")
     args = parser.parse_args()
-    result = check(args.out.resolve(), args.cold_start)
-    target = args.out.resolve() / "report.json"
+    out = args.out.absolute()
+    result = check(out, args.cold_start)
+    target = out / "report.json"
     target.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({"passed": result["passed"], "cases": result["cases"], "report": str(target)}, ensure_ascii=False))
     return 0 if result["passed"] else 2

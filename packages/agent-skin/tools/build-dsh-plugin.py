@@ -23,10 +23,6 @@ PLUGIN_OUTPUT_DIR = '.build/azhou-dsh-plugin'
 STAGE_PARENT = '.build/azhou-stage.dsh-plugin'
 MAX_PLUGIN_ICON_BYTES = 256 * 1024
 ICON_EDGE_PX = 256
-INDEX_JS = (
-    '/** Host half of the Agent Skin bundle; the Client module owns the rendering. */\n'
-    'export function apply() {}\n'
-)
 PATCH_YAML = "- insert:\n    - id: azhou-agent-skin\n      name: 'azhou-agent-skin'\n"
 LOCALES = {
     'zh': {'meta': {'title': '阿舟 AI 实验室 for DeepSeek Harness',
@@ -202,7 +198,8 @@ def _json_text(value) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + '\n'
 
 
-def _compose_package(destination: Path, *, body: str, icon: bytes, theme: dict, inputs: dict, artifacts) -> dict:
+def _compose_package(destination: Path, *, body: str, host_entry: str, icon: bytes, theme: dict,
+                     inputs: dict, artifacts) -> dict:
     destination = Path(destination)
     if destination.exists():
         raise RuntimeError(f'Refusing to compose over an existing directory: {destination}')
@@ -222,7 +219,7 @@ def _compose_package(destination: Path, *, body: str, icon: bytes, theme: dict, 
     }
     files = {
         'client.js': (_CLIENT_OPEN + body + _CLIENT_CLOSE).encode('utf-8'),
-        'index.js': INDEX_JS.encode('utf-8'),
+        'index.js': host_entry.encode('utf-8'),
         'cordis.patch.yml': PATCH_YAML.encode('utf-8'),
         'package.json': _json_text(package_json).encode('utf-8'),
         'icon.png': icon,
@@ -271,7 +268,7 @@ def verified_startup_stage(stage_root: Path, artifacts, created):
     receipt = artifacts.tree_receipt(stage_root)
     if receipt[:2] != created:
         raise RuntimeError(f'DSH 暂存根已替换，保留：{stage_root}')
-    files = {'azhou-payload/Contents/Resources/' + name for name in artifacts.STARTUP_OUTPUTS}
+    files = {'azhou-payload/Contents/Resources/' + name for name in artifacts.DSH_STARTUP_OUTPUTS}
     files.add('azhou-payload/Contents/Resources/startup/manifest.json')
     directories = {parent.as_posix() for name in files for parent in Path(name).parents if parent != Path('.')}
     expected = {**{name: 'file' for name in files}, **{name: 'directory' for name in directories}}
@@ -443,13 +440,14 @@ def _build_plugin_locked(destination: Path | None, *, root: Path, lock, lock_fd:
         body = _payload_body(payload)
         icon = _render_icon(root, artifacts, theme)
         inputs = artifacts.source_inputs()
+        host_entry = artifacts.dsh_host_entry_source(root)
         work = Path(tempfile.mkdtemp(prefix='azhou-dsh-compose-', dir=build_dir))
         initial_work = work.lstat()
         try:
             first, second = work / 'first' / PLUGIN_NAME, work / 'second' / PLUGIN_NAME
-            manifest = _compose_package(first, body=body, icon=icon, theme=theme,
+            manifest = _compose_package(first, body=body, host_entry=host_entry, icon=icon, theme=theme,
                                         inputs=inputs, artifacts=artifacts)
-            _compose_package(second, body=body, icon=icon, theme=theme,
+            _compose_package(second, body=body, host_entry=host_entry, icon=icon, theme=theme,
                              inputs=inputs, artifacts=artifacts)
             _assert_identical(first, second)
             _assert_no_path_leak(first, root)

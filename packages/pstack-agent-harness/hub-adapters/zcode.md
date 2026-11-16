@@ -9,7 +9,7 @@ pstack skills use Cursor names. In ZCode, read this file once per session, then 
 | `Task` | Dispatch a child through the session's own dispatch, when it has one. ZCode types those children `subagent_child`. With no dispatch, run the step yourself and say so. |
 | `AskQuestion` | Ask in plain text and let the user answer. No structured-choice tool is recorded. |
 | Open a todolist | No todolist tool is recorded. Keep the list in your reply and update it at each phase. |
-| Run another pstack skill (`/name` or "the **name** skill") | Invoke the project skill explicitly. ZCode discovers skills at `.agents/skills/`, so read `<pstack>/skills/<name>/SKILL.md` and follow it. Tell the user to invoke the Skill by its discovered ZCode name; use `zcode skills list` to verify it, rather than assuming a Claude Code namespaced slash command. The separate commands-only plugin exposes commands such as `/architect`. |
+| Run another pstack skill (`/name` or "the **name** skill") | Invoke the skill explicitly. ZCode discovers the 68 pstack skills bundled inside the installed plugin (user-level skills still come from `.agents/skills/`), so tell the user to invoke the Skill by its discovered ZCode name; use `zcode skills list` to verify it, rather than assuming a Claude Code namespaced slash command. With no skill-invocation surface in the session, read `<pstack>/skills/<name>/SKILL.md` from the installed plugin payload and follow it. The same plugin exposes commands such as `/architect`. |
 | `Grep`, `Glob` | The session's shell tool with `rg`, `find`, `ls`. |
 | Read a file | The session's file-read tool. |
 | Edit or delete a file | The session's file-edit tool. |
@@ -21,7 +21,7 @@ pstack skills use Cursor names. In ZCode, read this file once per session, then 
 | Cursor | ZCode |
 | --- | --- |
 | `subagent_type: generalPurpose` | No named subagent types are recorded. Dispatch ad-hoc and put the role in the brief. |
-| `poteto-agent`, `comment-sicko` | The same dispatch, with a brief that tells the worker to read `poteto-mode/SKILL.md`, or the resolved `<pstack>/agents/comment-sicko.md` file from the
+| `poteto-agent`, `comment-sicko` | The same dispatch, with a brief that tells the worker to read `<pstack>/skills/poteto-mode/SKILL.md`, or the resolved `<pstack>/agents/comment-sicko.md` file from the
 installed skill tree (when present), in full first. Never infer a file
 that is not there; an unavailable required reviewer remains blocked. |
 | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent` | The same dispatch, one per worker, each brief naming the skill its worker reads in full first and the diff and file contents it reviews. |

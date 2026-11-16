@@ -383,7 +383,26 @@ struct SkinOperationFailure: Sendable {
     let detail: String
 }
 
+enum SkinNativePresentationEnd: String, Sendable { case completed, skipped, interrupted, failed }
+
+struct SkinNativeLaunchReceipt: Sendable {
+    let operationID: UUID
+    let runNonce: String
+    let presentation: SkinNativePresentationEnd
+    let reason: String?
+    let workspace: SkinNativeWorkspaceObservation?
+    let coverDrawCommitted: Bool
+}
+
+struct SkinNativeWorkspaceObservation: Sendable {
+    let pageGeneration: String
+    let runID: Int
+    let wallpaperDisposition: String
+    let wallpaperReason: String
+}
+
 enum SkinLaunchResult: Sendable {
+    case nativePresentation(SkinNativeLaunchReceipt)
     case activated(HostProcessGeneration)
     case ready(ControllerReceipt, runID: Int)
     case skipped(PageEffect, runID: Int, beforeReady: Bool)

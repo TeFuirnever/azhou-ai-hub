@@ -75,6 +75,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-verify/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
+    "skills/super-lavish/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
     "skills/super-session-insights/SKILL.md",
 }
@@ -101,6 +102,7 @@ PROJECT_LOCAL_SKILL_PATHS = {
     ".agents/skills/e2e-case-lifecycle/SKILL.md",
     ".agents/skills/feature-boundary-planner/SKILL.md",
     ".agents/skills/record-browser-gif/SKILL.md",
+    ".agents/skills/verify-dsh-startup-gate/SKILL.md",
 }
 ZCODE_NOTICE_SHA256 = "c946abfb46cf3920fefeb756c526620201a3ce29bf84953b540763605b33d9ea"
 ZCODE_NOTICES = {f".agents/skills/{name}/NOTICE-ZCode.md" for name in (
@@ -458,6 +460,12 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "先让结构讲清关系，再让文字补充证据。",
         "startup": "🦊 阿舟 · Excalidraw Diagram 启动（mode=<create|edit|render|export>, deliverable=<format>, scope=<diagram>）",
         "brand_path": "skills/super-excalidraw-diagram/references/brand-layer.md",
+    },
+    "skills/super-lavish/SKILL.md": {
+        "display_name": "Super Lavish",
+        "motto": "把复杂结果变成可审阅的界面。",
+        "startup": "🦊 阿舟 · Super Lavish 启动（mode=<artifact|review|export|share>, scope=<short scope>）",
+        "brand_path": "skills/super-lavish/references/brand-layer.md",
     },
     "skills/super-repo-pedant/SKILL.md": {
         "display_name": "Super Repo Pedant",

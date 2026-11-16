@@ -1,0 +1,142 @@
+{
+  "schema": "azhou-native-handoff-design.v1",
+  "status": "design_only",
+  "implementation_ready": false,
+  "original_packet": {
+    "status": "not_read",
+    "requirement_mapping": null,
+    "acceptance_mapping": null
+  },
+  "original_experiment_selection": {
+    "T10": "proposed_pending_contract_reconciliation",
+    "T20": "not_selected",
+    "T30": "not_selected",
+    "short_2_8_seconds": "not_selected"
+  },
+  "tasks": [
+    {
+      "id": "NH-00",
+      "title": "核对原包、基线和安装所有权",
+      "depends_on": [],
+      "status": "not_started",
+      "completion_criteria": [
+        "读原 START_HERE/SPEC/DECISIONS/TASKS/ACCEPTANCE并保留校验结果",
+        "记录源码/安装/运行身份，确认旧修复与新主线关系",
+        "记录原T10与本补充任务映射和冲突裁决"
+      ],
+      "artifact": "baseline_and_contract_record",
+      "gate": "required_original_packet"
+    },
+    {
+      "id": "NH-10",
+      "title": "冻结共享状态与比较协议",
+      "depends_on": [
+        "NH-00"
+      ],
+      "status": "not_started",
+      "completion_criteria": [
+        "定义播放、就绪、壁纸、交接各自证据及绝对预算",
+        "冻结原版与候选对比协议，保证只比较一个视觉机制"
+      ],
+      "artifact": "frozen_protocol_and_capability_record",
+      "gate": "none"
+    },
+    {
+      "id": "NH-11",
+      "title": "核对DSH首帧能力",
+      "depends_on": [
+        "NH-00"
+      ],
+      "status": "not_started",
+      "completion_criteria": [
+        "检查实际DSH版本的早期HTML hook、CSP与web/desktop时序",
+        "记录supported、unsupported或inconclusive及可复核证据",
+        "能力缺口必须注明受影响动作、所有者和解除条件；不阻塞独立Codex工作"
+      ],
+      "artifact": "dsh_capability_record",
+      "gate": "none"
+    },
+    {
+      "id": "NH-20",
+      "title": "建立宿主设置快照与原生播放输入",
+      "depends_on": [
+        "NH-10"
+      ],
+      "status": "not_started",
+      "completion_criteria": [
+        "复用现有设置校验，识别空记录与失败",
+        "按当前绑定页读取有界快照，分块大素材",
+        "验证native播放器使用与页面相同的有效设置且不回写"
+      ],
+      "artifact": "settings_hydration_evidence",
+      "gate": "none"
+    },
+    {
+      "id": "NH-30",
+      "title": "实现Codex原生呈现与后台宿主交接",
+      "depends_on": [
+        "NH-20"
+      ],
+      "status": "not_started",
+      "completion_criteria": [
+        "复用PlayerStage及animation.js，隔离preview和正式run",
+        "将宿主页启动载荷拆为工作区能力而不启动第二播放器",
+        "更新Native结果语义、跳过、期限与换页验证"
+      ],
+      "artifact": "codex_candidate_and_evidence",
+      "gate": "none"
+    },
+    {
+      "id": "NH-40",
+      "title": "实现DSH早期遮罩与客户端原子接管",
+      "depends_on": [
+        "NH-11",
+        "NH-20"
+      ],
+      "status": "not_started",
+      "completion_criteria": [
+        "只有已证明可用的host hook才接管首帧",
+        "保持DSH数据库、settings.section与ctx.effect清理",
+        "独立超时释放，明确刷新/热重载播放策略"
+      ],
+      "artifact": "dsh_candidate_and_evidence",
+      "gate": "requires_verified_early_hook",
+      "allowed_resolution": [
+        "completed",
+        "blocked_with_evidence"
+      ],
+      "blocked_record_requires": [
+        "affected_action",
+        "evidence",
+        "owner",
+        "release_condition"
+      ]
+    },
+    {
+      "id": "NH-90",
+      "title": "独立审查、分端验收与移交",
+      "depends_on": [
+        "NH-30",
+        "NH-40"
+      ],
+      "status": "not_started",
+      "completion_criteria": [
+        "执行已实现端的NH验收与原包适用验收；未实现端明确blocked，不伪造测试或双端完成",
+        "记录每端源码/产物/安装/运行/视觉状态",
+        "保留租约和回退责任，按原T90要求收尾"
+      ],
+      "artifact": "delivery_receipt",
+      "gate": "none",
+      "dependency_resolution": "NH-30须有独立结果；NH-40可为完成或有证据的blocked，分别报告。blocked不算双端验收通过。"
+    }
+  ],
+  "runtime_validation": "not_run",
+  "closure_rules": {
+    "per_host_results": "independent",
+    "dual_host_success_requires": [
+      "codex_live_pass",
+      "dsh_live_pass"
+    ],
+    "blocked_host_is_not_pass": true
+  }
+}

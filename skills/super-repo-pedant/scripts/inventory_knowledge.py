@@ -111,8 +111,21 @@ def walk_markdown(directory: Path, root: Path) -> Iterable[Path]:
     )
 
 
+def inherited_repository_rule(root: Path) -> Path | None:
+    for directory in (root, *root.parents):
+        marker = directory / ".git"
+        if marker.is_dir() or marker.is_file():
+            rule = directory / "AGENTS.md"
+            return rule if directory != root and rule.is_file() else None
+    return None
+
+
 def project_candidates(root: Path) -> set[Path]:
-    return set(walk_markdown(root, root))
+    candidates = set(walk_markdown(root, root))
+    inherited = inherited_repository_rule(root)
+    if inherited:
+        candidates.add(inherited)
+    return candidates
 
 
 def expand_explicit_path(value: str | Path) -> list[Path]:
@@ -216,8 +229,10 @@ def build_inventory(
         }
         project_rows.append(row)
         project_rows_by_root[canonical_root] = row
+        inherited = inherited_repository_rule(root)
         for path in sorted(project_candidates(root)):
-            records[str(path)] = file_record(path, project_root=root)
+            owner = path.parent if path == inherited else root
+            records.setdefault(str(path), file_record(path, project_root=owner))
 
     for owner_value, decision in (memory_decisions or {}).items():
         owner = owner_value.expanduser().resolve()
@@ -322,7 +337,7 @@ def validate_inventory(data: Any) -> list[str]:
             root = Path(root_value)
             if not (root / "README.md").is_file():
                 errors.append(f"{label}: runnable project requires README.md")
-            if not any((root / name).is_file() for name in INSTRUCTION_NAMES):
+            if not any((root / name).is_file() for name in INSTRUCTION_NAMES) and not inherited_repository_rule(root):
                 errors.append(f"{label}: runnable project requires AGENTS.md, CLAUDE.md, or equivalent rule surface")
         memory_inventory = project.get("memory_inventory")
         if not isinstance(memory_inventory, dict):
