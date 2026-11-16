@@ -133,7 +133,13 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 
 ![Lavish 效果图](assets/skills/super-lavish-effect.png)
 
-<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify 与 Lavish：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
+## Imagegen
+
+> 🖼️ 本地生图，离线也能画——每一次生成都带执行回执。
+
+![Imagegen 效果图](assets/skills/super-imagegen-effect.png)
+
+<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish 与 Imagegen：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust.zh-CN-dark.jpg">

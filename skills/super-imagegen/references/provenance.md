@@ -34,6 +34,10 @@ shasum -a 256 ~/.agents/skills/azhou-imagegen/SKILL.md \
 
 Expected values on the registered snapshot are the three SHA-256 hashes in the table above. A mismatch means the private install moved: re-read its `--help` and doctor surface, reconcile this contract in one reviewed change, and update the pins — never stretch the old contract text over a changed runtime.
 
+## Showcase scene
+
+`assets/skills/super-imagegen-effect.png` (added 2026-11-16) is the package's skill showcase scene under skill-standard §4. It was generated with the maintainer's local azhou-gen pipeline: azhou-scenes `article_16_9` mode, Qwen-Image-2.1 edit with the hash-locked canonical fox reference (SHA-256 `bb86cf0a9e80beee8647aeaae19506eb410d2fc19b4ba93c1ec0e2c4d1e0f8a2`), the scene quality anchor recorded observation-only (`used_as_image_gen_reference=false`), and the 1664×960 raw candidate shipped unmodified (candidate SHA-256 `6b2526dd43855c56a1c481dfc0c47cda68316fc46dc8cb5e15f5dc397d0c275a`, seed 21). The full receipt chain (run `azhou-20261116T090215Z-azhou-imagegen-s21`, preflight → dispatch → postflight) and the named human visual P0 approval dated 2026-11-16 stay Git-external in the maintainer's store; the formal governed-workspace colour audit remains open. Repository-wide notice: [THIRD_PARTY_NOTICES.md](../../../THIRD_PARTY_NOTICES.md).
+
 ## Fidelity classification
 
 Classification: `original` — no upstream skill lineage; Azhou-authored capability and package bytes. The package wraps an unmodified external runtime (the installed private skill) without changing its behavior, which skill-standard §2.3 counts as `original`, and zero private bytes are vendored. Skill-standard §2.3.
