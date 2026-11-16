@@ -5,6 +5,8 @@ import builtins
 import io
 import importlib.util
 import json
+import hashlib
+import shutil
 from pathlib import Path
 import stat
 import struct
@@ -57,6 +59,83 @@ class ThemePackagePreflightTests(unittest.TestCase):
         self.assertEqual(result['hub_mapping']['status'], 'blocked')
         self.assertEqual(len(result['archive_sha256']), 64)
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), ['theme.zip'])
+
+    def test_reference_safe_css_pass_is_independent_and_never_importable(self):
+        self.files['theme.css'] = b'[data-ds-part="main"]{color:#fff;}'
+        result = self.archive()
+        self.assertEqual(result['reference_css'], {'status': 'passed', 'reasons': [],
+                                                   'contract': 'dreamskin-safe-css/1'})
+        self.assertEqual(result['resources']['status'], 'blocked')
+        self.assertEqual(result['hub_mapping']['status'], 'blocked')
+        self.assertEqual(result['status'], 'blocked')
+        before = self.path.read_bytes()
+        self.tool.preflight(self.path)
+        self.assertEqual(self.path.read_bytes(), before)
+        self.assertEqual(sorted(p.name for p in self.root.iterdir()), ['theme.zip'])
+
+    def test_resources_and_reference_css_pass_still_never_maps_or_imports(self):
+        self.files['theme.css'] = b'[data-ds-part="main"]{color:#fff;}'
+        result = self.image_archive('PNG')
+        self.assertEqual(result['resources']['status'], 'passed')
+        self.assertEqual(result['reference_css']['status'], 'passed')
+        self.assertEqual(result['hub_mapping']['status'], 'blocked')
+        self.assertEqual(result['status'], 'blocked')
+
+    def test_reference_safe_css_rejects_unsafe_and_invalid_utf8(self):
+        cases = [b'@import "https://private.example";', b'body{color:#fff;}',
+                 b'[data-ds-part="main"]{color:url(https://private.example);}',
+                 b'[data-ds-part="main"], [data-ds-part="sidebar"]{color:#fff;}',
+                 b'[data-ds-part="main"]::before{color:#fff;}',
+                 b'[data-ds-part="main"]{color:var(--secret);}',
+                 b'[data-ds-part="main"]{color:#fff;color:#000;}',
+                 b'/*private*/[data-ds-part="main"]{color:#fff;}',
+                 b'[data-ds-part="main"]{color:#fff!important;}',
+                 b'\\62ody{color:#fff;}', b'\xff', b'\xef\xbb\xbf[data-ds-part="main"]{color:#fff;}']
+        for css in cases:
+            with self.subTest(css=css):
+                result = self.archive({**self.files, 'theme.css': css})
+                self.assertEqual(result['reference_css']['status'], 'blocked')
+                self.assertTrue(result['reference_css']['reasons'])
+                self.assertNotIn('private', json.dumps(result))
+
+    def test_reference_validator_provenance_and_contract_corpus(self):
+        vendor = TOOL.parent.parent / 'vendor'
+        hashes = {'dream-safe-css-validator.mjs': '98a626655a4167ba0bbbff5eab96e78de7a5a74371e4a4ff6d8ac15211e5b24e',
+                  'dream-safe-css-policy.json': 'c784dd3a16d71395fca0b2695047395dc6f951f44df962284976faeb0b3ea551',
+                  'dream-safe-css.LICENSE': '18f8478d0f9efd45307e5f17790194593b116658145c758ced3166398eb05b21'}
+        for name, digest in hashes.items():
+            self.assertEqual(hashlib.sha256((vendor / name).read_bytes()).hexdigest(), digest)
+        result = subprocess.run([shutil.which('node'), str(TOOL.with_name('dream-safe-css.test.mjs'))],
+                                capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+
+    def test_reference_adapter_failures_are_bounded_closed_and_private(self):
+        self.files['theme.css'] = b'[data-ds-part="main"]{color:#fff;}'
+        original = subprocess.Popen
+        programs = ['import time; time.sleep(10)',
+                    'raise RuntimeError("/private/source/theme.css")',
+                    'print("[]")',
+                    'print(\'{"schema":"wrong","status":"passed","reasons":[]}\')',
+                    'print("x" * 1000000)',
+                    'import sys; sys.stderr.write("x" * 1000000)',
+                    'print(\'{"schema":"azhou-agent-skin.reference-safe-css.v1","contract":"dreamskin-safe-css/1","status":"passed","reasons":[],"source":"private"}\')']
+        for program in programs:
+            with self.subTest(program=program):
+                def spawn(*args, **kwargs):
+                    self.assertEqual(kwargs['env'], {'PATH': self.tool.os.defpath})
+                    self.assertNotIn(str(self.path), args[0])
+                    return original([sys.executable, '-c', program], **kwargs)
+                with mock.patch.object(self.tool.subprocess, 'Popen', side_effect=spawn), \
+                        mock.patch.object(self.tool, 'CSS_TIMEOUT', 0.1):
+                    result = self.archive()
+                self.assertEqual(result['reference_css']['reasons'], ['validator_unavailable'])
+                self.assertNotIn('/private/', json.dumps(result))
+        with mock.patch.object(self.tool.shutil, 'which', return_value=None):
+            self.assertEqual(self.archive()['reference_css']['reasons'], ['validator_unavailable'])
+        adapter = self.root / 'reference-safe-css.mjs'
+        adapter.write_bytes(TOOL.with_name('reference-safe-css.mjs').read_bytes())
+        with mock.patch.object(self.tool, 'CSS_ADAPTER', adapter):
+            self.assertEqual(self.archive()['reference_css']['reasons'], ['validator_unavailable'])
 
     def test_deflated_subset(self):
         self.assertEqual(self.archive(compression=zipfile.ZIP_DEFLATED)['structure']['status'], 'passed')

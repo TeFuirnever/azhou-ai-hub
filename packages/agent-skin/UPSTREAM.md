@@ -28,3 +28,17 @@ MIT 只覆盖代码。阿舟图像是维护者自有 IP，自 2026-11-13 起放�
 ## Hub 运行评估
 
 Hub adapter 按已核验的 App 版本选择日志评估方式：0.7.1 继续走旧事件评估；0.8.0 及更高版本要求被消费事件符合 `azhou-startup.event.v1`。已知诊断事件可以没有 schema，但不会被当作启动成功证据。合成事件测试验证适配器判定，不证明原生启动器实际产生日志、不构成上游许可，也不扩大素材使用权。
+
+## Safe CSS reference validator
+
+The read-only theme ZIP preflight vendors the following MIT files from `Codex-Dream-Skin` commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`. Copyright (c) 2026 Codex Dream Skin Studio contributors. The complete notice is retained as `vendor/dream-safe-css.LICENSE`.
+
+| Upstream file | Local file | SHA-256 |
+|---|---|---|
+| `runtime/safe-css-validator.mjs` | `vendor/dream-safe-css-validator.mjs` | `98a626655a4167ba0bbbff5eab96e78de7a5a74371e4a4ff6d8ac15211e5b24e` |
+| `runtime/safe-css-policy.json` | `vendor/dream-safe-css-policy.json` | `c784dd3a16d71395fca0b2695047395dc6f951f44df962284976faeb0b3ea551` |
+| `LICENSE` | `vendor/dream-safe-css.LICENSE` | `18f8478d0f9efd45307e5f17790194593b116658145c758ced3166398eb05b21` |
+
+All three files are byte-identical copies. The JSON is a contract snapshot, not runtime configuration. `tools/reference-safe-css.mjs` is the local anti-corruption boundary. It uses only `validateSafeCss`, never the compiler or reference-host selector mappings. These developer inspection files are not added to installation runtime/build inputs and do not enable theme import or application.
+
+To update, inspect a new immutable upstream revision and its license first. Copy the three complete source files without rewriting them, update this table and the focused suite's hash locks, compare the policy export deeply, and run the same corpus against the vendored and original validator. Preserve RED/GREEN evidence and perform independent review on the exact frozen diff. Any future Hub mapping is a separate reviewed implementation, not an upstream compiler call.

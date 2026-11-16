@@ -9,6 +9,10 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
+import shutil
+import subprocess
+import time
 import stat
 import struct
 import warnings
@@ -24,6 +28,10 @@ IMAGE_DIMENSION_LIMIT = 16384
 IMAGE_PIXEL_LIMIT = 50_000_000
 IMAGE_FORMATS = {'.png': 'PNG', '.jpg': 'JPEG', '.jpeg': 'JPEG', '.webp': 'WEBP'}
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
+CSS_ADAPTER = Path(__file__).with_name('reference-safe-css.mjs')
+CSS_TIMEOUT = 3
+CSS_OUTPUT_LIMIT = 4096
+CSS_CONTRACT = 'dreamskin-safe-css/1'
 NESTED_MAGIC = (b'PK\x03\x04', b'PK\x05\x06', b'7z\xbc\xaf\x27\x1c', b'Rar!', b'\x1f\x8b')
 
 
@@ -244,6 +252,70 @@ def inspect_image(name, data):
         raise Blocked('image_decode_invalid') from None
 
 
+def reference_css(data):
+    blocked = {'status': 'blocked', 'reasons': ['validator_unavailable'], 'contract': CSS_CONTRACT}
+    node = shutil.which('node')
+    if node is None or not 0 < len(data) <= FILE_LIMITS['theme.css']:
+        return blocked
+    process = None
+    try:
+        process = subprocess.Popen([node, str(CSS_ADAPTER)], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   env={'PATH': os.defpath})
+        deadline = time.monotonic() + CSS_TIMEOUT
+        output = {'stdout': bytearray(), 'stderr': bytearray()}
+        offset = 0
+        with selectors.DefaultSelector() as selector:
+            for stream, event, name in [(process.stdin, selectors.EVENT_WRITE, 'stdin'),
+                                        (process.stdout, selectors.EVENT_READ, 'stdout'),
+                                        (process.stderr, selectors.EVENT_READ, 'stderr')]:
+                os.set_blocking(stream.fileno(), False)
+                selector.register(stream, event, name)
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return blocked
+                for key, _ in selector.select(remaining):
+                    stream, name = key.fileobj, key.data
+                    if name == 'stdin':
+                        offset += os.write(stream.fileno(), data[offset:offset + 65536])
+                        if offset == len(data):
+                            selector.unregister(stream)
+                            stream.close()
+                    else:
+                        budget = CSS_OUTPUT_LIMIT - sum(map(len, output.values()))
+                        chunk = os.read(stream.fileno(), budget + 1)
+                        if len(chunk) > budget:
+                            return blocked
+                        if chunk:
+                            output[name].extend(chunk)
+                        else:
+                            selector.unregister(stream)
+                            stream.close()
+        if process.wait(timeout=max(0.001, deadline - time.monotonic())) != 0 or output['stderr']:
+            return blocked
+        response = json.loads(output['stdout'].decode('utf-8'), object_pairs_hook=unique_object)
+        if (not isinstance(response, dict)
+                or set(response) != {'schema', 'contract', 'status', 'reasons'}
+                or response['schema'] != 'azhou-agent-skin.reference-safe-css.v1'
+                or response['contract'] != CSS_CONTRACT
+                or not ((response['status'] == 'passed' and response['reasons'] == [])
+                        or (response['status'] == 'blocked' and response['reasons'] in
+                            [['safe_css_invalid'], ['css_utf8_invalid'], ['validator_unavailable']]))):
+            return blocked
+        return {key: response[key] for key in ('status', 'reasons', 'contract')}
+    except (OSError, ValueError, subprocess.SubprocessError, RecursionError):
+        return blocked
+    finally:
+        if process is not None:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            for stream in (process.stdin, process.stdout, process.stderr):
+                if stream is not None:
+                    stream.close()
+
+
 def preflight(path):
     report = {
         'schema': 'azhou-agent-skin.theme-package-preflight.v1',
@@ -269,6 +341,7 @@ def preflight(path):
         except (UnicodeError, Blocked):
             reasons.append('css_utf8_or_content_invalid')
         report['resources'] = {'status': 'blocked' if reasons else 'passed', 'reasons': reasons}
+        report['reference_css'] = reference_css(files['theme.css'])
     except Blocked as error:
         report['structure']['reasons'] = [str(error)]
     except (OSError, ValueError, zipfile.BadZipFile, NotImplementedError, RuntimeError, EOFError, struct.error, zlib.error):
