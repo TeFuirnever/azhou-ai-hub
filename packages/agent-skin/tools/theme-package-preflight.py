@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import stat
 import struct
+import warnings
 import zipfile
 import zlib
 
@@ -19,6 +20,9 @@ EXPANDED_LIMIT = 64 * 1024 * 1024
 ENTRY_LIMIT = 32
 FILE_LIMITS = {'theme.json': 1048576, 'theme.css': 262144}
 IMAGE_LIMIT = 10485760
+IMAGE_DIMENSION_LIMIT = 16384
+IMAGE_PIXEL_LIMIT = 50_000_000
+IMAGE_FORMATS = {'.png': 'PNG', '.jpg': 'JPEG', '.jpeg': 'JPEG', '.webp': 'WEBP'}
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp'}
 NESTED_MAGIC = (b'PK\x03\x04', b'PK\x05\x06', b'7z\xbc\xaf\x27\x1c', b'Rar!', b'\x1f\x8b')
 
@@ -148,6 +152,98 @@ def image_magic_matches(name, data):
     return len(data) >= 12 and data[:4] == b'RIFF' and data[8:12] == b'WEBP'
 
 
+def image_header_dimensions(format, data):
+    if format == 'PNG':
+        require(len(data) >= 33 and data[8:16] == b'\x00\x00\x00\rIHDR', 'image_decode_invalid')
+        return struct.unpack('>II', data[16:24])
+    if format == 'JPEG':
+        offset = 2
+        while offset < len(data):
+            require(data[offset] == 255, 'image_decode_invalid')
+            while offset < len(data) and data[offset] == 255:
+                offset += 1
+            require(offset < len(data), 'image_decode_invalid')
+            marker = data[offset]
+            offset += 1
+            require(marker not in (0, 0xd9, 0xda), 'image_decode_invalid')
+            if marker == 1 or 0xd0 <= marker <= 0xd8:
+                continue
+            require(offset + 2 <= len(data), 'image_decode_invalid')
+            length = int.from_bytes(data[offset:offset + 2], 'big')
+            require(length >= 2 and offset + length <= len(data), 'image_decode_invalid')
+            if marker in {0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7,
+                          0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf}:
+                require(length >= 8, 'image_decode_invalid')
+                height, width = struct.unpack('>HH', data[offset + 3:offset + 7])
+                return width, height
+            offset += length
+    else:
+        require(len(data) >= 20 and int.from_bytes(data[4:8], 'little') + 8 == len(data), 'image_decode_invalid')
+        offset = 12
+        canvas = None
+        raster = None
+        while offset + 8 <= len(data):
+            kind = data[offset:offset + 4]
+            size = int.from_bytes(data[offset + 4:offset + 8], 'little')
+            offset += 8
+            require(offset + size + size % 2 <= len(data), 'image_decode_invalid')
+            chunk = data[offset:offset + size]
+            require(kind not in (b'ANIM', b'ANMF'), 'image_animation_unsupported')
+            if kind == b'VP8X':
+                require(size == 10 and canvas is None, 'image_decode_invalid')
+                require(not chunk[0] & 2, 'image_animation_unsupported')
+                canvas = (int.from_bytes(chunk[4:7], 'little') + 1,
+                          int.from_bytes(chunk[7:10], 'little') + 1)
+            if kind in (b'VP8L', b'VP8 '):
+                require(raster is None, 'image_decode_invalid')
+                if kind == b'VP8L':
+                    require(size >= 5 and chunk[0] == 47, 'image_decode_invalid')
+                    bits = int.from_bytes(chunk[1:5], 'little')
+                    raster = (bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1
+                else:
+                    require(size >= 10 and chunk[3:6] == b'\x9d\x01\x2a', 'image_decode_invalid')
+                    width, height = struct.unpack('<HH', chunk[6:10])
+                    raster = width & 0x3fff, height & 0x3fff
+            offset += size + size % 2
+        require(offset == len(data) and raster is not None, 'image_decode_invalid')
+        require(canvas is None or canvas == raster, 'image_dimensions_mismatch')
+        return raster
+    raise Blocked('image_decode_invalid')
+
+
+def inspect_image(name, data):
+    require(len(data) <= IMAGE_LIMIT, 'image_size')
+    require(image_magic_matches(name, data), 'image_magic_mismatch')
+    format = IMAGE_FORMATS[Path(name).suffix]
+    dimensions = image_header_dimensions(format, data)
+    width, height = dimensions
+    require(1 <= width <= IMAGE_DIMENSION_LIMIT and 1 <= height <= IMAGE_DIMENSION_LIMIT
+            and width * height <= IMAGE_PIXEL_LIMIT, 'image_dimensions_or_pixels')
+    try:
+        from PIL import Image, ImageFile, features
+    except (ImportError, OSError):
+        raise Blocked('image_decoder_unavailable') from None
+    require(not ImageFile.LOAD_TRUNCATED_IMAGES
+            and (format != 'WEBP' or features.check('webp')), 'image_decoder_unavailable')
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('error')
+            for verify in (True, False):
+                with Image.open(io.BytesIO(data)) as image:
+                    require(image.format == format, 'image_format_mismatch')
+                    require(image.size == dimensions, 'image_dimensions_mismatch')
+                    require(getattr(image, 'n_frames', 1) == 1 and not getattr(image, 'is_animated', False)
+                            and not (format == 'PNG' and 'loop' in image.info), 'image_animation_unsupported')
+                    if verify:
+                        image.verify()
+                    else:
+                        image.load()
+    except (OSError, ValueError, SyntaxError, EOFError, struct.error, Warning, Image.DecompressionBombError) as error:
+        if isinstance(error, Blocked):
+            raise
+        raise Blocked('image_decode_invalid') from None
+
+
 def preflight(path):
     report = {
         'schema': 'azhou-agent-skin.theme-package-preflight.v1',
@@ -163,14 +259,16 @@ def preflight(path):
         files = package_files(data)
         image = theme_definition(files['theme.json'], files)
         report['structure'] = {'status': 'passed', 'reasons': []}
-        reasons = ['image_decode_unverified', 'image_dimensions_unverified', 'image_pixel_budget_unverified']
-        if not image_magic_matches(image, files[image]):
-            reasons.append('image_magic_mismatch')
+        reasons = []
+        try:
+            inspect_image(image, files[image])
+        except Blocked as error:
+            reasons.append(str(error))
         try:
             require(bool(files['theme.css'].decode('utf-8').strip()), 'css_empty')
         except (UnicodeError, Blocked):
             reasons.append('css_utf8_or_content_invalid')
-        report['resources']['reasons'] = reasons
+        report['resources'] = {'status': 'blocked' if reasons else 'passed', 'reasons': reasons}
     except Blocked as error:
         report['structure']['reasons'] = [str(error)]
     except (OSError, ValueError, zipfile.BadZipFile, NotImplementedError, RuntimeError, EOFError, struct.error, zlib.error):
