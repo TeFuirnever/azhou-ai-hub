@@ -16,6 +16,7 @@ EVIDENCE = 'super-session-insights.evidence.v1'
 REFLECTION = 'super-session-insights.reflection.v1'
 RECEIPT = 'super-session-insights.reflection-receipt.v1'
 UNKNOWN = 'unknown'
+EXPERIMENT_FIELDS = ('change', 'context', 'expected_observation', 'effort', 'success_condition', 'stop_condition', 'followup_evidence')
 SENSITIVE = re.compile(
     r'-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,})|https?://[^\s"<>]+|(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}|/(?:Users|home)/[^/\s]+/|[A-Za-z]:\\Users\\[^\\\s]+\\',
     re.IGNORECASE,
@@ -169,11 +170,21 @@ def validate_reflection(e, result):
         if insight['epistemic_status'] == 'supported':
             require(any(segments[r['segment_id']]['kind'] not in ('prior_report', 'interpretation', 'retrospective_summary') for r in insight['supporting_refs']), 'prior interpretation alone cannot support status')
     require(isinstance(result.get('limitations'), list) and all(nonempty(x) for x in result['limitations']), 'invalid limitations')
+    if 'limitation_refs' in result:
+        groups = result['limitation_refs']
+        require(isinstance(groups, list) and len(groups) == len(result['limitations']), 'invalid limitation references')
+        for group in groups:
+            check_refs(group, segments)
     if not segments:
         require(result['status'] in ('insufficient_evidence', 'hold') and not observations and not insights, 'empty evidence requires insufficient status')
     experiment = result.get('experiment')
     if experiment is not None:
-        fields(experiment, ['change', 'context', 'expected_observation', 'effort', 'success_condition', 'stop_condition', 'followup_evidence'])
+        fields(experiment, EXPERIMENT_FIELDS)
+    if 'experiment_refs' in result:
+        groups = result['experiment_refs']
+        require(experiment is not None and isinstance(groups, dict) and all(k in EXPERIMENT_FIELDS for k in groups), 'invalid experiment references')
+        for group in groups.values():
+            check_refs(group, segments)
     changes = result.get('changes')
     require(isinstance(changes, list), 'invalid changes')
     # Previous reports must be supplied as evidence; never load a path from a result.
@@ -235,11 +246,14 @@ def citation_review(e, result, segments):
         claims.append({'kind': 'change', 'claim': change['reason'], 'refs': excerpts(change['new_refs'])})
     experiment = result.get('experiment')
     if experiment is not None:
-        experiment = {key: experiment[key] for key in (
-            'change', 'context', 'expected_observation', 'effort', 'success_condition', 'stop_condition', 'followup_evidence')}
+        experiment = {key: experiment[key] for key in EXPERIMENT_FIELDS}
+    limitation_refs = result.get('limitation_refs')
+    experiment_refs = result.get('experiment_refs')
     return {'schema': 'super-session-insights.citation-review.v1', 'evidence_digest': e['digest'],
             'subject': e['scope'].get('subject', UNKNOWN), 'semantic_review': 'not_reviewed', 'claims': claims,
-            'limitations': result['limitations'], 'experiment': experiment}
+            'limitations': result['limitations'], 'experiment': experiment,
+            'limitation_refs': None if limitation_refs is None else [excerpts(group) for group in limitation_refs],
+            'experiment_refs': None if experiment_refs is None else {key: excerpts(group) for key, group in experiment_refs.items()}}
 
 
 def report_text(e, r):
@@ -282,9 +296,11 @@ def report_text(e, r):
         labels = {'change': '尝试', 'context': '适用情境', 'expected_observation': '观察',
                   'effort': '投入', 'success_condition': '成功条件', 'stop_condition': '停止条件',
                   'followup_evidence': '后续证据'}
-        lines += ['', '## 可选实验'] + [f'- {labels.get(k, k)}：{v}' for k, v in r['experiment'].items()]
+        groups = r.get('experiment_refs', {})
+        lines += ['', '## 可选实验'] + [f'- {labels[k]}：{r["experiment"][k]}' + (f' [{refs(groups[k])}]' if groups.get(k) else '') for k in EXPERIMENT_FIELDS]
     if r['limitations']:
-        lines += ['', '## 限制'] + ['- ' + x for x in r['limitations']]
+        groups = r.get('limitation_refs', [[] for _ in r['limitations']])
+        lines += ['', '## 限制'] + ['- ' + text + (f' [{refs(group)}]' if group else '') for text, group in zip(r['limitations'], groups)]
     if exact_duplicates(e):
         lines += ['', '存在精确重复片段；不能仅凭不同 ID 视为独立支持。']
     lines += ['', '<details>', '<summary>查看观察与来源</summary>', '']

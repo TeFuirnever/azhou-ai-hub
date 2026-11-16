@@ -315,6 +315,8 @@ class ReflectionTest(unittest.TestCase):
         self.assertEqual(0, reviewed.returncode, reviewed.stderr)
         review = json.loads(reviewed.stdout)
         self.assertEqual(self.result['limitations'], review['limitations'])
+        self.assertIsNone(review['limitation_refs'])
+        self.assertIsNone(review['experiment_refs'])
         self.assertEqual('核对样例', review['experiment']['change'])
         self.assertEqual('交接记录', review['experiment']['followup_evidence'])
         self.assertNotIn('unverified_extra', review['experiment'])
@@ -329,6 +331,50 @@ class ReflectionTest(unittest.TestCase):
         without_experiment = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
         self.assertEqual(0, without_experiment.returncode, without_experiment.stderr)
         self.assertIsNone(json.loads(without_experiment.stdout)['experiment'])
+
+    def test_limitations_and_experiment_can_bind_individual_citations(self):
+        ref = {'segment_id': 'e1', 'start': 0, 'end': 3, 'type': 'quote', 'text': '交付前'}
+        self.result['limitations'] = ['交付前的要求仅来自所选片段', '没有额外记录']
+        self.result['limitation_refs'] = [[ref], []]
+        self.result['experiment'] = {
+            'change': '确认样例', 'context': '交付前', 'expected_observation': '是否有纠正',
+            'effort': '一次', 'success_condition': '样例可用', 'stop_condition': '产生额外负担时停止',
+            'followup_evidence': '交接结果', 'unverified_extra': 'do not publish extra metadata',
+        }
+        self.result['experiment_refs'] = {'context': [ref]}
+        self.write()
+        result = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
+        self.assertEqual(0, result.returncode, result.stderr)
+        review = json.loads(result.stdout)
+        self.assertEqual('交付前', review['limitation_refs'][0][0]['cited_text'])
+        self.assertEqual([], review['limitation_refs'][1])
+        self.assertEqual('self', review['experiment_refs']['context'][0]['attribution'])
+        self.assertEqual('not_reviewed', review['semantic_review'])
+        self.assertNotIn('确认样例', json.dumps(review['limitation_refs'], ensure_ascii=False))
+        self.assertEqual(0, self.render().returncode)
+        report = (self.root / 'run/report.md').read_text(encoding='utf-8')
+        self.assertIn('交付前的要求仅来自所选片段 [e1[0:3]]', report)
+        self.assertIn('适用情境：交付前 [e1[0:3]]', report)
+        self.assertNotIn('do not publish extra metadata', report)
+
+    def test_optional_item_citations_reject_mismatch_without_echo(self):
+        self.result['limitation_refs'] = []
+        self.write()
+        self.assertEqual(1, self.run_cli('validate-reflection', '--evidence', 'evidence.json', '--input', 'reflection.json').returncode)
+        self.result['limitation_refs'] = [[{'segment_id': 'e1', 'start': 0, 'end': 3, 'type': 'quote', 'text': 'private-seed'}]]
+        self.write()
+        result = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
+        self.assertEqual(1, result.returncode)
+        self.assertNotIn('private-seed', result.stdout + result.stderr)
+        del self.result['limitation_refs']
+        self.result['experiment_refs'] = {'context': []}
+        self.write()
+        self.assertEqual(1, self.run_cli('validate-reflection', '--evidence', 'evidence.json', '--input', 'reflection.json').returncode)
+        self.result['experiment'] = {'change': 'a', 'context': 'b', 'expected_observation': 'c', 'effort': 'd',
+                                     'success_condition': 'e', 'stop_condition': 'f', 'followup_evidence': 'g'}
+        self.result['experiment_refs'] = {'unrecognized': []}
+        self.write()
+        self.assertEqual(1, self.run_cli('validate-reflection', '--evidence', 'evidence.json', '--input', 'reflection.json').returncode)
 
     def test_report_keeps_limitations_and_provenance_without_empty_sections(self):
         self.ev['scope']['subject'] = 'selected participant'
