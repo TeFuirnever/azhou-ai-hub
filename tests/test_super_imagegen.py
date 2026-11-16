@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import struct
 import unittest
 from pathlib import Path
 
@@ -162,6 +163,28 @@ class SuperImagegenPackageTest(unittest.TestCase):
                 path = PRIVATE_ROOT / relative
                 self.assertTrue(path.is_file(), f"missing private baseline file: {relative}")
                 self.assertEqual(digest, _sha256(path), f"private baseline drifted: {relative}")
+
+    def test_showcase_effect_image_is_metadata_sanitized(self) -> None:
+        # The generation pipeline embeds the scene prompt, local paths and
+        # runtime identity in eXIf/iTXt/tEXt chunks; the published showcase
+        # must carry none of them (sanitized before publishing, 2026-11-16).
+        data = (ROOT / "assets" / "skills" / "super-imagegen-effect.png").read_bytes()
+        pos = 8
+        present = []
+        while pos < len(data):
+            length = struct.unpack(">I", data[pos:pos + 4])[0]
+            present.append(data[pos + 4:pos + 8])
+            pos += 12 + length
+        for forbidden in (b"iTXt", b"tEXt", b"zTXt", b"eXIf"):
+            self.assertNotIn(forbidden, present, f"metadata chunk must stay out of the shipped image: {forbidden}")
+        self.assertIn(b"IHDR", present)
+        self.assertIn(b"IEND", present)
+
+    def test_provenance_binds_the_sanitized_shipment_and_the_approved_candidate(self) -> None:
+        self.assertIn("e038db573f137dfe42341167dcdf1c2d6481387e7aa33e65dd3b2ec24f98f419", self.provenance)
+        self.assertIn("6b2526dd43855c56a1c481dfc0c47cda68316fc46dc8cb5e15f5dc397d0c275a", self.provenance)
+        self.assertIn("metadata-sanitized", self.provenance)
+        self.assertIn("byte-identical", self.provenance)
 
 
 if __name__ == "__main__":
