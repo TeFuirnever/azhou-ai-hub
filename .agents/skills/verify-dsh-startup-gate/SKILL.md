@@ -20,9 +20,9 @@ DSH 启动遮罩是注入 DSH 宿主页面的不透明全视口盖板，在渲�
 - P1 盖板挂载 ⟺ 相位 ∈ {waiting, claimed, revealing}；盖板元素至多一个。
 - P2 released/expired 是吸收态；过期回调不得把已终结的 gate 翻成另一终态。
 - P3 盖板挂载期间，看门狗定时器恰在追踪的硬截止点上处于武装状态，且截止点未被越过。
-- P4 claim/ready/release 只在各自的合法前置相位返回 true。
-- P5 expiry listener 恰触发一次 ⟺ 注册后发生过 expiry（取消只压制未来触发；expired 期注册立即触发一次；released 期注册永不触发）。
-- P6 同时挂起至多一个 timer 与一个 frame（no-rAF 回退下 reveal fallback 与看门狗共存的两个 timer 合法）；终态后 timer/frame/盖板计数全部归零。
+- P4 claim/ready/release 只在各自的合法前置相位返回 true，**且返回 true 时相位必须已迁移到各自的后继相位**（claim→claimed、ready→revealing、release→expired）。
+- P5 expiry listener 恰触发一次 ⟺ gate 进入 expired 的那一刻它已注册、未取消、且注册于激活相位（expired 期注册的立即欠一次）。期望次数独立于 `fired` 推导（模型侧 `owed` 标记），伪造/过早通知本身即违规。
+- P6 同时挂起至多一个 timer 与一个 frame（no-rAF 回退下 reveal fallback 与看门狗共存的两个 timer 合法）；终态后 timer/frame/盖板/pagehide listener 计数全部归零。
 
 ## 如何运行
 
@@ -45,7 +45,7 @@ node packages/agent-skin/tools/verify-dsh-startup-gate.mjs
 
 ## Able-to-fail 探针
 
-检验器本身必须被证明能失败。四个已验收探针（2026-11-16 实测各被 P1/P6/P4/P3 抓住，反例深度 1–2）；同步推进 commit 时至少复跑一个：
+检验器本身必须被证明能失败。七个已验收探针（m1–m4 于 2026-11-16 首轮验收，各被 P1/P6/P4/P3 抓住；m5–m7 来自 PR #480 的 Codex 评审——它自行变异验证了检验器三个盲区，修复后同日验收，分别被 P5/P4/P6 的新 oracle 臂抓住）；同步推进 commit 时至少复跑一个：
 
 ```python
 import pathlib
@@ -63,6 +63,15 @@ MUTATIONS = {
  'm4-reveal-stall': (
    "      phase = 'revealing';\n      arm(250);",
    "      phase = 'revealing';"),
+ 'm5-premature-fire': (
+   "    expirationListeners.add(listener);",
+   "    listener();"),
+ 'm6-claim-no-transition': (
+   "      phase = 'claimed';\n      arm(12_000);\n      return true;",
+   "      arm(12_000);\n      return true;"),
+ 'm7-pagehide-listener-leak': (
+   "    host.removeEventListener?.('pagehide', expire);\n",
+   ""),
 }
 out = pathlib.Path('/tmp/azhou-gate-mutations'); out.mkdir(exist_ok=True)
 for name, (old, new) in MUTATIONS.items():
@@ -75,7 +84,7 @@ for name, (old, new) in MUTATIONS.items():
 ## 与代码保持同步
 
 - 覆盖对象：`packages/agent-skin/extension/hosts/dsh-startup-gate.js` 整文件（安装自检、gate 对象、expire/arm/remove、listener 语义）。
-- **sync commit：`541619a8`**（2026-11-16 确认：穷举三变体全绿 + 4/4 探针被抓住；该 commit 下 covered file 与工作区字节一致）。
+- **sync commit：`541619a8`**（2026-11-16 确认：穷举三变体全绿 + 7/7 探针被抓住；该 commit 下 covered file 与工作区字节一致）。
 - 覆盖对象在此 commit 之后发生变更而未重跑检验时，结果视为未验证；**只有**在新代码上重新跑出全绿、并至少通过一个 able-to-fail 探针之后，才允许把 sync commit 前移。
 - 更大范围的重新对齐（新相位、调度契约变化、环境假设调整）走 pstack `/maintain-formal-verification-skill`。
 

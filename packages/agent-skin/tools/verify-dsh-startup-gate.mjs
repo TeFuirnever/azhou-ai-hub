@@ -186,7 +186,7 @@ function digest(env, model) {
     frames: env.frames.size,
     children: env.root.children.length,
     used: model.used,
-    listeners: model.listeners.map((listener) => ({ fired: listener.fired, cancelled: listener.cancelled, regPhase: listener.regPhase })),
+    listeners: model.listeners.map((listener) => ({ fired: listener.fired, cancelled: listener.cancelled, regPhase: listener.regPhase, owed: listener.owed })),
     seenReleased: model.seenReleased,
     seenExpired: model.seenExpired,
     hardDeadline: model.hardDeadline,
@@ -227,25 +227,26 @@ function checkInvariants(env, model, sink, frameMode) {
   }
 
   // P6: bounded concurrent timers/frames, and a finished gate leaves no
-  // zombie timers, frames, or covers behind. In the no-rAF environment the
-  // reveal fallback legitimately coexists with the watchdog.
+  // zombie timers, frames, covers, or pagehide listeners behind. In the
+  // no-rAF environment the reveal fallback legitimately coexists with the
+  // watchdog.
   const maxTimers = frameMode === 'no-rAF' ? 2 : 1;
   if (timerDeadlines.length > maxTimers) fail(`${timerDeadlines.length} timers pending at once (limit ${maxTimers})`);
   if (env.frames.size > 1) fail(`${env.frames.size} animation frames pending at once`);
-  if (TERMINAL_PHASES.has(status) && (timerDeadlines.length > 0 || env.frames.size > 0 || children > 0)) {
-    fail(`terminal phase '${status}' left ${timerDeadlines.length} timers, ${env.frames.size} frames, ${children} covers behind`);
+  if (TERMINAL_PHASES.has(status) && (timerDeadlines.length > 0 || env.frames.size > 0 || children > 0 || env.pagehideListeners.size > 0)) {
+    fail(`terminal phase '${status}' left ${timerDeadlines.length} timers, ${env.frames.size} frames, ${children} covers, ${env.pagehideListeners.size} pagehide listeners behind`);
   }
 
   // P5: listener semantics — a listener fires exactly once iff expiry
-  // happened while it was registered; cancellation suppresses only future
-  // firing; a registration after expiry fired immediately at registration.
+  // happened while it was registered and not yet cancelled. `owed` is set
+  // once, at the moment the gate first enters 'expired', for every listener
+  // then registered in an active phase and not cancelled; registration in
+  // the 'expired' phase owes its fire immediately. The expectation is
+  // derived independently of `fired`, so a premature or spurious
+  // notification is a violation, not evidence of legitimacy.
   for (const listener of model.listeners) {
     if (listener.fired > 1) fail(`an expiry listener fired ${listener.fired} times`);
-    // Cancellation only suppresses future firing; a listener that already
-    // fired stays fired. Registration in a terminal phase resolves instantly.
-    const expected = listener.regPhase === 'expired' ? 1
-      : listener.regPhase === 'released' ? 0
-        : (listener.fired === 1 || (!listener.cancelled && model.seenExpired)) ? 1 : 0;
+    const expected = listener.owed ? 1 : 0;
     if (listener.fired !== expected) {
       fail(`expiry listener (registered in '${listener.regPhase}'${listener.cancelled ? ', cancelled' : ''}) fired ${listener.fired} times, expected ${expected}`);
     }
@@ -267,7 +268,13 @@ function applyEvent(env, model, event, source, frameMode, sink) {
     if (result !== expected) {
       apiFailure = `${event.type}() returned ${result} from phase '${before}': ${event.type} must succeed exactly on its legal phase`;
     }
+    const expectedPost = event.type === 'claim' ? 'claimed'
+      : event.type === 'ready' ? 'revealing'
+        : 'expired';
     if (result === true) {
+      if (gate.status() !== expectedPost) {
+        apiFailure = `${event.type}() returned true from phase '${before}' but the phase is now '${gate.status()}': a successful ${event.type} must enter '${expectedPost}'`;
+      }
       model.hardDeadline = env.now()
         + (event.type === 'claim' ? CLAIM_DEADLINE_MS : REVEAL_DEADLINE_MS);
     }
@@ -275,7 +282,7 @@ function applyEvent(env, model, event, source, frameMode, sink) {
     label = `${event.type}() -> ${result} (phase ${before} -> ${gate.status()})`;
   } else if (event.type === 'listen') {
     const before = gate.status();
-    const listener = { fired: 0, cancelled: false, regPhase: before };
+    const listener = { fired: 0, cancelled: false, regPhase: before, owed: before === 'expired' };
     const index = model.listeners.length;
     model.cancels.push(gate.onExpire(() => { listener.fired += 1; }));
     model.listeners.push(listener);
@@ -380,6 +387,13 @@ function explore(script, source, frameMode, maxStates) {
       if (apiFailure) sink(apiFailure, [...trace]);
       const statusNow = env.host.__azhouDshStartupGate.status();
       if (statusNow === 'released') model.seenReleased = true;
+      if (statusNow === 'expired' && !model.seenExpired) {
+        // The expiry transition: every listener registered in an active
+        // phase and not yet cancelled is owed exactly one notification.
+        for (const listener of model.listeners) {
+          if (!listener.cancelled && ACTIVE_PHASES.has(listener.regPhase)) listener.owed = true;
+        }
+      }
       if (statusNow === 'expired') model.seenExpired = true;
       checkInvariants(env, model, (message) => sink(message, [...trace]), frameMode);
       if (violation) return null;
