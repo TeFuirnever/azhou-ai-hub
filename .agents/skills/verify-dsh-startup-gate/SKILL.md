@@ -13,7 +13,7 @@ DSH 启动遮罩是注入 DSH 宿主页面的不透明全视口盖板，在渲�
 
 ## 验证什么
 
-`packages/agent-skin/tools/verify-dsh-startup-gate.mjs` 在与 `tools/dsh-startup-gate.unit.test.mjs` 同源的 stub 浏览器环境里运行**未经修改的真实 gate 源码**，在单调虚拟时钟下穷举所有事件交错：渲染器 API（claim/ready/release 各至多两次，含合法相位外的 no-op 重试）、expiry listener 注册与取消（各两次）、pagehide、重复 IIFE 注入、动画帧投递、看门狗定时器触发。环境三变体：normal（rAF 正常投递）、dead-rAF（rAF 注册但帧永不投递）、no-rAF（无 rAF，走 setTimeout 回退）。基线状态空间 148,816（normal 64,400 / dead-rAF 49,424 / no-rAF 34,992），node v24 全程约 90 秒，逐确定性可复现。
+`packages/agent-skin/tools/test-dsh-startup-gate.mjs` 在与 `tools/dsh-startup-gate.unit.test.mjs` 同源的 stub 浏览器环境里运行**未经修改的真实 gate 源码**，在单调虚拟时钟下穷举所有事件交错：渲染器 API（claim/ready/release 各至多两次，含合法相位外的 no-op 重试）、expiry listener 注册与取消（各两次）、pagehide、重复 IIFE 注入、动画帧投递、看门狗定时器触发。环境三变体：normal（rAF 正常投递）、dead-rAF（rAF 注册但帧永不投递）、no-rAF（无 rAF，走 setTimeout 回退）。基线状态空间 148,816（normal 64,400 / dead-rAF 49,424 / no-rAF 34,992），node v24 全程约 90 秒，逐确定性可复现。
 
 不变量（每条对应上句承诺的一个分句）：
 
@@ -27,7 +27,7 @@ DSH 启动遮罩是注入 DSH 宿主页面的不透明全视口盖板，在渲�
 ## 如何运行
 
 ```bash
-node packages/agent-skin/tools/verify-dsh-startup-gate.mjs
+node packages/agent-skin/tools/test-dsh-startup-gate.mjs
 ```
 
 - 退出 0：全部不变量成立。
@@ -79,7 +79,7 @@ for name, (old, new) in MUTATIONS.items():
     (out / f'{name}.js').write_text(src.replace(old, new))
 ```
 
-对每个变体运行 `node packages/agent-skin/tools/verify-dsh-startup-gate.mjs --gate /tmp/azhou-gate-mutations/<name>.js --variant normal`，期望全部退出 1。探针只写 /tmp 副本，绝不改动被跟踪文件。
+对每个变体运行 `node packages/agent-skin/tools/test-dsh-startup-gate.mjs --gate /tmp/azhou-gate-mutations/<name>.js --variant normal`，期望全部退出 1。探针只写 /tmp 副本，绝不改动被跟踪文件。
 
 ## 与代码保持同步
 
