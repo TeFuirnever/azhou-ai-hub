@@ -127,7 +127,13 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 The candidate [workspace theme slice](packages/agent-skin/docs/theme-appearance.md) supports one approved Azhou theme and workspace readability transparency, with saving and application reported separately. Full theme-library behavior, DSH theme support, and real-host visual acceptance remain unverified. Skip leaves an already-admitted background decode to finish only in its original workspace; waiting for a new shell is still cancelled. Theme settings use visible labels, native keyboard controls and explicit mask values or Follow theme.
 
-<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100 and Archify: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
+## Lavish
+
+> 🔍 Circle what to change in the browser — the annotated feedback returns to the agent.
+
+![Lavish effect preview](assets/skills/super-lavish-effect.png)
+
+<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify and Lavish: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust-dark.jpg">
