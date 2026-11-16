@@ -12,7 +12,7 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 12 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 13 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -36,6 +36,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
 npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
+npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 ~~~
 
 Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
@@ -44,7 +45,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills-dark.jpg">
-  <img src="assets/github/readme-banner-skills.jpg" alt="12 Skills: each one independently installable" width="100%">
+  <img src="assets/github/readme-banner-skills.jpg" alt="13 Skills: each one independently installable" width="100%">
 </picture>
 
 | Skill | Real job | Verification basis |
@@ -61,6 +62,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 | [Session Insights](skills/super-session-insights/SKILL.md) | Fact-bound usage insight reports from local agent session stores (Claude Code and Codex adapters; the zcode adapter fails closed); aggregates only, raw transcripts never leave the machine. | Wiring-integrity suite on synthetic stores with golden aggregates and privacy plus fail-closed negative controls. No behavior benchmark yet. |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | Rewrite agent-facing English under ASD-STE100-derived controlled-English structural rules, preserving every hedge, fact and scope qualifier. | Faithfully imported at the locked upstream commit with pinned SHA-256 integrity tests; `scripts/ste-lint.py` is a deterministic stdlib gate covered by positive and negative tests. No behavior benchmark yet. |
 | [Archify](skills/super-archify/SKILL.md) | Turn systems, plans, or codebases into interactive diagram maps — ten typed-JSON modes — delivered as self-contained explorable HTML. | Synchronized to official stable v3.2.0 (<code>208acba8</code>) with SHA-256 integrity over the selected subtree; browser checks and visual review are reported separately for the actual artifact. No model-quality improvement is claimed. |
+| [Lavish](skills/super-lavish/SKILL.md) | Turn complex or visual responses into reviewable HTML artifacts the user annotates in the browser; feedback returns to the agent through the locked <code>lavish-axi</code> CLI review loop. | Adopted at the locked upstream release <code>lavish-axi-v0.1.97</code> (commit <code>79aa0a18</code>): provenance pins the upstream skill SHA-256, npm integrity and tarball digest; the CLI is invoked through the locked <code>npx</code> baseline and is not vendored. Integrity tests pin the provenance and license copy. No behavior benchmark yet. |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try-dark.jpg">

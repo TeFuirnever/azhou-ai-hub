@@ -50,6 +50,15 @@ The README promo video is not stored in this repository. Both READMEs link to th
 
 `skills/super-repo-pedant/` is the Azhou-maintained derivative. Its compatibility contract records every preserved or deliberately replaced behavior.
 
+## Lavish Editor
+
+`skills/super-lavish/` imports the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`79aa0a18dba9c1a1dcec6db19d2ef4eb7643754b`](https://github.com/kunchenguid/lavish-axi/commit/79aa0a18dba9c1a1dcec6db19d2ef4eb7643754b) (official release `lavish-axi-v0.1.97`). The unmodified upstream baseline is hash-locked for reproducibility.
+
+- Copyright: Kun Chen, 2026
+- License: [MIT](LICENSES/Lavish-AXI-MIT.txt)
+- Imported boundary: generated skill instructions only; no Lavish application code, browser bundle or hosted service is vendored. `lavish-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y lavish-axi@0.1.97` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The CLI's own bundled third-party notices ship inside the npm package and are not redistributed from this repository.
+- Local changes: neutral frontmatter, locked CLI baseline, Azhou brand protocol and stable receipt, setup/provenance/compatibility records, and explicit authorization checkpoints.
+
 ## Excalidraw Diagram
 
 The package uses these licensed upstreams. Package versions and local digests are current runtime evidence. The three commit rows marked “selected baseline” were chosen on 2026-08-26 as the latest public commits at or before the 2026-08-23 package build; they are immutable future comparison points, not proof of the exact historical import commit.
