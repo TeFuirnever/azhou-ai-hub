@@ -12,7 +12,7 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 12 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 13 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -36,6 +36,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
 npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
+npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 ~~~
 
 Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
@@ -44,7 +45,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills-dark.jpg">
-  <img src="assets/github/readme-banner-skills.jpg" alt="12 Skills: each one independently installable" width="100%">
+  <img src="assets/github/readme-banner-skills.jpg" alt="13 Skills: each one independently installable" width="100%">
 </picture>
 
 | Skill | Real job | Verification basis |
@@ -61,6 +62,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 | [Session Insights](skills/super-session-insights/SKILL.md) | Fact-bound usage insight reports from local agent session stores (Claude Code and Codex adapters; the zcode adapter fails closed); aggregates only, raw transcripts never leave the machine. | Wiring-integrity suite on synthetic stores with golden aggregates and privacy plus fail-closed negative controls. No behavior benchmark yet. |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | Rewrite agent-facing English under ASD-STE100-derived controlled-English structural rules, preserving every hedge, fact and scope qualifier. | Faithfully imported at the locked upstream commit with pinned SHA-256 integrity tests; `scripts/ste-lint.py` is a deterministic stdlib gate covered by positive and negative tests. No behavior benchmark yet. |
 | [Archify](skills/super-archify/SKILL.md) | Turn systems, plans, or codebases into interactive diagram maps — ten typed-JSON modes — delivered as self-contained explorable HTML. | Synchronized to official stable v3.2.0 (<code>208acba8</code>) with SHA-256 integrity over the selected subtree; browser checks and visual review are reported separately for the actual artifact. No model-quality improvement is claimed. |
+| [Lavish](skills/super-lavish/SKILL.md) | Turn complex or visual responses into reviewable HTML artifacts the user annotates in the browser; feedback returns to the agent through the locked <code>lavish-axi</code> CLI review loop. | Adopted at the locked upstream release <code>lavish-axi-v0.1.97</code> (commit <code>79aa0a18</code>): provenance pins the upstream skill SHA-256, npm integrity and tarball digest; the CLI is invoked through the locked <code>npx</code> baseline and is not vendored. Integrity tests pin the provenance and license copy. No behavior benchmark yet. |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try-dark.jpg">
@@ -185,7 +187,7 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 |---|---|---|
 | `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; current source candidate `0.9.0/build 42`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT; bundled Azhou artwork is CC BY-NC-ND 4.0. |
 
-On a Codex cold start, the native launcher submits its own cover for drawing before opening Codex, reads the validated appearance snapshot, and plays the existing 12-second animation in its native window. It releases the cover after both playback and a supported Codex workspace are observed; hot starts still activate the existing process without replay. Build 42 is installed on the maintainer Mac. The standalone player, hot activation and cold-start event checks passed; cold-start visual continuity remains unverified. DSH uses a separate document gate. On 2026-11-14, the post-merge build 42 package was atomically updated in the existing shared DSH entity and rechecked on DeepSeek Harness `0.2.2-rc.1`: the host loading placeholder appeared first, then the Azhou cover masked the new-session composer, and the animation completed to the wallpapered workspace. Continuous first-frame capture remains pending. macOS CI requires real ordering, reveal and cleanup checks on owned test windows, including a negative control; these checks do not approve installed startup visual continuity. See the [startup contract](packages/agent-skin/docs/testing.md).
+On a Codex cold start, the launcher shows its own floating cover without taking focus and plays the 12-second animation in a native window. It hands off after playback and workspace readiness. Switching to another app or Space releases the cover. A warm launch activates the existing Codex process without replay. DSH uses its own document gate. macOS CI verifies window ordering, player reveal and cleanup with a negative control. The installed builds and pending visual acceptance are tracked in the [support matrix](docs/support-matrix.md#optional-integrations) and [startup tests](packages/agent-skin/docs/testing.md).
 
 <sub>🦊 Foundation CLI, pstack and Agent Skin previews: generated illustrations, not from the Azhou Scenes pipeline and without a colour gate; maintainer visual approval recorded 2026-11-12.</sub>
 
