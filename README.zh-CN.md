@@ -125,7 +125,13 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 
 ![Archify 效果图](assets/skills/super-archify-effect.png)
 
-<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100 与 Archify：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
+## Lavish
+
+> 🔍 在浏览器里圈出要改的地方——标注反馈回到 agent 手里。
+
+![Lavish 效果图](assets/skills/super-lavish-effect.png)
+
+<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify 与 Lavish：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust.zh-CN-dark.jpg">

@@ -125,7 +125,13 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 ![Archify effect preview](assets/skills/super-archify-effect.png)
 
-<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100 and Archify: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
+## Lavish
+
+> 🔍 Circle what to change in the browser — the annotated feedback returns to the agent.
+
+![Lavish effect preview](assets/skills/super-lavish-effect.png)
+
+<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify and Lavish: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust-dark.jpg">
