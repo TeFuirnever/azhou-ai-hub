@@ -20,8 +20,8 @@ This package contains the contract layer only. The generation code, prompt templ
 Resolve the install through the harness skill roots in order, then verify the CLI responds:
 
 ```bash
-python3 <installed>/scripts/azhou_gen.py --help
-python3 <installed>/scripts/azhou_gen.py --doctor --json
+python <installed>/scripts/azhou_gen.py --help
+python <installed>/scripts/azhou_gen.py --doctor --json
 ```
 
 Treat `--help` as the parameter authority — flags, defaults, and profiles are read from the installed copy, not from memory or from this document. `--doctor --json` must be run with the request's actual profile, model, and output parameters; a doctor pass on different parameters proves nothing for this request. The doctor reports model components, applicable LoRAs, the runtime lock, the output directory, and observed machine resources. It never downloads anything, and it never installs anything.

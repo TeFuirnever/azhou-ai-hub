@@ -28,8 +28,8 @@ Use `✅ 验证通过` only after the named checks actually ran. Use `❌ 验证
 
 Do not follow workflow or CLI details from memory — the installed copy is the current truth. Resolve the installed private `azhou-imagegen` skill through the harness skill roots, then read the actual surface from it:
 
-- `python3 <installed>/scripts/azhou_gen.py --help` for parameters and defaults
-- `python3 <installed>/scripts/azhou_gen.py --doctor --json` for the dependency gate
+- `python <installed>/scripts/azhou_gen.py --help` for parameters and defaults
+- `python <installed>/scripts/azhou_gen.py --doctor --json` for the dependency gate
 
 Run from the installed directory. An independent install uses the installed package plus explicit inputs; it does not search development checkouts or neighbor projects. If the install cannot be resolved, stop with a named hold — this package never reimplements, copies, or downloads the runtime. See [setup](references/setup.md) for the location rules, the doctor gate, and the fail-closed boundary; [provenance](references/provenance.md) records the private-source boundary and baseline hashes.
 
