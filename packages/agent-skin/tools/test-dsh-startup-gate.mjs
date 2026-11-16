@@ -277,6 +277,8 @@ function applyEvent(env, model, event, source, frameMode, sink) {
       }
       model.hardDeadline = env.now()
         + (event.type === 'claim' ? CLAIM_DEADLINE_MS : REVEAL_DEADLINE_MS);
+    } else if (gate.status() !== before) {
+      apiFailure = `${event.type}() returned false from phase '${before}' but the phase is now '${gate.status()}': a rejected ${event.type} must preserve the phase`;
     }
     model.used[event.type] += 1;
     label = `${event.type}() -> ${result} (phase ${before} -> ${gate.status()})`;
@@ -295,8 +297,12 @@ function applyEvent(env, model, event, source, frameMode, sink) {
     model.used.cancel += 1;
     label = `cancel(listener #${target})`;
   } else if (event.type === 'pagehide') {
+    const before = gate.status();
     for (const callback of [...env.pagehideListeners]) callback();
     env.pagehideListeners.clear();
+    if (ACTIVE_PHASES.has(before) && gate.status() !== 'expired') {
+      apiFailure = `pagehide fired from phase '${before}' but the phase is now '${gate.status()}': pagehide must expire an active gate`;
+    }
     model.used.pagehide += 1;
     label = `pagehide fires (cover ${env.root.children.length === 0 ? 'removed' : 'still attached'})`;
   } else if (event.type === 'rerun') {
@@ -312,9 +318,13 @@ function applyEvent(env, model, event, source, frameMode, sink) {
     model.used.rerun += 1;
     label = 'duplicate IIFE injection';
   } else if (event.type === 'frame') {
+    const before = gate.status();
     const [id, callback] = env.frames.entries().next().value;
     env.frames.delete(id);
     callback();
+    if (gate.status() !== 'released') {
+      apiFailure = `animation frame delivered from phase '${before}' but the phase is now '${gate.status()}': a delivered reveal frame must release the gate`;
+    }
     label = 'animation frame delivered (reveal callback)';
   } else if (event.type === 'fireTimers') {
     const parts = [];

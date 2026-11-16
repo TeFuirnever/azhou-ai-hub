@@ -20,7 +20,7 @@ DSH 启动遮罩是注入 DSH 宿主页面的不透明全视口盖板，在渲�
 - P1 盖板挂载 ⟺ 相位 ∈ {waiting, claimed, revealing}；盖板元素至多一个。
 - P2 released/expired 是吸收态；过期回调不得把已终结的 gate 翻成另一终态。
 - P3 盖板挂载期间，看门狗定时器恰在追踪的硬截止点上处于武装状态，且截止点未被越过。
-- P4 claim/ready/release 只在各自的合法前置相位返回 true，**且返回 true 时相位必须已迁移到各自的后继相位**（claim→claimed、ready→revealing、release→expired）。
+- P4 claim/ready/release 只在各自的合法前置相位返回 true；**返回 true 时相位必须已迁移到后继相位**（claim→claimed、ready→revealing、release→expired），**返回 false 时相位必须原地不动**；宿主事件必须落进各自后继相位（激活相位下 pagehide → expired，揭示帧投递 → released）。
 - P5 expiry listener 恰触发一次 ⟺ gate 进入 expired 的那一刻它已注册、未取消、且注册于激活相位（expired 期注册的立即欠一次）。期望次数独立于 `fired` 推导（模型侧 `owed` 标记），伪造/过早通知本身即违规。
 - P6 同时挂起至多一个 timer 与一个 frame（no-rAF 回退下 reveal fallback 与看门狗共存的两个 timer 合法）；终态后 timer/frame/盖板/pagehide listener 计数全部归零。
 
@@ -45,7 +45,7 @@ node packages/agent-skin/tools/test-dsh-startup-gate.mjs
 
 ## Able-to-fail 探针
 
-检验器本身必须被证明能失败。七个已验收探针（m1–m4 于 2026-11-16 首轮验收，各被 P1/P6/P4/P3 抓住；m5–m7 来自 PR #480 的 Codex 评审——它自行变异验证了检验器三个盲区，修复后同日验收，分别被 P5/P4/P6 的新 oracle 臂抓住）；同步推进 commit 时至少复跑一个：
+检验器本身必须被证明能失败。九个已验收探针（m1–m4 于 2026-11-16 首轮验收，各被 P1/P6/P4/P3 抓住；m5–m7 来自 PR #480 Codex 评审第一轮，m8–m9 来自同一评审对新 commit 的复审——Codex 每轮自行变异验证检验器盲区，修复后同日验收，分别被 P5/P4/P6 与新增的相位迁移、宿主事件 oracle 臂抓住）；同步推进 commit 时至少复跑一个：
 
 ```python
 import pathlib
@@ -72,6 +72,12 @@ MUTATIONS = {
  'm7-pagehide-listener-leak': (
    "    host.removeEventListener?.('pagehide', expire);\n",
    ""),
+ 'm8-pagehide-no-register': (
+   "    host.addEventListener?.('pagehide', expire, { once: true });\n",
+   ""),
+ 'm9-ready-rejected-advances': (
+   "      if (phase !== 'claimed') return false;",
+   "      if (phase !== 'claimed') { phase = 'claimed'; return false; }"),
 }
 out = pathlib.Path('/tmp/azhou-gate-mutations'); out.mkdir(exist_ok=True)
 for name, (old, new) in MUTATIONS.items():
