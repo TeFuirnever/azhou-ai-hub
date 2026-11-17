@@ -1,5 +1,6 @@
 # Azhou immersive experience plan
 
+新增执行合同：[无视频基础模式与全线验证](OPTIONAL-MEDIA-AND-VALIDATION.md)。P02a 稳定合同与 P02b 最终视觉分开；基础可用不等待视频，完整动态仍须视觉验收。本文较早的整阶段依赖按该合同逐切片核对，不把历史调查状态当作当前实施结果。
 按顺序交付阿舟连续启动与工作区体验，保留 Azhou IP、最新已保存设置与原生控件。
 本计划是设计资产，不是执行授权或已通过回执。
 P01调查基线与约束，P02冻结视觉与协议后P10隔离宿主边界，P03在P02和P10后，P04 集成整窗视觉，P05 独立完成 DSH。
@@ -99,6 +100,8 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] 独立 root verdict 对应精确 head SHA，所有检查与线程解决。由操作者 squash 合并，保留实际合并结果及恢复点后才考虑释放租约。
 
 ## 审阅阿舟场景和素材 (P02)
+
+本阶段依据[P02动态媒体制作](P02-MEDIA-PRODUCTION.md)、[融合复用矩阵](P02-REUSE-MATRIX.md)和[架构准备](P02-INTEGRATION-READINESS.md)执行。静态分镜只作制作输入，不满足用户要求的动态交付。容器与制作工具不预设，参考级质量不降级。P02冻结非生产完整媒体/主题候选及协议，后续阶段验收真实产品集成，避免循环依赖。
 
 **Depends on.** P01.
 
