@@ -193,6 +193,7 @@ def bind_freeze(freeze_dir, copy_dir):
 
 
 REPO_BINDING_COVER_NOTE = 'HEAD, index, tracked diff and status; untracked file bytes need --bind-file'
+BINDING_UNREADABLE = 'missing-or-unreadable'
 
 
 def snapshot_repo(repo):
@@ -361,9 +362,18 @@ def record_command(args):
             records.append({'command': item.get('command'), 'exit_code': item.get('exit_code')})
 
     if args.bind_repo:
-        repo_binding['after'] = snapshot_repo(args.bind_repo)
+        try:
+            repo_binding['after'] = snapshot_repo(args.bind_repo)
+        except (OSError, subprocess.SubprocessError):
+            repo_binding['after'] = BINDING_UNREADABLE
         repo_binding['unchanged'] = repo_binding['before'] == repo_binding['after']
-    file_after = {str(Path(item)): hash_file(item) for item in args.bind_file}
+    file_after = {}
+    for item in args.bind_file:
+        key = str(Path(item))
+        try:
+            file_after[key] = hash_file(item)
+        except OSError:
+            file_after[key] = BINDING_UNREADABLE
 
     result = {
         'schema': 'super-session-insights.diagnostic-run.v1',

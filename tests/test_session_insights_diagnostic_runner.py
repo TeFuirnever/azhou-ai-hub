@@ -281,6 +281,40 @@ class RecordCommandTest(unittest.TestCase):
         self.assertFalse(result['repo_binding']['unchanged'])
         self.assertFalse(result['file_binding_unchanged'])
 
+    def test_record_reports_deleted_bound_file_without_losing_run(self):
+        victim = self.root / 'victim.txt'
+        victim.write_bytes(b'bound bytes\n')
+        proc, out = self.record(f'rm {victim}', extra=('--bind-file', str(victim)))
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        self.assertTrue((out / 'result.json').is_file())
+        result = self.result(out)
+        self.assertIsNone(result['stop_reason'])
+        self.assertEqual(0, result['returncode'])
+        self.assertFalse(result['file_binding_unchanged'])
+        self.assertEqual('missing-or-unreadable', result['file_binding_after'][str(victim)])
+        self.assertIn('classification', result)
+        self.assertTrue((out / 'recorder-events.jsonl').is_file())
+
+    def test_record_reports_removed_repo_git_without_losing_run(self):
+        repo = self.root / 'repo'
+        repo.mkdir()
+        (repo / 'tracked.txt').write_text('one\n', encoding='utf-8')
+
+        def git(*args):
+            subprocess.run(['git', *args], cwd=str(repo), check=True, capture_output=True)
+
+        git('init', '-q', '-b', 'main')
+        git('-c', 'user.email=bench@example', '-c', 'user.name=bench', 'add', '.')
+        git('-c', 'user.email=bench@example', '-c', 'user.name=bench', 'commit', '-q', '-m', 'init')
+        proc, out = self.record(f'rm -rf {repo}/.git', extra=('--bind-repo', str(repo)))
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        self.assertTrue((out / 'result.json').is_file())
+        result = self.result(out)
+        self.assertIsNone(result['stop_reason'])
+        self.assertFalse(result['repo_binding']['unchanged'])
+        self.assertEqual('missing-or-unreadable', result['repo_binding']['after'])
+        self.assertIn('classification', result)
+
 
 class BindFreezeTest(unittest.TestCase):
     """Frozen material must verify first, copy read-only, and bind source and copy hashes."""
