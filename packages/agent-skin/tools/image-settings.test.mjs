@@ -52,6 +52,7 @@ function makeFixture(options = {}) {
   const drawCalls = [];
   const revoked = [];
   const created = [];
+  const blobs = [];
   const canvases = [];
   const elements = [];
   const timers = [];
@@ -101,6 +102,7 @@ function makeFixture(options = {}) {
       },
       click() {
         element.clickCount = (element.clickCount || 0) + 1;
+        if (tagName === 'a' && options.downloadError) throw new Error('download unavailable');
         for (const listener of element.listeners.get('click') || []) listener({ target: element });
       },
       removeAttribute(name) { attributes.delete(name); },
@@ -133,7 +135,7 @@ function makeFixture(options = {}) {
         if (options.decode === 'pending' || options.decodeForSource?.(value) === 'pending') return;
         queueMicrotask(() => {
           if (current.released) return;
-          if (options.decode === 'error') current.onerror?.(new Error('decoder detail must not escape'));
+          if (options.decode === 'error' || options.decodeForSource?.(value) === 'error') current.onerror?.(new Error('decoder detail must not escape'));
           else current.onload?.();
         });
       },
@@ -181,7 +183,7 @@ function makeFixture(options = {}) {
       },
     },
     indexedDB: options.indexedDB,
-    crypto: options.crypto ?? webcrypto, TextEncoder,
+    crypto: options.crypto ?? webcrypto, TextEncoder, TextDecoder, Blob,
     settingsNamespace: options.settingsNamespace,
     localization: options.localization,
     appearanceAvatar: options.appearanceAvatar,
@@ -189,7 +191,7 @@ function makeFixture(options = {}) {
     getAppearance: options.getAppearance,
     Image: ImageConstructor,
     URL: {
-      createObjectURL() { const value = `blob:fixture-${created.length + 1}`; created.push(value); return value; },
+      createObjectURL(blob) { blobs.push(blob); const value = `blob:fixture-${created.length + 1}`; created.push(value); return value; },
       revokeObjectURL(value) { revoked.push(value); },
     },
     setTimeout(callback, delay) {
@@ -227,6 +229,7 @@ function makeFixture(options = {}) {
     canvases,
     drawCalls,
     created,
+    blobs,
     revoked,
     timers,
     hasPausedYield() { return pausedYields.length > 0; },
@@ -2381,8 +2384,8 @@ test('Restore All synchronizes disabled theme controls without saving or changin
   assert.equal(mode.disabled,true);assert.equal(alpha.disabled,true);f.fixture.api.dispose();
 });
 
-function presetDraftFixture(storage=makeIndexedDB()) {
-  const fixture=makeFixture({indexedDB:storage.indexedDB,dimensionsForSource:value=>value==='data:image/png;base64,AAAA'?[512,512]:[1536,1024]});
+function presetDraftFixture(storage=makeIndexedDB(),options={}) {
+  const fixture=makeFixture({indexedDB:storage.indexedDB,dimensionsForSource:value=>value==='data:image/png;base64,AAAA'?[512,512]:[1536,1024],...options});
   const base=themeDraftFixture(storage);base.fixture.api.dispose();
   const control=attr=>fixture.elements.find(el=>el.getAttribute(attr)==='');
   return {...base,fixture,control,choose:value=>{const el=control('data-agent-skin-theme-choice');el.value=value;el.listeners.get('change')[0]();},click:label=>fixture.elements.find(el=>el.tagName==='BUTTON'&&el.textContent===label).listeners.get('click')[0]()};
@@ -2609,3 +2612,175 @@ test('a snapshot leaves unvalidated catalog disabled and normal load still rejec
   assert.equal(storage.state.puts, 0);
   fixture.api.dispose();
 });
+
+
+function presetFile(entry = localPreset()) {
+  const {id, ...content} = entry;
+  return {schema:'azhou-appearance-preset.v1', ...content};
+}
+function jsonPresetFile(content = presetFile()) {
+  const bytes = new TextEncoder().encode(JSON.stringify(content));
+  return {size:bytes.byteLength, async arrayBuffer() { return bytes.buffer; }};
+}
+async function importPreset(f, file) {
+  const input = f.control('data-agent-skin-preset-import');
+  assert.ok(input, 'settings exposes an Azhou preset file input');
+  input.files = [file]; input.value = 'C:\fakepath\preset.json';
+  await input.listeners.get('change')[0]();
+  assert.equal(input.value, '', 'file input resets for reimport');
+}
+test('exported Azhou file imports into another catalog, saves without applying and survives reopen', async () => {
+  const sourceStorage = makeIndexedDB(undefined,{libraryRecord:{schemaVersion:1,revision:7,entries:[localPreset()]}});
+  const a = presetDraftFixture(sourceStorage); await a.fixture.api.load(a.defaults); a.fixture.api.openSettings();
+  const output = a.control('data-agent-skin-preset-export'); assert.ok(output, 'selected preset export button exists');
+  output.listeners.get('click')[0]();
+  const blob = a.fixture.blobs[0];
+  const content = JSON.parse(await blob.text());
+  assert.deepEqual(content,presetFile());
+  assert.equal(sourceStorage.state.puts,0);
+  const anchor=a.fixture.elements.find(el=>el.tagName==='A');
+  assert.equal(anchor.download,'azhou-preset.json'); assert.equal(anchor.removed,true);
+  assert.deepEqual([...a.fixture.created],a.fixture.revoked);
+  a.fixture.api.dispose();
+  const b = presetDraftFixture(); const loaded = await b.fixture.api.load(b.defaults);
+  await b.fixture.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:65}});
+  const before = structuredClone([b.storage.state.record,b.storage.state.themeRecord]); const puts=b.storage.state.puts;
+  let applied=0,notified=0;
+  b.fixture.api.openSettings({onApply(){applied++;return {applied:true};},onSaved(){notified++;}});
+  await importPreset(b,blob);
+  assert.equal(b.control('data-agent-skin-preset-list').children[0].textContent,localPreset().name);
+  assert.equal(b.storage.state.puts,puts); assert.equal(applied,0);
+  assert.equal(b.control('data-agent-skin-theme-transparency').value,'65');
+  await b.click('保存');
+  assert.equal(applied,0,'catalog-only save does not apply appearance'); assert.equal(notified,1,'normal save notification remains');
+  assert.deepEqual([b.storage.state.record,b.storage.state.themeRecord],before,'catalog save preserves exact images/theme revisions');
+  assert.equal(b.storage.state.puts,puts+1); assert.equal(b.storage.state.libraryRecord.entries.length,1);
+  assert.notEqual(b.storage.state.libraryRecord.entries[0].id,localPreset().id);
+  await b.fixture.api.load(b.defaults); b.fixture.api.openSettings();
+  assert.equal(b.control('data-agent-skin-preset-list').children.length,1); b.fixture.api.dispose();
+});
+for (const mutate of [v=>v.extra=true,v=>v.id='foreign',v=>v.recipeId='dream',v=>v.appearance.artwork='https://example.com/a.png',v=>v.appearance.contours=[[[0,0],[Infinity,1]]],v=>v.surfaceTransparency={mode:'override',value:101},v=>v.appearance.avatar='data:image/png;base64,AAAA',v=>v.name='bad\u0000name']) {
+  test('preset file rejects invalid boundary '+String(mutate),async()=>{
+    const f=presetDraftFixture();await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();
+    const content=presetFile();mutate(content);await importPreset(f,jsonPresetFile(content));
+    assert.equal(f.control('data-agent-skin-preset-list').children.length,0);assert.equal(f.storage.state.puts,0);f.fixture.api.dispose();
+  });
+}
+for(const kind of ['too-large-before','too-large-after','invalid-utf8','invalid-json']) {
+  test('preset file rejects '+kind+' without staging',async()=>{
+    const f=presetDraftFixture();await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();let reads=0;
+    const file={size:kind==='too-large-before'?20*1024*1024+1:1,async arrayBuffer(){reads++;return kind==='too-large-after'?new ArrayBuffer(20*1024*1024+1):Uint8Array.of(kind==='invalid-utf8'?255:91).buffer;}};
+    await importPreset(f,file);if(kind==='too-large-before')assert.equal(reads,0);
+    assert.equal(f.control('data-agent-skin-preset-list').children.length,0);assert.equal(f.storage.state.puts,0);f.fixture.api.dispose();
+  });
+}
+test('import cancellation and late file read do not write or stage into reopened panel',async()=>{
+  const f=presetDraftFixture();await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();let release;
+  const importing=importPreset(f,{size:1,arrayBuffer(){return new Promise(resolve=>release=resolve);}});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.fixture.api.cancelSettings(),true);f.fixture.api.openSettings();
+  release(await jsonPresetFile().arrayBuffer());await importing;
+  assert.equal(f.control('data-agent-skin-preset-list').children.length,0);assert.equal(f.storage.state.puts,0);f.fixture.api.dispose();
+});
+test('imported file is discarded on embedded cancel and draft export never saves',async()=>{
+  const f=presetDraftFixture();await f.fixture.api.load(f.defaults);f.fixture.api.openSettings({}, {presentation:'embedded'});
+  await importPreset(f,jsonPresetFile());f.control('data-agent-skin-preset-export').listeners.get('click')[0]();
+  assert.equal(f.storage.state.puts,0);f.click('取消');
+  assert.equal(f.control('data-agent-skin-preset-list').children.length,0);assert.equal(f.fixture.created.length,1);assert.equal(f.fixture.revoked.length,1);f.fixture.api.dispose();
+});
+
+for(const failure of ['quota','abort','timeout','dispose']) {
+  test('imported catalog-only save '+failure+' preserves all committed records',async()=>{
+    const options={};const storage=makeIndexedDB(undefined,options);const f=presetDraftFixture(storage);
+    const loaded=await f.fixture.api.load(f.defaults);await f.fixture.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'follow'}});
+    const before=structuredClone([storage.state.record,storage.state.themeRecord,storage.state.libraryRecord]);let applied=0;
+    f.fixture.api.openSettings({onApply(){applied++;return {applied:true};}});await importPreset(f,jsonPresetFile());
+    if(failure==='quota')options.putError={name:'QuotaExceededError'};
+    if(failure==='abort')options.afterRequest=({kind,transaction})=>{if(kind==='put')transaction.abort();};
+    if(failure==='timeout'||failure==='dispose')options.holdRequests=true;
+    const saving=f.click('保存');
+    if(failure==='timeout'||failure==='dispose'){
+      await new Promise(resolve=>setImmediate(resolve));
+      if(failure==='dispose')f.fixture.api.dispose();else f.fixture.advance(10_001);
+    }
+    await saving;assert.deepEqual([storage.state.record,storage.state.themeRecord,storage.state.libraryRecord],before);assert.equal(applied,0);f.fixture.api.dispose();
+  });
+}
+for(const key of ['record','themeRecord','libraryRecord']) {
+  test('imported catalog-only save checks concurrent '+key,async()=>{
+    const f=presetDraftFixture();await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();await importPreset(f,jsonPresetFile());
+    f.storage.state[key]={winner:true};await f.click('保存');
+    assert.equal(f.storage.state.puts,0);assert.deepEqual(f.storage.state[key],{winner:true});f.fixture.api.dispose();
+  });
+}
+for(const end of ['cancel','dispose','timeout']) {
+  test('preset file late decode after '+end+' cannot stage or apply',async()=>{
+    const f=presetDraftFixture(makeIndexedDB(),{decodeForSource:value=>value==='data:image/png;base64,CCCC'?'pending':undefined});
+    await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();const importing=importPreset(f,jsonPresetFile(presetFile(localPreset('data:image/png;base64,CCCC'))));
+    await new Promise(resolve=>setImmediate(resolve));const late=f.fixture.images.at(-1).onload;
+    if(end==='cancel')f.fixture.api.cancelSettings();else if(end==='dispose')f.fixture.api.dispose();else f.fixture.advance(10_001);
+    await importing;late();await new Promise(resolve=>setImmediate(resolve));
+    if(end==='cancel'){f.fixture.api.openSettings();assert.equal(f.control('data-agent-skin-preset-list').children.length,0);}
+    else if(end==='timeout')assert.equal(f.control('data-agent-skin-preset-list').children.length,0);
+    assert.equal(f.storage.state.puts,0);assert.ok(f.fixture.images.at(-1).released);f.fixture.api.dispose();
+  });
+}
+test('preset file rejects undecodable artwork and full or oversized catalogs',async()=>{
+  const bad=presetDraftFixture(makeIndexedDB(),{decodeForSource:value=>value==='data:image/png;base64,CCCC'?'error':undefined});
+  await bad.fixture.api.load(bad.defaults);bad.fixture.api.openSettings();await importPreset(bad,jsonPresetFile(presetFile(localPreset('data:image/png;base64,CCCC'))));
+  assert.equal(bad.control('data-agent-skin-preset-list').children.length,0);bad.fixture.api.dispose();
+  const entries=Array.from({length:8},(_,i)=>({...localPreset(),id:String(i)}));
+  const full=presetDraftFixture(makeIndexedDB(undefined,{libraryRecord:{schemaVersion:1,revision:1,entries}}));
+  await full.fixture.api.load(full.defaults);full.fixture.api.openSettings();let reads=0;
+  await importPreset(full,{size:1,arrayBuffer(){reads++;}});assert.equal(reads,0);assert.equal(full.control('data-agent-skin-preset-import').disabled,true);full.fixture.api.dispose();
+  const huge=localPreset('data:image/png;base64,'+'A'.repeat(11*1024*1024));
+  const f=presetDraftFixture(makeIndexedDB(undefined,{libraryRecord:{schemaVersion:1,revision:1,entries:[huge]}}));
+  await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();await importPreset(f,jsonPresetFile(presetFile(huge)));
+  assert.equal(f.control('data-agent-skin-preset-list').children.length,1);assert.equal(f.storage.state.puts,0);f.fixture.api.dispose();
+});
+
+test('preset export cleans anchor and URL when download fails',async()=>{
+  const f=presetDraftFixture(makeIndexedDB(undefined,{libraryRecord:{schemaVersion:1,revision:1,entries:[localPreset()]}}),{downloadError:true});
+  await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();f.control('data-agent-skin-preset-export').listeners.get('click')[0]();
+  assert.equal(f.fixture.created.length,1);assert.deepEqual(f.fixture.revoked,[...f.fixture.created]);
+  assert.equal(f.fixture.elements.find(el=>el.tagName==='A').removed,true);assert.equal(f.storage.state.puts,0);f.fixture.api.dispose();
+});
+
+test('catalog file remains independent at maximum active theme revision', async()=>{
+  const f=presetDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+  await f.fixture.api.save(loaded.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'follow'}});
+  f.storage.state.themeRecord.revision=Number.MAX_SAFE_INTEGER;await f.fixture.api.load(f.defaults);
+  const before=structuredClone([f.storage.state.record,f.storage.state.themeRecord]);let applied=0;
+  f.fixture.api.openSettings({onApply(){applied++;return {applied:true};}});await importPreset(f,jsonPresetFile());await f.click('保存');
+  assert.equal(f.storage.state.libraryRecord?.entries.length,1,'independent catalog Save must not require a new theme revision');
+  assert.deepEqual([f.storage.state.record,f.storage.state.themeRecord],before);assert.equal(applied,0);
+  await assert.rejects(f.fixture.api.save({...before[0],wallpaperStrength:41},{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'follow'}}),error=>error.reason==='settings-invalid');f.fixture.api.dispose();
+});
+for(const from of ['load','save']) {
+  test('public catalog save honors edits to '+from+' returned settings',async()=>{
+    const f=presetDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+    const returned=from==='load'?loaded.settings:await f.fixture.api.save(loaded.settings);
+    returned.introTitle='Edited returned';returned.contours[0][0][0]=2;
+    await f.fixture.api.save(returned,undefined,{schemaVersion:1,revision:0,entries:[localPreset()]});
+    assert.equal(f.storage.state.record?.introTitle,'Edited returned');assert.equal(f.storage.state.record.contours[0][0][0],2);f.fixture.api.dispose();
+  });
+}
+
+for(const pending of ['file-read','image-decode']) {
+  test('embedded preset '+pending+' cancellation leaves status clear without hiding errors',async()=>{
+    const f=presetDraftFixture(makeIndexedDB(),{decodeForSource:value=>value==='data:image/png;base64,CCCC'?'pending':undefined});
+    await f.fixture.api.load(f.defaults);f.fixture.api.openSettings({}, {presentation:'embedded'});let completeRead;
+    const file=pending==='file-read'?{size:1,arrayBuffer(){return new Promise(resolve=>completeRead=resolve);}}:jsonPresetFile(presetFile(localPreset('data:image/png;base64,CCCC')));
+    const importing=importPreset(f,file);await new Promise(resolve=>setImmediate(resolve));
+    const lateDecode=pending==='image-decode'?f.fixture.images.at(-1).onload:null;
+    const cancel=f.fixture.elements.find(el=>el.tagName==='BUTTON'&&el.textContent==='取消');
+    assert.equal(cancel.disabled,false);await f.click('取消');await importing;
+    const status=f.control('data-agent-skin-settings-status');
+    assert.equal(status.textContent,'','embedded Cancel must not report an import failure');assert.equal(status.getAttribute('role'),'status');
+    if(completeRead)completeRead(await jsonPresetFile().arrayBuffer());else lateDecode();
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(status.textContent,'');assert.equal(f.control('data-agent-skin-preset-list').children.length,0);assert.equal(f.storage.state.puts,0);
+    await importPreset(f,jsonPresetFile({...presetFile(),extra:true}));
+    assert.equal(status.getAttribute('role'),'alert');assert.match(status.textContent,/无法导入或导出 Azhou 预设文件/);f.fixture.api.dispose();
+  });
+}

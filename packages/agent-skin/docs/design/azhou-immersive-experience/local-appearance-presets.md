@@ -19,3 +19,16 @@ Baseline comparisons preserve structured-clone types and graph identity, includi
 The adjacent embedded cancellation boundary retains the transaction-normalized currentSettings rather than copying callback-only themeState metadata back into an images candidate.
 
 Tests cover distinct A/B images, transparency 0 and 100, literal markup names, draft cancellation, catalog preservation, all three baseline conflicts, quota, abort, timeout, dispose, corruption, schema and size limits. No host adapter, renderer, Native protocol, installation or arbitrary theme ID is expanded. Deletion, ZIP import, CSS, synchronization and a general theme library are deferred.
+
+
+## Single-preset file exchange
+
+The settings panel imports and exports one Azhou JSON preset file. This is not Dream ZIP compatibility. P08 mapping and overall completion remain blocked.
+
+The wire object has exactly `schema`, `name`, `recipeId`, `appearance` and `surfaceTransparency`. `schema` is `azhou-appearance-preset.v1`. The other fields use the catalog entry validation above. There is no external id, catalog revision, active pointer, startup text, avatar, CSS, host selector, link or file path. Artwork must be a normalized inline PNG that decodes at 1536 by 1024. Import checks the declared byte size before reading and the actual byte size afterward, with a 20 MiB limit. UTF-8 decoding is strict. The complete catalog still has its separate eight-entry and 20 MiB limits.
+
+Import assigns a fresh opaque local id and adds only a catalog draft. It does not select or load the preset, change the current appearance, save, or apply. Cancel, close, dispose, timeout and late decode cannot commit it. Save retains the existing three-record baseline checks and atomic transaction. When only the catalog draft changed, Save writes only the catalog. It preserves the exact active images and theme records, including missing records and revisions, and skips `onApply`. The normal once-per-commit `onSaved` notification remains intact. A catalog-only save does not require a new theme revision, even at the maximum valid active revision. Public load and save return detached settings copies so caller edits cannot alter the internal comparison state. Saves that edit active settings retain the existing apply and retry contract.
+
+Export includes only the selected catalog entry, including an unsaved entry. It does not implicitly save. It uses the fixed safe download name `azhou-preset.json` and releases the temporary anchor and object URL on both success and failure. File controls have visible associated labels and remain in the existing keyboard navigation.
+
+Unit regressions cover the file boundary, draft-only round trip, active-record preservation, notifications, cancel and late file/decode completion, invalid schema and images, strict UTF-8, both file limits, catalog limits, three baseline conflicts, quota, abort, timeout and dispose. The isolated Chrome harness exercises the real file-input/Blob path, single-item export, imported literal markup names, IDB save and reopen, unchanged active records, cancellation, label/focus behavior and URL cleanup. These checks are not a real Codex host acceptance or a Dream ZIP test.

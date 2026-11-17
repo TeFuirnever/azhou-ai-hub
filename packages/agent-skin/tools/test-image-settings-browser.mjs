@@ -133,9 +133,11 @@ function browserChecks(maxInputBytes) {
     appearanceAvatarCanvas.getContext('2d').fillRect(0, 0, 8, 8);
     const appearanceAvatar = appearanceAvatarCanvas.toDataURL('image/png');
     const created = [];
+    const exportedPresetBlobs = [];
     const revoked = [];
     const urlApi = {
       createObjectURL(blob) {
+        if (blob.type === 'application/json') exportedPresetBlobs.push(blob);
         const url = child.URL.createObjectURL(blob);
         created.push(url);
         return url;
@@ -730,6 +732,55 @@ function browserChecks(maxInputBytes) {
         t.oncomplete=()=>resolve(result);t.onabort=()=>reject(t.error||new Error('raw transaction aborted'));t.onerror=()=>{};
       }); } finally { db.close(); }
     };
+    api.openSettings();
+    settingsDialog.querySelector('[data-agent-skin-settings-tab="workspace"]').click();
+    const presetFileInput=settingsDialog.querySelector('[data-agent-skin-preset-import]');
+    const presetExport=settingsDialog.querySelector('[data-agent-skin-preset-export]');
+    if(presetFileInput.labels.length!==1 || presetFileInput.labels[0].textContent!=='Import Azhou preset file') throw new Error('preset import label association');
+    presetFileInput.focus();if(childDocument.activeElement!==presetFileInput)throw new Error('preset import is not keyboard focusable');
+    presetExport.focus();if(childDocument.activeElement!==presetExport)throw new Error('preset export is not keyboard focusable');
+    presetList.value='browser-a';
+    const urlsBeforeExport=created.length,revokedBeforeExport=revoked.length;
+    presetExport.click();
+    if(exportedPresetBlobs.length!==1 || created.length!==urlsBeforeExport+1 || revoked.length!==revokedBeforeExport+1
+      || childDocument.querySelector('a[download="azhou-preset.json"]'))throw new Error('preset export resource cleanup');
+    const exportedFile=exportedPresetBlobs[0];
+    const exportedContent=JSON.parse(await exportedFile.text());
+    if(exportedContent.schema!=='azhou-appearance-preset.v1' || exportedContent.name!=='<img onerror=window.presetXss=true>'
+      || Object.keys(exportedContent).sort().join(',')!=='appearance,name,recipeId,schema,surfaceTransparency')throw new Error('preset export scope');
+    api.cancelSettings();
+    const exchangeCurrent=await api.load(defaults);
+    await api.save(exchangeCurrent.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:100}}, {schemaVersion:1,revision:0,entries:[]});
+    await api.load(defaults);
+    const exchangeBaseline=await rawCatalog('read');let exchangeApplied=0,exchangeNotified=0;
+    api.openSettings({onApply(){exchangeApplied++;return {applied:true};},onSaved(){exchangeNotified++;}});
+    const importFile=async(blob)=>{
+      const transfer=new child.DataTransfer();transfer.items.add(new child.File([blob],'azhou-preset.json',{type:'application/json'}));
+      presetFileInput.files=transfer.files;presetFileInput.dispatchEvent(new child.Event('change',{bubbles:true}));
+      await waitFor(()=>!api.isBusy(),'Azhou preset file import');
+    };
+    await importFile(exportedFile);
+    if(presetList.options.length!==1 || presetList.options[0].textContent!==exportedContent.name || child.presetXss
+      || presetFileInput.value!=='')throw new Error('preset file draft staging');
+    if(JSON.stringify(await rawCatalog('read'))!==JSON.stringify(exchangeBaseline))throw new Error('preset file import wrote before Save');
+    if(settingsDialog.querySelector('[data-agent-skin-workspace-preview-image]').src!==exchangeBaseline.images.artwork
+      || settingsDialog.querySelector('[data-agent-skin-theme-transparency]').value!=='100')throw new Error('preset file import changed active draft');
+    settingsDialog.querySelector('footer button:last-child').click();
+    await waitFor(()=>!api.isSettingsOpen(),'catalog-only file save');
+    const exchangeSaved=await rawCatalog('read');
+    if(JSON.stringify(exchangeSaved.images)!==JSON.stringify(exchangeBaseline.images)
+      || JSON.stringify(exchangeSaved.themeState)!==JSON.stringify(exchangeBaseline.themeState)
+      || exchangeApplied!==0 || exchangeNotified!==1 || exchangeSaved.appearancePresets.entries.length!==1
+      || exchangeSaved.appearancePresets.entries[0].id==='browser-a')throw new Error('preset file save changed active records or omitted catalog');
+    await api.load(defaults);api.openSettings();
+    if(presetList.options.length!==1)throw new Error('preset file did not survive reopen');
+    await importFile(exportedFile);api.cancelSettings();await api.load(defaults);api.openSettings();
+    if(presetList.options.length!==1)throw new Error('cancelled preset import persisted');
+    await importFile(new child.Blob([JSON.stringify({...exportedContent,css:'body{}'})]));
+    if(presetList.options.length!==1)throw new Error('unknown preset fields accepted');
+    api.cancelSettings();
+    const presetFileExchange={exported:true,strictScope:true,resourceCleanup:true,keyboardFocusable:true,imported:true,
+      catalogOnlySave:true,activeRecordsUnchanged:true,onApplyCalls:exchangeApplied,onSavedCalls:exchangeNotified,reopened:true,cancelled:true,unknownFieldsRejected:true};
     const savedP2Records=await rawCatalog('read');
     const p2BrowserResults=[];
     try {
@@ -886,6 +937,7 @@ function browserChecks(maxInputBytes) {
       appearance,
       storage: {
         p2BrowserResults,
+        presetFileExchange,
         initialReason: initiallyLoaded.reason,
         initialBaseline: initiallyLoaded.baseline,
         initialTitle: initialCommit.introTitle,
@@ -982,6 +1034,8 @@ try {
   });
   const origin = 'http://127.0.0.1:' + server.address().port;
   profile = await mkdtemp(join(tmpdir(), 'agent-skin-image-settings-chrome-'));
+  const downloadPath = join(profile, 'downloads');
+  await mkdir(downloadPath);
   chrome = spawn(options.chrome, [
     '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
     '--disable-background-networking', '--disable-extensions', '--window-size=1536,920', '--remote-debugging-port=0',
@@ -1000,6 +1054,7 @@ try {
     return targets.find(item => item.type === 'page' && item.webSocketDebuggerUrl);
   }, 10_000, 'isolated Chrome page');
   cdp = await CDP.open(target.webSocketDebuggerUrl);
+  await cdp.call('Browser.setDownloadBehavior', {behavior:'allow',downloadPath});
   await cdp.call('Runtime.enable');
   await cdp.call('Page.enable');
   await cdp.call('Page.navigate', { url: origin + '/' });
@@ -1045,6 +1100,16 @@ try {
     accessibleName: '背景强度（0–75）',
   }, 'the real slider label association and Chromium AX tree expose its visible name');
 
+  const downloadedPreset = await until(async()=>{
+    try {return JSON.parse(await readFile(join(downloadPath,'azhou-preset.json'),'utf8'));}catch{return null;}
+  },5000,'actual Azhou preset download');
+  assert.equal(downloadedPreset.schema,'azhou-appearance-preset.v1');
+  assert.equal(downloadedPreset.name,'<img onerror=window.presetXss=true>');
+  assert.deepEqual(Object.keys(downloadedPreset).sort(),['appearance','name','recipeId','schema','surfaceTransparency']);
+  result.storage.presetFileExchange.downloadedFileVerified=true;
+  assert.equal(result.storage.presetFileExchange.activeRecordsUnchanged,true);
+  assert.equal(result.storage.presetFileExchange.onApplyCalls,0);
+  assert.equal(result.storage.presetFileExchange.onSavedCalls,1);
   assert.deepEqual(result.storage.p2BrowserResults, [
     { kind: 'bigint', disabled: true, appearanceSaved: true, catalogPreserved: true, concurrentBlocked: true },
     { kind: 'cycle', disabled: true, appearanceSaved: true, catalogPreserved: true, concurrentBlocked: true },
@@ -1245,6 +1310,7 @@ try {
     workspacePreviewGeometry: result.previewWorkflow.workspacePreviewGeometry,
     screenshotGeometry: result.previewWorkflow.screenshotGeometry,
     settingsScreenshot: screenshotPath,
+    presetFileExchange: result.storage.presetFileExchange,
     storage: result.storage,
   }, null, 2));
 } catch (error) {

@@ -64,6 +64,12 @@ function createImageSettings(environment) {
     'settings.presets.unavailable': '本机预设目录无法验证，已禁用；当前外观仍可编辑和保存，原目录保留。',
     'settings.presets.added': '预设已加入目录草稿；尚未保存。',
     'settings.presets.loaded': '预设已载入当前草稿；尚未保存。',
+    'settings.presets.import': '导入 Azhou 预设文件',
+    'settings.presets.export': '导出选中预设',
+    'settings.presets.exchangeNote': '仅支持单项 Azhou JSON 文件，不是 Dream ZIP。导入仅加入目录草稿，不改变当前外观；保存后保留。导出选中草稿，不会隐式保存。',
+    'settings.presets.imported': 'Azhou 预设已加入目录草稿；当前外观未变，尚未保存。',
+    'settings.presets.exported': '已导出选中预设；本机草稿未保存。',
+    'settings.presets.fileError': '无法导入或导出 Azhou 预设文件。请使用有效的单项 Azhou JSON 文件（最多20 MiB）。',
     'settings.title': '阿舟 · 主题与外观',
     'settings.close': '取消并关闭设置',
     'settings.categories.label': '设置分类',
@@ -603,13 +609,13 @@ function createImageSettings(environment) {
     if (disposed) throw makeError('operation-cancelled');
     if (active) {
       loadReason = 'operation-busy';
-      return { settings: fallback, baseline: currentBaseline, reason: loadReason };
+      return { settings: cloneSettings(fallback), baseline: currentBaseline, reason: loadReason };
     }
     if (!indexedDB || typeof indexedDB.open !== 'function') {
       currentSettings = fallback;
       currentBaseline = undefined;
       loadReason = 'settings-unavailable';
-      return { settings: fallback, baseline: undefined, reason: loadReason };
+      return { settings: cloneSettings(fallback), baseline: undefined, reason: loadReason };
     }
     const { task, promise } = beginOperation('load', 10_000, (timedOutTask) => {
       currentSettings = timedOutTask.resolvedSettings || fallback;
@@ -620,7 +626,7 @@ function createImageSettings(environment) {
         timedOutTask.transaction = null;
         try { transaction.abort(); } catch {}
       }
-      finish(timedOutTask, true, { settings: currentSettings, baseline: currentBaseline, reason: loadReason });
+      finish(timedOutTask, true, { settings: cloneSettings(currentSettings), baseline: currentBaseline, reason: loadReason });
     });
     Promise.resolve().then(async () => {
       let baseline;
@@ -666,7 +672,7 @@ function createImageSettings(environment) {
         currentSettings = settings;
         currentBaseline = baseline;
         loadReason = reason;
-        finish(task, true, { settings, baseline, reason, themeState: currentThemeState?.activeThemeId ? structuredCloneTheme(currentThemeState) : null });
+        finish(task, true, { settings: cloneSettings(settings), baseline, reason, themeState: currentThemeState?.activeThemeId ? structuredCloneTheme(currentThemeState) : null });
       } catch (error) {
         if (task.settled) return;
         if (error?.reason === 'operation-cancelled') {
@@ -677,7 +683,7 @@ function createImageSettings(environment) {
         currentBaseline = baseline;
         loadReason = error && typeof error.reason === 'string' ? error.reason : 'settings-unavailable';
         finish(task, true, {
-          settings: fallback,
+          settings: cloneSettings(fallback),
           baseline,
           reason: loadReason,
         });
@@ -781,6 +787,34 @@ function createImageSettings(environment) {
     return structuredCloneTheme(value);
   }
 
+  async function stagePreset(task, entry) {
+    const candidate = structuredCloneTheme(draftLibrary);
+    candidate.entries.push({id: newPresetId(), ...entry});
+    return validateLibrary(task, candidate);
+  }
+
+  async function readPresetFile(task, file) {
+    if (!file || !Number.isSafeInteger(file.size) || file.size <= 0 || file.size > MAX_RECORD_BYTES
+      || typeof file.arrayBuffer !== 'function') throw makeError('settings-invalid');
+    const buffer = await file.arrayBuffer();
+    assertCurrent(task);
+    if (Object.prototype.toString.call(buffer) !== '[object ArrayBuffer]'
+      || buffer.byteLength <= 0 || buffer.byteLength > MAX_RECORD_BYTES) throw makeError('settings-invalid');
+    const Decoder = environment.TextDecoder || document.defaultView?.TextDecoder;
+    const value = JSON.parse(new Decoder('utf-8', {fatal: true}).decode(buffer));
+    if (!exactKeys(value, ['schema', 'name', 'recipeId', 'appearance', 'surfaceTransparency'])
+      || value.schema !== 'azhou-appearance-preset.v1') throw makeError('settings-invalid');
+    const {schema, ...entry} = value;
+    return stagePreset(task, entry);
+  }
+
+  function sameThemeSelection(selection) {
+    return selection === undefined ? !currentThemeState : recordEquals(selection, {
+      activeThemeId: currentThemeState?.activeThemeId ?? null,
+      surfaceTransparency: currentThemeState?.preferencesByTheme?.[APPROVED_THEME_ID] || {mode: 'follow'},
+    });
+  }
+
   function newPresetId() {
     if (typeof environment.crypto?.randomUUID === 'function') return environment.crypto.randomUUID();
     if (typeof environment.crypto?.getRandomValues !== 'function') throw makeError('settings-unavailable');
@@ -856,7 +890,7 @@ function createImageSettings(environment) {
     return storageError('settings-unavailable', operation + '-failed');
   }
 
-  function saveInTransaction(task, db, candidate, themeCandidate, libraryCandidate) {
+  function saveInTransaction(task, db, candidate, themeCandidate, libraryCandidate, preserveActive) {
     let transaction;
     let failure = null;
     let timer = null;
@@ -903,8 +937,10 @@ function createImageSettings(environment) {
             const libraryPut = store.put(libraryCandidate, LIBRARY_KEY);
             libraryPut.onerror = () => { failure = storageFailureFrom(libraryPut.error, 'library-write'); };
           }
-          const putRequest = store.put(candidate, SETTINGS_KEY);
-          putRequest.onerror = () => { failure = storageFailureFrom(putRequest.error, 'database-write'); };
+          if (!preserveActive) {
+            const putRequest = store.put(candidate, SETTINGS_KEY);
+            putRequest.onerror = () => { failure = storageFailureFrom(putRequest.error, 'database-write'); };
+          }
         } catch (error) {
           failure = storageFailureFrom(error, 'database-write');
           try { transaction.abort(); } catch {}
@@ -921,8 +957,10 @@ function createImageSettings(environment) {
         task.transactionFinished = true;
         if (task.transaction === transaction) task.transaction = null;
         if (task.settled || !isCurrent(task)) return;
-        currentSettings = candidate;
-        currentBaseline = candidate;
+        if (!preserveActive) {
+          currentSettings = candidate;
+          currentBaseline = candidate;
+        }
         if (themeCandidate !== undefined) {
           currentThemeBaseline = themeCandidate;
           currentThemeState = themeCandidate;
@@ -932,7 +970,7 @@ function createImageSettings(environment) {
           currentLibrary = structuredCloneTheme(libraryCandidate);
         }
         loadReason = '';
-        finish(task, true, candidate);
+        finish(task, true, cloneSettings(candidate));
       };
       transaction.onerror = () => {
         failure ||= storageFailureFrom(transaction.error, 'database-write');
@@ -965,9 +1003,10 @@ function createImageSettings(environment) {
         if (!record || !['avatar', 'artwork', 'contours', ...Object.keys(TEXT_LIMITS), 'wallpaperStrength']
           .every(key => own(candidate, key))) throw makeError('settings-invalid');
         const revision = currentThemeState?.revision ?? 0;
+        const preserveActive = libraryDraft !== undefined && recordEquals(record, currentSettings) && sameThemeSelection(themeSelection);
         if (themeSelection !== undefined && (!validThemeSelection(themeSelection)
-          || (themeSelection?.activeThemeId !== null && revision >= Number.MAX_SAFE_INTEGER))) throw makeError('settings-invalid');
-        const themeCandidate = themeSelection === undefined && !currentThemeState
+          || (!preserveActive && themeSelection?.activeThemeId !== null && revision >= Number.MAX_SAFE_INTEGER))) throw makeError('settings-invalid');
+        const themeCandidate = preserveActive ? undefined : themeSelection === undefined && !currentThemeState
           ? (currentThemeBaseline === undefined ? undefined : null) : {
             schemaVersion: 1, revision: revision < Number.MAX_SAFE_INTEGER ? revision + 1 : 1,
             activeThemeId: themeSelection?.activeThemeId ?? null,
@@ -983,11 +1022,11 @@ function createImageSettings(environment) {
           libraryCandidate.revision = currentLibrary.revision + 1;
           recordByteLength(libraryCandidate);
         }
-        await validateRecordImages(task, record);
+        if (!preserveActive) await validateRecordImages(task, record);
         if (!isCurrent(task)) throw makeError('operation-cancelled');
         const db = await openDatabase();
         if (!isCurrent(task)) throw makeError('operation-cancelled');
-        saveInTransaction(task, db, record, themeCandidate, libraryCandidate);
+        saveInTransaction(task, db, record, themeCandidate, libraryCandidate, preserveActive);
       } catch (error) {
         if (!task.settled) finish(task, false,
           error?.reason === 'operation-timeout' || error?.reason === 'operation-cancelled'
@@ -1167,12 +1206,13 @@ function createImageSettings(environment) {
     for (const control of panelControls.controls) {
       const isSave = control === panelControls.saveButton;
       const isCancel = control === panelControls.cancelButton;
-      control.disabled = Boolean(active)
+      control.disabled = (Boolean(active) && !(isCancel && active.kind === 'preset-file'))
         || (panelApplying && !isCancel)
         || (Boolean(panelCommit) && !panelApplying && !isSave && !isCancel)
-        || ([panelControls.presetName, panelControls.presetAdd, panelControls.presetList, panelControls.presetLoad].includes(control) && !draftLibrary)
+        || ([panelControls.presetName, panelControls.presetAdd, panelControls.presetList, panelControls.presetLoad, panelControls.presetImport, panelControls.presetExport].includes(control) && !draftLibrary)
         || (control === panelControls.presetAdd && (!draftTheme || draftLibrary?.entries.length >= 8))
-        || (control === panelControls.presetLoad && !draftLibrary?.entries.length)
+        || (control === panelControls.presetImport && draftLibrary?.entries.length >= 8)
+        || ([panelControls.presetLoad, panelControls.presetExport].includes(control) && !draftLibrary?.entries.length)
         || (control === panelControls.themeMode && !draftTheme)
         || (control === panelControls.themeTransparency && (!draftTheme || draftTheme.surfaceTransparency.mode !== 'override'));
       if (control.style && typeof control.style.setProperty === 'function') {
@@ -1758,6 +1798,63 @@ function createImageSettings(environment) {
       buttons['settings.presets.' + key] = button;
       presetSection.appendChild(button); controls.push(button);
     }
+    const presetImport = document.createElement('input');
+    presetImport.type = 'file'; presetImport.accept = '.json,application/json';
+    presetImport.id = 'agent-skin-presets-import';
+    presetImport.setAttribute('data-agent-skin-preset-import', '');
+    styleInput(presetImport);
+    const importLabel = document.createElement('label'); importLabel.htmlFor = presetImport.id;
+    labels['settings.presets.import'] = {element: importLabel};
+    const presetExport = document.createElement('button');
+    presetExport.type = 'button'; styleButton(presetExport);
+    presetExport.setAttribute('data-agent-skin-preset-export', '');
+    buttons['settings.presets.export'] = presetExport;
+    const exchangeNote = document.createElement('p');
+    labels['settings.presets.exchangeNote'] = {element: exchangeNote};
+    presetSection.append(importLabel, presetImport, presetExport, exchangeNote);
+    controls.push(presetImport, presetExport);
+    presetImport.addEventListener('change', async () => {
+      const file = presetImport.files?.[0];
+      presetImport.value = '';
+      if (!file || !panelOpen || active || panelCommit || !draftLibrary || draftLibrary.entries.length >= 8) return;
+      const {task, promise} = beginOperation('preset-file', 10_000);
+      const atStart = panelGeneration;
+      updatePanelBusy();
+      Promise.resolve().then(async () => {
+        try {
+          const validated = await readPresetFile(task, file);
+          if (!isCurrent(task) || panelGeneration !== atStart) throw makeError('operation-cancelled');
+          draftLibrary = validated;
+          finish(task, true, true);
+          updatePresetList(); setPanelStatus('settings.presets.imported');
+        } catch (error) { if (!task.settled) finish(task, false, error); }
+      });
+      try { await promise; }
+      catch (error) {
+        if (error?.reason !== 'operation-cancelled' && panelOpen && panelGeneration === atStart) setPanelStatus(error?.reason === 'operation-timeout'
+          ? displayError(error.reason) : 'settings.presets.fileError', 'alert');
+      }
+      updatePanelBusy();
+    });
+    presetExport.addEventListener('click', () => {
+      if (!panelOpen || active || panelCommit || !draftLibrary) return;
+      const entry = draftLibrary.entries.find(value => value.id === presetList.value);
+      if (!entry) return;
+      let url, anchor;
+      try {
+        const {id, ...content} = entry;
+        const BlobConstructor = environment.Blob || document.defaultView?.Blob;
+        const blob = new BlobConstructor([JSON.stringify({schema: 'azhou-appearance-preset.v1', ...content})], {type: 'application/json'});
+        url = URLObject.createObjectURL(blob);
+        anchor = document.createElement('a'); anchor.href = url; anchor.download = 'azhou-preset.json';
+        anchor.hidden = true; document.body.appendChild(anchor); anchor.click();
+        setPanelStatus('settings.presets.exported');
+      } catch { setPanelStatus('settings.presets.fileError', 'alert'); }
+      finally {
+        try { anchor?.remove(); } catch {}
+        if (url) { try { URLObject.revokeObjectURL(url); } catch {} }
+      }
+    });
     const presetNote = document.createElement('p');
     labels['settings.presets.note'] = {element: presetNote};
     presetSection.appendChild(presetNote);
@@ -1768,11 +1865,9 @@ function createImageSettings(environment) {
       updatePanelBusy();
       Promise.resolve().then(async () => {
         try {
-          const candidate = structuredCloneTheme(draftLibrary);
-          candidate.entries.push({ id: newPresetId(), name: presetName.value.trim(), recipeId: APPROVED_THEME_ID,
+          const validated = await stagePreset(task, {name: presetName.value.trim(), recipeId: APPROVED_THEME_ID,
             appearance: {...appearanceDraft(draft), wallpaperStrength: draft.wallpaperStrength},
-            surfaceTransparency: {...draftTheme.surfaceTransparency} });
-          const validated = await validateLibrary(task, candidate);
+            surfaceTransparency: {...draftTheme.surfaceTransparency}});
           if (!isCurrent(task) || panelGeneration !== atStart) throw makeError('operation-cancelled');
           draftLibrary = validated;
           finish(task, true, true);
@@ -1917,7 +2012,9 @@ function createImageSettings(environment) {
       const panelAtStart = panelGeneration;
       const themeSelection = draftTheme || (currentThemeState || draftThemePreference.mode !== 'follow'
         ? { activeThemeId: null, surfaceTransparency: { ...draftThemePreference } } : undefined);
-      const saving = save(cloneSettings(draft), themeSelection, draftLibrary && !recordEquals(draftLibrary, currentLibrary) ? draftLibrary : undefined);
+      const libraryDraft = draftLibrary && !recordEquals(draftLibrary, currentLibrary) ? draftLibrary : undefined;
+      const catalogOnly = libraryDraft !== undefined && recordEquals(draft, currentSettings) && sameThemeSelection(themeSelection);
+      const saving = save(cloneSettings(draft), themeSelection, libraryDraft);
       updatePanelBusy();
       let saved;
       try {
@@ -1930,7 +2027,7 @@ function createImageSettings(environment) {
       if (!panelOpen || panelAtStart !== panelGeneration) return;
       panelCommit = {
         saved: { ...cloneSettings(saved), themeState: currentThemeState?.activeThemeId ? structuredCloneTheme(currentThemeState) : null },
-        onApply: typeof panelCallbacks?.onApply === 'function' ? panelCallbacks.onApply : null,
+        onApply: !catalogOnly && typeof panelCallbacks?.onApply === 'function' ? panelCallbacks.onApply : null,
         failed: false,
       };
       panelSavedNotified = false;
@@ -1960,7 +2057,7 @@ function createImageSettings(environment) {
       dialog.addEventListener('keydown', containPanelTab, true);
     }
     panelControls = {
-      presetName, presetList, presetAdd, presetLoad, controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, themeTransparencyValue, themeTransparencyReason, themeStrengthNote, heading, close: null, categoryNav, labels,
+      presetName, presetList, presetAdd, presetLoad, presetImport, presetExport, controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, themeTransparencyValue, themeTransparencyReason, themeStrengthNote, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
       workspacePreviewSurface, workspacePreviewImage: backgroundImage, workspacePreviewWash: backgroundWash,
       workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel, footer: actions,
@@ -2033,7 +2130,12 @@ function createImageSettings(environment) {
     return true;
   }
 
+  function cancelPresetFile() {
+    if (active?.kind === 'preset-file') finish(active, false, makeError('operation-cancelled'));
+  }
+
   function cancelSettings() {
+    cancelPresetFile();
     if (!panelOpen || active) return false;
     if (panelCommit) return closePanel('saved');
     const callback = panelCallbacks?.onCancel;
@@ -2067,6 +2169,7 @@ function createImageSettings(environment) {
   // fields, the save action and the stored record agree again (the modal path
   // closes the panel instead of reverting).
   function revertPanelDraft() {
+    cancelPresetFile();
     if (!panelOpen || active || panelApplying) return false;
     if (panelCommit) {
       if (!panelSavedNotified) {
