@@ -263,6 +263,8 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
     if "startup/prepare.js" in manifest["outputs"]:
         manifest["outputs"].pop("startup/prepare.js")
         (resources / "startup/prepare.js").unlink()
+    manifest["outputs"].pop("web/assets/defaults/cold-cover.png", None)
+    (resources / "web/assets/defaults/cold-cover.png").unlink(missing_ok=True)
 
     marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
     manifest["inputSHA256"] = marker["inputSHA256"]
