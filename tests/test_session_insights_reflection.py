@@ -103,7 +103,10 @@ class ReflectionTest(unittest.TestCase):
         self.assertEqual(1, self.render().returncode)
 
     def test_duplicate_json_key_and_unbound_evidence_are_rejected(self):
-        (self.root / 'evidence.json').write_text('{"schema": "x", "schema": "y"}', encoding='utf-8')
+        payload = json.dumps(self.ev, ensure_ascii=False)
+        marker = '"question":'
+        payload = payload.replace(marker, marker + json.dumps(self.ev['scope']['question'], ensure_ascii=False) + ', ' + marker, 1)
+        (self.root / 'evidence.json').write_text(payload, encoding='utf-8')
         self.assertEqual(1, self.run_cli('validate-evidence', '--input', 'evidence.json').returncode)
         self.ev['segments'][0]['text'] += 'changed'
         self.write()
@@ -154,6 +157,26 @@ class ReflectionTest(unittest.TestCase):
         self.assertEqual(1, p.returncode)
         self.assertNotIn(secret, p.stdout + p.stderr)
         self.assertFalse((self.root / 'run').exists())
+
+    def test_windows_home_path_is_rejected_and_not_echoed(self):
+        text = 'C:\\Users\\bob\\secret-note'
+        self.ev['segments'][0]['text'] = text
+        self.ev['segments'][0]['text_sha256'] = hashlib.sha256(text.encode()).hexdigest()
+        self.ev['digest'] = digest({k: v for k, v in self.ev.items() if k != 'digest'})
+        self.write()
+        p = self.run_cli('validate-evidence', '--input', 'evidence.json')
+        self.assertEqual(1, p.returncode)
+        self.assertNotIn(text, p.stdout + p.stderr)
+
+    def test_windows_absolute_and_backslash_traversal_identifiers_are_rejected(self):
+        for field, value in (('origin_id', 'C:\\Users\\bob\\proj'), ('origin_id', '..\\..\\proj'),
+                             ('locator', 'C:\\Users\\bob\\rollout.jsonl'), ('locator', '..\\..\\rollout.jsonl')):
+            with self.subTest(field=field, value=value):
+                self.ev = evidence()
+                (self.ev['sources'][0] if field == 'origin_id' else self.ev['segments'][0])[field] = value
+                self.ev['digest'] = digest({k: v for k, v in self.ev.items() if k != 'digest'})
+                self.write()
+                self.assertEqual(1, self.run_cli('validate-evidence', '--input', 'evidence.json').returncode)
 
     def test_explicit_prior_report_and_insight_are_bound(self):
         prior = json.dumps({'schema': 'super-session-insights.reflection.v1', 'insights': [{'id': 'old1', 'epistemic_status': 'hypothesis'}]}, ensure_ascii=False)
@@ -326,25 +349,22 @@ class ReflectionTest(unittest.TestCase):
         report = (self.root / 'run/report.md').read_text(encoding='utf-8')
         self.assertIn('交接记录未确认', report)
         self.assertIn('核对样例', report)
-        del self.result['experiment']
+        self.result['experiment'] = None
         self.write()
         without_experiment = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
         self.assertEqual(0, without_experiment.returncode, without_experiment.stderr)
         self.assertIsNone(json.loads(without_experiment.stdout)['experiment'])
 
-    def test_omitted_experiment_key_validates_reviews_and_renders_without_experiment_section(self):
+    def test_omitted_experiment_key_fails_validation(self):
         del self.result['experiment']
         self.write()
         validated = self.run_cli('validate-reflection', '--evidence', 'evidence.json', '--input', 'reflection.json')
-        self.assertEqual(0, validated.returncode, validated.stderr)
+        self.assertEqual(1, validated.returncode)
         reviewed = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
-        self.assertEqual(0, reviewed.returncode, reviewed.stderr)
-        self.assertIsNone(json.loads(reviewed.stdout)['experiment'])
+        self.assertEqual(1, reviewed.returncode)
         rendered = self.render()
-        self.assertEqual(0, rendered.returncode, rendered.stderr)
-        report = (self.root / 'run/report.md').read_text(encoding='utf-8')
-        self.assertNotIn('## 可选实验', report)
-        self.assertIn('## 限制', report)
+        self.assertEqual(1, rendered.returncode)
+        self.assertEqual('fail', json.loads(rendered.stdout)['status'])
 
     def test_limitations_and_experiment_can_bind_individual_citations(self):
         ref = {'segment_id': 'e1', 'start': 0, 'end': 3, 'type': 'quote', 'text': '交付前'}

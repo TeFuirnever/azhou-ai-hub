@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -58,7 +59,10 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual('observed', summary['operations']['render']['start_outcome'])
         self.assertEqual('unobserved', summary['operations']['validate-reflection']['start_outcome'])
         self.assertFalse(summary['zero_call_verdict'])
-        self.assertIn('unknown', summary['coverage_statement'])
+        self.assertIn('python -I/-S/-E', summary['coverage_statement'])
+        self.assertIn('FIFO loss and forged messages', summary['coverage_statement'])
+        self.assertIn('not a security monitor', summary['coverage_statement'])
+        self.assertIn('not a complete call budget', summary['coverage_statement'])
 
     def test_exit_candidates_stay_textual_and_exclude_quoted_and_heredoc_forms(self):
         records = [
@@ -91,7 +95,10 @@ class ClassifyTest(unittest.TestCase):
                          summary['operations']['render']['exit_candidates'])
         self.assertEqual('unobserved', summary['operations']['render']['start_outcome'])
         self.assertFalse(summary['zero_call_verdict'])
-        self.assertIn('unknown', summary['coverage_statement'])
+        self.assertIn('python -I/-S/-E', summary['coverage_statement'])
+        self.assertIn('FIFO loss and forged messages', summary['coverage_statement'])
+        self.assertIn('not a security monitor', summary['coverage_statement'])
+        self.assertIn('not a complete call budget', summary['coverage_statement'])
 
     def test_shell_heredoc_stripping_matches_pinned_behavior(self):
         stripped = self.runner.strip_heredocs(
@@ -117,7 +124,7 @@ class RecordCommandTest(unittest.TestCase):
         self.counter += 1
         out = self.root / (out_name or f'out-{self.counter}')
         command = [sys.executable, str(RUNNER), 'record',
-                   '--argv-json', json.dumps(['/bin/zsh', '-c', script]),
+                   '--argv-json', json.dumps(['/bin/sh', '-c', script]),
                    '--work', str(self.work), '--out', str(out),
                    '--target', str(self.target), '--recorder-dir', str(RECORDER), *extra]
         if stdin_path:
@@ -206,6 +213,16 @@ class RecordCommandTest(unittest.TestCase):
         self.assertEqual('timeout', result['stop_reason'])
         self.assertNotEqual(0, result['returncode'])
         self.assertLess(result['elapsed_seconds'], 15)
+        self.assertFalse((out / 'recorder-events.fifo').exists())
+
+    def test_record_times_out_when_stdin_feed_would_block(self):
+        prompt = self.root / 'big-prompt.txt'
+        prompt.write_bytes(b'x' * 70000)
+        proc, out = self.record('sleep 30', extra=('--timeout-seconds', '2'), stdin_path=prompt)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        result = self.result(out)
+        self.assertEqual('timeout', result['stop_reason'])
+        self.assertLess(result['elapsed_seconds'], 15)
 
     def test_record_places_fifo_at_requested_path_and_keeps_output_private(self):
         fifo = self.root / 'shared' / 'events.fifo'
@@ -218,6 +235,7 @@ class RecordCommandTest(unittest.TestCase):
         self.assertEqual(str(fifo), result['fifo_path'])
         self.assertEqual(1, result['classification']['operations']['render']['instrumented_starts'])
         self.assertNotIn(str(fifo), json.dumps(json.loads(json.dumps(result['classification']))))
+        self.assertFalse(fifo.exists())
 
     def test_record_feeds_stdin_file_bytes(self):
         prompt = self.root / 'prompt.txt'
@@ -227,6 +245,17 @@ class RecordCommandTest(unittest.TestCase):
         proc, out = self.record(script, stdin_path=prompt)
         self.assertEqual(0, proc.returncode, proc.stderr)
         self.assertEqual(b'authorized synthetic prompt bytes\n', capture.read_bytes())
+
+    def test_record_rejects_recorder_env_overrides_and_merges_pythonpath(self):
+        proc, out = self.record('true', extra=('--env', 'SSI_RECORDER_FIFO=/tmp/elsewhere'))
+        self.assertNotEqual(0, proc.returncode)
+        self.assertIn('SSI_RECORDER_FIFO', proc.stderr)
+        proc, out = self.record(f'python3 {self.target} render',
+                                extra=('--env', 'PYTHONPATH=/w/vendor', '--env', 'EXTRA=1'))
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        result = self.result(out)
+        self.assertEqual(1, result['classification']['operations']['render']['instrumented_starts'])
+        self.assertEqual({'PYTHONPATH': '/w/vendor', 'EXTRA': '1'}, result['env_overrides'])
 
     def test_record_binds_repo_and_file_revisions(self):
         repo = self.root / 'repo'
@@ -306,6 +335,29 @@ class BindFreezeTest(unittest.TestCase):
             self.assertIn('verification failed', proc.stderr)
             self.assertFalse(copy.exists())
 
+    def test_bind_freeze_fails_when_source_changes_after_verification(self):
+        runner = load_runner()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            freeze = self.make_freeze(root)
+            copy = root / 'copy'
+            target = freeze / 'MODEL-PROMPT.md'
+            real_hash = runner.hash_file
+            mutated = []
+
+            def hash_and_mutate(path):
+                result = real_hash(path)
+                if Path(path) == target and not mutated:
+                    mutated.append(True)
+                    target.write_bytes(b'changed after verification\n')
+                return result
+
+            with mock.patch.object(runner, 'hash_file', side_effect=hash_and_mutate):
+                with self.assertRaises(SystemExit):
+                    runner.bind_freeze(freeze, copy)
+            self.assertFalse((copy / 'MODEL-PROMPT.md').exists())
+            self.assertFalse((copy / 'freeze-binding.json').exists())
+
     def test_bind_freeze_rejects_escaping_manifest_paths_without_writing_outside_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -333,6 +385,18 @@ class BindFreezeTest(unittest.TestCase):
                     self.assertFalse(copy.exists())
                     self.assertEqual(before, outside.read_bytes())
                     self.assertNotEqual(0, stat.S_IMODE(outside.stat().st_mode) & 0o222)
+            for name, entry_path in (('windows-absolute', 'C:\\Users\\bob\\leak.txt'),
+                                     ('windows-traversal', '..\\leak.txt')):
+                with self.subTest(name):
+                    freeze = self.make_freeze(root / name)
+                    manifest = {'schema': 'diag.freeze.v1',
+                                'frozen_files': [{'path': entry_path, 'sha256': '0' * 64}]}
+                    (freeze / 'FREEZE.manifest.json').write_bytes((json.dumps(manifest) + '\n').encode('utf-8'))
+                    copy = root / name / 'copy'
+                    proc = self.run_bind(freeze, copy)
+                    self.assertNotEqual(0, proc.returncode)
+                    self.assertIn('unsafe path', proc.stderr)
+                    self.assertFalse(copy.exists())
 
 
 if __name__ == '__main__':

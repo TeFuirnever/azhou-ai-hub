@@ -41,7 +41,7 @@ Session Insights 的品牌感来自"先有数字，再有故事"的纪律：品�
 - `inputs`：逐 harness 的文件计数与复合 SHA-256（排序后的（相对路径摘要、mtime、大小）元组；不含内容，不含明文绝对路径）
 - `artifacts`：报告文件名与对收据小节之前正文的 SHA-256
 - `verification`：报告只从 `super-session-insights.aggregate.v1` 渲染、不重算指标的声明
-- `holds`：如 `codex unsupported`、`zcode unsupported`
+- `holds`：如 `zcode unsupported`
 - `next_action`：一个可执行的下一步
 - `learning_signal`：`none` 或一行机器可复算的信号
 

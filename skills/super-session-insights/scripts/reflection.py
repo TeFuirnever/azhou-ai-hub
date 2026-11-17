@@ -18,7 +18,7 @@ RECEIPT = 'super-session-insights.reflection-receipt.v1'
 UNKNOWN = 'unknown'
 EXPERIMENT_FIELDS = ('change', 'context', 'expected_observation', 'effort', 'success_condition', 'stop_condition', 'followup_evidence')
 SENSITIVE = re.compile(
-    r'-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,})|https?://[^\s"<>]+|(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}|/(?:Users|home)/[^/\s]+/|[A-Za-z]:\\Users\\[^\\\s]+\\',
+    r'-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,})|https?://[^\s"<>]+|(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}|/(?:Users|home)/[^/\s]+/|[A-Za-z]:\\+Users\\+[^\\\s]+\\+',
     re.IGNORECASE,
 )
 
@@ -74,6 +74,12 @@ def ids(items):
     return result
 
 
+def unsafe_path(value):
+    normalized = value.replace('\\', '/')
+    return (normalized.startswith('/') or bool(re.match(r'[A-Za-z]:', normalized))
+            or '..' in normalized.split('/'))
+
+
 def validate_evidence(e):
     require(isinstance(e, dict) and e.get('schema') == EVIDENCE, 'invalid evidence schema')
     require(not SENSITIVE.search(canonical(e).decode('utf-8')), 'sensitive pattern detected')
@@ -96,7 +102,7 @@ def validate_evidence(e):
     require(sum(len(s.get('text', '')) for s in segments.values() if isinstance(s.get('text'), str)) <= 40000, 'oversize: reduce text')
     for s in sources.values():
         fields(s, ['type', 'imported_at', 'origin_id', 'completeness'])
-        require(not s['origin_id'].startswith('/') and '..' not in Path(s['origin_id']).parts, 'unsafe source identifier')
+        require(not unsafe_path(s['origin_id']), 'unsafe source identifier')
     for s in segments.values():
         fields(s, ['container_source_id', 'content_source_id', 'container_role', 'speaker', 'attribution', 'kind', 'occurred_at', 'time_basis', 'text', 'text_sha256', 'locator'])
         require(s['container_source_id'] in sources and (s['content_source_id'] in sources or s['content_source_id'] == UNKNOWN), 'unknown source')
@@ -107,7 +113,7 @@ def validate_evidence(e):
         require(s['time_basis'] in ('source_metadata', 'user_declared', 'quoted_claim', UNKNOWN), 'invalid time basis')
         require(s['time_basis'] != UNKNOWN or s['occurred_at'] == UNKNOWN, 'unknown time basis')
         require(s['text_sha256'] == sha(s['text'].encode('utf-8')), 'segment digest mismatch')
-        require(not s['locator'].startswith('/') and '..' not in Path(s['locator']).parts, 'unsafe locator')
+        require(not unsafe_path(s['locator']), 'unsafe locator')
     relations = e.get('relations')
     require(isinstance(relations, list), 'invalid relations')
     nodes = set(sources) | set(segments)
@@ -177,6 +183,7 @@ def validate_reflection(e, result):
             check_refs(group, segments)
     if not segments:
         require(result['status'] in ('insufficient_evidence', 'hold') and not observations and not insights, 'empty evidence requires insufficient status')
+    require('experiment' in result, 'missing experiment')
     experiment = result.get('experiment')
     if experiment is not None:
         fields(experiment, EXPERIMENT_FIELDS)

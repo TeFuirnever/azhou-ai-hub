@@ -29,6 +29,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -46,6 +47,14 @@ HEREDOC = re.compile(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z_0-9]*)['\"]?")
 
 def hash_file(path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def unsafe_path(value) -> bool:
+    if not isinstance(value, str) or not value:
+        return True
+    normalized = value.replace('\\', '/')
+    return (normalized.startswith('/') or bool(re.match(r'[A-Za-z]:', normalized))
+            or '..' in normalized.split('/'))
 
 
 def strip_heredocs(command: str) -> str:
@@ -140,9 +149,7 @@ def bind_freeze(freeze_dir, copy_dir):
         raise SystemExit(f'copy directory already exists: {copy_dir}')
     manifest_bytes = (freeze_dir / 'FREEZE.manifest.json').read_bytes()
     manifest = json.loads(manifest_bytes)
-    unsafe = [entry.get('path') for entry in manifest.get('frozen_files', [])
-              if not isinstance(entry.get('path'), str) or entry['path'].startswith('/')
-              or '..' in Path(entry['path']).parts]
+    unsafe = [entry.get('path') for entry in manifest.get('frozen_files', []) if unsafe_path(entry.get('path'))]
     if unsafe:
         raise SystemExit(f'frozen material verification failed: unsafe path {unsafe}')
     problems = [entry['path'] for entry in manifest.get('frozen_files', [])
@@ -153,12 +160,16 @@ def bind_freeze(freeze_dir, copy_dir):
     copy_dir.mkdir(mode=0o700)
     entries = []
     for entry in manifest['frozen_files']:
+        source_bytes = (freeze_dir / entry['path']).read_bytes()
+        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+        if source_sha256 != entry.get('sha256'):
+            raise SystemExit(f'frozen material verification failed: {entry["path"]}')
         member = copy_dir / entry['path']
         member.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        member.write_bytes((freeze_dir / entry['path']).read_bytes())
+        member.write_bytes(source_bytes)
         member.chmod(0o444)
-        entries.append({'path': entry['path'], 'source_sha256': entry['sha256'],
-                        'copy_sha256': hash_file(member), 'match': hash_file(member) == entry['sha256']})
+        entries.append({'path': entry['path'], 'source_sha256': source_sha256,
+                        'copy_sha256': hash_file(member), 'match': hash_file(member) == source_sha256})
     manifest_copy = copy_dir / 'FREEZE.manifest.json'
     manifest_copy.write_bytes(manifest_bytes)
     manifest_copy.chmod(0o444)
@@ -226,6 +237,8 @@ def record_command(args):
         name, separator, value = item.partition('=')
         if not separator or not name:
             raise SystemExit(f'--env must be NAME=VALUE, got: {item}')
+        if name.startswith('SSI_RECORDER_'):
+            raise SystemExit(f'--env must not override recorder wiring: {name}')
         env_overrides[name] = value
     if args.stdin_path and not Path(args.stdin_path).is_file():
         raise SystemExit(f'stdin file does not exist: {args.stdin_path}')
@@ -244,69 +257,79 @@ def record_command(args):
     if not fifo.parent.is_dir():
         raise SystemExit(f'FIFO parent directory does not exist: {fifo.parent}')
     os.mkfifo(fifo, 0o600)
-    reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-    raw = bytearray()
+    try:
+        reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+        raw = bytearray()
 
-    def drain():
-        while True:
-            try:
-                chunk = os.read(reader, 65536)
-            except BlockingIOError:
-                break
-            if not chunk:
-                break
-            raw.extend(chunk)
-
-    env = os.environ.copy()
-    existing = env.get('PYTHONPATH')
-    env['PYTHONPATH'] = str(recorder_dir) + (os.pathsep + existing if existing else '')
-    env['SSI_RECORDER_FIFO'] = str(fifo)
-    env['SSI_RECORDER_TARGET'] = str(target)
-    env.update(env_overrides)
-
-    repo_binding = None
-    if args.bind_repo:
-        repo_binding = {'covers': REPO_BINDING_COVER_NOTE,
-                        'before': snapshot_repo(args.bind_repo), 'after': None, 'unchanged': None}
-    file_before = {str(Path(item)): hash_file(item) for item in args.bind_file}
-    stdin_bytes = Path(args.stdin_path).read_bytes() if args.stdin_path else None
-
-    stdout_path = out / 'stdout.log'
-    stderr_path = out / 'stderr.log'
-    began = time.monotonic()
-    stop_reason = None
-    with stdout_path.open('wb') as stdout_stream, stderr_path.open('wb') as stderr_stream:
-        os.chmod(stdout_path, 0o600)
-        os.chmod(stderr_path, 0o600)
-        proc = subprocess.Popen(argv, cwd=str(work), stdin=subprocess.PIPE, stdout=stdout_stream,
-                                stderr=stderr_stream, env=env, start_new_session=True)
-        try:
-            if stdin_bytes is not None:
-                proc.stdin.write(stdin_bytes)
-            proc.stdin.close()
-        except BrokenPipeError:
-            pass
-        deadline = began + args.timeout_seconds
-        while proc.poll() is None:
-            drain()
-            if time.monotonic() > deadline:
-                stop_reason = 'timeout'
+        def drain():
+            while True:
                 try:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                except ProcessLookupError:
+                    chunk = os.read(reader, 65536)
+                except BlockingIOError:
+                    break
+                if not chunk:
+                    break
+                raw.extend(chunk)
+
+        env = os.environ.copy()
+        env.update(env_overrides)
+        existing = env.get('PYTHONPATH')
+        env['PYTHONPATH'] = str(recorder_dir) + (os.pathsep + existing if existing else '')
+        env['SSI_RECORDER_FIFO'] = str(fifo)
+        env['SSI_RECORDER_TARGET'] = str(target)
+
+        repo_binding = None
+        if args.bind_repo:
+            repo_binding = {'covers': REPO_BINDING_COVER_NOTE,
+                            'before': snapshot_repo(args.bind_repo), 'after': None, 'unchanged': None}
+        file_before = {str(Path(item)): hash_file(item) for item in args.bind_file}
+        stdin_bytes = Path(args.stdin_path).read_bytes() if args.stdin_path else None
+
+        stdout_path = out / 'stdout.log'
+        stderr_path = out / 'stderr.log'
+        began = time.monotonic()
+        stop_reason = None
+        with stdout_path.open('wb') as stdout_stream, stderr_path.open('wb') as stderr_stream:
+            os.chmod(stdout_path, 0o600)
+            os.chmod(stderr_path, 0o600)
+            proc = subprocess.Popen(argv, cwd=str(work), stdin=subprocess.PIPE, stdout=stdout_stream,
+                                    stderr=stderr_stream, env=env, start_new_session=True)
+            deadline = began + args.timeout_seconds
+
+            def feed_stdin():
+                try:
+                    if stdin_bytes is not None:
+                        proc.stdin.write(stdin_bytes)
+                    proc.stdin.close()
+                except OSError:
                     pass
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
+
+            threading.Thread(target=feed_stdin, daemon=True).start()
+            while proc.poll() is None:
+                drain()
+                if time.monotonic() > deadline:
+                    stop_reason = 'timeout'
                     try:
-                        os.killpg(proc.pid, signal.SIGKILL)
+                        os.killpg(proc.pid, signal.SIGTERM)
                     except ProcessLookupError:
                         pass
-                    proc.wait()
-                break
-            time.sleep(0.2)
-    drain()
-    os.close(reader)
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        proc.wait()
+                    break
+                time.sleep(0.2)
+        drain()
+        os.close(reader)
+    finally:
+        try:
+            os.unlink(fifo)
+        except OSError:
+            pass
 
     events_path = out / 'recorder-events.jsonl'
     events_path.write_bytes(bytes(raw))
@@ -350,6 +373,7 @@ def record_command(args):
         'target': str(target),
         'recorder_dir': str(recorder_dir),
         'fifo_path': str(fifo),
+        'env_overrides': env_overrides,
         'returncode': proc.returncode,
         'stop_reason': stop_reason,
         'elapsed_seconds': round(time.monotonic() - began, 3),
