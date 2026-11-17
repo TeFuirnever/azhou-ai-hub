@@ -163,6 +163,17 @@ class CheckAssetsTests(AssetFixture):
 
 
 class ResolverTests(AssetFixture):
+    def test_startup_cover_is_private_optional_and_cannot_be_a_symlink(self):
+        self.assertNotIn("startup-cover.png", ARTIFACTS.resolved_assets(self.root))
+        cover = self.overlay / "startup-cover.png"
+        self.write(cover, png(1672, 941, 2))
+        self.assertEqual((cover, "private"), ARTIFACTS.resolved_assets(self.root)["startup-cover.png"])
+        self.assertEqual([], self.errors())
+        cover.unlink()
+        cover.symlink_to(self.library / "wallpaper-scene-q-v3.png")
+        with self.assertRaisesRegex(RuntimeError, "startup-cover.png"):
+            ARTIFACTS.resolved_assets(self.root)
+
     def test_no_overlay_resolves_every_asset_from_the_library(self):
         self.assertEqual({name: "azhou" for name in NAMES}, ARTIFACTS.asset_sources(self.root))
         self.assertEqual("assets/azhou/app-icon/source.png", ARTIFACTS.asset_key(self.root, "app-icon/source.png"))

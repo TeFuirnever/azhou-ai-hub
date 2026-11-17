@@ -263,6 +263,8 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
     if "startup/prepare.js" in manifest["outputs"]:
         manifest["outputs"].pop("startup/prepare.js")
         (resources / "startup/prepare.js").unlink()
+    manifest["outputs"].pop("web/assets/defaults/cold-cover.png", None)
+    (resources / "web/assets/defaults/cold-cover.png").unlink(missing_ok=True)
 
     marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
     manifest["inputSHA256"] = marker["inputSHA256"]
@@ -933,6 +935,8 @@ class StartupBuildTests(unittest.TestCase):
         self.assertTrue(entry_avatar.is_file())
         self.assertTrue(artwork.is_file())
         self.assertTrue(contours_js.is_file())
+        self.assertEqual((web / "assets/defaults/cold-cover.png").read_bytes(),
+                         (self.root / "assets/private/wallpaper-scene-q-v3.png").read_bytes())
 
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(manifest["schema"], 1)
@@ -1019,6 +1023,7 @@ class StartupBuildTests(unittest.TestCase):
     def test_manifest_and_actual_resources_reject_tampering(self):
         resources = self.bundle / "Contents/Resources"
         for relative in ("startup/install.js", "startup/prepare.js", "web/assets/defaults/artwork.png",
+                         "web/assets/defaults/cold-cover.png",
                          "web/assets/defaults/contours.js"):
             with self.subTest(relative=relative):
                 clone = Path(self.temporary.name) / ("tamper-" + relative.replace("/", "-"))
@@ -1047,6 +1052,24 @@ class StartupBuildTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "fixture|preview|生产"):
             self.verifier.verify_startup(clone, self.info, self.marker)
+
+    def test_private_startup_cover_is_bound_without_changing_wallpaper(self):
+        with tempfile.TemporaryDirectory(prefix="agent-skin-cover-test-") as temporary:
+            root = (Path(temporary) / "source").resolve()
+            clone_source_tree(root)
+            cover = root / "assets/private/startup-cover.png"
+            synthetic_png(cover, 1672, 941, lambda x, y: (180, 80, 30, 255))
+            bundle = root / ".build/azhou-stage.cover/azhou-payload"
+            bundle.mkdir(parents=True)
+            self.builder.build_startup(bundle, root=root)
+            verifier = load_module(root / "tools/verify-artifacts.py", "agent_skin_cover_artifacts")
+            inputs = verifier.source_inputs()
+            marker = {"version": APP_VERSION, "build": APP_BUILD,
+                      "inputSHA256": verifier.aggregate_inputs(inputs), "inputs": inputs}
+            installed_cover = bundle / "Contents/Resources/web/assets/defaults/cold-cover.png"
+            self.assertEqual(installed_cover.read_bytes(), cover.read_bytes())
+            self.assertNotEqual(cover.read_bytes(), (root / "assets/private/wallpaper-scene-q-v3.png").read_bytes())
+            verifier.verify_startup(bundle, self.info, marker)
 
     def test_missing_private_default_input_fails_before_writing_outputs(self):
         root = (Path(self.temporary.name) / "missing-private-source").resolve()

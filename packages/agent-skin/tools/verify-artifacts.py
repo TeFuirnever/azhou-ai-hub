@@ -142,7 +142,15 @@ def resolved_assets(root: Path = ROOT) -> dict:
     overlay = root / ASSET_OVERLAY
     if overlay.is_symlink() or (overlay.exists() and not overlay.is_dir()):
         raise RuntimeError('assets/private 只能是实体目录（可选的本地覆盖层）。')
-    return {name: resolve_asset(root, name) for name in asset_names(load_theme_config(root))}
+    assets = {name: resolve_asset(root, name) for name in asset_names(load_theme_config(root))}
+    cover = overlay / 'startup-cover.png'
+    if cover.is_symlink():
+        raise RuntimeError('startup-cover.png 不能是符号链接。')
+    if cover.exists():
+        if not cover.is_file():
+            raise RuntimeError('startup-cover.png 必须是实体文件。')
+        assets['startup-cover.png'] = (cover, 'private')
+    return assets
 
 
 def asset_sources(root: Path = ROOT) -> dict:
@@ -330,7 +338,9 @@ STARTUP_OUTPUTS = (
     'web/vendor/dream-image-metadata.LICENSE',
     'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png', 'web/assets/defaults/artwork.png',
     'web/assets/defaults/contours.js',
+    'web/assets/defaults/cold-cover.png',
 )
+PRE_COVER_STARTUP_OUTPUTS = tuple(path for path in STARTUP_OUTPUTS if path != 'web/assets/defaults/cold-cover.png')
 LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS = (
     'startup/install.js',
     'web/index.html', 'web/style.css', 'web/animation.js', 'web/image-settings.js', 'web/localization.js',
@@ -1019,6 +1029,7 @@ def verify_dsh_plugin(path):
 
     inputs = source_inputs()
     manifest = package_json_of('manifest.json')
+    inputs.pop('assets/private/startup-cover.png', None)
     outputs = {relative: hashlib.sha256(package_bytes(relative)).hexdigest()
                for relative in DSH_PLUGIN_OUTPUTS}
     if (manifest.get('schema') != 1 or manifest.get('protocolVersion') != 1
@@ -1268,7 +1279,9 @@ def verify_startup(path, info, marker, *, current_source=True):
         frozenset(source_inputs) == frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
     uses_image_metadata_outputs = uses_current_startup_inputs or uses_pre_page_adapter_startup_inputs
     if uses_image_metadata_outputs:
-        expected_outputs = (STARTUP_OUTPUTS if has_native_preparation
+        has_cover = expected_version != '0.9.0' or (expected_build.isdecimal() and int(expected_build) >= 43)
+        native_outputs = STARTUP_OUTPUTS if has_cover else PRE_COVER_STARTUP_OUTPUTS
+        expected_outputs = (native_outputs if has_native_preparation
                             else LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS)
     else:
         expected_outputs = PRE_IMAGE_METADATA_STARTUP_OUTPUTS
@@ -1285,6 +1298,15 @@ def verify_startup(path, info, marker, *, current_source=True):
         if not isinstance(digest, str) or digest != hashlib.sha256(data).hexdigest():
             raise RuntimeError(f'启动产物摘要不匹配：{candidate}')
         output_bytes[relative] = data
+
+    if 'web/assets/defaults/cold-cover.png' in output_bytes:
+        cover_digest = hashlib.sha256(output_bytes['web/assets/defaults/cold-cover.png']).hexdigest()
+        inputs = marker['inputs']
+        expected_cover = inputs.get('assets/private/startup-cover.png')
+        if expected_cover is None:
+            expected_cover = inputs.get('assets/private/wallpaper-scene-q-v3.png', inputs.get('assets/azhou/wallpaper-scene-q-v3.png'))
+        if cover_digest != expected_cover:
+            raise RuntimeError('启动封面与来源标记不一致。')
 
     if has_native_preparation:
         preparation_data = output_bytes['startup/prepare.js']

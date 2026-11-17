@@ -1219,9 +1219,20 @@ extension NativePlayerPresentation {
 @MainActor
 private final class NativeBrandCoverView: NSView {
     private(set) var drew = false
+    private let image: NSImage? = Bundle.main.resourceURL.flatMap {
+        NSImage(contentsOf: $0.appendingPathComponent("web/assets/defaults/cold-cover.png"))
+    }
     override func draw(_ dirtyRect: NSRect) {
         NSColor(srgbRed: 0.945, green: 0.918, blue: 0.875, alpha: 1).setFill()
         dirtyRect.fill()
+        if let image, image.size.width > 0, image.size.height > 0 {
+            let scale = max(bounds.width / image.size.width, bounds.height / image.size.height)
+            let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
+            image.draw(in: NSRect(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2,
+                                  width: size.width, height: size.height))
+            drew = true
+            return
+        }
         let title = "阿舟 AI 实验室" as NSString
         let attributes: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 32, weight: .medium),
             .foregroundColor: NSColor(srgbRed: 0.20, green: 0.19, blue: 0.17, alpha: 1)]
@@ -1581,7 +1592,11 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
                                messageHandler: messageHandler, navigationDelegate: navigationDelegate)
         self.webView = view
         view.isHidden = nativeStartup != nil
-        panel.contentView?.addSubview(view)
+        if let cover, nativeStartup != nil {
+            panel.contentView?.addSubview(view, positioned: .below, relativeTo: cover)
+        } else {
+            panel.contentView?.addSubview(view)
+        }
     }
     func showColdCover(locale: NativeDisplayLocale, runNonce: String, delegate: NSWindowDelegate) throws -> NativeCoverReceipt {
         guard panel == nil else { throw StartupFailure(reason: "protocol-error", message: "原生启动窗口不可重复创建。") }
@@ -1605,8 +1620,22 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
     }
     func revealColdPlayer() {
         webView?.isHidden = false
-        cover?.removeFromSuperview()
-        cover = nil
+        guard let cover else { return }
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            cover.removeFromSuperview()
+            self.cover = nil
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.65
+            cover.animator().alphaValue = 0
+        } completionHandler: { [weak self, weak cover] in
+            MainActor.assumeIsolated {
+                guard let self, let cover, self.cover === cover else { return }
+                cover.removeFromSuperview()
+                self.cover = nil
+            }
+        }
     }
 
     func discardColdPlayer() {

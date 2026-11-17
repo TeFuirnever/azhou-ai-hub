@@ -40,6 +40,7 @@ ASSETS = {
     "app-icon/source.png": {"size": (lambda w, h: w == h and w >= 1024, "square, at least 1024"),
                             "colors": (2, 6), "max": MAX_ASSET_BYTES},
 }
+OPTIONAL_OVERLAY_ASSETS = {"startup-cover.png": ASSETS["wallpaper-scene-q-v3.png"]}
 COLOR_NAMES = {2: "RGB", 6: "RGBA"}
 
 
@@ -77,7 +78,7 @@ def check_file(path: Path, name: str) -> tuple[list[str], str | None]:
     label = path.as_posix()
     if path.is_symlink() or not path.is_file():
         return [f"{label}: must be a regular file"], None
-    spec = ASSETS[name]
+    spec = (ASSETS | OPTIONAL_OVERLAY_ASSETS)[name]
     data = path.read_bytes()
     if len(data) > spec["max"]:
         return [f"{label}: {len(data)} bytes exceeds the {spec['max']}-byte limit"], None
@@ -130,7 +131,7 @@ def check(root: Path = ROOT, *, require_no_overlay: bool = False) -> dict:
             errors.append(f"{OVERLAY}: a fresh checkout must not contain the local overlay")
         for path in _walk(overlay):
             relative = path.relative_to(overlay).as_posix()
-            if relative not in ASSETS:
+            if relative not in ASSETS and relative not in OPTIONAL_OVERLAY_ASSETS:
                 report["ignored"].append(f"{OVERLAY}/{relative}")
                 continue
             problems, summary = check_file(path, relative)

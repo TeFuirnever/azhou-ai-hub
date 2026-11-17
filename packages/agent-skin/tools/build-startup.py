@@ -186,11 +186,13 @@ def _png_data(data: bytes, label: str) -> tuple[int, int]:
         raise RuntimeError(f'Generated startup PNG did not finish: {label}')
     channels = 3 if color_type == 2 else 4
     row_bytes = width * channels
+    expected_size = (row_bytes + 1) * height
     try:
-        decoded = zlib.decompress(bytes(compressed))
+        decoder = zlib.decompressobj()
+        decoded = decoder.decompress(bytes(compressed), expected_size + 1)
     except zlib.error as exc:
         raise RuntimeError(f'Generated startup PNG cannot be decoded: {label}') from exc
-    if (len(decoded) != (row_bytes + 1) * height
+    if (not decoder.eof or decoder.unused_data or len(decoded) != expected_size
             or any(decoded[row * (row_bytes + 1)] > 4 for row in range(height))):
         raise RuntimeError(f'Generated startup PNG decoded pixels are invalid: {label}')
     return width, height
@@ -394,6 +396,8 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
     _check_metadata(root, artifacts, theme_config, required_inputs)
     verify_image_metadata_reader(root)
     inputs = artifacts.source_inputs()
+    if host == 'dsh':
+        inputs.pop('assets/private/startup-cover.png', None)
     if not set(required_inputs).issubset(inputs):
         raise RuntimeError('Startup manifest cannot bind every required source input.')
 
@@ -472,6 +476,16 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
         ASSET_JS_PREFIX + _json_literal(assets) + ASSET_JS_SUFFIX, encoding='utf-8',
     )
     shutil.copyfile(entry_avatar_input, entry_avatar_path)
+    has_cover = host == 'codex' and (artifacts.VERSION != '0.9.0' or int(artifacts.BUILD) >= 43)
+    if has_cover:
+        cover = asset_paths.get('startup-cover.png', asset_paths['wallpaper-scene-q-v3.png']).read_bytes()
+        if len(cover) > 8 * 1024 * 1024:
+            raise RuntimeError('Startup cover exceeds 8 MiB.')
+        cover_width, cover_height = _png_data(cover, 'startup-cover.png')
+        if not (1024 <= cover_width <= 8192 and 512 <= cover_height <= 8192
+                and 1.4 <= cover_width / cover_height <= 2.5):
+            raise RuntimeError('Startup cover must be a landscape PNG.')
+        (defaults_dir / 'cold-cover.png').write_bytes(cover)
     wallpaper_css = (root / 'wallpaper/wallpaper.css').read_text(encoding='utf-8')
     playback_owner = 'dsh-gated' if host == 'dsh' else 'page'
     install_script = _build_script(root, assets, wallpaper_css, artifacts,
@@ -489,6 +503,8 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
                     'web/assets/defaults/avatar.png', 'web/assets/defaults/entry-avatar.png',
                     'web/assets/defaults/artwork.png',
                     'web/assets/defaults/contours.js')
+    if has_cover:
+        output_paths += ('web/assets/defaults/cold-cover.png',)
     outputs = {}
     for relative in output_paths:
         outputs[relative] = hashlib.sha256((resources / relative).read_bytes()).hexdigest()
