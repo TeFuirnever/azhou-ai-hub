@@ -1,0 +1,7 @@
+# Reflection history and corrections
+
+A user may explicitly supply a previous structured reflection as a `prior_report` segment. Preserve its exact imported UTF-8 text and bind its SHA-256. For a `changes` entry, supply `prior_segment_id`, `previous_report_digest` (that segment's text hash), `previous_insight_id`, `current_insight_id`, `type`, `old_status`, `new_status`, `new_refs` and `reason`. The validator resolves the old ID and status only in that supplied report and the new ID and status in the current result; it never opens a path named by the result. Old IDs are unique only within their own report. References to new evidence use the same range contract as observations.
+
+An old report is evidence of an old interpretation, not independent evidence that the interpretation is true. If the old report is missing, record the user's correction as a new direct statement and do not manufacture a verified change. A topic absent from new material is not proof that it has become unimportant. Preserve old artifacts; record narrowing, dispute or withdrawal in a new run. A user correction of their goal should update the interpretation without rewriting tool results. Without reliable historical source and time evidence, say the interpretation differs rather than asserting that the user changed.
+
+These reflections do not modify a live skill, global configuration or memory. A proposed tool or skill change requires its own authorization and the repository's applicable evaluation and promotion contract.
