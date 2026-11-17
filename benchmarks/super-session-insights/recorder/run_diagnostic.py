@@ -149,20 +149,24 @@ def bind_freeze(freeze_dir, copy_dir):
         raise SystemExit(f'copy directory already exists: {copy_dir}')
     manifest_bytes = (freeze_dir / 'FREEZE.manifest.json').read_bytes()
     manifest = json.loads(manifest_bytes)
-    unsafe = [entry.get('path') for entry in manifest.get('frozen_files', []) if unsafe_path(entry.get('path'))]
+    frozen = manifest.get('frozen_files') if isinstance(manifest, dict) else None
+    if not isinstance(frozen, list) or not all(isinstance(entry, dict) and isinstance(entry.get('path'), str)
+                                              and isinstance(entry.get('sha256'), str) for entry in frozen):
+        raise SystemExit('frozen material verification failed: invalid frozen_files')
+    unsafe = [entry['path'] for entry in frozen if unsafe_path(entry['path'])]
     if unsafe:
         raise SystemExit(f'frozen material verification failed: unsafe path {unsafe}')
-    problems = [entry['path'] for entry in manifest.get('frozen_files', [])
+    problems = [entry['path'] for entry in frozen
                 if not (freeze_dir / entry['path']).is_file()
-                or hash_file(freeze_dir / entry['path']) != entry.get('sha256')]
+                or hash_file(freeze_dir / entry['path']) != entry['sha256']]
     if problems:
         raise SystemExit(f'frozen material verification failed: {problems}')
     copy_dir.mkdir(mode=0o700)
     entries = []
-    for entry in manifest['frozen_files']:
+    for entry in frozen:
         source_bytes = (freeze_dir / entry['path']).read_bytes()
         source_sha256 = hashlib.sha256(source_bytes).hexdigest()
-        if source_sha256 != entry.get('sha256'):
+        if source_sha256 != entry['sha256']:
             raise SystemExit(f'frozen material verification failed: {entry["path"]}')
         member = copy_dir / entry['path']
         member.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

@@ -69,6 +69,7 @@ def ids(items):
     result = {}
     for item in items:
         fields(item, ['id'])
+        require(not unsafe_path(item['id']), 'unsafe identifier')
         require(item['id'] not in result, 'duplicate id')
         result[item['id']] = item
     return result
@@ -197,6 +198,7 @@ def validate_reflection(e, result):
     # Previous reports must be supplied as evidence; never load a path from a result.
     for change in changes:
         fields(change, ['previous_report_digest', 'previous_insight_id', 'current_insight_id', 'type', 'old_status', 'new_status', 'reason', 'prior_segment_id'])
+        require(not any(unsafe_path(change[key]) for key in ('previous_insight_id', 'current_insight_id', 'prior_segment_id')), 'unsafe identifier')
         prior = segments.get(change['prior_segment_id'])
         require(prior is not None and prior['kind'] == 'prior_report' and prior['text_sha256'] == change['previous_report_digest'], 'prior report not supplied')
         try:

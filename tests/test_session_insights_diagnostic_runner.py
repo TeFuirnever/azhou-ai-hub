@@ -432,6 +432,25 @@ class BindFreezeTest(unittest.TestCase):
                     self.assertIn('unsafe path', proc.stderr)
                     self.assertFalse(copy.exists())
 
+    def test_bind_freeze_rejects_malformed_manifest_without_copy_residue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            cases = (('missing-key', {'schema': 'diag.freeze.v1'}),
+                     ('non-list', {'schema': 'diag.freeze.v1', 'frozen_files': 'oops'}),
+                     ('non-dict-entry', {'schema': 'diag.freeze.v1', 'frozen_files': ['oops']}),
+                     ('missing-sha', {'schema': 'diag.freeze.v1', 'frozen_files': [{'path': 'a.txt'}]}))
+            for name, manifest in cases:
+                with self.subTest(name):
+                    freeze = root / name / 'freeze'
+                    freeze.mkdir(parents=True)
+                    (freeze / 'FREEZE.manifest.json').write_bytes((json.dumps(manifest) + '\n').encode('utf-8'))
+                    copy = root / name / 'copy'
+                    proc = self.run_bind(freeze, copy)
+                    self.assertNotEqual(0, proc.returncode)
+                    self.assertIn('verification failed', proc.stderr)
+                    self.assertNotIn('Traceback', proc.stderr)
+                    self.assertFalse(copy.exists())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -203,6 +203,36 @@ class ReflectionTest(unittest.TestCase):
                 self.write()
                 self.assertEqual(1, self.run_cli('validate-evidence', '--input', 'evidence.json').returncode)
 
+    def test_unsafe_identifier_ids_are_rejected(self):
+        for container, value in (('sources', '/var/folders/xy/T/sess-42'), ('sources', '..\\..\\proj'),
+                                 ('segments', 'C:\\Temp\\sess.jsonl'), ('segments', '../../x')):
+            with self.subTest(container=container, value=value):
+                self.ev = evidence()
+                self.ev[container][0]['id'] = value
+                if container == 'sources':
+                    for segment in self.ev['segments']:
+                        segment['container_source_id'] = value
+                        segment['content_source_id'] = value
+                self.ev['digest'] = digest({k: v for k, v in self.ev.items() if k != 'digest'})
+                self.write()
+                self.assertEqual(1, self.run_cli('validate-evidence', '--input', 'evidence.json').returncode)
+
+    def test_unsafe_insight_and_change_ids_are_rejected(self):
+        self.result['insights'][0]['id'] = '/var/folders/xy/T/ins'
+        self.write()
+        self.assertEqual(1, self.run_cli('validate-reflection', '--evidence', 'evidence.json', '--input', 'reflection.json').returncode)
+        self.result = reflection(self.ev)
+        prior = json.dumps({'schema': 'super-session-insights.reflection.v1', 'insights': [{'id': '/var/folders/xy/T/old', 'epistemic_status': 'hypothesis'}]}, ensure_ascii=False)
+        self.ev['segments'].append(dict(self.ev['segments'][0], id='old', order=0, kind='prior_report', speaker='assistant', text=prior, text_sha256=hashlib.sha256(prior.encode()).hexdigest()))
+        self.ev['digest'] = digest({k: v for k, v in self.ev.items() if k != 'digest'})
+        self.result['evidence_digest'] = self.ev['digest']
+        self.result['changes'] = [{'prior_segment_id': 'old', 'previous_report_digest': hashlib.sha256(prior.encode()).hexdigest(),
+                                   'previous_insight_id': '/var/folders/xy/T/old', 'current_insight_id': 'i1', 'type': 'revised',
+                                   'old_status': 'hypothesis', 'new_status': 'hypothesis', 'reason': '范围缩小',
+                                   'new_refs': self.result['insights'][0]['supporting_refs']}]
+        self.write()
+        self.assertEqual(1, self.run_cli('validate-reflection', '--evidence', 'evidence.json', '--input', 'reflection.json').returncode)
+
     def test_explicit_prior_report_and_insight_are_bound(self):
         prior = json.dumps({'schema': 'super-session-insights.reflection.v1', 'insights': [{'id': 'old1', 'epistemic_status': 'hypothesis'}]}, ensure_ascii=False)
         self.ev['segments'].append(dict(self.ev['segments'][0], id='old', order=0, kind='prior_report', speaker='assistant', text=prior, text_sha256=hashlib.sha256(prior.encode()).hexdigest()))
