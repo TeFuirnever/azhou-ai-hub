@@ -104,13 +104,12 @@ def classify(events, records, target_path):
         command_text = str(record.get('command', ''))
         stripped = strip_heredocs(command_text)
         found = sorted({match.group(1) for match in candidate.finditer(stripped)})
-        linkage = 'textual-candidate'
-        if not found:
-            found = sorted({match.group(1) for match in list_form.finditer(stripped)})
-            linkage = 'python-list-candidate'
+        list_found = sorted({match.group(1) for match in list_form.finditer(stripped)})
         for op in found:
-            candidates[op].append({'exit_code': record.get('exit_code'), 'linkage': linkage})
-        if not found and bare_name.search(stripped):
+            candidates[op].append({'exit_code': record.get('exit_code'), 'linkage': 'textual-candidate'})
+        for op in list_found:
+            candidates[op].append({'exit_code': record.get('exit_code'), 'linkage': 'python-list-candidate'})
+        if not found and not list_found and bare_name.search(stripped):
             unlinked.append({'exit_code': record.get('exit_code'),
                              'reason': 'target named without a recognized invocation form'})
     operations = {}

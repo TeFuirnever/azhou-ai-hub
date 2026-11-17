@@ -66,11 +66,15 @@ class ClassifyTest(unittest.TestCase):
             {'command': 'subprocess.run([sys.executable, "/tmp/x/reflection.py", "review-citations"])', 'exit_code': 0},
             {'command': 'quoted = "reflection.py validate-evidence"', 'exit_code': 0},
             {'command': "cat <<'EOF'\nreflection.py validate-evidence\nEOF", 'exit_code': 0},
+            {'command': 'python3 reflection.py render && python3 -c \'import subprocess,sys;'
+                        'subprocess.run([sys.executable, "reflection.py", "review-citations"])\'', 'exit_code': 5},
         ]
         summary = self.runner.classify([], records, 'reflection.py')
-        self.assertEqual([{'exit_code': 0, 'linkage': 'textual-candidate'}],
+        self.assertEqual([{'exit_code': 0, 'linkage': 'textual-candidate'},
+                          {'exit_code': 5, 'linkage': 'textual-candidate'}],
                          summary['operations']['render']['exit_candidates'])
-        self.assertEqual([{'exit_code': 0, 'linkage': 'python-list-candidate'}],
+        self.assertEqual([{'exit_code': 0, 'linkage': 'python-list-candidate'},
+                          {'exit_code': 5, 'linkage': 'python-list-candidate'}],
                          summary['operations']['review-citations']['exit_candidates'])
         self.assertEqual([], summary['operations']['validate-evidence']['exit_candidates'])
         self.assertEqual('unknown', summary['operations']['render']['exit_outcome'])
@@ -164,19 +168,26 @@ class RecordCommandTest(unittest.TestCase):
             {'type': 'item.completed',
              'item': {'type': 'command_execution',
                       'command': "cat <<'EOF'\nreflection.py validate-evidence\nEOF", 'exit_code': 0}},
+            {'type': 'item.completed',
+             'item': {'type': 'command_execution', 'exit_code': 5,
+                      'command': f'python3 {self.target} render && python3 -c \'import subprocess,sys; '
+                                 f'subprocess.run([sys.executable, "{self.target}", "review-citations"])\''}},
         ]
         records_path.write_text('\n'.join(json.dumps(entry) for entry in entries) + '\n', encoding='utf-8')
         script = f'cat {records_path}; python3 {self.target} render'
         proc, out = self.record(script)
         self.assertEqual(0, proc.returncode, proc.stderr)
         result = self.result(out)
-        self.assertEqual([{'command': entry['item']['command'], 'exit_code': 0} for entry in entries],
+        self.assertEqual([{'command': entry['item']['command'], 'exit_code': entry['item']['exit_code']}
+                          for entry in entries],
                          result['command_records'])
         classification = result['classification']
         self.assertEqual(1, classification['operations']['render']['instrumented_starts'])
-        self.assertEqual([{'exit_code': 0, 'linkage': 'textual-candidate'}],
+        self.assertEqual([{'exit_code': 0, 'linkage': 'textual-candidate'},
+                          {'exit_code': 5, 'linkage': 'textual-candidate'}],
                          classification['operations']['render']['exit_candidates'])
-        self.assertEqual([{'exit_code': 0, 'linkage': 'python-list-candidate'}],
+        self.assertEqual([{'exit_code': 0, 'linkage': 'python-list-candidate'},
+                          {'exit_code': 5, 'linkage': 'python-list-candidate'}],
                          classification['operations']['review-citations']['exit_candidates'])
         self.assertEqual([], classification['operations']['validate-evidence']['exit_candidates'])
         self.assertEqual([], classification['unlinked_target_records'])
