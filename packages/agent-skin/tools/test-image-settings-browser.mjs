@@ -150,6 +150,7 @@ function browserChecks(maxInputBytes) {
       Image: child.Image,
       URL: urlApi,
       indexedDB: child.indexedDB,
+      crypto: child.crypto, TextEncoder: child.TextEncoder,
       localization,
       appearanceAvatar,
       getAppearance: () => currentAppearance,
@@ -386,7 +387,7 @@ function browserChecks(maxInputBytes) {
     const workspacePreviewSurface = workspacePreview?.querySelector(':scope > div');
     const workspacePreviewWash = settingsDialog.querySelector('[data-agent-skin-workspace-preview-wash]');
     const strengthInput = settingsDialog.querySelector('input[type="range"]');
-    const textInputs = [...settingsDialog.querySelectorAll('input[type="text"]')];
+    const textInputs = [...settingsDialog.querySelectorAll('input[type="text"]:not([data-agent-skin-preset-name])')];
     const titleInput = textInputs[0];
     const captionInput = textInputs[1];
     const subtitleInput = settingsDialog.querySelector('textarea');
@@ -589,7 +590,7 @@ function browserChecks(maxInputBytes) {
       onSaved() { savedCallbackCount++; },
     });
     const applyDialog = childDocument.querySelector('dialog[data-agent-skin-settings]');
-    const applyTitle = applyDialog.querySelector('input[type="text"]');
+    const applyTitle = applyDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
     applyTitle.value = 'Apply draft';
     applyTitle.dispatchEvent(new child.Event('input', { bubbles: true }));
     const applyStrength = applyDialog.querySelector('input[type="range"]');
@@ -642,10 +643,10 @@ function browserChecks(maxInputBytes) {
     if (!api.openSettings() || !secondAPI.openSettings()) {
       throw new Error('both settings pages must open for the conflict regression');
     }
-    const pageATitle = settingsDialog.querySelector('input[type="text"]');
+    const pageATitle = settingsDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
     const pageAConflictSave = settingsDialog.querySelector('footer button:last-child');
     const pageBDialog = secondDocument.querySelector('dialog[data-agent-skin-settings]');
-    const pageBTitle = pageBDialog.querySelector('input[type="text"]');
+    const pageBTitle = pageBDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
     const pageBSave = pageBDialog.querySelector('footer button:last-child');
     const pageBStatus = pageBDialog.querySelector('[data-agent-skin-settings-status]');
     pageATitle.value = 'Page A wins';
@@ -682,11 +683,100 @@ function browserChecks(maxInputBytes) {
       throw new Error('reopening settings reads the value committed by the other page');
     }
     const reopenedDialog = secondDocument.querySelector('dialog[data-agent-skin-settings]');
-    const reopenedTitle = reopenedDialog.querySelector('input[type="text"]');
+    const reopenedTitle = reopenedDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
     if (reopenedTitle.value !== 'Page A wins') throw new Error('reopened input does not show the external winner');
     reopenedAPI.cancelSettings();
     reopenedAPI.dispose();
     secondPage.remove();
+    const presetArtworkB = canvasFor(1536, 1024, context => {
+      context.fillStyle = '#9b204a'; context.fillRect(0, 0, 1536, 1024);
+    }).toDataURL('image/png');
+    await api.save(winningCommit.settings, {activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:0}}, {
+      schemaVersion:1,revision:0,entries:[
+        {id:'browser-a',name:'<img onerror=window.presetXss=true>',recipeId:'azhou-q-v3',appearance:{artwork:art.dataURL,contours:art.contours,wallpaperStrength:42},surfaceTransparency:{mode:'override',value:0}},
+        {id:'browser-b',name:'B',recipeId:'azhou-q-v3',appearance:{artwork:presetArtworkB,contours:art.contours,wallpaperStrength:42},surfaceTransparency:{mode:'override',value:100}},
+      ],
+    });
+    const presetBefore = await api.load(defaults);
+    if (!api.openSettings()) throw new Error('local preset panel opens');
+    const presetList = settingsDialog.querySelector('[data-agent-skin-preset-list]');
+    if (presetList.options[0].textContent !== '<img onerror=window.presetXss=true>' || child.presetXss) throw new Error('preset names must remain text');
+    const loadPreset = Array.from(settingsDialog.querySelectorAll('button')).find(button=>button.textContent==='Load into draft');
+    for (const [id,image,alpha] of [['browser-a',art.dataURL,'0'],['browser-b',presetArtworkB,'100']]) {
+      presetList.value=id;loadPreset.click();
+      if (settingsDialog.querySelector('[data-agent-skin-workspace-preview-image]').src!==image
+        || settingsDialog.querySelector('[data-agent-skin-theme-transparency]').value!==alpha) throw new Error('preset A/B draft preview mismatch');
+    }
+    api.cancelSettings();
+    const presetAfterCancel=await api.load(defaults);
+    if (JSON.stringify(presetAfterCancel.settings)!==JSON.stringify(presetBefore.settings)) throw new Error('preset load cancellation wrote images');
+    api.openSettings();presetList.value='browser-b';loadPreset.click();
+    settingsDialog.querySelector('footer button:last-child').click();
+    await waitFor(()=>!api.isSettingsOpen(),'local preset commit');
+    const presetAfterSave=await api.load(defaults);
+    if (presetAfterSave.settings.artwork!==presetArtworkB || presetAfterSave.themeState.preferencesByTheme['azhou-q-v3'].value!==100
+      || presetAfterSave.settings.introTitle!==presetBefore.settings.introTitle || presetAfterSave.settings.avatar!==presetBefore.settings.avatar) throw new Error('preset save changed startup fields or lost transparency');
+    api.openSettings();
+    if (settingsDialog.querySelector('[data-agent-skin-theme-transparency]').value!=='100') throw new Error('preset alpha did not survive reopen');
+    api.cancelSettings();
+    const rawCatalog = async (operation, values) => {
+      const db = await new Promise((resolve,reject)=>{const r=child.indexedDB.open('azhou-codex-startup',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+      try { return await new Promise((resolve,reject)=>{
+        const t=db.transaction('settings',operation==='read'?'readonly':'readwrite'), store=t.objectStore('settings'), result={};
+        for(const key of ['images','themeState','appearancePresets']) {
+          if(operation==='read') {const q=store.get(key);q.onsuccess=()=>{result[key]=q.result;};}
+          else if(Object.hasOwn(values,key)) store.put(values[key],key);
+        }
+        t.oncomplete=()=>resolve(result);t.onabort=()=>reject(t.error||new Error('raw transaction aborted'));t.onerror=()=>{};
+      }); } finally { db.close(); }
+    };
+    const savedP2Records=await rawCatalog('read');
+    const p2BrowserResults=[];
+    try {
+      for(const kind of ['bigint','cycle']) {
+        const damaged={corrupt:1n}; if(kind==='cycle') damaged.self=damaged;
+        await rawCatalog('write',{appearancePresets:damaged});
+        const loadedP2=await api.load(defaults);
+        if(loadedP2.reason || loadedP2.settings.artwork!==savedP2Records.images.artwork) throw new Error('bad catalog contaminated valid appearance');
+        if(!api.openSettings()) throw new Error('P2 panel failed to open');
+        if(!settingsDialog.querySelector('[data-agent-skin-preset-list]').disabled) throw new Error('bad catalog presets not disabled');
+        const field=settingsDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
+        field.value='P2 '+kind;field.dispatchEvent(new child.Event('input',{bubbles:true}));
+        settingsDialog.querySelector('footer button:last-child').click();
+        await waitFor(()=>!api.isSettingsOpen(),'P2 '+kind+' appearance save');
+        const after=await rawCatalog('read');
+        if(after.images.introTitle!=='P2 '+kind || after.appearancePresets.corrupt!==1n
+          || (kind==='cycle' && after.appearancePresets.self!==after.appearancePresets)) throw new Error('P2 save lost appearance or damaged catalog');
+        const prior=await api.load(defaults);
+        const winner={corrupt:2n};if(kind==='cycle')winner.self=winner;
+        await rawCatalog('write',{appearancePresets:winner});
+        const failure=await api.save({...prior.settings,introTitle:'Stale P2'}).then(()=>'',error=>error.reason);
+        if(failure!=='settings-conflict') throw new Error('P2 concurrent change was not rejected');
+        const concurrent=await rawCatalog('read');
+        if(concurrent.appearancePresets.corrupt!==2n || concurrent.images.introTitle!=='P2 '+kind) throw new Error('P2 stale writer replaced winner');
+        p2BrowserResults.push({kind,disabled:true,appearanceSaved:true,catalogPreserved:true,concurrentBlocked:true});
+      }
+      await rawCatalog('write',savedP2Records);
+      const unusedArtwork=canvasFor(1536,1024,ctx=>{ctx.fillStyle='#12ad48';ctx.fillRect(0,0,1536,1024);}).toDataURL('image/png');
+      const inactive=structuredClone(savedP2Records.appearancePresets);
+      for(const entry of inactive.entries)entry.appearance.artwork=unusedArtwork;
+      await rawCatalog('write',{appearancePresets:inactive});
+      let inactiveDecodes=0;
+      function ObservedImage(){
+        const image=new child.Image();const property=Object.getOwnPropertyDescriptor(child.HTMLImageElement.prototype,'src');
+        Object.defineProperty(image,'src',{configurable:true,get(){return property.get.call(this);},set(value){if(value===unusedArtwork){inactiveDecodes++;throw new Error('inactive catalog decode attempted');}property.set.call(this,value);}});
+        return image;
+      }
+      const snapshotApi=createImageSettings({document:childDocument,Image:ObservedImage,URL:child.URL,indexedDB:child.indexedDB,
+        crypto:child.crypto,TextEncoder:child.TextEncoder,localization,setTimeout:child.setTimeout.bind(child),clearTimeout:child.clearTimeout.bind(child),performance:child.performance});
+      const snapshot=await snapshotApi.loadSnapshot(defaults);snapshotApi.dispose();
+      if(snapshot.status!=='valid'||snapshot.settings.artwork!==savedP2Records.images.artwork||inactiveDecodes!==0)throw new Error('inactive catalog interfered with active snapshot');
+      p2BrowserResults.push({kind:'snapshot',status:snapshot.status,inactiveDecodes,activeArtworkPreserved:true});
+    } finally {
+      if(api.isSettingsOpen())api.cancelSettings();
+      await rawCatalog('write',savedP2Records);await api.load(defaults);
+    }
+
     const versionchange = await new Promise((resolve, reject) => {
       const request = child.indexedDB.open('azhou-codex-startup', 2);
       let blocked = false;
@@ -795,6 +885,7 @@ function browserChecks(maxInputBytes) {
       idleCancelResult: api.cancelImport(),
       appearance,
       storage: {
+        p2BrowserResults,
         initialReason: initiallyLoaded.reason,
         initialBaseline: initiallyLoaded.baseline,
         initialTitle: initialCommit.introTitle,
@@ -935,7 +1026,17 @@ try {
   const settingsFrameId = frameTree.frameTree.childFrames?.[0]?.frame?.id;
   assert.ok(settingsFrameId, 'the real settings iframe is available for AX inspection');
   const settingsAXTree = await cdp.call('Accessibility.getFullAXTree', { frameId: settingsFrameId });
-  const strengthAXNode = settingsAXTree.nodes.find(node => node.role?.value === 'slider');
+  const strengthRemote = await cdp.call('Runtime.evaluate', {
+    expression: 'document.querySelector("iframe").contentDocument.getElementById("agent-skin-settings-wallpaper-strength")',
+    returnByValue: false,
+  });
+  assert.ok(strengthRemote.result.objectId, 'the wallpaper strength control exists');
+  const strengthDOM = await cdp.call('DOM.describeNode', { objectId: strengthRemote.result.objectId });
+  await cdp.call('Runtime.releaseObject', { objectId: strengthRemote.result.objectId });
+  const strengthAXNodes = settingsAXTree.nodes.filter(node =>
+    node.backendDOMNodeId === strengthDOM.node.backendNodeId && node.role?.value === 'slider');
+  assert.equal(strengthAXNodes.length, 1, 'exactly one AX slider belongs to the wallpaper strength control');
+  const strengthAXNode = strengthAXNodes[0];
   assert.deepEqual({
     dom: result.previewWorkflow.settingsUi.strengthLabelAssociation,
     accessibleName: strengthAXNode?.name?.value || '',
@@ -943,6 +1044,12 @@ try {
     dom: { controlIsSlider: true, sliderLabelCount: 1 },
     accessibleName: '背景强度（0–75）',
   }, 'the real slider label association and Chromium AX tree expose its visible name');
+
+  assert.deepEqual(result.storage.p2BrowserResults, [
+    { kind: 'bigint', disabled: true, appearanceSaved: true, catalogPreserved: true, concurrentBlocked: true },
+    { kind: 'cycle', disabled: true, appearanceSaved: true, catalogPreserved: true, concurrentBlocked: true },
+    { kind: 'snapshot', status: 'valid', inactiveDecodes: 0, activeArtworkPreserved: true },
+  ], 'real IndexedDB catalogs cannot corrupt saved appearance or block active snapshots');
 
   assert.deepEqual(result.formats.map(item => item.type), ['image/png', 'image/jpeg', 'image/webp']);
   assert.deepEqual(result.directPagePreflight,

@@ -79,6 +79,8 @@ function makeFixture(options = {}) {
         getPropertyValue(name) { return this.properties.get(name) || ''; },
       },
       children: [],
+      get firstChild() {return element.children[0];},
+      removeChild(child) {element.children.splice(element.children.indexOf(child),1);},
       attributes,
       disabled: false,
       value: '',
@@ -125,9 +127,10 @@ function makeFixture(options = {}) {
     };
     Object.defineProperty(current, 'src', {
       set(value) {
+        if (options.dimensionsForSource) [current.naturalWidth,current.naturalHeight] = options.dimensionsForSource(value);
         if (!value) { current.released = true; return; }
         current.released = false;
-        if (options.decode === 'pending') return;
+        if (options.decode === 'pending' || options.decodeForSource?.(value) === 'pending') return;
         queueMicrotask(() => {
           if (current.released) return;
           if (options.decode === 'error') current.onerror?.(new Error('decoder detail must not escape'));
@@ -237,7 +240,7 @@ function makeFixture(options = {}) {
 }
 
 function makeIndexedDB(initialRecord, options = {}) {
-  const state = { record: initialRecord, themeRecord: options.themeRecord, puts: 0, putSuccesses: 0, completions: 0,
+  const state = { record: initialRecord, themeRecord: options.themeRecord, libraryRecord: options.libraryRecord, puts: 0, putSuccesses: 0, completions: 0,
     deletes: 0, clears: 0, opens: [], transactions: [], heldRequests: [], releaseOpen: null };
   let hasStore = false;
   const database = {
@@ -251,6 +254,7 @@ function makeIndexedDB(initialRecord, options = {}) {
       let pendingRequests = 0;
       let stagedRecord;
       let stagedThemeRecord;
+      let stagedLibraryRecord;
       let aborted = false;
       let transactionFinished = false;
       let completionQueued = false;
@@ -284,8 +288,9 @@ function makeIndexedDB(initialRecord, options = {}) {
                 if (aborted || transactionFinished || pendingRequests !== 0) return;
                 transactionFinished = true;
                 transaction.completed = true;
-                if (stagedRecord !== undefined) state.record = JSON.parse(JSON.stringify(stagedRecord));
-                if (stagedThemeRecord !== undefined) state.themeRecord = JSON.parse(JSON.stringify(stagedThemeRecord));
+                if (stagedRecord !== undefined) state.record = structuredClone(stagedRecord);
+                if (stagedThemeRecord !== undefined) state.themeRecord = structuredClone(stagedThemeRecord);
+                if (stagedLibraryRecord !== undefined) state.libraryRecord = structuredClone(stagedLibraryRecord);
                 state.completions++;
                 transaction.oncomplete?.({ target: transaction });
               });
@@ -300,16 +305,16 @@ function makeIndexedDB(initialRecord, options = {}) {
           assert.equal(name, 'settings');
           return {
             get(key) {
-              assert.ok(['images', 'themeState'].includes(key));
+              assert.ok(['images', 'themeState', 'appearancePresets'].includes(key));
               return transaction.request('get', request => {
-                const record = key === 'images' ? state.record : state.themeRecord;
-                request.result = record === undefined ? undefined : JSON.parse(JSON.stringify(record));
+                const record = key === 'images' ? state.record : key === 'themeState' ? state.themeRecord : state.libraryRecord;
+                request.result = record === undefined ? undefined : structuredClone(record);
                 request.onsuccess?.({ target: request });
               });
             },
             put(value, key) {
               assert.equal(mode, 'readwrite');
-              assert.ok(['images', 'themeState'].includes(key));
+              assert.ok(['images', 'themeState', 'appearancePresets'].includes(key));
               state.puts++;
               return transaction.request('put', request => {
                 if (options.putError) {
@@ -318,8 +323,9 @@ function makeIndexedDB(initialRecord, options = {}) {
                   try { transaction.abort(); } catch {}
                   return;
                 }
-                if (key === 'images') stagedRecord = JSON.parse(JSON.stringify(value));
-                else stagedThemeRecord = JSON.parse(JSON.stringify(value));
+                if (key === 'images') stagedRecord = structuredClone(value);
+                else if (key === 'themeState') stagedThemeRecord = structuredClone(value);
+                else stagedLibraryRecord = structuredClone(value);
                 request.result = key;
                 request.onsuccess?.({ target: request });
               });
@@ -768,7 +774,7 @@ test('loadSnapshot reports a pending read timeout as failure, not as a missing r
   for (let attempt = 0; attempt < 10 && storage.state.heldRequests.length === 0; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
-  assert.equal(storage.state.heldRequests.length, 2, 'both readonly settings reads are pending');
+  assert.equal(storage.state.heldRequests.length, 3, 'all three readonly settings reads are pending');
 
   fixture.advance(5_000);
   const snapshot = await loading;
@@ -779,7 +785,7 @@ test('loadSnapshot reports a pending read timeout as failure, not as a missing r
   assert.equal(Object.hasOwn(snapshot, 'baseline'), false);
   assert.equal(storage.state.transactions[0].aborted, true);
   assert.equal(storage.state.puts, 0);
-  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true]);
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true, true]);
   fixture.api.dispose();
 });
 
@@ -867,7 +873,7 @@ test('settings editor leads with a draft workspace preview and passes a clone to
   assert.equal(backgroundAction.textContent, '选择背景图片');
   assert.equal(backgroundAction.getAttribute('aria-label'), null,
     'the visible button text is its accessible name without a duplicate aria-label');
-  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   assert.equal(titleInput.parentNode.tagName, 'LABEL');
   assert.equal(titleInput.parentNode.children[0].textContent, '启动标题（最多 16 个字符）');
   assert.equal(titleInput.getAttribute('aria-label'), null,
@@ -945,7 +951,7 @@ test('a failed animation preview reports an error and keeps the draft editable',
     introTitle: 'Saved title', introCaption: '', artworkSubtitle: '', wallpaperStrength: 42,
   });
   assert.equal(fixture.api.openSettings({ onPreview: () => { throw new Error('preview unavailable'); } }), true);
-  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   const previewButton = fixture.elements.find(element => element.getAttribute('data-agent-skin-preview-animation') === '');
   const alert = fixture.elements.find(element => element.getAttribute('aria-live') === 'assertive');
   title.value = 'Unsaved title';
@@ -982,7 +988,7 @@ test('a failed background apply retries the saved result without repeating the s
     onSaved: value => saved.push(value),
     onCancel: () => { cancelled++; },
   }), true);
-  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   title.value = 'New title';
   title.listeners.get('input')[0]();
   const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
@@ -1094,7 +1100,7 @@ test('embedded presentation renders inline without modal traps and keeps the sec
   assert.equal(dialog.listeners.has('cancel'), false, 'no native cancel path is wired inline');
   assert.equal(dialog.listeners.has('keydown'), false, 'the host page navigation stays untrapped');
 
-  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   title.value = 'Draft edit';
   title.listeners.get('input')[0]();
   const cancelButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '取消');
@@ -1138,7 +1144,7 @@ test('embedded cancel reverts to the last saved record, not the open-time baseli
     onApply: async value => { applied.push(value.introTitle); return { applied: true }; },
     onSaved: () => {},
   }, { presentation: 'embedded' }), true);
-  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
   const cancelButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '取消');
 
@@ -1174,7 +1180,7 @@ test('embedded cancel drops a saved-but-unapplied commit so the next save is fre
     onApply: async value => { applied.push(value.introTitle); return applyOutcome; },
     onSaved: value => saved.push(value.introTitle),
   }, { presentation: 'embedded' }), true);
-  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const title = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   const saveButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
   const cancelButton = fixture.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '取消');
 
@@ -1270,7 +1276,7 @@ test('the settings dialog follows host locale changes without replacing the dial
   const dialog = fixture.elements.find(element => element.tagName === 'DIALOG');
   const appearanceAvatar = fixture.elements.find(element =>
     element.getAttribute('data-agent-skin-appearance-avatar') === '');
-  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   const status = fixture.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
   assert.equal(dialog.getAttribute('data-agent-skin-settings'), '');
   assert.equal(appearanceAvatar.src, 'data:image/png;base64,AAAA');
@@ -1448,7 +1454,7 @@ test('missing built-in text uses the host locale while the open draft stays unch
   assert.equal(loaded.settings.introCaption, 'AZHOU / AI LAB');
   assert.equal(loaded.settings.artworkSubtitle, '和阿舟一起，把想法做出来。');
   assert.equal(fixture.api.openSettings(), true);
-  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   assert.equal(titleInput.value, '阿舟 AI 实验室');
 
   localization.setLocale('en');
@@ -1481,7 +1487,7 @@ test('locale changes leave committed custom text and the stored settings record 
   const loaded = await fixture.api.load(record);
   assert.equal(loaded.reason, '');
   assert.equal(fixture.api.openSettings(), true);
-  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
 
   localization.setLocale('en');
 
@@ -1718,7 +1724,7 @@ test('a write timeout aborts the unfinished transaction and a late baseline call
   assert.equal(storage.state.puts, 0);
   assert.equal(storage.state.record, undefined);
 
-  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true]);
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true, true]);
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(storage.state.puts, 0);
   assert.equal(write.completed, false);
@@ -1748,7 +1754,7 @@ test('external dispose aborts a pending save and ignores its late request callba
   assert.equal(write.aborted, true);
   assert.equal(storage.state.record, undefined);
 
-  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true]);
+  assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true, true]);
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(storage.state.puts, 0);
   assert.equal(write.completed, false);
@@ -1782,7 +1788,7 @@ test('load total timeout returns safe defaults, preserves the baseline, and leav
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(storage.state.transactions.length, 1);
   fixture.advance(4_500);
-  assert.deepEqual(storage.state.releaseHeldRequests(), [true, true]);
+  assert.deepEqual(storage.state.releaseHeldRequests(), [true, true, true]);
   for (let attempt = 0; attempt < 10 && fixture.images.length < 2; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 0));
   }
@@ -1854,7 +1860,7 @@ test('database open and read each time out after their five-second budget', asyn
     for (let attempt = 0; attempt < 10 && storage.state.heldRequests.length === 0; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 0));
     }
-    assert.equal(storage.state.heldRequests.length, 2, 'both read-only gets remain pending');
+    assert.equal(storage.state.heldRequests.length, 3, 'all three read-only gets remain pending');
     const transaction = storage.state.transactions[0];
     assert.equal(transaction.mode, 'readonly');
 
@@ -1867,7 +1873,7 @@ test('database open and read each time out after their five-second budget', asyn
     assert.equal(loaded.settings.introTitle, 'Safe default');
     assert.equal(transaction.aborted, true);
 
-    assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true]);
+    assert.deepEqual(storage.state.releaseHeldRequests(true), [true, true, true]);
     await new Promise(resolve => setTimeout(resolve, 0));
     assert.equal(transaction.completed, false, 'the late get cannot complete the aborted transaction');
     assert.equal(storage.state.record, undefined);
@@ -1891,7 +1897,7 @@ test('restore all defaults changes only the draft and cancel keeps the saved rec
   const fixture = makeFixture({ indexedDB: storage.indexedDB, imageDimensions: [[512, 512], [1536, 1024]] });
   await fixture.api.load(defaults);
   assert.equal(fixture.api.openSettings(), true);
-  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const titleInput = fixture.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   const restore = fixture.elements.find(element => element.tagName === 'BUTTON'
     && element.textContent === '恢复全部默认');
   titleInput.value = 'Unsaved draft';
@@ -1928,8 +1934,8 @@ test('a settings conflict keeps the local text copyable and reopening reads the 
   assert.equal(pageA.api.openSettings(), true);
   assert.equal(pageB.api.openSettings(), true);
 
-  const pageATitle = pageA.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
-  const pageBTitle = pageB.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const pageATitle = pageA.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
+  const pageBTitle = pageB.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   const pageASave = pageA.elements.find(element => element.tagName === 'BUTTON' && element.textContent === '保存');
   const pageBSave = pageB.elements.find(element => element.tagName === 'BUTTON' && element.textContent === 'Save');
   const pageAStatus = pageA.elements.find(element => element.getAttribute('data-agent-skin-settings-status') === '');
@@ -1957,7 +1963,7 @@ test('a settings conflict keeps the local text copyable and reopening reads the 
   const reopened = await reopenedPage.api.load(baseline);
   assert.equal(reopened.settings.introTitle, 'Page A saved');
   assert.equal(reopenedPage.api.openSettings(), true);
-  const reopenedTitle = reopenedPage.elements.find(element => element.tagName === 'INPUT' && element.type === 'text');
+  const reopenedTitle = reopenedPage.elements.find(element => element.tagName === 'INPUT' && element.type === 'text' && element.getAttribute('data-agent-skin-preset-name') === null);
   assert.equal(reopenedTitle.value, 'Page A saved', 'a newly opened page reads the external winner');
   assert.equal(storage.state.puts, 1, 'the conflict and close add no writes');
 
@@ -2031,7 +2037,7 @@ test('an injected settings namespace replaces database name, version, store and 
     'an injected namespace replaces the database name and version');
   assert.ok(seen.stores.length > 0 && seen.stores.every(store => store === 'synthetic-settings'),
     'an injected namespace replaces the object store');
-  assert.ok(seen.keys.length === 2 && seen.keys.some(({ key }) => key === 'images-v3') && seen.keys.some(({ key }) => key === 'images-v3:themeState'),
+  assert.ok(seen.keys.length === 3 && seen.keys.some(({ key }) => key === 'images-v3') && seen.keys.some(({ key }) => key === 'images-v3:themeState') && seen.keys.some(({ key }) => key === 'images-v3:appearancePresets'),
     'an injected namespace replaces the record key');
   fixture.api.dispose();
 });
@@ -2373,4 +2379,233 @@ test('Restore All synchronizes disabled theme controls without saving or changin
   assert.equal(f.control('data-agent-skin-theme-transparency-reason').textContent,'选择阿舟主题后可调整');
   assert.equal(f.storage.state.puts,0);f.fixture.api.cancelSettings();f.fixture.api.openSettings();
   assert.equal(mode.disabled,true);assert.equal(alpha.disabled,true);f.fixture.api.dispose();
+});
+
+function presetDraftFixture(storage=makeIndexedDB()) {
+  const fixture=makeFixture({indexedDB:storage.indexedDB,dimensionsForSource:value=>value==='data:image/png;base64,AAAA'?[512,512]:[1536,1024]});
+  const base=themeDraftFixture(storage);base.fixture.api.dispose();
+  const control=attr=>fixture.elements.find(el=>el.getAttribute(attr)==='');
+  return {...base,fixture,control,choose:value=>{const el=control('data-agent-skin-theme-choice');el.value=value;el.listeners.get('change')[0]();},click:label=>fixture.elements.find(el=>el.tagName==='BUTTON'&&el.textContent===label).listeners.get('click')[0]()};
+}
+function localPreset(artwork = 'data:image/png;base64,BBBB', value = 0) {
+  return {id: 'local-fixture', name: '<img onerror=evil()>', recipeId: 'azhou-q-v3',
+    appearance: {artwork, contours: [[[0,0],[1,1]]], wallpaperStrength: 42},
+    surfaceTransparency: {mode:'override',value}};
+}
+test('local presets are draft-only, preserve startup fields and commit together', async()=>{
+  const f=presetDraftFixture();await f.fixture.api.load(f.defaults);let applied=0;
+  f.fixture.api.openSettings({onApply(){applied++;return {applied:true};}});
+  f.choose('azhou-q-v3');
+  const name=f.control('data-agent-skin-preset-name');assert.ok(name,'named local preset input exists');
+  name.value='<b>A</b>';await f.click('新增预设');
+  assert.equal(f.storage.state.puts,0);assert.equal(applied,0);
+  f.click('取消');assert.equal(f.storage.state.libraryRecord,undefined);
+  f.fixture.api.openSettings();f.choose('azhou-q-v3');name.value='A';await f.click('新增预设');
+  await f.click('保存');
+  assert.equal(f.storage.state.libraryRecord.entries[0].name,'A');
+  assert.equal(f.storage.state.libraryRecord.schemaVersion,1);
+  assert.equal(f.storage.state.libraryRecord.revision,1);
+  assert.equal(f.storage.state.libraryRecord.entries[0].recipeId,'azhou-q-v3');
+  assert.equal('avatar' in f.storage.state.libraryRecord.entries[0].appearance,false);
+  f.fixture.api.dispose();
+});
+test('public save preserves a library and conflicts with a concurrent directory writer',async()=>{
+  const storage=makeIndexedDB(undefined,{libraryRecord:{schemaVersion:1,revision:1,entries:[]}});
+  const f=themeDraftFixture(storage);const loaded=await f.fixture.api.load(f.defaults);
+  await f.fixture.api.save(loaded.settings);assert.equal(storage.state.libraryRecord.revision,1);
+  storage.state.libraryRecord={schemaVersion:1,revision:2,entries:[]};
+  await assert.rejects(f.fixture.api.save(loaded.settings),e=>e.reason==='settings-conflict');
+  assert.equal(storage.state.libraryRecord.revision,2);f.fixture.api.dispose();
+});
+for(const mutate of [x=>x.entries.push({...localPreset(),recipeId:'other'}),x=>x.extra=true,
+  x=>x.entries.push({...localPreset(),appearance:{...localPreset().appearance,wallpaperStrength:76}}),
+  x=>x.entries=Array.from({length:9},(_,i)=>({...localPreset(),id:String(i)}))]) {
+  test('invalid local catalog fails closed without replacing valid current settings '+String(mutate),async()=>{
+    const library={schemaVersion:1,revision:1,entries:[]};mutate(library);
+    const storage=makeIndexedDB(undefined,{libraryRecord:library});const f=themeDraftFixture(storage);
+    const loaded=await f.fixture.api.load(f.defaults);assert.equal(loaded.settings.artwork,f.defaults.artwork);
+    f.fixture.api.openSettings();assert.equal(f.control('data-agent-skin-preset-name').disabled,true);
+    f.click('取消');assert.deepEqual(storage.state.libraryRecord,library);f.fixture.api.dispose();
+  });
+}
+
+test('A/B presets load distinct images and transparency endpoints, keep startup fields and survive reopen', async()=>{
+  const storage=makeIndexedDB(undefined,{libraryRecord:{schemaVersion:1,revision:1,entries:[localPreset(),{...localPreset('data:image/png;base64,CCCC',100),id:'B',name:'B'}]}});
+  const f=presetDraftFixture(storage);await f.fixture.api.load(f.defaults);
+  let applied=0;f.fixture.api.openSettings({onApply(){applied++;return {applied:true};}});
+  const title=f.fixture.elements.find(el=>el.tagName==='INPUT'&&el.type==='text'&&el.getAttribute('data-agent-skin-preset-name')===null);
+  title.value='Keep startup';title.listeners.get('input')[0]();
+  const list=f.control('data-agent-skin-preset-list');
+  assert.equal(list.children[0].textContent,'<img onerror=evil()>');
+  const preview=f.fixture.elements.find(el=>el.getAttribute('data-agent-skin-workspace-preview-image')==='');
+  for(const [id,image,alpha] of [['local-fixture','BBBB','0'],['B','CCCC','100']]) {
+    list.value=id;f.click('载入到草稿');assert.equal(preview.src,'data:image/png;base64,'+image);
+    assert.equal(f.control('data-agent-skin-theme-transparency').value,alpha);assert.equal(title.value,'Keep startup');
+    assert.equal(storage.state.puts,0);assert.equal(applied,0);
+  }
+  await f.click('保存');assert.equal(applied,1);assert.equal(storage.state.record.avatar,f.defaults.avatar);
+  assert.equal(storage.state.record.artwork,'data:image/png;base64,CCCC');assert.equal(storage.state.record.introTitle,'Keep startup');
+  assert.equal(storage.state.themeRecord.preferencesByTheme['azhou-q-v3'].value,100);
+  assert.equal(storage.state.libraryRecord.revision,1,'loading does not revise the library');
+  f.fixture.api.openSettings();list.value='local-fixture';f.click('载入到草稿');await f.click('保存');
+  assert.equal(storage.state.themeRecord.preferencesByTheme['azhou-q-v3'].value,0);
+  const reopened=presetDraftFixture(storage);const loaded=await reopened.fixture.api.load(reopened.defaults);
+  assert.equal(loaded.settings.artwork,'data:image/png;base64,BBBB');reopened.fixture.api.openSettings();
+  assert.equal(reopened.control('data-agent-skin-theme-transparency').value,'0');
+  reopened.fixture.api.dispose();f.fixture.api.dispose();
+});
+for (const key of ['record','themeRecord','libraryRecord']) {
+  test('a concurrent '+key+' writer prevents all three draft records from committing',async()=>{
+    const f=presetDraftFixture();const loaded=await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();f.choose('azhou-q-v3');
+    f.control('data-agent-skin-preset-name').value='new';await f.click('新增预设');
+    f.storage.state[key]=key==='record'?{...loaded.settings,introTitle:'winner'}:key==='themeRecord'?{winner:true}:{schemaVersion:1,revision:2,entries:[]};
+    const before=JSON.stringify([f.storage.state.record,f.storage.state.themeRecord,f.storage.state.libraryRecord]);
+    await f.click('保存');assert.equal(JSON.stringify([f.storage.state.record,f.storage.state.themeRecord,f.storage.state.libraryRecord]),before);
+    assert.equal(f.storage.state.puts,0);assert.equal(f.fixture.api.isSettingsOpen(),true);f.fixture.api.dispose();
+  });
+}
+for(const failure of ['quota','abort','cancel','timeout']) {
+  test('local preset '+failure+' leaves three committed records untouched',async()=>{
+    const options={};const storage=makeIndexedDB(undefined,options);const f=presetDraftFixture(storage);
+    await f.fixture.api.load(f.defaults);f.fixture.api.openSettings();f.choose('azhou-q-v3');
+    f.control('data-agent-skin-preset-name').value='candidate';await f.click('新增预设');
+    if(failure==='quota') options.putError={name:'QuotaExceededError'};
+    if(failure==='abort') options.afterRequest=({kind,transaction})=>{if(kind==='put')transaction.abort();};
+    if(failure==='cancel'||failure==='timeout') options.holdRequests=true;
+    const saving=f.click('保存');
+    if(failure==='cancel'||failure==='timeout') {
+      await new Promise(resolve=>setImmediate(resolve));
+      if(failure==='cancel') f.fixture.api.dispose();else f.fixture.advance(10_001);
+    }
+    await saving;assert.equal(storage.state.record,undefined);assert.equal(storage.state.themeRecord,undefined);assert.equal(storage.state.libraryRecord,undefined);
+    f.fixture.api.dispose();
+  });
+}
+test('catalog limits reject bad names, duplicate IDs, extra keys, huge JSON and undecodable images',async()=>{
+  const f=presetDraftFixture();const loaded=await f.fixture.api.load(f.defaults);
+  for(const entries of [ [{...localPreset(),name:' '}], [{...localPreset(),name:'x'.repeat(41)}],
+    [localPreset(),localPreset()], [{...localPreset(),css:'body{}'}],
+    [{...localPreset(),appearance:{...localPreset().appearance,contours:[[[0,0]]]}}],
+    Array.from({length:3},(_,i)=>({...localPreset('data:image/png;base64,'+'A'.repeat(8*1024*1024)),id:'big-'+i}))]) {
+    await assert.rejects(f.fixture.api.save(loaded.settings,undefined,{schemaVersion:1,revision:0,entries}),e=>['settings-invalid','asset-invalid'].includes(e.reason));
+  }
+  assert.equal(f.storage.state.puts,0);f.fixture.api.dispose();
+  const storage=makeIndexedDB(undefined,{libraryRecord:{schemaVersion:1,revision:1,entries:[localPreset()]}});
+  const fixture=makeFixture({indexedDB:storage.indexedDB,decode:'error'});const result=await fixture.api.load(f.defaults);
+  assert.equal(result.settings.artwork,f.defaults.artwork);fixture.api.openSettings();
+  assert.equal(fixture.elements.find(el=>el.getAttribute('data-agent-skin-preset-name')==='').disabled,true);fixture.api.dispose();
+});
+test('restore defaults and embedded cancellation retain the catalog and discard new entries',async()=>{
+  const storage=makeIndexedDB(undefined,{libraryRecord:{schemaVersion:1,revision:3,entries:[]}});const f=presetDraftFixture(storage);
+  await f.fixture.api.load(f.defaults);f.fixture.api.openSettings({}, {presentation:'embedded'});f.choose('azhou-q-v3');
+  f.control('data-agent-skin-preset-name').value='not saved';await f.click('新增预设');
+  f.click('恢复全部默认');assert.equal(f.control('data-agent-skin-preset-list').children.length,1);
+  f.click('取消');assert.equal(f.control('data-agent-skin-preset-list').children.length,0);
+  assert.equal(storage.state.libraryRecord.revision,3);assert.equal(storage.state.puts,0);f.fixture.api.dispose();
+});
+
+test('embedded cancel restores theme selection and committed library revision',async()=>{
+  const f=presetDraftFixture();await f.fixture.api.load(f.defaults);f.fixture.api.openSettings({}, {presentation:'embedded'});
+  f.choose('azhou-q-v3');f.control('data-agent-skin-preset-name').value='A';await f.click('新增预设');await f.click('保存');
+  assert.equal(f.storage.state.libraryRecord.revision,1);await f.click('保存');
+  assert.equal(f.storage.state.libraryRecord.revision,1,'unchanged embedded catalog is not rewritten');
+  f.choose('');f.click('取消');assert.equal(f.control('data-agent-skin-theme-choice').value,'azhou-q-v3');
+  assert.equal(f.storage.state.libraryRecord.revision,1);f.fixture.api.dispose();
+});
+test('a timed-out library image does not replace valid saved appearance',async()=>{
+  const record={schemaVersion:1,avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],introTitle:'Keep saved',introCaption:'',artworkSubtitle:'',wallpaperStrength:17};
+  const storage=makeIndexedDB(record,{libraryRecord:{schemaVersion:1,revision:1,entries:[localPreset('data:image/png;base64,CCCC')]}});
+  const fixture=makeFixture({indexedDB:storage.indexedDB,dimensionsForSource:v=>v===record.avatar?[512,512]:[1536,1024],decodeForSource:v=>v.endsWith('CCCC')?'pending':''});
+  const loading=fixture.api.load({...record,artwork:'data:image/png;base64,DDDD'});
+  await new Promise(resolve=>setImmediate(resolve));fixture.advance(4001);const loaded=await loading;
+  assert.equal(loaded.settings.artwork,record.artwork);assert.equal(loaded.settings.wallpaperStrength,17);assert.equal(storage.state.puts,0);
+  fixture.api.openSettings();assert.equal(fixture.elements.find(el=>el.getAttribute('data-agent-skin-preset-name')==='').disabled,true);fixture.api.dispose();
+});
+
+for (const kind of ['BigInt', 'cyclic']) {
+  test('an unchanged '+kind+' invalid catalog stays read-only while active appearance saves', async () => {
+    const library = kind === 'BigInt' ? {corrupt: 1n} : {corrupt: true};
+    if (kind === 'cyclic') library.self = library;
+    const storage = makeIndexedDB(undefined, {libraryRecord: library});
+    const f = presetDraftFixture(storage);
+    const loaded = await f.fixture.api.load(f.defaults);
+    f.fixture.api.openSettings();
+    assert.equal(f.control('data-agent-skin-preset-name').disabled, true);
+    await f.fixture.api.save({...loaded.settings, introTitle: 'Still editable'});
+    assert.equal(storage.state.record.introTitle, 'Still editable');
+    assert.deepEqual(storage.state.libraryRecord, library);
+    assert.equal(storage.state.puts, 1, 'only active images are written');
+    const changed = structuredClone(library);
+    changed.corrupt = kind === 'BigInt' ? 2n : false;
+    storage.state.libraryRecord = changed;
+    await assert.rejects(f.fixture.api.save(loaded.settings), error => error.reason === 'settings-conflict');
+    assert.deepEqual(storage.state.libraryRecord, changed);
+    assert.equal(storage.state.record.introTitle, 'Still editable');
+    f.fixture.api.dispose();
+  });
+}
+
+test('a valid active snapshot does not wait for decoding inactive preset images', async () => {
+  const record = {schemaVersion:1, avatar:'data:image/png;base64,AAAA', artwork:'data:image/png;base64,BBBB',
+    contours:[[[0,0],[1,1]]], introTitle:'Keep saved', introCaption:'', artworkSubtitle:'', wallpaperStrength:17};
+  const library = {schemaVersion:1, revision:1, entries:Array.from({length:8}, (_,i) => ({...localPreset('data:image/png;base64,CCCC'), id:'preset-'+i}))};
+  const storage = makeIndexedDB(record, {libraryRecord:library});
+  const fixture = makeFixture({indexedDB:storage.indexedDB,
+    dimensionsForSource:value=>value===record.avatar?[512,512]:[1536,1024],
+    decodeForSource:value=>value.endsWith('CCCC')?'pending':''});
+  const loading = fixture.api.loadSnapshot(record);
+  const snapshot = await Promise.race([loading, new Promise(resolve=>setImmediate(()=>resolve({status:'blocked-by-inactive-catalog'})))]);
+  assert.equal(snapshot.status, 'valid');
+  assert.equal(snapshot.settings.artwork, record.artwork);
+  assert.equal(snapshot.settings.wallpaperStrength, 17);
+  assert.equal(fixture.images.length, 2, 'only active avatar and wallpaper are decoded');
+  assert.equal(storage.state.puts, 0);
+  fixture.api.dispose();
+});
+
+for (const [kind, initial, changed] of [
+  ['undefined', {value:undefined}, {}],
+  ['non-finite number', {value:NaN}, {value:null}],
+  ['Date', {value:new Date(0)}, {value:new Date(1)}],
+  ['Date type', {value:new Date(0)}, {value:new Date(0).toISOString()}],
+  ['RegExp', {value:/first/i}, {value:/second/i}],
+  ['Map', {value:new Map([['key', 1]])}, {value:new Map([['key', 2]])}],
+  ['Set', {value:new Set([1])}, {value:new Set([2])}],
+  ['ArrayBuffer', {value:Uint8Array.of(1).buffer}, {value:Uint8Array.of(2).buffer}],
+  ['typed array', {value:Uint8Array.of(1)}, {value:Uint8Array.of(2)}],
+  ['view type', {value:Uint8Array.of(1)}, {value:Int8Array.of(1)}],
+  ['sparse array', {value:new Array(1)}, {value:[undefined]}],
+  ['alias topology', (()=>{const value={};return {a:value,b:value};})(), {a:{},b:{}}],
+]) {
+  test('invalid catalog '+kind+' uses clone equality without hiding concurrent changes', async () => {
+    const storage = makeIndexedDB(undefined, {libraryRecord:initial});
+    const f = presetDraftFixture(storage);
+    const loaded = await f.fixture.api.load(f.defaults);
+    await f.fixture.api.save({...loaded.settings, introTitle:'Saved safely'});
+    assert.deepEqual(storage.state.libraryRecord, initial);
+    storage.state.libraryRecord = changed;
+    await assert.rejects(f.fixture.api.save(loaded.settings), error=>error.reason==='settings-conflict');
+    assert.equal(storage.state.record.introTitle, 'Saved safely');
+    assert.deepEqual(storage.state.libraryRecord, changed);
+    f.fixture.api.dispose();
+  });
+}
+
+test('a snapshot leaves unvalidated catalog disabled and normal load still rejects bad preset images', async () => {
+  const storage = makeIndexedDB(undefined, {libraryRecord:{schemaVersion:1, revision:1, entries:[localPreset('data:image/png;base64,CCCC')]}});
+  const fixture = makeFixture({indexedDB:storage.indexedDB,
+    dimensionsForSource:value=>value.endsWith('AAAA')?[512,512]:value.endsWith('CCCC')?[1,1]:[1536,1024]});
+  const defaults = {avatar:'data:image/png;base64,AAAA', artwork:'data:image/png;base64,BBBB', contours:[[[0,0],[1,1]]]};
+  const snapshot = await fixture.api.loadSnapshot(defaults);
+  assert.equal(snapshot.status, 'missing');
+  fixture.api.openSettings();
+  const name = fixture.elements.find(el=>el.getAttribute('data-agent-skin-preset-name')==='');
+  assert.equal(name.disabled, true, 'snapshot never exposes unchecked catalog entries');
+  fixture.api.cancelSettings();
+  const loaded = await fixture.api.load(defaults);
+  fixture.api.openSettings();
+  assert.equal(name.disabled, true, 'normal settings load decodes and rejects wrong-size preset images');
+  await assert.rejects(fixture.api.save(loaded.settings, undefined, storage.state.libraryRecord), error=>error.reason==='settings-invalid');
+  assert.equal(storage.state.puts, 0);
+  fixture.api.dispose();
 });

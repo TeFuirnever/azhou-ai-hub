@@ -56,6 +56,14 @@ function createImageSettings(environment) {
     'animation.title.default': '阿舟 AI 实验室',
     'animation.caption.default': 'AZHOU / AI LAB',
     'animation.subtitle.default': '和阿舟一起，把想法做出来。',
+    'settings.presets.name': '本机外观预设名称（最多40个字符）',
+    'settings.presets.list': '本机外观预设',
+    'settings.presets.add': '新增预设',
+    'settings.presets.load': '载入到草稿',
+    'settings.presets.note': '仅本机，最多8项。选择阿舟主题后可新增预设。新增和载入仅改草稿；统一保存后生效。恢复全部默认保留预设目录。',
+    'settings.presets.unavailable': '本机预设目录无法验证，已禁用；当前外观仍可编辑和保存，原目录保留。',
+    'settings.presets.added': '预设已加入目录草稿；尚未保存。',
+    'settings.presets.loaded': '预设已载入当前草稿；尚未保存。',
     'settings.title': '阿舟 · 主题与外观',
     'settings.close': '取消并关闭设置',
     'settings.categories.label': '设置分类',
@@ -146,6 +154,9 @@ function createImageSettings(environment) {
   let currentSettings = null;
   let currentBaseline;
   let currentThemeBaseline;
+  let currentLibraryBaseline;
+  let currentLibrary = { schemaVersion: 1, revision: 0, entries: [] };
+  let draftLibrary = null;
   let currentThemeState = null;
   let currentThemeReason = '';
   let defaultRecord = null;
@@ -464,6 +475,8 @@ function createImageSettings(environment) {
       let sawResult = false;
       let themeValue;
       let sawTheme = false;
+      let libraryValue;
+      let sawLibrary = false;
       let settled = false;
       let timer = null;
       let failure = null;
@@ -489,6 +502,9 @@ function createImageSettings(environment) {
           finish(false, failure);
         }, 5_000);
         const store = transaction.objectStore(STORE_NAME);
+        const libraryRequest = store.get(LIBRARY_KEY);
+        libraryRequest.onsuccess = () => { libraryValue = libraryRequest.result; sawLibrary = true; };
+        libraryRequest.onerror = () => { failure = storageError('settings-unavailable', 'library-read-failed'); };
         const themeRequest = store.get(THEME_KEY);
         themeRequest.onsuccess = () => { themeValue = themeRequest.result; sawTheme = true; };
         themeRequest.onerror = () => { failure = storageError('settings-unavailable', 'theme-read-failed'); };
@@ -497,8 +513,8 @@ function createImageSettings(environment) {
         request.onerror = () => { failure = storageError('settings-unavailable', 'database-read-failed'); };
         transaction.oncomplete = () => {
           if (task && task.transaction === transaction) task.transaction = null;
-          finish(sawResult && sawTheme, sawResult && sawTheme
-            ? { images: value, theme: themeValue } : (failure || storageError('settings-unavailable', 'database-read-failed')));
+          finish(sawResult && sawTheme && sawLibrary, sawResult && sawTheme && sawLibrary
+            ? { images: value, theme: themeValue, library: libraryValue } : (failure || storageError('settings-unavailable', 'database-read-failed')));
         };
         transaction.onerror = () => { failure ||= storageError('settings-unavailable', 'database-read-failed'); };
         transaction.onabort = () => {
@@ -581,7 +597,7 @@ function createImageSettings(environment) {
     return record;
   }
 
-  async function load(defaults) {
+  async function load(defaults, includeLibrary = true) {
     const fallback = defaultSettings(defaults);
     defaultRecord = fallback;
     if (disposed) throw makeError('operation-cancelled');
@@ -596,7 +612,7 @@ function createImageSettings(environment) {
       return { settings: fallback, baseline: undefined, reason: loadReason };
     }
     const { task, promise } = beginOperation('load', 10_000, (timedOutTask) => {
-      currentSettings = fallback;
+      currentSettings = timedOutTask.resolvedSettings || fallback;
       if (timedOutTask.baselineKnown) currentBaseline = timedOutTask.baseline;
       loadReason = 'operation-timeout';
       if (timedOutTask.transaction && !timedOutTask.transactionFinished) {
@@ -604,7 +620,7 @@ function createImageSettings(environment) {
         timedOutTask.transaction = null;
         try { transaction.abort(); } catch {}
       }
-      finish(timedOutTask, true, { settings: fallback, baseline: currentBaseline, reason: loadReason });
+      finish(timedOutTask, true, { settings: currentSettings, baseline: currentBaseline, reason: loadReason });
     });
     Promise.resolve().then(async () => {
       let baseline;
@@ -618,6 +634,8 @@ function createImageSettings(environment) {
         try { resolvedTheme = await resolveTheme(stored.theme, baseline); }
         catch (error) { themeReason = error?.reason || 'settings-invalid'; }
         if (!isCurrent(task)) throw makeError('operation-cancelled');
+        currentLibraryBaseline = stored.library;
+        currentLibrary = null;
         currentThemeBaseline = stored.theme;
         currentThemeState = resolvedTheme;
         currentThemeReason = themeReason;
@@ -636,6 +654,13 @@ function createImageSettings(environment) {
             settings = fallback;
             reason = error?.reason === 'operation-timeout' ? 'operation-timeout' : 'settings-invalid';
           }
+        }
+        if (!isCurrent(task)) throw makeError('operation-cancelled');
+        task.resolvedSettings = settings;
+        try { if (includeLibrary) currentLibrary = await validateLibrary(task, stored.library); }
+        catch (error) {
+          if (error?.reason === 'operation-cancelled') throw error;
+          currentLibrary = null;
         }
         if (!isCurrent(task)) throw makeError('operation-cancelled');
         currentSettings = settings;
@@ -669,7 +694,7 @@ function createImageSettings(environment) {
     };
     let loaded;
     try {
-      loaded = await load(defaults);
+      loaded = await load(defaults, false);
     } catch (error) {
       return Object.freeze({
         status: 'failure',
@@ -710,6 +735,7 @@ function createImageSettings(environment) {
   }
 
   const THEME_KEY = SETTINGS_KEY === 'images' ? 'themeState' : SETTINGS_KEY + ':themeState';
+  const LIBRARY_KEY = SETTINGS_KEY === 'images' ? 'appearancePresets' : SETTINGS_KEY + ':appearancePresets';
   const APPROVED_THEME_ID = 'azhou-q-v3';
 
   async function imagesBinding(record) {
@@ -730,6 +756,35 @@ function createImageSettings(environment) {
     return (exactKeys(preference, ['mode']) && preference.mode === 'follow')
       || (exactKeys(preference, ['mode', 'value']) && preference.mode === 'override'
         && Number.isFinite(preference.value) && preference.value >= 0 && preference.value <= 100);
+  }
+
+  async function validateLibrary(task, value) {
+    if (value === undefined) return { schemaVersion: 1, revision: 0, entries: [] };
+    if (!exactKeys(value, ['schemaVersion', 'revision', 'entries']) || value.schemaVersion !== 1
+      || !Number.isSafeInteger(value.revision) || value.revision < 0
+      || !Array.isArray(value.entries) || value.entries.length > 8) throw makeError('settings-invalid');
+    recordByteLength(value);
+    const ids = new Set();
+    for (const entry of value.entries) {
+      if (!exactKeys(entry, ['id', 'name', 'recipeId', 'appearance', 'surfaceTransparency'])
+        || typeof entry.id !== 'string' || !/^[a-zA-Z0-9-]{1,80}$/.test(entry.id) || ids.has(entry.id)
+        || typeof entry.name !== 'string' || entry.name !== entry.name.trim() || !entry.name.length
+        || entry.name.length > 40 || /[\u0000-\u001f\u007f]/.test(entry.name)
+        || entry.recipeId !== APPROVED_THEME_ID || !validTransparency(entry.surfaceTransparency)
+        || !exactKeys(entry.appearance, ['artwork', 'contours', 'wallpaperStrength'])) throw makeError('settings-invalid');
+      ids.add(entry.id);
+      const appearance = entry.appearance;
+      if (!normalizeStoredRecord({ schemaVersion: 1, ...appearance }, defaultRecord)
+        || !validContours(appearance.contours)) throw makeError('settings-invalid');
+      await decodeRecordImage(task, appearance.artwork, 1536, 1024);
+    }
+    return structuredCloneTheme(value);
+  }
+
+  function newPresetId() {
+    if (typeof environment.crypto?.randomUUID === 'function') return environment.crypto.randomUUID();
+    if (typeof environment.crypto?.getRandomValues !== 'function') throw makeError('settings-unavailable');
+    return Array.from(environment.crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
   }
 
   function validThemeSelection(selection) {
@@ -757,8 +812,39 @@ function createImageSettings(environment) {
   }
 
   function recordEquals(left, right) {
-    if (left === undefined || right === undefined) return left === right;
-    try { return JSON.stringify(left) === JSON.stringify(right); }
+    const leftSeen = new Map();
+    const rightSeen = new Map();
+    const equal = (a, b) => {
+      if (Object.is(a, b)) return true;
+      if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+      if (leftSeen.has(a) || rightSeen.has(b)) return leftSeen.get(a) === b && rightSeen.get(b) === a;
+      const tag = Object.prototype.toString.call(a);
+      if (tag !== Object.prototype.toString.call(b)) return false;
+      leftSeen.set(a, b);
+      rightSeen.set(b, a);
+      if (tag === '[object Date]') return Object.is(a.getTime(), b.getTime());
+      if (tag === '[object RegExp]') return a.source === b.source && a.flags === b.flags;
+      if (tag === '[object ArrayBuffer]') {
+        if (a.byteLength !== b.byteLength) return false;
+        const bytes = new Uint8Array(b);
+        return new Uint8Array(a).every((byte, index) => byte === bytes[index]);
+      }
+      if (ArrayBuffer.isView(a)) return a.byteOffset === b.byteOffset && a.byteLength === b.byteLength && equal(a.buffer, b.buffer);
+      if (tag === '[object Map]' || tag === '[object Set]') {
+        if (a.size !== b.size) return false;
+        const other = b.entries();
+        for (const [key, value] of a.entries()) {
+          const entry = other.next().value;
+          if (!equal(key, entry[0]) || !equal(value, entry[1])) return false;
+        }
+        return true;
+      }
+      if (tag !== '[object Object]' && tag !== '[object Array]') return false;
+      if (Array.isArray(a) && a.length !== b.length) return false;
+      const keys = Object.keys(a);
+      return keys.length === Object.keys(b).length && keys.every(key => own(b, key) && equal(a[key], b[key]));
+    };
+    try { return equal(left, right); }
     catch { return false; }
   }
 
@@ -770,7 +856,7 @@ function createImageSettings(environment) {
     return storageError('settings-unavailable', operation + '-failed');
   }
 
-  function saveInTransaction(task, db, candidate, themeCandidate) {
+  function saveInTransaction(task, db, candidate, themeCandidate, libraryCandidate) {
     let transaction;
     let failure = null;
     let timer = null;
@@ -789,11 +875,12 @@ function createImageSettings(environment) {
         finish(task, false, failure);
       }, 5_000);
       const store = transaction.objectStore(STORE_NAME);
-      let imageReady = false, themeReady = false;
+      let imageReady = false, themeReady = false, libraryReady = false;
+      const libraryRequest = store.get(LIBRARY_KEY);
       const themeRequest = store.get(THEME_KEY);
       const baselineRequest = store.get(SETTINGS_KEY);
       const tryWrite = () => {
-        if (!imageReady || !themeReady) return;
+        if (!imageReady || !themeReady || !libraryReady) return;
 
         if (!isCurrent(task)) {
           failure = makeError('operation-cancelled');
@@ -801,7 +888,8 @@ function createImageSettings(environment) {
           return;
         }
         if (!recordEquals(baselineRequest.result, currentBaseline)
-          || !recordEquals(themeRequest.result, currentThemeBaseline)) {
+          || !recordEquals(themeRequest.result, currentThemeBaseline)
+          || !recordEquals(libraryRequest.result, currentLibraryBaseline)) {
           failure = makeError('settings-conflict', 'baseline-changed');
           try { transaction.abort(); } catch {}
           return;
@@ -811,6 +899,10 @@ function createImageSettings(environment) {
             const themePut = store.put(themeCandidate, THEME_KEY);
             themePut.onerror = () => { failure = storageFailureFrom(themePut.error, 'theme-write'); };
           }
+          if (libraryCandidate !== undefined) {
+            const libraryPut = store.put(libraryCandidate, LIBRARY_KEY);
+            libraryPut.onerror = () => { failure = storageFailureFrom(libraryPut.error, 'library-write'); };
+          }
           const putRequest = store.put(candidate, SETTINGS_KEY);
           putRequest.onerror = () => { failure = storageFailureFrom(putRequest.error, 'database-write'); };
         } catch (error) {
@@ -818,6 +910,8 @@ function createImageSettings(environment) {
           try { transaction.abort(); } catch {}
         }
       };
+      libraryRequest.onerror = () => { failure = storageFailureFrom(libraryRequest.error, 'library-read'); };
+      libraryRequest.onsuccess = () => { libraryReady = true; tryWrite(); };
       baselineRequest.onerror = () => { failure = storageFailureFrom(baselineRequest.error, 'database-read'); };
       themeRequest.onerror = () => { failure = storageFailureFrom(themeRequest.error, 'theme-read'); };
       baselineRequest.onsuccess = () => { imageReady = true; tryWrite(); };
@@ -832,6 +926,10 @@ function createImageSettings(environment) {
         if (themeCandidate !== undefined) {
           currentThemeBaseline = themeCandidate;
           currentThemeState = themeCandidate;
+        }
+        if (libraryCandidate !== undefined) {
+          currentLibraryBaseline = libraryCandidate;
+          currentLibrary = structuredCloneTheme(libraryCandidate);
         }
         loadReason = '';
         finish(task, true, candidate);
@@ -852,7 +950,7 @@ function createImageSettings(environment) {
     }
   }
 
-  function save(candidate, themeSelection) {
+  function save(candidate, themeSelection, libraryDraft) {
     if (disposed) return Promise.reject(makeError('operation-cancelled'));
     if (active) return Promise.reject(makeError('operation-busy'));
     if (!indexedDB || typeof indexedDB.open !== 'function') {
@@ -878,11 +976,18 @@ function createImageSettings(environment) {
               : structuredCloneTheme(currentThemeState.preferencesByTheme),
             imagesBinding: await imagesBinding(record),
           };
+        let libraryCandidate;
+        if (libraryDraft !== undefined) {
+          if (!currentLibrary || currentLibrary.revision >= Number.MAX_SAFE_INTEGER) throw makeError('settings-invalid');
+          libraryCandidate = await validateLibrary(task, libraryDraft);
+          libraryCandidate.revision = currentLibrary.revision + 1;
+          recordByteLength(libraryCandidate);
+        }
         await validateRecordImages(task, record);
         if (!isCurrent(task)) throw makeError('operation-cancelled');
         const db = await openDatabase();
         if (!isCurrent(task)) throw makeError('operation-cancelled');
-        saveInTransaction(task, db, record, themeCandidate);
+        saveInTransaction(task, db, record, themeCandidate, libraryCandidate);
       } catch (error) {
         if (!task.settled) finish(task, false,
           error?.reason === 'operation-timeout' || error?.reason === 'operation-cancelled'
@@ -1065,6 +1170,9 @@ function createImageSettings(environment) {
       control.disabled = Boolean(active)
         || (panelApplying && !isCancel)
         || (Boolean(panelCommit) && !panelApplying && !isSave && !isCancel)
+        || ([panelControls.presetName, panelControls.presetAdd, panelControls.presetList, panelControls.presetLoad].includes(control) && !draftLibrary)
+        || (control === panelControls.presetAdd && (!draftTheme || draftLibrary?.entries.length >= 8))
+        || (control === panelControls.presetLoad && !draftLibrary?.entries.length)
         || (control === panelControls.themeMode && !draftTheme)
         || (control === panelControls.themeTransparency && (!draftTheme || draftTheme.surfaceTransparency.mode !== 'override'));
       if (control.style && typeof control.style.setProperty === 'function') {
@@ -1162,9 +1270,25 @@ function createImageSettings(environment) {
     }
   }
 
+  function updatePresetList() {
+    if (!panelControls) return;
+    const list = panelControls.presetList;
+    const selected = list.value;
+    while (list.firstChild) list.removeChild(list.firstChild);
+    for (const entry of draftLibrary?.entries || []) {
+      const option = document.createElement('option');
+      option.value = entry.id;
+      option.textContent = entry.name;
+      list.appendChild(option);
+    }
+    list.value = draftLibrary?.entries.some(entry => entry.id === selected)
+      ? selected : draftLibrary?.entries[0]?.id || '';
+  }
+
   function updatePanelFields() {
     if (!panelControls || !draft) return;
     for (const [key, control] of Object.entries(panelControls.fields)) control.value = draft[key] ?? '';
+    updatePresetList();
     panelControls.themeChoice.value = draftTheme?.activeThemeId || '';
     panelControls.themeMode.value = draftTheme?.surfaceTransparency.mode || 'follow';
     panelControls.themeTransparency.value = String(draftTheme?.surfaceTransparency.value ?? 30);
@@ -1612,6 +1736,64 @@ function createImageSettings(environment) {
     controls.push(themeChoice, themeMode, themeTransparency);
     for (const [control, key] of [[themeChoice, 'choice'], [themeMode, 'mode'], [themeTransparency, 'transparency']]) ariaLabels.push({control, key: 'settings.themeControl.' + key});
 
+    const presetSection = document.createElement('div');
+    presetSection.style.cssText = 'display:grid;gap:8px;margin-top:20px;min-width:0';
+    workspacePanel.appendChild(presetSection);
+    const presetName = document.createElement('input');
+    presetName.type = 'text'; presetName.maxLength = 40;
+    presetName.setAttribute('data-agent-skin-preset-name', '');
+    const presetList = document.createElement('select');
+    presetList.setAttribute('data-agent-skin-preset-list', '');
+    for (const [control, key] of [[presetName, 'name'], [presetList, 'list']]) {
+      control.id = 'agent-skin-presets-' + key;
+      styleInput(control);
+      const label = document.createElement('label'); label.htmlFor = control.id;
+      labels['settings.presets.' + key] = {element: label};
+      presetSection.append(label, control); controls.push(control);
+    }
+    const presetAdd = document.createElement('button');
+    const presetLoad = document.createElement('button');
+    for (const [button, key] of [[presetAdd, 'add'], [presetLoad, 'load']]) {
+      button.type = 'button'; styleButton(button);
+      buttons['settings.presets.' + key] = button;
+      presetSection.appendChild(button); controls.push(button);
+    }
+    const presetNote = document.createElement('p');
+    labels['settings.presets.note'] = {element: presetNote};
+    presetSection.appendChild(presetNote);
+    presetAdd.addEventListener('click', async () => {
+      if (!panelOpen || active || panelCommit || !draftTheme || !draftLibrary || draftLibrary.entries.length >= 8) return;
+      const {task, promise} = beginOperation('preset', 10_000);
+      const atStart = panelGeneration;
+      updatePanelBusy();
+      Promise.resolve().then(async () => {
+        try {
+          const candidate = structuredCloneTheme(draftLibrary);
+          candidate.entries.push({ id: newPresetId(), name: presetName.value.trim(), recipeId: APPROVED_THEME_ID,
+            appearance: {...appearanceDraft(draft), wallpaperStrength: draft.wallpaperStrength},
+            surfaceTransparency: {...draftTheme.surfaceTransparency} });
+          const validated = await validateLibrary(task, candidate);
+          if (!isCurrent(task) || panelGeneration !== atStart) throw makeError('operation-cancelled');
+          draftLibrary = validated;
+          finish(task, true, true);
+          updatePresetList(); setPanelStatus('settings.presets.added');
+        } catch (error) { if (!task.settled) finish(task, false, error); }
+      });
+      try { await promise; } catch (error) { setPanelStatus(displayError(error?.reason), 'alert'); }
+      updatePanelBusy();
+    });
+    presetLoad.addEventListener('click', () => {
+      if (!panelOpen || active || panelCommit || !draftLibrary) return;
+      const entry = draftLibrary.entries.find(value => value.id === presetList.value);
+      if (!entry) return;
+      if (!draftTheme) draftAppearances.existing = appearanceDraft(draft);
+      Object.assign(draft, structuredCloneTheme(entry.appearance));
+      draftThemePreference = {...entry.surfaceTransparency};
+      draftTheme = {activeThemeId: APPROVED_THEME_ID, surfaceTransparency: {...entry.surfaceTransparency}};
+      draftAppearances.theme = appearanceDraft(draft);
+      updatePanelFields(); updatePanelBusy(); setPanelStatus('settings.presets.loaded');
+    });
+
     addSection('startup', 'settings.startup.note');
     addFile('avatar', 'settings.button.choosePortrait');
     for (const [key, limit, labelKey] of [
@@ -1735,7 +1917,7 @@ function createImageSettings(environment) {
       const panelAtStart = panelGeneration;
       const themeSelection = draftTheme || (currentThemeState || draftThemePreference.mode !== 'follow'
         ? { activeThemeId: null, surfaceTransparency: { ...draftThemePreference } } : undefined);
-      const saving = save(cloneSettings(draft), themeSelection);
+      const saving = save(cloneSettings(draft), themeSelection, draftLibrary && !recordEquals(draftLibrary, currentLibrary) ? draftLibrary : undefined);
       updatePanelBusy();
       let saved;
       try {
@@ -1778,7 +1960,7 @@ function createImageSettings(environment) {
       dialog.addEventListener('keydown', containPanelTab, true);
     }
     panelControls = {
-      controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, themeTransparencyValue, themeTransparencyReason, themeStrengthNote, heading, close: null, categoryNav, labels,
+      presetName, presetList, presetAdd, presetLoad, controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, themeTransparencyValue, themeTransparencyReason, themeStrengthNote, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
       workspacePreviewSurface, workspacePreviewImage: backgroundImage, workspacePreviewWash: backgroundWash,
       workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel, footer: actions,
@@ -1798,6 +1980,7 @@ function createImageSettings(environment) {
     panelPresentation = options && options.presentation === 'embedded' ? 'embedded' : 'modal';
     if (!buildSettingsPanel()) return false;
     draft = cloneSettings(currentSettings);
+    draftLibrary = structuredCloneTheme(currentLibrary);
     draftThemePreference = { ...(currentThemeState?.preferencesByTheme?.[APPROVED_THEME_ID] || { mode: 'follow' }) };
     draftTheme = currentThemeState?.activeThemeId ? { activeThemeId: currentThemeState.activeThemeId,
       surfaceTransparency: { ...draftThemePreference } } : null;
@@ -1813,7 +1996,8 @@ function createImageSettings(environment) {
     else if (loadReason === 'operation-timeout') setPanelStatus('settings.load.timeout', 'alert');
     else if (loadReason === 'settings-unavailable' || loadReason === 'settings-blocked') {
       setPanelStatus('settings.load.unavailable', 'alert');
-    } else setPanelStatus('');
+    } else if (!currentLibrary) setPanelStatus('settings.presets.unavailable', 'alert');
+    else setPanelStatus('');
     // The embedded section renders inline: show() keeps the dialog non-modal
     // with no backdrop and no native cancel event.
     try { if (panelPresentation === 'embedded') dialog.show(); else dialog.showModal(); }
@@ -1839,6 +2023,7 @@ function createImageSettings(environment) {
     draftTheme = null;
     draftThemePreference = null;
     draftAppearances = null;
+    draftLibrary = null;
     panelCommit = null;
     panelApplying = false;
     panelCallbacks = null;
@@ -1868,9 +2053,9 @@ function createImageSettings(environment) {
       const savedCallback = panelCallbacks?.onSaved;
       try { savedCallback?.(savedSnapshot); } catch {}
     }
-    currentSettings = cloneSettings(savedSnapshot);
     panelCommit = null;
     panelApplying = false;
+    draftLibrary = structuredCloneTheme(currentLibrary);
     updatePanelBusy();
     setPanelStatus('settings.status.saved');
   }
@@ -1889,10 +2074,14 @@ function createImageSettings(environment) {
         const savedCallback = panelCallbacks?.onSaved;
         try { savedCallback?.(panelCommit.saved); } catch {}
       }
-      currentSettings = cloneSettings(panelCommit.saved);
       panelCommit = null;
     }
     draft = cloneSettings(currentSettings);
+    draftLibrary = structuredCloneTheme(currentLibrary);
+    draftThemePreference = {...(currentThemeState?.preferencesByTheme?.[APPROVED_THEME_ID] || {mode:'follow'})};
+    draftTheme = currentThemeState?.activeThemeId ? {activeThemeId: currentThemeState.activeThemeId,
+      surfaceTransparency: {...draftThemePreference}} : null;
+    draftAppearances = {existing: appearanceDraft(draft), theme: appearanceDraft(draftTheme ? draft : defaultRecord || draft)};
     updatePanelFields();
     updatePanelBusy();
     setPanelStatus('');
@@ -1917,6 +2106,7 @@ function createImageSettings(environment) {
       draftTheme = null;
       draftThemePreference = null;
       draftAppearances = null;
+    draftLibrary = null;
     }
     try { dialog?.remove(); } catch {}
     if (panelFocusSheet) {
