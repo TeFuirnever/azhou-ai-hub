@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import shutil
 import struct
 import subprocess
 import sys
@@ -172,6 +173,15 @@ def main() -> int:
             # exits before resolving a process, opening a socket, or writing a journal.
             run([str(binary), "--wallpaper-helper", "--action", "invalid"], cwd=ROOT,
                 log=out / "logs" / "startup-cli-refusal.log", env=environment, expected=2)
+
+    with tempfile.TemporaryDirectory(prefix="cover-image-", dir=out) as directory:
+        fixture = Path(directory)
+        binary = fixture / "startup-tests"
+        shutil.copy2(objects[0], binary)
+        png(fixture / "web/assets/defaults/cold-cover.png", 16, 8, lambda _x, _y: (255, 0, 0, 255))
+        environment["LLVM_PROFILE_FILE"] = str(raw_dir / "cover-image-%p.profraw")
+        run([str(binary), "--probe-cover-image"], cwd=ROOT,
+            log=out / "logs" / "cover-image.log", env=environment)
 
     merge = out / "coverage.profdata"
     raw_files = sorted(str(path) for path in raw_dir.glob("*.profraw"))

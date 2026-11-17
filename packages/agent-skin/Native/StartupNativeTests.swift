@@ -339,6 +339,26 @@ struct StartupNativeTests {
 
     @MainActor
     static func main() async throws {
+        if CommandLine.arguments.contains("--probe-cover-image") {
+            _ = NSApplication.shared
+            var window: NSWindow?
+            let panel = AppKitNativePlayerPresentation(activateApp: {}, makeVisible: { _ in },
+                runAlert: { _ in }, orderCover: { window = $0 })
+            let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
+            let receipt = try panel.showColdCover(locale: .chinese, runNonce: "image-probe", delegate: delegate)
+            defer { panel.discardColdPlayer() }
+            guard let view = window?.contentView?.subviews.first,
+                  let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+                preconditionFailure("cover image probe needs a drawable view")
+            }
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            guard let color = bitmap.colorAt(x: bitmap.pixelsWide / 2, y: bitmap.pixelsHigh / 2)?.usingColorSpace(.sRGB) else {
+                preconditionFailure("cover image probe needs a sample pixel")
+            }
+            precondition(receipt.drawObserved && color.redComponent > 0.85 && color.greenComponent < 0.5 && color.blueComponent < 0.4,
+                "the bundled red image must be rendered in the cover: \(Bundle.main.resourceURL?.path ?? "nil") \(color)")
+            return
+        }
         if CommandLine.arguments.contains("--probe-cold-window-ordering") {
             _ = NSApplication.shared
             NSApp.setActivationPolicy(.accessory)
@@ -5859,10 +5879,21 @@ private func nativeColdLaunchChecks() async throws -> Int {
     let previewDelegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
     let cover = try panel.showColdCover(locale: .chinese, runNonce: "appkit-unit", delegate: previewDelegate)
     expect(firstWindow?.level == .floating, "cold cover stays above a subsequently opened normal host window")
+    let coverView = firstWindow?.contentView?.subviews.first
     panel.createPlayer(locale: .chinese, mode: "launch", theme: "light", inspect: false,
         nativeStartup: .init(runNonce: "appkit-unit", locale: "zh-CN", theme: "light"),
         messageHandler: previewDelegate, navigationDelegate: previewDelegate)
-    panel.revealColdPlayer(); panel.makeVisible(); panel.orderOut(); panel.stopLoading(); panel.removeMessageHandler(named: "launcher")
+    let playerView = firstWindow?.contentView?.subviews.compactMap { $0 as? WKWebView }.first
+    expect(coverView?.superview != nil && playerView?.isHidden == true, "cover remains visible while the player prepares")
+    panel.revealColdPlayer()
+    for _ in 0..<150 where coverView?.superview != nil {
+        try await Task.sleep(nanoseconds: 20_000_000)
+    }
+    expect(coverView?.superview == nil && playerView?.isHidden == false,
+        "reveal removes the cover and exposes the same player after the transition")
+    panel.revealColdPlayer()
+    expect(playerView?.isHidden == false, "repeating reveal keeps the player visible")
+    panel.makeVisible(); panel.orderOut(); panel.stopLoading(); panel.removeMessageHandler(named: "launcher")
     expect(firstWindow != nil && firstWindow === reusedWindow, "real AppKit cover and WK attach reuse the identical NSWindow")
     expect(cover.drawObserved && cover.transactionCommitted && activationCount == 0, "AppKit receipt reports draw/commit without activation or a visual no-flash claim")
     panel.discardColdPlayer()
