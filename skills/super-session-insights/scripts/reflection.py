@@ -18,7 +18,7 @@ RECEIPT = 'super-session-insights.reflection-receipt.v1'
 UNKNOWN = 'unknown'
 EXPERIMENT_FIELDS = ('change', 'context', 'expected_observation', 'effort', 'success_condition', 'stop_condition', 'followup_evidence')
 SENSITIVE = re.compile(
-    r'-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,})|https?://[^\s"<>]+|(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}|/(?:Users|home)/[^/\s]+/|[A-Za-z]:\\+Users\\+[^\\\s]+\\+',
+    r'-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,})|https?://[^\s"<>]+|(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}|/(?:Users|home)/[^/\s]+/?|[A-Za-z]:\\+Users\\+[^\\\s]+\\*',
     re.IGNORECASE,
 )
 

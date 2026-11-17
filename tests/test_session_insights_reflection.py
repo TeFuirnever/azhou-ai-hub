@@ -168,6 +168,31 @@ class ReflectionTest(unittest.TestCase):
         self.assertEqual(1, p.returncode)
         self.assertNotIn(text, p.stdout + p.stderr)
 
+    def test_bare_home_paths_in_evidence_are_rejected_and_not_echoed(self):
+        for text in ('/Users/bob', '/home/bob', 'C:\\Users\\bob'):
+            with self.subTest(text=text):
+                self.ev = evidence()
+                self.result = reflection(self.ev)
+                self.ev['segments'][0]['text'] = text
+                self.ev['segments'][0]['text_sha256'] = hashlib.sha256(text.encode()).hexdigest()
+                self.ev['digest'] = digest({k: v for k, v in self.ev.items() if k != 'digest'})
+                self.write()
+                p = self.run_cli('validate-evidence', '--input', 'evidence.json')
+                self.assertEqual(1, p.returncode)
+                self.assertNotIn(text, p.stdout + p.stderr)
+
+    def test_bare_home_paths_in_reflection_are_rejected_and_not_echoed(self):
+        for text in ('/Users/bob', '/home/bob', 'C:\\Users\\bob'):
+            with self.subTest(text=text):
+                self.ev = evidence()
+                self.result = reflection(self.ev)
+                self.result['insights'][0]['claim'] = text
+                self.write()
+                p = self.render()
+                self.assertEqual(1, p.returncode)
+                self.assertNotIn(text, p.stdout + p.stderr)
+                self.assertFalse((self.root / 'run').exists())
+
     def test_windows_absolute_and_backslash_traversal_identifiers_are_rejected(self):
         for field, value in (('origin_id', 'C:\\Users\\bob\\proj'), ('origin_id', '..\\..\\proj'),
                              ('locator', 'C:\\Users\\bob\\rollout.jsonl'), ('locator', '..\\..\\rollout.jsonl')):
