@@ -28,7 +28,6 @@ ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / "skills" / "super-gh-axi"
 SKILL = SKILL_DIR / "SKILL.md"
 
-# Upstream baseline: kunchenguid/gh-axi, tag gh-axi-v0.1.51.
 UPSTREAM_COMMIT = "911a0868600b125aafe5e7f77197a0eb5a5b493c"
 UPSTREAM_TAG = "gh-axi-v0.1.51"
 UPSTREAM_CLI_VERSION = "0.1.51"
