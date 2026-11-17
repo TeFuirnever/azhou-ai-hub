@@ -120,6 +120,16 @@ def main() -> int:
             ["tools/test-production-assets.py"],
         ),
     ]
+    if sys.platform == "darwin":
+        results.extend([
+            run_suite("agent-skin Dream ZIP resource and reference contracts", packages["agent-skin"],
+                      ["tools/test-production-theme-package-preflight.py"]),
+            run_suite("agent-skin isolated Dream source library", packages["agent-skin"],
+                      ["tools/test-production-theme-library.py"]),
+        ])
+    else:
+        print("SKIPPED: Dream source-library functional suites require the macOS test dependency environment; "
+              "the macOS CI leg installs pinned Pillow and runs them", flush=True)
     return next((code for code in results if code), 0)
 
 

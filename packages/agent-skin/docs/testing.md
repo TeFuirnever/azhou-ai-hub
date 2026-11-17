@@ -112,3 +112,8 @@ Codex 的主页面接续仅在本次尚未结束的接入操作内生效，始�
 宿主布局回归以脱敏的实际结构为依据：核对目标控件、影响可见性和尺寸的祖先样式、滚动容器与重建行为，不复制聊天内容。合成夹具需断言目标顺序和实际几何；选择器命中或备用入口可见不能代替目标位置通过。早期跳过回归会延迟挂载合成 app shell，并验证可交互控件到达后备用入口恢复；它不证明官方加载画面的 DOM 时序。交付分别记录测试载荷版本、安装版本和页面实际运行版本；实机结果仅在同版页面检查后判定，无法核实时保持待验收。
 
 `CI / Agent Skin full production UT coverage` 运行完整 UT 门禁，并进入聚合 Required 判定；macOS Startup and Pet 作业必跑生成载荷浏览器及真实窗口功能回归。仓库通用 `python3 scripts/verify.py` 仍执行其原有完整检查，不能替代本页的包级覆盖率命令。提交/推送状态与远端 CI 结果另行报告，不因本地通过而推断远端已通过。
+
+
+## P08 isolated source-library developer checks
+
+`tools/theme-library.py` is an explicit-root developer CLI, not an installed host capability. Its original-ZIP import/list/read contract and failure boundaries are documented in [the source-library design](theme-source-library.md). Run `python3 -B tools/test-production-theme-package-preflight.py`, `python3 -B tools/test-production-theme-library.py` and `node --test tools/dream-theme-validator.test.mjs` in the existing Node/Pillow development environment. The dependency-equipped macOS repository gate and CI register these suites. `test-unit-coverage.py` discovers the production suites; no whole-package 95% result is inferred from their standalone success. Contract fixtures are synthetic and do not establish external-theme compatibility, visual acceptance, CSS mapping or permission to apply a theme.

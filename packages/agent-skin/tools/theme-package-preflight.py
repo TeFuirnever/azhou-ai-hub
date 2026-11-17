@@ -78,6 +78,10 @@ def read_archive(path):
         descriptor = os.open(path, flags)
     except OSError:
         raise Blocked('input_type') from None
+    return read_open_archive(descriptor)
+
+
+def read_open_archive(descriptor):
     with os.fdopen(descriptor, 'rb') as stream:
         before = os.fstat(stream.fileno())
         require(stat.S_ISREG(before.st_mode), 'input_type')
@@ -270,14 +274,13 @@ def inspect_image(name, data):
         raise Blocked('image_decode_invalid') from None
 
 
-def reference_css(data):
-    blocked = {'status': 'blocked', 'reasons': ['validator_unavailable'], 'contract': CSS_CONTRACT}
+def reference_adapter(data, adapter):
     node = shutil.which('node')
-    if node is None or not 0 < len(data) <= FILE_LIMITS['theme.css']:
-        return blocked
+    if node is None:
+        return None
     process = None
     try:
-        process = subprocess.Popen([node, str(CSS_ADAPTER)], stdin=subprocess.PIPE,
+        process = subprocess.Popen([node, str(adapter)], stdin=subprocess.PIPE,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    env={'PATH': os.defpath})
         deadline = time.monotonic() + CSS_TIMEOUT
@@ -292,7 +295,7 @@ def reference_css(data):
             while selector.get_map():
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
-                    return blocked
+                    return None
                 for key, _ in selector.select(remaining):
                     stream, name = key.fileobj, key.data
                     if name == 'stdin':
@@ -304,26 +307,18 @@ def reference_css(data):
                         budget = CSS_OUTPUT_LIMIT - sum(map(len, output.values()))
                         chunk = os.read(stream.fileno(), budget + 1)
                         if len(chunk) > budget:
-                            return blocked
+                            return None
                         if chunk:
                             output[name].extend(chunk)
                         else:
                             selector.unregister(stream)
                             stream.close()
         if process.wait(timeout=max(0.001, deadline - time.monotonic())) != 0 or output['stderr']:
-            return blocked
+            return None
         response = json.loads(output['stdout'].decode('utf-8'), object_pairs_hook=unique_object)
-        if (not isinstance(response, dict)
-                or set(response) != {'schema', 'contract', 'status', 'reasons'}
-                or response['schema'] != 'azhou-agent-skin.reference-safe-css.v1'
-                or response['contract'] != CSS_CONTRACT
-                or not ((response['status'] == 'passed' and response['reasons'] == [])
-                        or (response['status'] == 'blocked' and response['reasons'] in
-                            [['safe_css_invalid'], ['css_utf8_invalid'], ['validator_unavailable']]))):
-            return blocked
-        return {key: response[key] for key in ('status', 'reasons', 'contract')}
+        return response
     except (OSError, ValueError, subprocess.SubprocessError, RecursionError):
-        return blocked
+        return None
     finally:
         if process is not None:
             if process.poll() is None:
@@ -332,6 +327,22 @@ def reference_css(data):
             for stream in (process.stdin, process.stdout, process.stderr):
                 if stream is not None:
                     stream.close()
+
+
+def reference_css(data):
+    blocked = {'status': 'blocked', 'reasons': ['validator_unavailable'], 'contract': CSS_CONTRACT}
+    if not 0 < len(data) <= FILE_LIMITS['theme.css']:
+        return blocked
+    response = reference_adapter(data, CSS_ADAPTER)
+    if (not isinstance(response, dict)
+            or set(response) != {'schema', 'contract', 'status', 'reasons'}
+            or response['schema'] != 'azhou-agent-skin.reference-safe-css.v1'
+            or response['contract'] != CSS_CONTRACT
+            or not ((response['status'] == 'passed' and response['reasons'] == [])
+                    or (response['status'] == 'blocked' and response['reasons'] in
+                        [['safe_css_invalid'], ['css_utf8_invalid'], ['validator_unavailable']]))):
+        return blocked
+    return {key: response[key] for key in ('status', 'reasons', 'contract')}
 
 
 def preflight(path):

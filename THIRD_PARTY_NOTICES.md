@@ -122,6 +122,14 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the output-shaping instruction body only; the upstream ships no runtime, scripts, or assets to vendor.
 - Local changes: neutral frontmatter (the upstream host-specific `disable-model-invocation` key is not copied), Azhou brand protocol and stable receipt, setup/provenance records, and five appended presentation constraints (conclusion source/limit proximity, decision continuity, evidence integrity, optional Review Contract, relative-path-only output).
 
+## Codex Dream Skin official-theme contract
+
+- Source: [Codex-Dream-Skin](https://github.com/TeFuirnever/Codex-Dream-Skin), commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`.
+- Copyright: 2026 Codex Dream Skin Studio contributors.
+- License: [MIT notice](packages/agent-skin/vendor/dream-theme-validator.LICENSE).
+- Boundary: only the pure `validateOfficialTheme` contract and its constants/helpers from `runtime/theme-package-validator.mjs`. The derivative does not contain source staging, filesystem access, client-version assumptions, CSS compilation or host selector mappings.
+- Rebuild and exact source/derivative hashes: [Agent Skin provenance](packages/agent-skin/UPSTREAM.md#official-theme-json-contract). This code license does not authorize redistribution of third-party theme media.
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.
