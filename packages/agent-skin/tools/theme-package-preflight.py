@@ -22,6 +22,7 @@ import zlib
 ARCHIVE_LIMIT = 32 * 1024 * 1024
 EXPANDED_LIMIT = 64 * 1024 * 1024
 ENTRY_LIMIT = 32
+CENTRAL_DIRECTORY_LIMIT = ENTRY_LIMIT * (46 + 65535)
 FILE_LIMITS = {'theme.json': 1048576, 'theme.css': 262144}
 IMAGE_LIMIT = 10485760
 IMAGE_DIMENSION_LIMIT = 16384
@@ -89,11 +90,28 @@ def read_archive(path):
         return data
 
 
+def check_central_directory(data, offset, size, count):
+    require(0 < count <= ENTRY_LIMIT, 'entry_count')
+    require(0 < size <= CENTRAL_DIRECTORY_LIMIT, 'central_directory_size')
+    end = offset + size
+    cursor = offset
+    scanned = 0
+    while cursor < end:
+        require(scanned < ENTRY_LIMIT, 'entry_count')
+        require(cursor + 46 <= end and data[cursor:cursor + 4] == b'PK\x01\x02', 'zip_integrity')
+        name_size, extra_size, comment_size = struct.unpack_from('<3H', data, cursor + 28)
+        cursor += 46 + name_size + extra_size + comment_size
+        require(cursor <= end, 'zip_integrity')
+        scanned += 1
+    require(cursor == end and scanned == count, 'zip_integrity')
+
+
 def package_files(data):
     require(data.startswith(b'PK\x03\x04') and data[-22:-18] == b'PK\x05\x06', 'zip_integrity')
     disk, central_disk, count_disk, count, central_size, central_offset, comment_size = struct.unpack('<4H2IH', data[-18:])
     require(disk == central_disk == 0 and count_disk == count and comment_size == 0
             and central_offset + central_size == len(data) - 22, 'zip_integrity')
+    check_central_directory(data, central_offset, central_size, count)
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         entries = archive.infolist()
         require(0 < len(entries) <= ENTRY_LIMIT, 'entry_count')

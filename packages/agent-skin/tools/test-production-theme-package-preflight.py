@@ -50,6 +50,58 @@ class ThemePackagePreflightTests(unittest.TestCase):
         self.assertEqual(result['structure']['status'], 'blocked')
         self.assertIn(reason, result['structure']['reasons'])
 
+    def test_central_budget_rejects_actual_excess_even_with_forged_declared_count_before_zipfile(self):
+        with zipfile.ZipFile(self.path, 'w') as archive:
+            for index in range(self.tool.ENTRY_LIMIT + 1):
+                archive.writestr('file' + str(index) + '.png', b'x')
+        original = self.path.read_bytes()
+        for declared in [self.tool.ENTRY_LIMIT + 1, 1, self.tool.ENTRY_LIMIT]:
+            with self.subTest(declared=declared):
+                data = bytearray(original)
+                struct.pack_into('<HH', data, len(data) - 14, declared, declared)
+                self.path.write_bytes(data)
+                with mock.patch.object(self.tool.zipfile, 'ZipFile', side_effect=AssertionError('central budget must run before ZipFile')):
+                    self.assert_blocked_structure(self.tool.preflight(self.path), 'entry_count')
+
+    def test_central_entry_budget_boundary_allows_32_records_to_reach_zipfile(self):
+        with zipfile.ZipFile(self.path, 'w') as archive:
+            for index in range(self.tool.ENTRY_LIMIT):
+                archive.writestr('file' + str(index) + '.png', b'x')
+        original_zipfile = zipfile.ZipFile
+        with mock.patch.object(self.tool.zipfile, 'ZipFile', wraps=original_zipfile) as parser:
+            self.assert_blocked_structure(self.tool.preflight(self.path), 'required_files')
+            parser.assert_called_once()
+
+    def test_central_scan_rejects_mismatch_truncation_and_bad_signature_before_zipfile(self):
+        self.archive()
+        original = self.path.read_bytes()
+        central = original.find(b'PK\x01\x02')
+        for kind in ['mismatched-count', 'truncated-record', 'bad-signature']:
+            with self.subTest(kind=kind):
+                data = bytearray(original)
+                if kind == 'mismatched-count':
+                    struct.pack_into('<HH', data, len(data) - 14, 1, 1)
+                elif kind == 'truncated-record':
+                    struct.pack_into('<H', data, central + 28, 65535)
+                else:
+                    data[central:central + 4] = b'NOPE'
+                self.path.write_bytes(data)
+                with mock.patch.object(self.tool.zipfile, 'ZipFile', side_effect=AssertionError('invalid central scan reached ZipFile')):
+                    self.assert_blocked_structure(self.tool.preflight(self.path), 'zip_integrity')
+
+    def test_central_byte_budget_boundary_runs_before_zipfile(self):
+        self.archive()
+        data = self.path.read_bytes()
+        size = struct.unpack_from('<I', data, len(data) - 10)[0]
+        with mock.patch.object(self.tool, 'CENTRAL_DIRECTORY_LIMIT', size - 1, create=True), \
+                mock.patch.object(self.tool.zipfile, 'ZipFile', side_effect=AssertionError('oversized central directory reached ZipFile')):
+            self.assert_blocked_structure(self.tool.preflight(self.path), 'central_directory_size')
+        original_zipfile = zipfile.ZipFile
+        with mock.patch.object(self.tool, 'CENTRAL_DIRECTORY_LIMIT', size, create=True), \
+                mock.patch.object(self.tool.zipfile, 'ZipFile', wraps=original_zipfile) as parser:
+            self.assertEqual(self.tool.preflight(self.path)['structure']['status'], 'passed')
+            parser.assert_called_once()
+
     def test_structure_pass_never_implies_importable(self):
         result = self.archive()
         self.assertEqual(result['structure']['status'], 'passed')

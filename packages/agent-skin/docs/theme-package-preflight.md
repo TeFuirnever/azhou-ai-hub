@@ -31,7 +31,7 @@ Run the focused contract suite with `python3 -B packages/agent-skin/tools/test-p
 
 ## Remaining resource limitation
 
-The ZIP central directory is parsed by `zipfile` before the entry-count limit is checked. The 32 MiB archive limit bounds input bytes, not peak parser memory. Image byte and pixel ceilings are not a memory or execution-time sandbox for native decoders. This subset does not establish a complete import resource-safety verdict.
+Before constructing `zipfile.ZipFile`, the reader rejects declared counts outside 1 through 32 and central directories exceeding `32 * (46 + 65535)` bytes. That byte ceiling covers at most 32 ordinary fixed headers plus maximum-length ZIP filenames; accepted entries do not permit extra fields or comments. A fixed-header scan then walks the actual variable-length records, checks every record boundary and signature, stops before record 33, and requires the actual count to match the declaration. Forging the EOCD count therefore cannot move an unbounded record list into the standard-library parser. The normal parser and local-record checks still run afterward. The 32 MiB archive ceiling remains a byte bound, not a process-memory sandbox. Image byte and pixel ceilings are not a memory or execution-time sandbox for native decoders. This subset does not establish a complete import resource-safety verdict.
 
 ## CSS process boundary
 
