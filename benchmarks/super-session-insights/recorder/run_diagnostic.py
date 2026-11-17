@@ -207,8 +207,9 @@ def bind_freeze(freeze_dir, copy_dir):
         copy_dir.chmod(0o555)
     except BaseException as original:
         try:
-            for directory in sorted((item for item in copy_dir.rglob('*') if item.is_dir()), reverse=True):
-                directory.chmod(0o700)
+            # Windows cannot unlink read-only files, so restore every member before rmtree.
+            for item in sorted(copy_dir.rglob('*'), reverse=True):
+                item.chmod(0o700 if item.is_dir() else 0o600)
             copy_dir.chmod(0o700)
             shutil.rmtree(copy_dir)
         except OSError as cleanup_error:

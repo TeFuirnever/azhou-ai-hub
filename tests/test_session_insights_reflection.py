@@ -50,7 +50,9 @@ class ReflectionTest(unittest.TestCase):
         self.write()
 
     def write(self):
+        # Synthetic fixture bytes, not real credentials. codeql[py/clear-text-storage-sensitive-data]
         (self.root / 'evidence.json').write_text(json.dumps(self.ev, ensure_ascii=False), encoding='utf-8')
+        # codeql[py/clear-text-storage-sensitive-data]
         (self.root / 'reflection.json').write_text(json.dumps(self.result, ensure_ascii=False), encoding='utf-8')
 
     def run_cli(self, command, *args):
