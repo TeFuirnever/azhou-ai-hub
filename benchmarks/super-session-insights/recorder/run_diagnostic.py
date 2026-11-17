@@ -26,6 +26,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -162,36 +163,43 @@ def bind_freeze(freeze_dir, copy_dir):
     if problems:
         raise SystemExit(f'frozen material verification failed: {problems}')
     copy_dir.mkdir(mode=0o700)
-    entries = []
-    for entry in frozen:
-        source_bytes = (freeze_dir / entry['path']).read_bytes()
-        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
-        if source_sha256 != entry['sha256']:
-            raise SystemExit(f'frozen material verification failed: {entry["path"]}')
-        member = copy_dir / entry['path']
-        member.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        member.write_bytes(source_bytes)
-        member.chmod(0o444)
-        entries.append({'path': entry['path'], 'source_sha256': source_sha256,
-                        'copy_sha256': hash_file(member), 'match': hash_file(member) == source_sha256})
-    manifest_copy = copy_dir / 'FREEZE.manifest.json'
-    manifest_copy.write_bytes(manifest_bytes)
-    manifest_copy.chmod(0o444)
-    binding = {
-        'schema': 'super-session-insights.freeze-binding.v1',
-        'freeze_dir': str(freeze_dir),
-        'copy_dir': str(copy_dir),
-        'manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(),
-        'manifest_copy_sha256': hash_file(copy_dir / 'FREEZE.manifest.json'),
-        'verified': all(entry['match'] for entry in entries),
-        'files': entries,
-    }
-    binding_path = copy_dir / 'freeze-binding.json'
-    binding_path.write_text(json.dumps(binding, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    binding_path.chmod(0o444)
-    for directory in sorted((item for item in copy_dir.rglob('*') if item.is_dir()), reverse=True):
-        directory.chmod(0o555)
-    copy_dir.chmod(0o555)
+    try:
+        entries = []
+        for entry in frozen:
+            try:
+                source_bytes = (freeze_dir / entry['path']).read_bytes()
+            except OSError:
+                raise SystemExit(f'frozen material verification failed: {entry["path"]}') from None
+            source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+            if source_sha256 != entry['sha256']:
+                raise SystemExit(f'frozen material verification failed: {entry["path"]}')
+            member = copy_dir / entry['path']
+            member.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            member.write_bytes(source_bytes)
+            member.chmod(0o444)
+            entries.append({'path': entry['path'], 'source_sha256': source_sha256,
+                            'copy_sha256': hash_file(member), 'match': hash_file(member) == source_sha256})
+        manifest_copy = copy_dir / 'FREEZE.manifest.json'
+        manifest_copy.write_bytes(manifest_bytes)
+        manifest_copy.chmod(0o444)
+        binding = {
+            'schema': 'super-session-insights.freeze-binding.v1',
+            'freeze_dir': str(freeze_dir),
+            'copy_dir': str(copy_dir),
+            'manifest_sha256': hashlib.sha256(manifest_bytes).hexdigest(),
+            'manifest_copy_sha256': hash_file(copy_dir / 'FREEZE.manifest.json'),
+            'verified': all(entry['match'] for entry in entries),
+            'files': entries,
+        }
+        binding_path = copy_dir / 'freeze-binding.json'
+        binding_path.write_text(json.dumps(binding, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        binding_path.chmod(0o444)
+        for directory in sorted((item for item in copy_dir.rglob('*') if item.is_dir()), reverse=True):
+            directory.chmod(0o555)
+        copy_dir.chmod(0o555)
+    except BaseException:
+        shutil.rmtree(copy_dir, ignore_errors=True)
+        raise
     print(json.dumps({'binding': str(binding_path), 'verified': binding['verified'],
                       'files': len(entries)}, ensure_ascii=False))
 
@@ -251,7 +259,6 @@ def record_command(args):
         if not Path(bound).is_file():
             raise SystemExit(f'bound file does not exist: {bound}')
 
-    out.mkdir(mode=0o700)
     # The recorder emitter opens the FIFO from inside the observed process, so
     # when the output directory is not writable by that process (for example a
     # private evidence tree behind a sandbox deny rule) the caller moves the
@@ -259,8 +266,9 @@ def record_command(args):
     fifo = Path(args.fifo_path).resolve() if args.fifo_path else out / 'recorder-events.fifo'
     if fifo.exists():
         raise SystemExit(f'FIFO path already exists: {fifo}')
-    if not fifo.parent.is_dir():
+    if not fifo.parent.is_dir() and fifo.parent != out:
         raise SystemExit(f'FIFO parent directory does not exist: {fifo.parent}')
+    out.mkdir(mode=0o700)
     os.mkfifo(fifo, 0o600)
     try:
         reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
@@ -297,8 +305,23 @@ def record_command(args):
         with stdout_path.open('wb') as stdout_stream, stderr_path.open('wb') as stderr_stream:
             os.chmod(stdout_path, 0o600)
             os.chmod(stderr_path, 0o600)
-            proc = subprocess.Popen(argv, cwd=str(work), stdin=subprocess.PIPE, stdout=stdout_stream,
-                                    stderr=stderr_stream, env=env, start_new_session=True)
+            try:
+                proc = subprocess.Popen(argv, cwd=str(work), stdin=subprocess.PIPE, stdout=stdout_stream,
+                                        stderr=stderr_stream, env=env, start_new_session=True)
+            except OSError as error:
+                failure = {'schema': 'super-session-insights.diagnostic-run.v1', 'label': args.label,
+                           'argv': argv, 'cwd': str(work), 'target': str(target),
+                           'recorder_dir': str(recorder_dir), 'fifo_path': str(fifo),
+                           'env_overrides': env_overrides, 'returncode': None,
+                           'stop_reason': 'spawn-failed', 'spawn_error': str(error),
+                           'classification': classify([], [], args.target),
+                           'repo_binding': repo_binding, 'file_binding_before': file_before,
+                           'file_binding_after': None, 'file_binding_unchanged': None,
+                           'isolation': 'not enforced by this runner; caller-arranged and independently verified'}
+                result_path = out / 'result.json'
+                result_path.write_text(json.dumps(failure, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+                result_path.chmod(0o600)
+                raise SystemExit(f'command failed to start: {error}') from None
             deadline = began + args.timeout_seconds
 
             def feed_stdin():

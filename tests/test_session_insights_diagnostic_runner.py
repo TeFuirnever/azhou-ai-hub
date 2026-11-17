@@ -315,6 +315,33 @@ class RecordCommandTest(unittest.TestCase):
         self.assertEqual('missing-or-unreadable', result['repo_binding']['after'])
         self.assertIn('classification', result)
 
+    def test_record_rejects_fifo_paths_before_creating_out(self):
+        taken = self.root / 'taken.fifo'
+        taken.write_bytes(b'')
+        proc, out = self.record('true', extra=('--fifo-path', str(taken)))
+        self.assertNotEqual(0, proc.returncode)
+        self.assertIn('already exists', proc.stderr)
+        self.assertFalse(out.exists())
+        proc, out = self.record('true', extra=('--fifo-path', str(self.root / 'missing' / 'x.fifo')))
+        self.assertNotEqual(0, proc.returncode)
+        self.assertIn('does not exist', proc.stderr)
+        self.assertFalse(out.exists())
+
+    def test_record_writes_result_json_when_command_fails_to_start(self):
+        self.counter += 1
+        out = self.root / f'out-{self.counter}'
+        command = [sys.executable, str(RUNNER), 'record',
+                   '--argv-json', json.dumps(['/nonexistent-binary-xyz']),
+                   '--work', str(self.work), '--out', str(out),
+                   '--target', str(self.target), '--recorder-dir', str(RECORDER)]
+        proc = subprocess.run(command, capture_output=True, text=True, timeout=60, encoding='utf-8')
+        self.assertNotEqual(0, proc.returncode)
+        self.assertIn('failed to start', proc.stderr)
+        result = self.result(out)
+        self.assertIsNone(result['returncode'])
+        self.assertEqual('spawn-failed', result['stop_reason'])
+        self.assertIn('nonexistent-binary-xyz', result['spawn_error'])
+
 
 class BindFreezeTest(unittest.TestCase):
     """Frozen material must verify first, copy read-only, and bind source and copy hashes."""
@@ -391,6 +418,7 @@ class BindFreezeTest(unittest.TestCase):
                     runner.bind_freeze(freeze, copy)
             self.assertFalse((copy / 'MODEL-PROMPT.md').exists())
             self.assertFalse((copy / 'freeze-binding.json').exists())
+            self.assertFalse(copy.exists())
 
     def test_bind_freeze_rejects_escaping_manifest_paths_without_writing_outside_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
