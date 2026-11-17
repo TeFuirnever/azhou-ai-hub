@@ -4,6 +4,7 @@
 > 性质：只读结构侦察——目录布局、文件命名、记录类型分类与顶层字段名；**未读取任何会话正文**，路径均已脱敏为模式。
 > 对象版本：ZCode.app **3.11.2**（macOS，`CFBundleShortVersionString`）+ 其 CLI 存储 `~/.zcode/`。其他平台/版本未验证。
 > 用途：session-insights 的 zcode 适配器（M3 前置，issue #161 spec §Implementation Decisions 要求"未验证前 fail closed"）。
+> 后续状态：本文结论仅适用于 3.11.2 的当次探测。2026-10-06 对 3.14.4 的[后续侦察](2026-10-06-zcode-3.14.4-session-store-scout.md)发现早期路径范围遗漏并给出 go；适配器仍未立项，当前支持声明以 Skill 和支持矩阵为准。
 
 ## 结论（go/no-go）
 

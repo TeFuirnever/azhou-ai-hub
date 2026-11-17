@@ -2,7 +2,7 @@
 
 > Spec 日期：2026-09-07（Asia/Shanghai）
 > 来源证据：[docs/research/2026-09-07-agent-insights-industry-survey.md](../research/2026-09-07-agent-insights-industry-survey.md)（业界机制对照：Claude Code `/insights`、awesome-skills/insights、Computer History roast 插件）、2026-09-07 本机会话存储结构实测（研究笔记 §2，只验证路径与字段形态，未读取内容）。
-> 状态：ready-for-agent。本 spec 只定义工作，不执行修改。
+> 发布时状态：ready-for-agent；本文保留 2026-09-07 的初始设计，不描述当前运行时行为。当前行为以 [Session Insights Skill](../../skills/super-session-insights/SKILL.md) 和 [支持矩阵](../support-matrix.md) 为准；反思模式已由 PR #489 实现，独立行为评测仍见 [评测计划](../../benchmarks/super-session-insights/reflection/evaluation-plan.md)。
 > 发布：2026-09-07 已按 to-spec 流程发布为 [issue #161](https://github.com/TeFuirnever/azhou-ai-hub/issues/161)（英文，spec-of-record，标签 `ready-for-agent`）；本文件保留中文扩展细节与落地约束，实现以 issue 为准，两处冲突时先对齐再动工。
 
 ## Problem Statement
