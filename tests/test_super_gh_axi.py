@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import struct
 import unittest
 from pathlib import Path
 
@@ -149,11 +150,29 @@ class SuperGhAxiPackageTest(unittest.TestCase):
         self.assertIn("intentionally omitted", self.compatibility)
         self.assertIn("narrowed", self.compatibility)
 
-    def test_showcase_scene_deferral_is_recorded(self) -> None:
-        self.assertIn("Deferred", self.provenance)
-        self.assertIn("super-gh-axi-effect.png", self.provenance)
-        self.assertIn("azhou-scenes", self.provenance)
-        self.assertFalse((ROOT / "assets" / "skills" / "super-gh-axi-effect.png").exists())
+    def test_showcase_effect_image_is_metadata_sanitized(self) -> None:
+        # The generation pipeline embeds the scene prompt, local paths and
+        # runtime identity in eXIf/iTXt/tEXt chunks; the published showcase
+        # must carry none of them (sanitized before publishing, 2026-11-17).
+        data = (ROOT / "assets" / "skills" / "super-gh-axi-effect.png").read_bytes()
+        pos = 8
+        present = []
+        while pos < len(data):
+            length = struct.unpack(">I", data[pos:pos + 4])[0]
+            present.append(data[pos + 4:pos + 8])
+            pos += 12 + length
+        for forbidden in (b"iTXt", b"tEXt", b"zTXt", b"eXIf"):
+            self.assertNotIn(forbidden, present, f"metadata chunk must stay out of the shipped image: {forbidden}")
+        self.assertIn(b"IHDR", present)
+        self.assertIn(b"IEND", present)
+
+    def test_provenance_binds_the_sanitized_shipment_and_the_approved_candidate(self) -> None:
+        self.assertIn("ae0b014187fe8bf167eca8b2509ec685b65c133fcd3622049d387e61fff40f03", self.provenance)
+        self.assertIn("64c17580947743509a2f0447d59e86482153ab8427b11c92ada7cab1c64ee7b8", self.provenance)
+        self.assertIn("metadata-sanitized", self.provenance)
+        self.assertIn("byte-identical", self.provenance)
+        self.assertIn("03-production-alert", self.provenance)
+        self.assertIn("azhou-20261117T131932Z-gh-axi-showcase-s21", self.provenance)
 
     def test_brand_contract_is_present(self) -> None:
         contract = SKILL_BRAND_CONTRACTS["skills/super-gh-axi/SKILL.md"]

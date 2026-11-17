@@ -149,7 +149,13 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 ![i-have-adhd effect preview](assets/skills/super-i-have-adhd-effect.png)
 
-<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify, Lavish, Imagegen and i-have-adhd: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
+## Gh Axi
+
+> ⚙️ Open the PR, join the queue, land the green check — GitHub work in one pass.
+
+![Gh Axi effect preview](assets/skills/super-gh-axi-effect.png)
+
+<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify, Lavish, Imagegen, i-have-adhd and Gh Axi: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust-dark.jpg">
