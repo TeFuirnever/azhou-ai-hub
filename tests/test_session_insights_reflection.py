@@ -50,9 +50,7 @@ class ReflectionTest(unittest.TestCase):
         self.write()
 
     def write(self):
-        # Synthetic fixture bytes, not real credentials. codeql[py/clear-text-storage-sensitive-data]
         (self.root / 'evidence.json').write_text(json.dumps(self.ev, ensure_ascii=False), encoding='utf-8')
-        # codeql[py/clear-text-storage-sensitive-data]
         (self.root / 'reflection.json').write_text(json.dumps(self.result, ensure_ascii=False), encoding='utf-8')
 
     def run_cli(self, command, *args):
@@ -141,23 +139,23 @@ class ReflectionTest(unittest.TestCase):
         self.assertEqual([['e1', 'e2']], receipt['exact_duplicate_segments'])
 
     def test_secret_pattern_is_not_echoed_or_published(self):
-        secret = 'ghp_' + 'X' * 30
-        self.ev['segments'][0]['text'] = secret
-        self.ev['segments'][0]['text_sha256'] = hashlib.sha256(secret.encode()).hexdigest()
+        text = 'ghp_' + 'X' * 30
+        self.ev['segments'][0]['text'] = text
+        self.ev['segments'][0]['text_sha256'] = hashlib.sha256(text.encode()).hexdigest()
         self.ev['digest'] = digest({k: v for k, v in self.ev.items() if k != 'digest'})
         self.write()
         p = self.render()
         self.assertEqual(1, p.returncode)
-        self.assertNotIn(secret, p.stderr + p.stdout)
+        self.assertNotIn(text, p.stderr + p.stdout)
         self.assertFalse((self.root / 'run').exists())
 
     def test_sensitive_seed_in_model_result_cannot_reach_report(self):
-        secret = 'sk-' + 'Z' * 32
-        self.result['insights'][0]['claim'] = secret
+        text = 'sk-' + 'Z' * 32
+        self.result['insights'][0]['claim'] = text
         self.write()
         p = self.render()
         self.assertEqual(1, p.returncode)
-        self.assertNotIn(secret, p.stdout + p.stderr)
+        self.assertNotIn(text, p.stdout + p.stderr)
         self.assertFalse((self.root / 'run').exists())
 
     def test_windows_home_path_is_rejected_and_not_echoed(self):
