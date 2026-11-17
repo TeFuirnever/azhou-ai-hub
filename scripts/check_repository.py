@@ -75,6 +75,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-verify/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
+    "skills/super-gh-axi/SKILL.md",
     "skills/super-i-have-adhd/SKILL.md",
     "skills/super-imagegen/SKILL.md",
     "skills/super-lavish/SKILL.md",
@@ -509,6 +510,12 @@ SKILL_BRAND_CONTRACTS = {
         "startup": "🦊 阿舟 · i-have-adhd 启动（mode=<start|resume|stop>, scope=<session>）",
         "brand_path": "skills/super-i-have-adhd/references/brand-layer.md",
     },
+    "skills/super-gh-axi/SKILL.md": {
+        "display_name": "Gh Axi",
+        "motto": "GitHub 操作，真相永远在 CLI 里。",
+        "startup": "🦊 阿舟 · Gh Axi 启动（mode=<inspect|operate|raw>, scope=<github-area>）",
+        "brand_path": "skills/super-gh-axi/references/brand-layer.md",
+    },
 }
 
 BASELINE_HASHES = {
@@ -933,6 +940,7 @@ RENAMED_AWAY_SKILLS = {
     "azhou-verify": "super-azhou-verify",
     "eli5": "super-eli5",
     "excalidraw-diagram": "super-excalidraw-diagram",
+    "gh-axi": "super-gh-axi",
     "session-insights": "super-session-insights",
 }
 

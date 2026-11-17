@@ -29,6 +29,7 @@ SKILL_DIRS = (
     ROOT / "skills" / "super-lavish",
     ROOT / "skills" / "super-imagegen",
     ROOT / "skills" / "super-i-have-adhd",
+    ROOT / "skills" / "super-gh-axi",
     ROOT / "skills" / "super-session-insights",
     ROOT / "skills" / "super-asd-ste100",
 )
@@ -144,8 +145,8 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(15, len(SKILL_DIRS))
-        self.assertIn("fifteen canonical packages", support)
+        self.assertEqual(16, len(SKILL_DIRS))
+        self.assertIn("sixteen canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
