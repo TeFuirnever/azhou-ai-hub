@@ -6,8 +6,12 @@ no gh-axi application code is vendored. Following the super-lavish precedent,
 the pins live in this test module instead of a separate manifest JSON: upstream
 baseline digests are UPSTREAM_* constants, the repository's retained license
 copy is checked byte-for-byte against the upstream LICENSE digest. The package
-file whitelist follows the super-imagegen precedent; the showcase
-metadata-absence test lands with the deferred showcase image, not here.
+file whitelist follows the super-imagegen precedent.
+
+The skill package text (SKILL.md and references/) is itself the pinned text
+contract these tests intentionally pin: the documents_-style methods assert the
+exact wording the instruction surface must carry. The showcase metadata,
+chunk-whitelist and shipped-digest pins cover the showcase image landed here.
 """
 
 from __future__ import annotations
@@ -35,8 +39,14 @@ UPSTREAM_NPM_INTEGRITY = (
 )
 UPSTREAM_TARBALL_SHA256 = "fee983711774d8fa50ecec90a51aa8032538648c6877fcb1c44d7bd9716d54c2"
 
+SHOWCASE_SHIPPED_SHA256 = "64c17580947743509a2f0447d59e86482153ab8427b11c92ada7cab1c64ee7b8"
+SHOWCASE_APPROVED_SHA256 = "ae0b014187fe8bf167eca8b2509ec685b65c133fcd3622049d387e61fff40f03"
+
 LOCKED_INVOCATION = f"gh-axi@{UPSTREAM_CLI_VERSION}"
-UNPINNED_NPX = re.compile(r"npx -y gh-axi(?!@)")
+NPX_GH_AXI = re.compile(r"\bnpx(?:\s+-{1,2}[\w-]+(?:=\S+)?)*\s+gh-axi(?![\w-])(?:@[^\s`\"']*)?")
+OFF_BASELINE_GH_AXI_SPEC = re.compile(rf"\bgh-axi@(?!{re.escape(UPSTREAM_CLI_VERSION)}(?![\w-]))")
+
+RECEIPT_STATUSES = ("complete", "complete_with_holds", "hold", "failed")
 
 ALLOWED_PACKAGE_FILES = {
     "SKILL.md",
@@ -77,7 +87,7 @@ class SuperGhAxiPackageTest(unittest.TestCase):
         self.assertIsNotNone(description)
         self.assertLessEqual(len(description.group(1).strip()), 1024)
 
-    def test_description_keeps_the_rename_compatibility_trigger(self) -> None:
+    def test_description_documents_the_rename_compatibility_trigger(self) -> None:
         self.assertIn("Azhou skill.", self.frontmatter)
         self.assertIn("Renamed from gh-axi (the old name still triggers this skill)", self.frontmatter)
 
@@ -98,12 +108,18 @@ class SuperGhAxiPackageTest(unittest.TestCase):
         self.assertIn(f"npm tarball SHA-256 | `{UPSTREAM_TARBALL_SHA256}`", self.provenance)
 
     def test_provenance_reproducible_check_matches_the_pins(self) -> None:
-        self.assertIn(UPSTREAM_COMMIT, self.provenance)
-        self.assertIn(UPSTREAM_SKILL_SHA256, self.provenance)
-        self.assertIn(UPSTREAM_TARBALL_SHA256, self.provenance)
-        self.assertIn(UPSTREAM_NPM_INTEGRITY, self.provenance)
+        block = self.provenance.split("## Reproducible source check", 1)[1].split("\n## ", 1)[0]
+        self.assertIn(f"Expected SHA-256: `{UPSTREAM_SKILL_SHA256}`", block)
+        self.assertIn(f"Expected tarball SHA-256: `{UPSTREAM_TARBALL_SHA256}`", block)
+        self.assertIn(f"Expected npm `dist.integrity`: `{UPSTREAM_NPM_INTEGRITY}`", block)
+        self.assertIn(f"https://registry.npmjs.org/gh-axi/-/gh-axi-{UPSTREAM_CLI_VERSION}.tgz", block)
+        source_urls = re.findall(
+            r"raw\.githubusercontent\.com/kunchenguid/gh-axi/([^/]+)/skills/gh-axi/SKILL\.md", block
+        )
+        self.assertTrue(source_urls, "the reproducible check must record its source recipe")
+        self.assertEqual({UPSTREAM_COMMIT}, set(source_urls))
 
-    def test_provenance_declares_the_fidelity_classification(self) -> None:
+    def test_provenance_documents_the_fidelity_classification(self) -> None:
         match = re.search(r"^Classification: `([^`]+)`", self.provenance, re.MULTILINE)
         self.assertIsNotNone(match)
         self.assertEqual("faithful", match.group(1))
@@ -114,7 +130,7 @@ class SuperGhAxiPackageTest(unittest.TestCase):
         self.assertTrue(license_copy.is_file())
         self.assertEqual(UPSTREAM_LICENSE_SHA256, _sha256(license_copy))
 
-    def test_notice_section_is_registered(self) -> None:
+    def test_notice_documents_the_gh_axi_entry(self) -> None:
         notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
         self.assertIn("## Gh Axi", notices)
         self.assertIn("LICENSES/Gh-Axi-MIT.txt", notices)
@@ -124,14 +140,20 @@ class SuperGhAxiPackageTest(unittest.TestCase):
             ("SKILL.md", self.text),
             ("setup.md", self.setup),
         ):
+            for invocation in NPX_GH_AXI.findall(text):
+                self.assertEqual(
+                    f"npx -y {LOCKED_INVOCATION}",
+                    invocation,
+                    f"{surface} must invoke the CLI as npx -y {LOCKED_INVOCATION} only",
+                )
             self.assertIsNone(
-                UNPINNED_NPX.search(text),
-                f"{surface} carries an unpinned npx invocation",
+                OFF_BASELINE_GH_AXI_SPEC.search(text),
+                f"{surface} pins a gh-axi spec outside the locked baseline",
             )
         self.assertIn(f"npx -y {LOCKED_INVOCATION} --help", self.text)
         self.assertIn(LOCKED_INVOCATION, self.setup)
 
-    def test_setup_fails_closed_on_missing_runtime(self) -> None:
+    def test_setup_documents_fail_closed_behavior(self) -> None:
         self.assertIn("Node 20+", self.setup)
         self.assertIn("Fail closed", self.setup)
         self.assertIn("Do not fall back to a different version", self.setup)
@@ -144,7 +166,7 @@ class SuperGhAxiPackageTest(unittest.TestCase):
             )
         self.assertIn("not vendored", self.setup)
 
-    def test_compatibility_map_translates_the_host_invocation_key(self) -> None:
+    def test_compatibility_map_documents_the_translation_choices(self) -> None:
         self.assertIn("translated, not copied", self.compatibility)
         self.assertIn("model-invoked discipline", self.compatibility)
         self.assertIn("intentionally omitted", self.compatibility)
@@ -154,21 +176,21 @@ class SuperGhAxiPackageTest(unittest.TestCase):
         # The generation pipeline embeds the scene prompt, local paths and
         # runtime identity in eXIf/iTXt/tEXt chunks; the published showcase
         # must carry none of them (sanitized before publishing, 2026-11-17).
-        data = (ROOT / "assets" / "skills" / "super-gh-axi-effect.png").read_bytes()
+        image = ROOT / "assets" / "skills" / "super-gh-axi-effect.png"
+        self.assertEqual(SHOWCASE_SHIPPED_SHA256, _sha256(image))
+        data = image.read_bytes()
         pos = 8
         present = []
         while pos < len(data):
             length = struct.unpack(">I", data[pos:pos + 4])[0]
             present.append(data[pos + 4:pos + 8])
             pos += 12 + length
-        for forbidden in (b"iTXt", b"tEXt", b"zTXt", b"eXIf"):
-            self.assertNotIn(forbidden, present, f"metadata chunk must stay out of the shipped image: {forbidden}")
-        self.assertIn(b"IHDR", present)
-        self.assertIn(b"IEND", present)
+        self.assertIn(b"IDAT", present, "the shipped pixel stream must keep its IDAT bytes")
+        self.assertEqual({b"IHDR", b"IDAT", b"IEND"}, set(present))
 
-    def test_provenance_binds_the_sanitized_shipment_and_the_approved_candidate(self) -> None:
-        self.assertIn("ae0b014187fe8bf167eca8b2509ec685b65c133fcd3622049d387e61fff40f03", self.provenance)
-        self.assertIn("64c17580947743509a2f0447d59e86482153ab8427b11c92ada7cab1c64ee7b8", self.provenance)
+    def test_provenance_documents_the_sanitized_shipment_and_approved_candidate(self) -> None:
+        self.assertIn(SHOWCASE_APPROVED_SHA256, self.provenance)
+        self.assertIn(SHOWCASE_SHIPPED_SHA256, self.provenance)
         self.assertIn("metadata-sanitized", self.provenance)
         self.assertIn("byte-identical", self.provenance)
         self.assertIn("03-production-alert", self.provenance)
@@ -189,11 +211,16 @@ class SuperGhAxiPackageTest(unittest.TestCase):
         self.assertIn("skills/super-gh-axi/SKILL.md", INSTALLABLE_SKILL_PATHS)
         self.assertIn("skills/super-gh-axi/SKILL.md", SKILL_BRAND_CONTRACTS)
 
-    def test_receipt_schema_is_stable(self) -> None:
+    def test_package_documents_the_status_vocabulary_and_receipt_schema(self) -> None:
         self.assertIn("schema: super-gh-axi.receipt.v1", self.brand)
-        for status in ("complete", "complete_with_holds", "hold", "failed"):
-            self.assertIn(status, self.brand)
+        self.assertIn(f"status: {' | '.join(RECEIPT_STATUSES)}", self.brand)
         self.assertIn("auth_boundary", self.brand)
+        dictionary = self.brand.split("## Status dictionary", 1)[1].split("\n## ", 1)[0]
+        rows = [line for line in dictionary.splitlines() if line.startswith("| `")]
+        statuses = [re.match(r"\| `[^`]+` \| `([^`]+)` \|", line).group(1) for line in rows]
+        self.assertEqual(list(RECEIPT_STATUSES), statuses)
+        enumeration = ", ".join(f"`{status}`" for status in RECEIPT_STATUSES[:-1])
+        self.assertIn(f"Keep {enumeration}, and `{RECEIPT_STATUSES[-1]}` distinct", self.text)
 
 
 if __name__ == "__main__":
