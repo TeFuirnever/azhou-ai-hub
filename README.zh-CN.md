@@ -61,7 +61,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 | [Eli5](skills/super-eli5/SKILL.md) | 像讲给完全零基础的人一样解释主题：交付一份自带全部内容、大图少字的独立 HTML。 | 上游行为句在锁定上游 commit 上逐字保留，并有可复现的 SHA-256 源校验。尚无行为 benchmark。 |
 | [Ask Azhou](skills/super-ask-azhou/SKILL.md) | 全目录路由：说清意图，得到技能、模式与边界。只推荐不代调用。 | 路由模式改编自锁定上游；路由图奇偶校验是带负控的仓库门禁检查。尚无行为 benchmark。 |
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | 从上游真源文档端到端产出、校准与评审架构设计文档。 | 沉淀自 MCC ARCH-2026-001 v0.1–v0.17 流水线；附确定性脚手架（`new_doc.py`）、收尾门检查器（`verify_doc.py`）与 `benchmarks/super-arch-doc/` 黄金用例。 |
-| [Session Insights](skills/super-session-insights/SKILL.md) | 从本机会话存储产出事实绑定的使用报告（Claude Code 与 Codex；zcode fail closed）；显式请求时，反思用户选定并授权模型分析的脱敏材料。 | 合成数据上的统计接线和反思合同检查；反思的实际价值与独立语义评审尚未验证。 |
+| [Session Insights](skills/super-session-insights/SKILL.md) | 从本机会话存储产出事实绑定的使用报告（Claude Code 与 Codex；zcode fail closed）；显式请求时，反思用户选定并授权模型分析的脱敏材料。 | 合成数据上的统计接线和反思合同检查。尚无行为 benchmark。反思的实际价值与独立语义评审尚未验证。 |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的受控英语结构规则改写面向 agent 的英文；保留每个 hedge、事实和范围限定语。 | 在锁定的上游 commit 上 faithful 导入，vendored 文件钉有 SHA-256 完整性测试；`scripts/ste-lint.py` 是确定性标准库门禁，配正负测试。尚无行为 benchmark。 |
 | [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成交互图示地图——共十种 typed-JSON 模式，交付为自包含可探索 HTML。 | 同步到正式稳定版 v3.2.0（<code>208acba8</code>），选定子树有 SHA-256 完整性校验；浏览器与视觉验收按实际产物分别报告。不宣称模型质量提升。 |
 | [Lavish](skills/super-lavish/SKILL.md) | 把复杂或视觉性回答变成可审阅的 HTML 产物；用户在浏览器里圈点标注，反馈经锁定的 <code>lavish-axi</code> CLI 审阅回路回到 agent。 | 在锁定的上游正式发布 <code>lavish-axi-v0.1.97</code>（commit <code>79aa0a18</code>）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
