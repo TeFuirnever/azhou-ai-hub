@@ -35,6 +35,14 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+RESULT_V1_FIELDS = {'schema', 'label', 'argv', 'cwd', 'target', 'recorder_dir', 'fifo_path',
+                    'env_overrides', 'returncode', 'stop_reason', 'elapsed_seconds', 'timeout_seconds',
+                    'recorder_events_sha256', 'recorder_event_count', 'recorder_parse_errors',
+                    'stdout_sha256', 'stderr_sha256', 'command_records', 'stdout_event_parse_errors',
+                    'classification', 'repo_binding', 'file_binding_before', 'file_binding_after',
+                    'file_binding_unchanged', 'isolation'}
+
+
 class ClassifyTest(unittest.TestCase):
     """Pure classification: instrumented events are the count basis; text is never one."""
 
@@ -105,6 +113,25 @@ class ClassifyTest(unittest.TestCase):
             "cat <<'EOF'\nreflection.py validate-reflection\nEOF\npython reflection.py review-citations")
         self.assertEqual("cat <<'EOF'\npython reflection.py review-citations", stripped)
 
+    def test_shell_heredoc_stripping_only_drops_true_heredoc_bodies(self):
+        self.assertEqual('cat <<< "note"\npython3 reflection.py render',
+                         self.runner.strip_heredocs('cat <<< "note"\npython3 reflection.py render'))
+        self.assertEqual("python3 -c 'print(1 << bits)'\npython3 reflection.py render",
+                         self.runner.strip_heredocs("python3 -c 'print(1 << bits)'\npython3 reflection.py render"))
+
+    def test_here_string_and_shift_operators_keep_trailing_invocations_scannable(self):
+        records = [
+            {'command': 'cat <<< "note"\npython3 reflection.py render', 'exit_code': 0},
+            {'command': "python3 -c 'print(1 << bits)'\npython3 reflection.py review-citations",
+             'exit_code': 3},
+        ]
+        summary = self.runner.classify([], records, 'reflection.py')
+        self.assertEqual([{'exit_code': 0, 'linkage': 'textual-candidate'}],
+                         summary['operations']['render']['exit_candidates'])
+        self.assertEqual([{'exit_code': 3, 'linkage': 'textual-candidate'}],
+                         summary['operations']['review-citations']['exit_candidates'])
+        self.assertEqual([], summary['unlinked_target_records'])
+
 
 @unittest.skipUnless(os.name == 'posix' and hasattr(os, 'mkfifo'), 'requires a POSIX FIFO')
 class RecordCommandTest(unittest.TestCase):
@@ -146,6 +173,7 @@ class RecordCommandTest(unittest.TestCase):
         proc, out = self.record(script)
         self.assertEqual(0, proc.returncode, proc.stderr)
         result = self.result(out)
+        self.assertEqual(RESULT_V1_FIELDS, set(result))
         classification = result['classification']
         self.assertEqual(4, classification['python_starts'])
         self.assertEqual(1, classification['subprocess_attempts'])
@@ -341,6 +369,32 @@ class RecordCommandTest(unittest.TestCase):
         self.assertIsNone(result['returncode'])
         self.assertEqual('spawn-failed', result['stop_reason'])
         self.assertIn('nonexistent-binary-xyz', result['spawn_error'])
+        self.assertTrue(RESULT_V1_FIELDS.issubset(result))
+        self.assertEqual(600, result['timeout_seconds'])
+        self.assertEqual([], result['command_records'])
+        self.assertEqual(0, result['recorder_event_count'])
+
+    def test_record_writes_full_result_json_when_setup_fails(self):
+        self.counter += 1
+        out = self.root / f'out-{self.counter}'
+        not_a_repo = self.root / 'not-a-repo'
+        not_a_repo.mkdir()
+        command = [sys.executable, str(RUNNER), 'record',
+                   '--argv-json', json.dumps(['true']),
+                   '--work', str(self.work), '--out', str(out),
+                   '--target', str(self.target), '--recorder-dir', str(RECORDER),
+                   '--bind-repo', str(not_a_repo)]
+        proc = subprocess.run(command, capture_output=True, text=True, timeout=60, encoding='utf-8')
+        self.assertNotEqual(0, proc.returncode)
+        self.assertIn('record setup failed', proc.stderr)
+        self.assertNotIn('Traceback', proc.stderr)
+        result = self.result(out)
+        self.assertEqual('setup-failed', result['stop_reason'])
+        self.assertIsNone(result['returncode'])
+        self.assertEqual(600, result['timeout_seconds'])
+        self.assertEqual([], result['command_records'])
+        self.assertTrue(RESULT_V1_FIELDS.issubset(result))
+        self.assertFalse((out / 'recorder-events.fifo').exists())
 
 
 class BindFreezeTest(unittest.TestCase):
@@ -478,6 +532,82 @@ class BindFreezeTest(unittest.TestCase):
                     self.assertIn('verification failed', proc.stderr)
                     self.assertNotIn('Traceback', proc.stderr)
                     self.assertFalse(copy.exists())
+
+    def test_bind_freeze_rejects_missing_and_unparseable_manifest_cleanly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ('missing', 'unparseable'):
+                with self.subTest(name):
+                    freeze = root / name / 'freeze'
+                    freeze.mkdir(parents=True)
+                    if name == 'unparseable':
+                        (freeze / 'FREEZE.manifest.json').write_bytes(b'{not json\n')
+                    copy = root / name / 'copy'
+                    proc = self.run_bind(freeze, copy)
+                    self.assertNotEqual(0, proc.returncode)
+                    self.assertIn('verification failed', proc.stderr)
+                    self.assertNotIn('Traceback', proc.stderr)
+                    self.assertFalse(copy.exists())
+
+    def test_bind_freeze_reports_unreadable_member_without_traceback(self):
+        runner = load_runner()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            freeze = self.make_freeze(root)
+            copy = root / 'copy'
+            with mock.patch.object(runner, 'hash_file', side_effect=OSError('unreadable')):
+                with self.assertRaises(SystemExit) as caught:
+                    runner.bind_freeze(freeze, copy)
+            self.assertIn('verification failed', str(caught.exception))
+            self.assertFalse(copy.exists())
+
+    def test_bind_freeze_cleans_residue_when_lock_down_is_interrupted(self):
+        runner = load_runner()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            freeze = self.make_freeze(root)
+            copy = root / 'copy'
+            real_chmod = Path.chmod
+
+            def chmod_with_interrupted_lock_down(path, mode):
+                if mode == 0o555 and Path(path) == copy:
+                    raise OSError('lock-down interrupted')
+                return real_chmod(path, mode)
+
+            with mock.patch.object(Path, 'chmod', new=chmod_with_interrupted_lock_down):
+                with self.assertRaises(OSError):
+                    runner.bind_freeze(freeze, copy)
+            self.assertFalse(copy.exists())
+
+    def test_bind_freeze_surfaces_cleanup_failure(self):
+        runner = load_runner()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            freeze = self.make_freeze(root)
+            copy = root / 'copy'
+            target = freeze / 'MODEL-PROMPT.md'
+            real_hash = runner.hash_file
+            mutated = []
+
+            def hash_and_mutate(path):
+                result = real_hash(path)
+                if Path(path) == target and not mutated:
+                    mutated.append(True)
+                    target.write_bytes(b'changed after verification\n')
+                return result
+
+            def stubborn_rmtree(path, ignore_errors=False):
+                if ignore_errors:
+                    return None
+                raise OSError('copy removal denied')
+
+            with mock.patch.object(runner, 'hash_file', side_effect=hash_and_mutate):
+                with mock.patch.object(runner.shutil, 'rmtree', new=stubborn_rmtree):
+                    with self.assertRaises(SystemExit) as caught:
+                        runner.bind_freeze(freeze, copy)
+            self.assertIn('copy cleanup failed', str(caught.exception))
+            self.assertIn('copy removal denied', str(caught.exception))
+            self.assertIn('verification failed', str(caught.exception))
 
 
 if __name__ == '__main__':

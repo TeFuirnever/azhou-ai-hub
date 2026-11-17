@@ -43,7 +43,7 @@ COVERAGE_STATEMENT = (
     'attempts, unobserved paths and textual exit candidates remain unknown; '
     'this is not a complete call budget and not a security monitor.'
 )
-HEREDOC = re.compile(r"<<-?\s*['\"]?([A-Za-z_][A-Za-z_0-9]*)['\"]?")
+HEREDOC = re.compile(r"(?<![\w<])<<-?\s*(['\"])([A-Za-z_][A-Za-z_0-9]*)\1")
 
 
 def hash_file(path) -> str:
@@ -70,7 +70,7 @@ def strip_heredocs(command: str) -> str:
         kept.append(line)
         match = HEREDOC.search(line)
         if match:
-            delimiter = match.group(1)
+            delimiter = match.group(2)
     return '\n'.join(kept)
 
 
@@ -148,8 +148,11 @@ def bind_freeze(freeze_dir, copy_dir):
     copy_dir = Path(copy_dir)
     if copy_dir.exists():
         raise SystemExit(f'copy directory already exists: {copy_dir}')
-    manifest_bytes = (freeze_dir / 'FREEZE.manifest.json').read_bytes()
-    manifest = json.loads(manifest_bytes)
+    try:
+        manifest_bytes = (freeze_dir / 'FREEZE.manifest.json').read_bytes()
+        manifest = json.loads(manifest_bytes)
+    except (OSError, ValueError):
+        raise SystemExit('frozen material verification failed: manifest') from None
     frozen = manifest.get('frozen_files') if isinstance(manifest, dict) else None
     if not isinstance(frozen, list) or not all(isinstance(entry, dict) and isinstance(entry.get('path'), str)
                                               and isinstance(entry.get('sha256'), str) for entry in frozen):
@@ -157,9 +160,14 @@ def bind_freeze(freeze_dir, copy_dir):
     unsafe = [entry['path'] for entry in frozen if unsafe_path(entry['path'])]
     if unsafe:
         raise SystemExit(f'frozen material verification failed: unsafe path {unsafe}')
-    problems = [entry['path'] for entry in frozen
-                if not (freeze_dir / entry['path']).is_file()
-                or hash_file(freeze_dir / entry['path']) != entry['sha256']]
+    problems = []
+    for entry in frozen:
+        member = freeze_dir / entry['path']
+        try:
+            if not member.is_file() or hash_file(member) != entry['sha256']:
+                problems.append(entry['path'])
+        except OSError:
+            problems.append(entry['path'])
     if problems:
         raise SystemExit(f'frozen material verification failed: {problems}')
     copy_dir.mkdir(mode=0o700)
@@ -197,8 +205,15 @@ def bind_freeze(freeze_dir, copy_dir):
         for directory in sorted((item for item in copy_dir.rglob('*') if item.is_dir()), reverse=True):
             directory.chmod(0o555)
         copy_dir.chmod(0o555)
-    except BaseException:
-        shutil.rmtree(copy_dir, ignore_errors=True)
+    except BaseException as original:
+        try:
+            for directory in sorted((item for item in copy_dir.rglob('*') if item.is_dir()), reverse=True):
+                directory.chmod(0o700)
+            copy_dir.chmod(0o700)
+            shutil.rmtree(copy_dir)
+        except OSError as cleanup_error:
+            raise SystemExit(f'copy cleanup failed: {copy_dir}: {cleanup_error}; '
+                             f'original failure: {original}') from None
         raise
     print(json.dumps({'binding': str(binding_path), 'verified': binding['verified'],
                       'files': len(entries)}, ensure_ascii=False))
@@ -269,58 +284,96 @@ def record_command(args):
     if not fifo.parent.is_dir() and fifo.parent != out:
         raise SystemExit(f'FIFO parent directory does not exist: {fifo.parent}')
     out.mkdir(mode=0o700)
-    os.mkfifo(fifo, 0o600)
+    repo_binding = None
+    file_before = {}
+
+    def base_result():
+        return {
+            'schema': 'super-session-insights.diagnostic-run.v1',
+            'label': args.label,
+            'argv': argv,
+            'cwd': str(work),
+            'target': str(target),
+            'recorder_dir': str(recorder_dir),
+            'fifo_path': str(fifo),
+            'env_overrides': env_overrides,
+            'returncode': None,
+            'stop_reason': None,
+            'elapsed_seconds': 0.0,
+            'timeout_seconds': args.timeout_seconds,
+            'recorder_events_sha256': hashlib.sha256(b'').hexdigest(),
+            'recorder_event_count': 0,
+            'recorder_parse_errors': 0,
+            'stdout_sha256': hashlib.sha256(b'').hexdigest(),
+            'stderr_sha256': hashlib.sha256(b'').hexdigest(),
+            'command_records': [],
+            'stdout_event_parse_errors': 0,
+            'classification': classify([], [], args.target),
+            'repo_binding': repo_binding,
+            'file_binding_before': file_before,
+            'file_binding_after': None,
+            'file_binding_unchanged': None,
+            'isolation': 'not enforced by this runner; caller-arranged and independently verified',
+        }
+
+    def write_result(record):
+        result_path = out / 'result.json'
+        result_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+        result_path.chmod(0o600)
+        return result_path
+
     try:
-        reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
-        raw = bytearray()
+        try:
+            os.mkfifo(fifo, 0o600)
+            reader = os.open(fifo, os.O_RDONLY | os.O_NONBLOCK)
+            raw = bytearray()
 
-        def drain():
-            while True:
-                try:
-                    chunk = os.read(reader, 65536)
-                except BlockingIOError:
-                    break
-                if not chunk:
-                    break
-                raw.extend(chunk)
+            def drain():
+                while True:
+                    try:
+                        chunk = os.read(reader, 65536)
+                    except BlockingIOError:
+                        break
+                    if not chunk:
+                        break
+                    raw.extend(chunk)
 
-        env = os.environ.copy()
-        env.update(env_overrides)
-        existing = env.get('PYTHONPATH')
-        env['PYTHONPATH'] = str(recorder_dir) + (os.pathsep + existing if existing else '')
-        env['SSI_RECORDER_FIFO'] = str(fifo)
-        env['SSI_RECORDER_TARGET'] = str(target)
+            env = os.environ.copy()
+            env.update(env_overrides)
+            existing = env.get('PYTHONPATH')
+            env['PYTHONPATH'] = str(recorder_dir) + (os.pathsep + existing if existing else '')
+            env['SSI_RECORDER_FIFO'] = str(fifo)
+            env['SSI_RECORDER_TARGET'] = str(target)
 
-        repo_binding = None
-        if args.bind_repo:
-            repo_binding = {'covers': REPO_BINDING_COVER_NOTE,
-                            'before': snapshot_repo(args.bind_repo), 'after': None, 'unchanged': None}
-        file_before = {str(Path(item)): hash_file(item) for item in args.bind_file}
-        stdin_bytes = Path(args.stdin_path).read_bytes() if args.stdin_path else None
+            if args.bind_repo:
+                repo_binding = {'covers': REPO_BINDING_COVER_NOTE,
+                                'before': snapshot_repo(args.bind_repo), 'after': None, 'unchanged': None}
+            file_before = {str(Path(item)): hash_file(item) for item in args.bind_file}
+            stdin_bytes = Path(args.stdin_path).read_bytes() if args.stdin_path else None
 
-        stdout_path = out / 'stdout.log'
-        stderr_path = out / 'stderr.log'
+            stdout_path = out / 'stdout.log'
+            stderr_path = out / 'stderr.log'
+            stdout_stream = stdout_path.open('wb')
+            stderr_stream = stderr_path.open('wb')
+        except Exception as error:
+            failure = base_result()
+            failure['stop_reason'] = 'setup-failed'
+            failure['setup_error'] = str(error)
+            write_result(failure)
+            raise SystemExit(f'record setup failed: {error}') from None
         began = time.monotonic()
         stop_reason = None
-        with stdout_path.open('wb') as stdout_stream, stderr_path.open('wb') as stderr_stream:
+        with stdout_stream, stderr_stream:
             os.chmod(stdout_path, 0o600)
             os.chmod(stderr_path, 0o600)
             try:
                 proc = subprocess.Popen(argv, cwd=str(work), stdin=subprocess.PIPE, stdout=stdout_stream,
                                         stderr=stderr_stream, env=env, start_new_session=True)
             except OSError as error:
-                failure = {'schema': 'super-session-insights.diagnostic-run.v1', 'label': args.label,
-                           'argv': argv, 'cwd': str(work), 'target': str(target),
-                           'recorder_dir': str(recorder_dir), 'fifo_path': str(fifo),
-                           'env_overrides': env_overrides, 'returncode': None,
-                           'stop_reason': 'spawn-failed', 'spawn_error': str(error),
-                           'classification': classify([], [], args.target),
-                           'repo_binding': repo_binding, 'file_binding_before': file_before,
-                           'file_binding_after': None, 'file_binding_unchanged': None,
-                           'isolation': 'not enforced by this runner; caller-arranged and independently verified'}
-                result_path = out / 'result.json'
-                result_path.write_text(json.dumps(failure, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-                result_path.chmod(0o600)
+                failure = base_result()
+                failure['stop_reason'] = 'spawn-failed'
+                failure['spawn_error'] = str(error)
+                write_result(failure)
                 raise SystemExit(f'command failed to start: {error}') from None
             deadline = began + args.timeout_seconds
 
@@ -402,19 +455,11 @@ def record_command(args):
         except OSError:
             file_after[key] = BINDING_UNREADABLE
 
-    result = {
-        'schema': 'super-session-insights.diagnostic-run.v1',
-        'label': args.label,
-        'argv': argv,
-        'cwd': str(work),
-        'target': str(target),
-        'recorder_dir': str(recorder_dir),
-        'fifo_path': str(fifo),
-        'env_overrides': env_overrides,
+    result = base_result()
+    result.update({
         'returncode': proc.returncode,
         'stop_reason': stop_reason,
         'elapsed_seconds': round(time.monotonic() - began, 3),
-        'timeout_seconds': args.timeout_seconds,
         'recorder_events_sha256': hashlib.sha256(bytes(raw)).hexdigest(),
         'recorder_event_count': len(events),
         'recorder_parse_errors': raw_parse_failures,
@@ -427,11 +472,8 @@ def record_command(args):
         'file_binding_before': file_before,
         'file_binding_after': file_after,
         'file_binding_unchanged': file_before == file_after,
-        'isolation': 'not enforced by this runner; caller-arranged and independently verified',
-    }
-    result_path = out / 'result.json'
-    result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    result_path.chmod(0o600)
+    })
+    result_path = write_result(result)
     print(json.dumps({'result': str(result_path), 'returncode': proc.returncode, 'stop_reason': stop_reason},
                      ensure_ascii=False))
 
