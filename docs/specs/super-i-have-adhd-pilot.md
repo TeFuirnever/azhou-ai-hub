@@ -1,5 +1,7 @@
 # Planned: super-i-have-adhd bounded pilot
 
+> 状态（2026-11-16）：本设计已执行——package 落地，U0/U1/U2 与 provisional promote 见 [provenance](../../skills/super-i-have-adhd/references/provenance.md) 的 Adoption evidence 与 [changelog](../../CHANGELOG.md)。以下正文是执行前冻结的设计记录。
+
 本页是 [roadmap](../roadmap.md) 的 planning deliverable，遵循 [principles](../principles.md) 与 [Skill Standard](../skill-standard.md)。本次只完成 source comparison、scope 与 acceptance design；未新增 runtime package、安装、付费 experiment 或执行 pilot。以下 criteria 是 proposed local decision gates，不是已测结果或通用 benchmark。
 
 ## Source comparison 与最小增量

@@ -75,6 +75,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-verify/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
+    "skills/super-i-have-adhd/SKILL.md",
     "skills/super-imagegen/SKILL.md",
     "skills/super-lavish/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
@@ -501,6 +502,12 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "每一次生成，都带执行回执。",
         "startup": "🦊 阿舟 · Imagegen 启动（mode=<plain|candidate|export>, scope=<short scope>）",
         "brand_path": "skills/super-imagegen/references/brand-layer.md",
+    },
+    "skills/super-i-have-adhd/SKILL.md": {
+        "display_name": "i-have-adhd",
+        "motto": "第一行就是下一步动作。",
+        "startup": "🦊 阿舟 · i-have-adhd 启动（mode=<start|resume|stop>, scope=<session>）",
+        "brand_path": "skills/super-i-have-adhd/references/brand-layer.md",
     },
 }
 
