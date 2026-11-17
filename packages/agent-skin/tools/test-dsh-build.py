@@ -177,6 +177,17 @@ assert.equal(rows.length, 1, 'duplicate host injection registers one bridge per 
         self.assertEqual(self.snapshot(self.destination), self.snapshot(second),
                          "a second full assembly must reproduce every package byte")
 
+    def test_private_codex_cover_does_not_change_dsh_package(self):
+        cover = self.root / "assets/private/startup-cover.png"
+        cover.write_bytes((self.root / "assets/private/wallpaper-scene-q-v3.png").read_bytes())
+        try:
+            second = self.root / ".build/azhou-dsh-plugin-cover/azhou-agent-skin"
+            self.build_plugin(second)
+            self.assertEqual(self.snapshot(self.destination), self.snapshot(second))
+            self.artifacts.verify_dsh_plugin(second)
+        finally:
+            cover.unlink()
+
     def test_assembly_rejects_different_outputs_and_replaced_stages(self):
         with tempfile.TemporaryDirectory(prefix="agent-skin-dsh-safety-") as temporary:
             root = Path(temporary)

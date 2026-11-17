@@ -2,7 +2,7 @@
 
 两端本机安装、旧来源恢复及安装后复查，先读 [本地安装 SOP](docs/local-install-sop.md)。
 
-本目录是 Hub 的规范包 `agent-skin`，源码候选为 **0.9.0/build 42**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”。DSH 插件使用独立的文档级启动门并复用共享播放器。界面跟随官方宿主的语言和深浅色，入口与设置使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。安装版本和实机验收进度见[支持矩阵](../../docs/support-matrix.md#optional-integrations)。
+本目录是 Hub 的规范包 `agent-skin`，源码候选为 **0.9.0/build 43**。应用显示名称为“阿舟 AI 实验室 for Codex / Azhou AI Lab for Codex”，兼容安装入口仍为“阿舟 AI 实验室.app”。DSH 插件使用独立的文档级启动门并复用共享播放器。界面跟随官方宿主的语言和深浅色，入口与设置使用独立的私有 bot 头像，名字为“阿舟 / Azhou”。安装版本和实机验收进度见[支持矩阵](../../docs/support-matrix.md#optional-integrations)。
 
 Codex 读取构建载荷时，`startup` 目录和 `install.js` 须为实体，载荷必须是非空、严格小于 24 MiB 的 UTF-8 普通文件；读取前后检测到身份或内容状态变化会报告 `asset-invalid`。资源根仍按原规则解析；这不能排除最后检查之后的替换，也不构成宿主或权利验收。
 
@@ -115,6 +115,8 @@ node tools/test-wallpaper.mjs --image wallpaper-scene-q-v3.png
 
 启动默认素材来自 `working.png` 和 `wallpaper-scene-q-v3.png`（先找 `assets/private/`，再用 `assets/azhou/`）；构建时生成规范头像、背景和同图线稿。入口头像则单独读取 `entry-avatar.png`，在入口与设置头部显示，不改变这些动画输入、应用图标或 Pet。
 
+Codex 冷启动封面默认使用壁纸原图；本地可将横向 PNG 放在 `assets/private/startup-cover.png`，构建时单独打包并记录摘要，不替换壁纸。播放器就绪后封面渐变消失；系统启用减少动态效果时直接切换。私有封面不随仓库分发。
+
 Codex 主界面壁纸使用 `assets/azhou/wallpaper-scene-q-v3.png`（可被本地覆盖层替换），原生尺寸为1672×941、RGB PNG。以正式 `04-working.png` 为 Q 版比例和画风主参考，女性v2身份图仅辅助核对角色特征，经 ImageGen 生成完整实验室场景。大头、小身体、短四肢的 Q 版造型必须保留；扩展背景不代表改用普通动漫身材。生成提示词、参考来源与摘要见私有记录 `assets/private/provenance/wallpaper-scene-q-v3.json`。
 
 这是一份项目衍生图，随 `assets/azhou/` 以 CC BY-NC-ND 4.0 发布，不代表已进入正式 IP 素材库；原参考文件保持不变。场景使用 `cover` 等比铺满窗口，窄窗会裁掉部分环境，Retina或较大窗口可能放大原始像素，不宣称原生4K清晰度。
@@ -143,7 +145,7 @@ Codex 主界面壁纸使用 `assets/azhou/wallpaper-scene-q-v3.png`（可被本�
 | 日常入口 | ~/Applications/阿舟 AI 实验室.app |
 | Bundle ID | local.azhou.codex-startup |
 | 主可执行文件 | AzhouCodexStartup |
-| 版本 | 0.9.0 / build 42 candidate |
+| 版本 | 0.9.0 / build 43 candidate |
 | Dock策略 | LSUIElement=true / accessory |
 | 主程序识别 | 规范化真实路径、com.openai.codex、有效主可执行文件；排除自身和嵌套Helper |
 

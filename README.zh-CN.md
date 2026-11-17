@@ -12,7 +12,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——14 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——15 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -38,6 +38,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
 npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
+npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 ~~~
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
@@ -46,7 +47,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills.zh-CN-dark.jpg">
-  <img src="assets/github/readme-banner-skills.zh-CN.jpg" alt="14 个 Skill：每个都能独立安装" width="100%">
+  <img src="assets/github/readme-banner-skills.zh-CN.jpg" alt="15 个 Skill：每个都能独立安装" width="100%">
 </picture>
 
 | Skill | 解决的真实任务 | 验证依据 |
@@ -65,6 +66,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 | [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成交互图示地图——共十种 typed-JSON 模式，交付为自包含可探索 HTML。 | 同步到正式稳定版 v3.2.0（<code>208acba8</code>），选定子树有 SHA-256 完整性校验；浏览器与视觉验收按实际产物分别报告。不宣称模型质量提升。 |
 | [Lavish](skills/super-lavish/SKILL.md) | 把复杂或视觉性回答变成可审阅的 HTML 产物；用户在浏览器里圈点标注，反馈经锁定的 <code>lavish-axi</code> CLI 审阅回路回到 agent。 | 在锁定的上游正式发布 <code>lavish-axi-v0.1.97</code>（commit <code>79aa0a18</code>）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
 | [Imagegen](skills/super-imagegen/SKILL.md) | 经本机已装的私有 <code>azhou-imagegen</code> 运行时执行准备好的本地生图请求：分流请求、跑 doctor 门禁、遵守运行锁，交付带不可变回执的输出；运行时缺失即拒绝。 | 仅契约层包装私有本地运行时：provenance 钉有基线哈希，仓库零私有字节；fail-closed setup。尚无行为 benchmark。 |
+| [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | 为 ADHD 读者塑形输出：下一步动作先行、多步工作编号分步、每回合重述状态、压制岔题；直到读者说出停止短语才解除。 | 在冻结上游 commit <code>1ecea199</code>（MIT）上 adapted 引入：指令正文逐字保留，上游双 SHA-256 钉入 provenance；完整性测试钉住 provenance、许可副本与五条 Azhou 呈现约束。尚无行为 benchmark。 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try.zh-CN-dark.jpg">
@@ -141,7 +143,13 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 
 ![Imagegen 效果图](assets/skills/super-imagegen-effect.png)
 
-<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish 与 Imagegen：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
+## i-have-adhd
+
+> ✂️ 把大任务拆成小步——先做这张。
+
+![i-have-adhd 效果图](assets/skills/super-i-have-adhd-effect.png)
+
+<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish、Imagegen 与 i-have-adhd：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust.zh-CN-dark.jpg">
@@ -199,9 +207,9 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码候选为 `0.9.0/build 42`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码采用 MIT，随附的阿舟素材采用 CC BY-NC-ND 4.0。 |
+| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码候选为 `0.9.0/build 43`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码采用 MIT，随附的阿舟素材采用 CC BY-NC-ND 4.0。 |
 
-Codex 冷启动时，启动器以浮动层显示自有遮罩而不抢焦点，在原生窗口播放 12 秒动画。播放结束且工作区就绪后交接。切换到其他应用或 Space 时释放遮罩。热启动只激活现有 Codex 进程，不重播。DSH 使用独立的页面启动门。源码中的 DSH 内嵌外观设置在保存后保持打开，Tab 可返回宿主设置页。macOS CI 用负对照验证窗口排序、播放器显露和清理。维护者的 Mac 已安装 PR #476 候选以便验收；用户反馈冷启动、页面切换和输入正常，运行时载荷摘要尚未独立核验。已安装版本及待完成的视觉验收见[支持矩阵](docs/support-matrix.md#optional-integrations)与[启动测试](packages/agent-skin/docs/testing.md)。
+Codex 冷启动时，启动器以浮动层显示静态封面而不抢焦点，再在同一原生窗口渐变进入 12 秒动画。默认封面可由本地私有素材覆盖。播放结束且工作区就绪后交接。切换到其他应用或 Space 时释放遮罩。热启动只激活现有 Codex 进程，不重播。DSH 使用独立的页面启动门。源码中的 DSH 内嵌外观设置在保存后保持打开，Tab 可返回宿主设置页。macOS CI 用负对照验证窗口排序、播放器显露和清理。维护者的 Mac 已安装 PR #476 候选以便验收；用户反馈冷启动、页面切换和输入正常，运行时载荷摘要尚未独立核验。用户随后反馈，本地 build 43 的封面及所请求的启动检查符合预期。已安装版本及待完成的视觉验收见[支持矩阵](docs/support-matrix.md#optional-integrations)与[启动测试](packages/agent-skin/docs/testing.md)。
 
 <sub>🦊 Foundation CLI、pstack 与 Agent Skin 效果图为生成插图，未经 Azhou Scenes 流水线，也没有色彩门禁；维护者视觉批准已于 2026-11-12 记录。</sub>
 

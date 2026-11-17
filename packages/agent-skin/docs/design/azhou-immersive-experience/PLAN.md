@@ -1,5 +1,6 @@
 # Azhou immersive experience plan
 
+新增执行合同：[无视频基础模式与全线验证](OPTIONAL-MEDIA-AND-VALIDATION.md)。P02a 稳定合同与 P02b 最终视觉分开；基础可用不等待视频，完整动态仍须视觉验收。本文较早的整阶段依赖按该合同逐切片核对，不把历史调查状态当作当前实施结果。
 按顺序交付阿舟连续启动与工作区体验，保留 Azhou IP、最新已保存设置与原生控件。
 本计划是设计资产，不是执行授权或已通过回执。
 P01调查基线与约束，P02冻结视觉与协议后P10隔离宿主边界，P03在P02和P10后，P04 集成整窗视觉，P05 独立完成 DSH。
@@ -9,7 +10,7 @@ P07 管理主题，P08 安全导入，P09 完成入口及音频选择，P06 最�
 
 One box is one unit of work. Every box names the evidence that checks it. Check a box only when its evidence exists. The body is a how-to. The appendices explain and record.
 
-实施使用 `packages/pstack-agent-harness/harness/pstack/codex/skills/poteto-mode/playbooks/autopilot-stack.md`。产品 PR 由操作者最终合并，文档归档本身不启动实施。该安排不限制用户已授权的本设计文档 PR 合并。更高优先级会话要求 PR 为草稿时先建草稿，通过审阅后再标为 ready，不照抄上游 never draft。
+实施使用 `packages/pstack-agent-harness/harness/pstack/codex/skills/poteto-mode/playbooks/autopilot-stack.md`。用户已在设计归档后授权端到端执行及对应任务常规提交推送合并；UI仍须操作者视觉审阅，其余精确diff审查及仓库门禁不变。更高优先级会话要求 PR 为草稿时先建草稿，通过审阅后再标为 ready，不照抄上游 never draft。
 
 Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
 
@@ -17,7 +18,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ### Arm the program
 
-- [ ] 向操作者说明协议并等待明确启动产品实施。保存该次授权证据。
+- [x] 已收到操作者端到端执行授权；各阶段门禁继续适用，私有会话证据不入仓。
 - [ ] 在开始与每个审计 tick 重新读取 `git show origin/main:packages/pstack-agent-harness/harness/pstack/codex/skills/poteto-mode/playbooks/autopilot-stack.md`、swarm、opening-a-pr 及当前项目 AGENTS。保存读取的 SHA。
 - [ ] 用可用调度器落实上游 `/loop 1h` 意图，记录任务与停止条件。不可用时明确保持人工 tick，不声称已调度。没有实施授权前不安排执行循环。
 - [ ] 每个 tick 重新读协议，按实际副作用检查 owner 与证据。仅对新变化发 status message，并记录本轮决定。发现停滞先查 owner，再决定接替，不能以无进程推断可抢占。
@@ -99,6 +100,8 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] 独立 root verdict 对应精确 head SHA，所有检查与线程解决。由操作者 squash 合并，保留实际合并结果及恢复点后才考虑释放租约。
 
 ## 审阅阿舟场景和素材 (P02)
+
+本阶段依据[P02动态媒体制作](P02-MEDIA-PRODUCTION.md)、[融合复用矩阵](P02-REUSE-MATRIX.md)和[架构准备](P02-INTEGRATION-READINESS.md)执行。静态分镜只作制作输入，不满足用户要求的动态交付。容器与制作工具不预设，参考级质量不降级。P02冻结非生产完整媒体/主题候选及协议，后续阶段验收真实产品集成，避免循环依赖。
 
 **Depends on.** P01.
 
@@ -570,7 +573,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## Appendix A. Prototype evidence
 
-本次只有源码与既有设计阅读，没有新的原型、截图或测量。P01 先恢复原包，P02 原型审角色和构图，P03 证实冷启首帧及故障释放，P05 证实 DSH hook。没有原型 SHA，不虚构链接。原型不准操作未授权安装或正在工作的宿主。
+设计归档时只有源码与既有设计阅读。P01新增调查见P01-BASELINE.md；目前没有新的原型截图或性能测量。P01 已恢复并校验原包，继续归档完整映射，P02 原型审角色和构图，P03 证实冷启首帧及故障释放，P05 证实 DSH hook。没有原型 SHA，不虚构链接。原型不准操作未授权安装或正在工作的宿主。
 
 ## Appendix B. Alternatives rejected
 
@@ -578,7 +581,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 ## Appendix C. Risks
 
-P01 的原包缺失阻止需求映射冻结。P03 面临宿主页换代和多显示器露底。P05 面临真实 hook 与 CSP 能力缺口。P02 的新素材需身份及授权审阅。P06 不能因某端 blocked 宣称双端完成。
+P01 原包已恢复；独立24文件摘要一致，原检查器1191项检查通过。完整18需求/12验收映射归档及当前运行基线仍须关闭。P03 面临宿主页换代和多显示器露底。P05 面临真实 hook 与 CSP 能力缺口。P02 的新素材需身份及授权审阅。P06 不能因某端 blocked 宣称双端完成。
 
 实际模型、独立 reviewer 与控制工具以执行时能力为准。十条 lane 是必须覆盖的场景，不要求十个并发 owner 或十台云 VM。缺少工具时记录明确阻塞，不能把计划形式校验当成运行验证。
 

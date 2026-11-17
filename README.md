@@ -12,7 +12,7 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 14 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 15 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -38,6 +38,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
 npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
+npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 ~~~
 
 Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
@@ -46,7 +47,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills-dark.jpg">
-  <img src="assets/github/readme-banner-skills.jpg" alt="14 Skills: each one independently installable" width="100%">
+  <img src="assets/github/readme-banner-skills.jpg" alt="15 Skills: each one independently installable" width="100%">
 </picture>
 
 | Skill | Real job | Verification basis |
@@ -65,6 +66,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 | [Archify](skills/super-archify/SKILL.md) | Turn systems, plans, or codebases into interactive diagram maps — ten typed-JSON modes — delivered as self-contained explorable HTML. | Synchronized to official stable v3.2.0 (<code>208acba8</code>) with SHA-256 integrity over the selected subtree; browser checks and visual review are reported separately for the actual artifact. No model-quality improvement is claimed. |
 | [Lavish](skills/super-lavish/SKILL.md) | Turn complex or visual responses into reviewable HTML artifacts the user annotates in the browser; feedback returns to the agent through the locked <code>lavish-axi</code> CLI review loop. | Adopted at the locked upstream release <code>lavish-axi-v0.1.97</code> (commit <code>79aa0a18</code>): provenance pins the upstream skill SHA-256, npm integrity and tarball digest; the CLI is invoked through the locked <code>npx</code> baseline and is not vendored. Integrity tests pin the provenance and license copy. No behavior benchmark yet. |
 | [Imagegen](skills/super-imagegen/SKILL.md) | Execute prepared local image-generation requests through the machine's installed private <code>azhou-imagegen</code> runtime: route the request, run the doctor gate, honor the runtime lock, and hand back outputs with an immutable receipt; refuses when the runtime is missing. | Contract-only package over a proprietary local runtime, with baseline hashes pinned in provenance and zero private bytes in the repository; fail-closed setup. No behavior benchmark yet. |
+| [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | Shape output for a reader with ADHD: next action first, bounded numbered steps, state restated every turn, tangents suppressed; stays on until the reader's stop phrase. | Adapted from the frozen upstream commit <code>1ecea199</code> (MIT) with the instruction body retained verbatim and both upstream SHA-256 digests pinned; integrity tests pin the provenance, license copy and the five Azhou presentation constraints. No behavior benchmark yet. |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try-dark.jpg">
@@ -141,7 +143,13 @@ The candidate [workspace theme slice](packages/agent-skin/docs/theme-appearance.
 
 ![Imagegen effect preview](assets/skills/super-imagegen-effect.png)
 
-<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify, Lavish and Imagegen: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
+## i-have-adhd
+
+> ✂️ Cut the pile into small steps — and do this card first.
+
+![i-have-adhd effect preview](assets/skills/super-i-have-adhd-effect.png)
+
+<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify, Lavish, Imagegen and i-have-adhd: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust-dark.jpg">
@@ -199,9 +207,9 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
-| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; current source candidate `0.9.0/build 42`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT; bundled Azhou artwork is CC BY-NC-ND 4.0. |
+| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; current source candidate `0.9.0/build 43`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT; bundled Azhou artwork is CC BY-NC-ND 4.0. |
 
-On a Codex cold start, the launcher shows its own floating cover without taking focus and plays the 12-second animation in a native window. It hands off after playback and workspace readiness. Switching to another app or Space releases the cover. A warm launch activates the existing Codex process without replay. DSH uses its own document gate. In the source, its embedded appearance settings stay open after saving and let Tab return to the host settings page. macOS CI verifies window ordering, player reveal and cleanup with a negative control. On the maintainer Mac, the PR #476 candidate was installed for acceptance; the user reported a successful cold start, page navigation and input. The loaded payload hash was not independently checked. The installed builds and pending visual acceptance are tracked in the [support matrix](docs/support-matrix.md#optional-integrations) and [startup tests](packages/agent-skin/docs/testing.md).
+On a Codex cold start, the launcher shows its own floating image cover without taking focus, then fades into the 12-second animation in the same native window. A local private cover can override the bundled default. It hands off after playback and workspace readiness. Switching to another app or Space releases the cover. A warm launch activates the existing Codex process without replay. DSH uses its own document gate. In the source, its embedded appearance settings stay open after saving and let Tab return to the host settings page. macOS CI verifies window ordering, player reveal and cleanup with a negative control. On the maintainer Mac, the PR #476 candidate was installed for acceptance; the user reported a successful cold start, page navigation and input. The loaded payload hash was not independently checked. The user later reported that the local build 43 cover and requested startup checks matched expectations. The installed builds and pending visual acceptance are tracked in the [support matrix](docs/support-matrix.md#optional-integrations) and [startup tests](packages/agent-skin/docs/testing.md).
 
 <sub>🦊 Foundation CLI, pstack and Agent Skin previews: generated illustrations, not from the Azhou Scenes pipeline and without a colour gate; maintainer visual approval recorded 2026-11-12.</sub>
 

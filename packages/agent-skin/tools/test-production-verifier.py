@@ -93,6 +93,8 @@ class VerifierApiTests(unittest.TestCase):
         manifest.pop("startupEntrypoints", None)
         manifest["outputs"].pop("startup/prepare.js", None)
         (bundle / "Contents/Resources/startup/prepare.js").unlink()
+        manifest["outputs"].pop("web/assets/defaults/cold-cover.png", None)
+        (bundle / "Contents/Resources/web/assets/defaults/cold-cover.png").unlink(missing_ok=True)
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
 
     def rewrite_defaults(self, bundle: Path, assets: dict) -> None:

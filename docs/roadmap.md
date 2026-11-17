@@ -5,7 +5,7 @@
 ## Next milestone
 
 - **Principles 与现有工作对齐**：确立 Myself first, community-ready 与两个互补 pillars；复用既有工作和验收路径，不重复实现，不开展 full repository audit。
-- **Planned — `super-i-have-adhd`**：来源为 [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd)。已形成 [bounded pilot design](specs/super-i-have-adhd-pilot.md)：先对照 upstream instructions、当前 Hub Skills 与 retired Super Caveman 的历史边界，再在一个真实 workflow 比较原始、当前与最小增强。当前只授权 design；没有 Skill implementation、pilot execution、installation 或 publication。它不被预设为 Super Caveman 的 replacement。
+- **Landed — `super-i-have-adhd`**：来源为 [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd)。已形成 [bounded pilot design](specs/super-i-have-adhd-pilot.md)：先对照 upstream instructions、当前 Hub Skills 与 retired Super Caveman 的历史边界，再在一个真实 workflow 比较原始、当前与最小增强。package 已落地并按该设计执行了 pilot（promote 记录为 provisional；现状与边界以 [support matrix](support-matrix.md)、包 [provenance](../skills/super-i-have-adhd/references/provenance.md) 与 [changelog](../CHANGELOG.md) 为准）。它不被预设为 Super Caveman 的 replacement。
 - **Existing integrations 继续既有 acceptance tracks**：pstack 沿 [integration contract](integrations.md) 与 [support matrix](support-matrix.md)；Agent Skin 沿既有 tickets 与其实现分支验收，不新建并行实现。Focused Skill pilot 不以所有 integrations 完成为前置条件。
 
 ## Current-work reconciliation
