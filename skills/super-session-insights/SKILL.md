@@ -47,7 +47,7 @@ python <skill-dir>/scripts/session_insights.py report --aggregate .azhou/super-s
 
 读取 [reflection contract](references/reflection-contract.md) 完成证据整理、来源与时间核对、反例和替代解释、结构验证及报告；旧报告与纠正按 [history evolution](references/history-evolution.md) 处理。分析由宿主完成，本地脚本提供引用片段复核、结构校验与渲染，不联网。先逐项核对原文是否支持每个事实，不能把结构通过当成语义证明；短请求优先直接回答，仅在确有价值时提出实验。用户可以选择不行动；建议修改 Skill 不是执行授权。工具隔离无法确认时停止文件输入路径，聊天中已有材料可带限制分析。统计与反思混合请求分别标记来源和失败状态。
 
-反思的启动及 scope、evidence、reflection、verification 阶段均使用同一 run-id，具体格式见品牌层。结构通过不代表语义正确、实验已采纳或工作流已改善。
+反思的启动及 scope、evidence、reflection、verification 阶段均使用同一 run-id：一次反思运行取一个本轮 ID，各阶段事件的 `run` 取值相同。结构通过不代表语义正确、实验已采纳或工作流已改善。
 
 ## 增量缓存
 

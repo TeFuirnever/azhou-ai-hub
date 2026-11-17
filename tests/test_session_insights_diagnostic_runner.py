@@ -295,6 +295,34 @@ class BindFreezeTest(unittest.TestCase):
             self.assertIn('verification failed', proc.stderr)
             self.assertFalse(copy.exists())
 
+    def test_bind_freeze_rejects_escaping_manifest_paths_without_writing_outside_copy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            absolute_target = root / 'absolute-target.txt'
+            absolute_target.write_bytes(b'escape bytes\n')
+            cases = [('traversal', '../leak.txt', root / 'traversal' / 'leak.txt',
+                      root / 'traversal' / 'deep' / 'leak.txt'),
+                     ('absolute', str(absolute_target), absolute_target, absolute_target)]
+            for name, entry_path, source, outside in cases:
+                with self.subTest(name):
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    outside.parent.mkdir(parents=True, exist_ok=True)
+                    source.write_bytes(b'escape bytes\n')
+                    if outside != source:
+                        outside.write_bytes(b'sentinel bytes\n')
+                    before = outside.read_bytes()
+                    freeze = self.make_freeze(source.parent)
+                    manifest = {'schema': 'diag.freeze.v1',
+                                'frozen_files': [{'path': entry_path, 'sha256': sha256_bytes(source.read_bytes())}]}
+                    (freeze / 'FREEZE.manifest.json').write_bytes((json.dumps(manifest) + '\n').encode('utf-8'))
+                    copy = outside.parent / 'copy'
+                    proc = self.run_bind(freeze, copy)
+                    self.assertNotEqual(0, proc.returncode)
+                    self.assertIn('verification failed', proc.stderr)
+                    self.assertFalse(copy.exists())
+                    self.assertEqual(before, outside.read_bytes())
+                    self.assertNotEqual(0, stat.S_IMODE(outside.stat().st_mode) & 0o222)
+
 
 if __name__ == '__main__':
     unittest.main()

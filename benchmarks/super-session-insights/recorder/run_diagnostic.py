@@ -141,6 +141,11 @@ def bind_freeze(freeze_dir, copy_dir):
         raise SystemExit(f'copy directory already exists: {copy_dir}')
     manifest_bytes = (freeze_dir / 'FREEZE.manifest.json').read_bytes()
     manifest = json.loads(manifest_bytes)
+    unsafe = [entry.get('path') for entry in manifest.get('frozen_files', [])
+              if not isinstance(entry.get('path'), str) or entry['path'].startswith('/')
+              or '..' in Path(entry['path']).parts]
+    if unsafe:
+        raise SystemExit(f'frozen material verification failed: unsafe path {unsafe}')
     problems = [entry['path'] for entry in manifest.get('frozen_files', [])
                 if not (freeze_dir / entry['path']).is_file()
                 or hash_file(freeze_dir / entry['path']) != entry.get('sha256')]

@@ -332,6 +332,20 @@ class ReflectionTest(unittest.TestCase):
         self.assertEqual(0, without_experiment.returncode, without_experiment.stderr)
         self.assertIsNone(json.loads(without_experiment.stdout)['experiment'])
 
+    def test_omitted_experiment_key_validates_reviews_and_renders_without_experiment_section(self):
+        del self.result['experiment']
+        self.write()
+        validated = self.run_cli('validate-reflection', '--evidence', 'evidence.json', '--input', 'reflection.json')
+        self.assertEqual(0, validated.returncode, validated.stderr)
+        reviewed = self.run_cli('review-citations', '--evidence', 'evidence.json', '--input', 'reflection.json')
+        self.assertEqual(0, reviewed.returncode, reviewed.stderr)
+        self.assertIsNone(json.loads(reviewed.stdout)['experiment'])
+        rendered = self.render()
+        self.assertEqual(0, rendered.returncode, rendered.stderr)
+        report = (self.root / 'run/report.md').read_text(encoding='utf-8')
+        self.assertNotIn('## 可选实验', report)
+        self.assertIn('## 限制', report)
+
     def test_limitations_and_experiment_can_bind_individual_citations(self):
         ref = {'segment_id': 'e1', 'start': 0, 'end': 3, 'type': 'quote', 'text': '交付前'}
         self.result['limitations'] = ['交付前的要求仅来自所选片段', '没有额外记录']

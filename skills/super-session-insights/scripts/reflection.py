@@ -292,12 +292,13 @@ def report_text(e, r):
         lines += ['', '目前没有可报告的观察。']
     if r['changes']:
         lines += ['', '## 与旧理解的关系'] + ['- ' + x['reason'] for x in r['changes']]
-    if r['experiment']:
+    experiment = r.get('experiment')
+    if experiment:
         labels = {'change': '尝试', 'context': '适用情境', 'expected_observation': '观察',
                   'effort': '投入', 'success_condition': '成功条件', 'stop_condition': '停止条件',
                   'followup_evidence': '后续证据'}
         groups = r.get('experiment_refs', {})
-        lines += ['', '## 可选实验'] + [f'- {labels[k]}：{r["experiment"][k]}' + (f' [{refs(groups[k])}]' if groups.get(k) else '') for k in EXPERIMENT_FIELDS]
+        lines += ['', '## 可选实验'] + [f'- {labels[k]}：{experiment[k]}' + (f' [{refs(groups[k])}]' if groups.get(k) else '') for k in EXPERIMENT_FIELDS]
     if r['limitations']:
         groups = r.get('limitation_refs', [[] for _ in r['limitations']])
         lines += ['', '## 限制'] + ['- ' + text + (f' [{refs(group)}]' if group else '') for text, group in zip(r['limitations'], groups)]
