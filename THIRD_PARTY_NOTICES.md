@@ -122,6 +122,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the output-shaping instruction body only; the upstream ships no runtime, scripts, or assets to vendor.
 - Local changes: neutral frontmatter (the upstream host-specific `disable-model-invocation` key is not copied), Azhou brand protocol and stable receipt, setup/provenance records, and five appended presentation constraints (conclusion source/limit proximity, decision continuity, evidence integrity, optional Review Contract, relative-path-only output).
 
+## Gh Axi
+
+`skills/super-gh-axi/` imports the generated `gh-axi` Agent Skill from [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi) at immutable commit [`911a0868600b125aafe5e7f77197a0eb5a5b493c`](https://github.com/kunchenguid/gh-axi/commit/911a0868600b125aafe5e7f77197a0eb5a5b493c) (official release `gh-axi-v0.1.51`). The unmodified upstream baseline is hash-locked for reproducibility.
+
+- Copyright: Kun Chen, 2026
+- License: [MIT](LICENSES/Gh-Axi-MIT.txt)
+- Imported boundary: generated skill instructions only; no gh-axi application code, `dist/` bundle or runtime assets are vendored. `gh-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y gh-axi@0.1.51` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The wrapped `gh` binary and its authentication stay external and are not redistributed from this repository.
+- Local changes: neutral frontmatter with the invocation translation, locked CLI baseline, Azhou brand protocol and stable receipt, setup/provenance/compatibility records, and explicit authorization checkpoints.
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.
