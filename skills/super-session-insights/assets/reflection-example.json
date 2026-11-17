@@ -1,0 +1,98 @@
+{
+  "evidence": {
+    "schema": "super-session-insights.evidence.v1",
+    "scope": {
+      "question": "如何交接",
+      "selection": "selected",
+      "omissions": "unknown"
+    },
+    "sources": [
+      {
+        "id": "s1",
+        "type": "conversation",
+        "imported_at": "2026-11-15",
+        "origin_id": "unknown",
+        "completeness": "partial"
+      }
+    ],
+    "segments": [
+      {
+        "id": "e1",
+        "container_source_id": "s1",
+        "content_source_id": "s1",
+        "order": 1,
+        "container_role": "user",
+        "speaker": "user",
+        "attribution": "self",
+        "kind": "direct_statement",
+        "occurred_at": "unknown",
+        "time_basis": "unknown",
+        "text": "交付前确认样例。",
+        "text_sha256": "4e7f57709ddf72c2f99aefaef05edabc3fd3fbf5691036d9212bb2f9b418d8e8",
+        "locator": "turn-1"
+      }
+    ],
+    "relations": [],
+    "coverage": {
+      "selected": 1,
+      "processed": 1,
+      "omissions": "unknown"
+    },
+    "authorization": {
+      "analysis": "selected redacted text",
+      "disclosure": "local report",
+      "tool_boundary": "instruction_only",
+      "policy_reference": "unknown"
+    },
+    "digest": "28b8f0411451710395fd5c0e00a74ea943fddecbc3f21b12d484d3d2d29b20df"
+  },
+  "reflection": {
+    "schema": "super-session-insights.reflection.v1",
+    "evidence_digest": "28b8f0411451710395fd5c0e00a74ea943fddecbc3f21b12d484d3d2d29b20df",
+    "status": "limited",
+    "observations": [
+      {
+        "claim": "要求交付前确认样例",
+        "refs": [
+          {
+            "segment_id": "e1",
+            "start": 0,
+            "end": 3,
+            "type": "quote",
+            "text": "交付前"
+          }
+        ],
+        "scope": "selected conversation"
+      }
+    ],
+    "insights": [
+      {
+        "id": "i1",
+        "claim": "样例可能有助于交接",
+        "epistemic_status": "hypothesis",
+        "supporting_refs": [
+          {
+            "segment_id": "e1",
+            "start": 0,
+            "end": 3,
+            "type": "quote",
+            "text": "交付前"
+          }
+        ],
+        "counter_refs": [],
+        "alternatives": [
+          "任务不同"
+        ],
+        "scope": "selected conversation",
+        "revisit_condition": "出现反例"
+      }
+    ],
+    "changes": [],
+    "experiment": null,
+    "limitations": [
+      "仅一段对话"
+    ],
+    "host": "test",
+    "model": "unknown"
+  }
+}
