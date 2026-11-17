@@ -43,7 +43,7 @@ COVERAGE_STATEMENT = (
     'attempts, unobserved paths and textual exit candidates remain unknown; '
     'this is not a complete call budget and not a security monitor.'
 )
-HEREDOC = re.compile(r"(?<![\w<])<<-?\s*(['\"])([A-Za-z_][A-Za-z_0-9]*)\1")
+HEREDOC = re.compile(r"(?<!<)<<-?\s*(?:['\"]([A-Za-z_][A-Za-z_0-9]*)['\"]|([A-Za-z_][A-Za-z_0-9]*)\s*$)")
 
 
 def hash_file(path) -> str:
@@ -70,7 +70,7 @@ def strip_heredocs(command: str) -> str:
         kept.append(line)
         match = HEREDOC.search(line)
         if match:
-            delimiter = match.group(2)
+            delimiter = match.group(1) or match.group(2)
     return '\n'.join(kept)
 
 
@@ -317,6 +317,8 @@ def record_command(args):
         }
 
     def write_result(record):
+        out.mkdir(mode=0o700, parents=True, exist_ok=True)
+        out.chmod(0o700)
         result_path = out / 'result.json'
         result_path.write_text(json.dumps(record, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         result_path.chmod(0o600)
@@ -355,12 +357,13 @@ def record_command(args):
             stderr_path = out / 'stderr.log'
             stdout_stream = stdout_path.open('wb')
             stderr_stream = stderr_path.open('wb')
-        except Exception as error:
+        except BaseException as error:
+            reason = str(error) or type(error).__name__
             failure = base_result()
             failure['stop_reason'] = 'setup-failed'
-            failure['setup_error'] = str(error)
+            failure['setup_error'] = reason
             write_result(failure)
-            raise SystemExit(f'record setup failed: {error}') from None
+            raise SystemExit(f'record setup failed: {reason}') from None
         began = time.monotonic()
         stop_reason = None
         with stdout_stream, stderr_stream:
@@ -386,26 +389,34 @@ def record_command(args):
                     pass
 
             threading.Thread(target=feed_stdin, daemon=True).start()
-            while proc.poll() is None:
-                drain()
-                if time.monotonic() > deadline:
-                    stop_reason = 'timeout'
-                    try:
-                        os.killpg(proc.pid, signal.SIGTERM)
-                    except ProcessLookupError:
-                        pass
-                    try:
-                        proc.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
+            try:
+                while proc.poll() is None:
+                    drain()
+                    if time.monotonic() > deadline:
+                        stop_reason = 'timeout'
                         try:
-                            os.killpg(proc.pid, signal.SIGKILL)
+                            os.killpg(proc.pid, signal.SIGTERM)
                         except ProcessLookupError:
                             pass
-                        proc.wait()
-                    break
-                time.sleep(0.2)
-        drain()
-        os.close(reader)
+                        try:
+                            proc.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            try:
+                                os.killpg(proc.pid, signal.SIGKILL)
+                            except ProcessLookupError:
+                                pass
+                            proc.wait()
+                        break
+                    time.sleep(0.2)
+                drain()
+                os.close(reader)
+            except BaseException:
+                failure = base_result()
+                failure['returncode'] = proc.returncode
+                failure['stop_reason'] = 'interrupted'
+                failure['elapsed_seconds'] = round(time.monotonic() - began, 3)
+                write_result(failure)
+                raise
     finally:
         try:
             os.unlink(fifo)
@@ -413,8 +424,11 @@ def record_command(args):
             pass
 
     events_path = out / 'recorder-events.jsonl'
-    events_path.write_bytes(bytes(raw))
-    events_path.chmod(0o600)
+    try:
+        events_path.write_bytes(bytes(raw))
+        events_path.chmod(0o600)
+    except OSError:
+        pass
     events = []
     raw_parse_failures = 0
     for line in bytes(raw).splitlines():
@@ -427,7 +441,11 @@ def record_command(args):
 
     records = []
     stdout_parse_failures = 0
-    for line in stdout_path.read_bytes().decode(errors='replace').splitlines():
+    try:
+        stdout_lines = stdout_path.read_bytes().decode(errors='replace').splitlines()
+    except OSError:
+        stdout_lines = []
+    for line in stdout_lines:
         stripped_line = line.strip()
         if not stripped_line.startswith('{'):
             continue
@@ -455,6 +473,14 @@ def record_command(args):
         except OSError:
             file_after[key] = BINDING_UNREADABLE
 
+    try:
+        stdout_sha256 = hash_file(stdout_path)
+    except OSError:
+        stdout_sha256 = BINDING_UNREADABLE
+    try:
+        stderr_sha256 = hash_file(stderr_path)
+    except OSError:
+        stderr_sha256 = BINDING_UNREADABLE
     result = base_result()
     result.update({
         'returncode': proc.returncode,
@@ -463,8 +489,8 @@ def record_command(args):
         'recorder_events_sha256': hashlib.sha256(bytes(raw)).hexdigest(),
         'recorder_event_count': len(events),
         'recorder_parse_errors': raw_parse_failures,
-        'stdout_sha256': hash_file(stdout_path),
-        'stderr_sha256': hash_file(stderr_path),
+        'stdout_sha256': stdout_sha256,
+        'stderr_sha256': stderr_sha256,
         'command_records': records,
         'stdout_event_parse_errors': stdout_parse_failures,
         'classification': classify(events, records, args.target),

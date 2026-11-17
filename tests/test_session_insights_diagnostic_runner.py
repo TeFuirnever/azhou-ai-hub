@@ -118,6 +118,10 @@ class ClassifyTest(unittest.TestCase):
                          self.runner.strip_heredocs('cat <<< "note"\npython3 reflection.py render'))
         self.assertEqual("python3 -c 'print(1 << bits)'\npython3 reflection.py render",
                          self.runner.strip_heredocs("python3 -c 'print(1 << bits)'\npython3 reflection.py render"))
+        self.assertEqual('cat <<EOF',
+                         self.runner.strip_heredocs('cat <<EOF\nusage: python3 reflection.py render\nEOF'))
+        self.assertEqual("cat<<'EOF'",
+                         self.runner.strip_heredocs("cat<<'EOF'\nreflection.py validate-evidence\nEOF"))
 
     def test_here_string_and_shift_operators_keep_trailing_invocations_scannable(self):
         records = [
@@ -130,6 +134,16 @@ class ClassifyTest(unittest.TestCase):
                          summary['operations']['render']['exit_candidates'])
         self.assertEqual([{'exit_code': 3, 'linkage': 'textual-candidate'}],
                          summary['operations']['review-citations']['exit_candidates'])
+        self.assertEqual([], summary['unlinked_target_records'])
+
+    def test_unquoted_and_attached_heredoc_bodies_stay_out_of_candidate_scans(self):
+        records = [
+            {'command': 'cat <<EOF\nusage: python3 reflection.py render\nEOF', 'exit_code': 0},
+            {'command': "cat<<'EOF'\nreflection.py validate-evidence\nEOF", 'exit_code': 0},
+        ]
+        summary = self.runner.classify([], records, 'reflection.py')
+        self.assertEqual([], summary['operations']['render']['exit_candidates'])
+        self.assertEqual([], summary['operations']['validate-evidence']['exit_candidates'])
         self.assertEqual([], summary['unlinked_target_records'])
 
 
@@ -312,7 +326,8 @@ class RecordCommandTest(unittest.TestCase):
     def test_record_reports_deleted_bound_file_without_losing_run(self):
         victim = self.root / 'victim.txt'
         victim.write_bytes(b'bound bytes\n')
-        proc, out = self.record(f'rm {victim}', extra=('--bind-file', str(victim)))
+        proc, out = self.record(f'rm {victim}; rm "$(dirname "$SSI_RECORDER_FIFO")/stdout.log"',
+                                extra=('--bind-file', str(victim)))
         self.assertEqual(0, proc.returncode, proc.stderr)
         self.assertTrue((out / 'result.json').is_file())
         result = self.result(out)
@@ -322,6 +337,8 @@ class RecordCommandTest(unittest.TestCase):
         self.assertEqual('missing-or-unreadable', result['file_binding_after'][str(victim)])
         self.assertIn('classification', result)
         self.assertTrue((out / 'recorder-events.jsonl').is_file())
+        self.assertEqual('missing-or-unreadable', result['stdout_sha256'])
+        self.assertEqual([], result['command_records'])
 
     def test_record_reports_removed_repo_git_without_losing_run(self):
         repo = self.root / 'repo'
@@ -395,6 +412,53 @@ class RecordCommandTest(unittest.TestCase):
         self.assertEqual([], result['command_records'])
         self.assertTrue(RESULT_V1_FIELDS.issubset(result))
         self.assertFalse((out / 'recorder-events.fifo').exists())
+
+    def test_record_keeps_result_json_when_command_deletes_output_dir(self):
+        proc, out = self.record('rm -rf "$(dirname "$SSI_RECORDER_FIFO")"')
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        self.assertTrue((out / 'result.json').is_file())
+        result = self.result(out)
+        self.assertTrue(RESULT_V1_FIELDS.issubset(result))
+        self.assertEqual('missing-or-unreadable', result['stdout_sha256'])
+        self.assertEqual('missing-or-unreadable', result['stderr_sha256'])
+        self.assertEqual([], result['command_records'])
+        self.assertIsNone(result['stop_reason'])
+        self.assertNotEqual('missing-or-unreadable', result['recorder_events_sha256'])
+
+    def test_record_writes_result_json_when_run_is_interrupted(self):
+        runner = load_runner()
+        self.counter += 1
+        out = self.root / f'out-{self.counter}'
+        args = runner.build_parser().parse_args([
+            'record', '--argv-json', json.dumps(['true']),
+            '--work', str(self.work), '--out', str(out),
+            '--target', str(self.target), '--recorder-dir', str(RECORDER)])
+        fake_proc = mock.Mock(returncode=None)
+        fake_proc.poll.side_effect = KeyboardInterrupt()
+        with mock.patch.object(runner.subprocess, 'Popen', return_value=fake_proc):
+            with self.assertRaises(KeyboardInterrupt):
+                runner.record_command(args)
+        result = self.result(out)
+        self.assertEqual('interrupted', result['stop_reason'])
+        self.assertIsNone(result['returncode'])
+        self.assertTrue(RESULT_V1_FIELDS.issubset(result))
+
+    def test_record_writes_result_json_when_setup_is_interrupted(self):
+        runner = load_runner()
+        self.counter += 1
+        out = self.root / f'out-{self.counter}'
+        args = runner.build_parser().parse_args([
+            'record', '--argv-json', json.dumps(['true']),
+            '--work', str(self.work), '--out', str(out),
+            '--target', str(self.target), '--recorder-dir', str(RECORDER),
+            '--bind-repo', str(self.root / 'repo')])
+        with mock.patch.object(runner, 'snapshot_repo', side_effect=KeyboardInterrupt()):
+            with self.assertRaises(SystemExit):
+                runner.record_command(args)
+        result = self.result(out)
+        self.assertEqual('setup-failed', result['stop_reason'])
+        self.assertEqual('KeyboardInterrupt', result['setup_error'])
+        self.assertTrue(RESULT_V1_FIELDS.issubset(result))
 
 
 class BindFreezeTest(unittest.TestCase):
