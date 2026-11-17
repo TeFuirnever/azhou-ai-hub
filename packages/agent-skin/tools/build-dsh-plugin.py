@@ -440,6 +440,7 @@ def _build_plugin_locked(destination: Path | None, *, root: Path, lock, lock_fd:
         body = _payload_body(payload)
         icon = _render_icon(root, artifacts, theme)
         inputs = artifacts.source_inputs()
+        inputs.pop('assets/private/startup-cover.png', None)
         host_entry = artifacts.dsh_host_entry_source(root)
         work = Path(tempfile.mkdtemp(prefix='azhou-dsh-compose-', dir=build_dir))
         initial_work = work.lstat()

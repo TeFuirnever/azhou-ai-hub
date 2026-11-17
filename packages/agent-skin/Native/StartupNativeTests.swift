@@ -5997,7 +5997,17 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             }
             let hostNumber = host.windowNumber
             for revealed in [false, true] {
-                if revealed { presentation.revealColdPlayer() }
+                if revealed {
+                    presentation.revealColdPlayer()
+                    if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                        expect(coverView.superview === content && !webView.isHidden,
+                            "cover remains above the player during the transition")
+                        let end = Date().addingTimeInterval(2)
+                        while coverView.superview != nil && Date() < end {
+                            RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+                        }
+                    }
+                }
                 let ids = waitForWindows({ ids in
                     guard let coverIndex = ids.firstIndex(of: windowNumber),
                           let hostIndex = ids.firstIndex(of: hostNumber) else { return false }
