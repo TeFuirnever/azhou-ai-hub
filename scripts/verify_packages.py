@@ -120,6 +120,8 @@ def main() -> int:
             ["tools/test-production-assets.py"],
         ),
     ]
+    results.append(run_suite("agent-skin Dream AST/capsule/total mapping contracts", packages["agent-skin"],
+                             ["tools/test-production-dream-style.py"]))
     if sys.platform == "darwin":
         results.extend([
             run_suite("agent-skin Dream ZIP resource and reference contracts", packages["agent-skin"],

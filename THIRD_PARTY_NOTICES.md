@@ -122,6 +122,13 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the output-shaping instruction body only; the upstream ships no runtime, scripts, or assets to vendor.
 - Local changes: neutral frontmatter (the upstream host-specific `disable-model-invocation` key is not copied), Azhou brand protocol and stable receipt, setup/provenance records, and five appended presentation constraints (conclusion source/limit proximity, decision continuity, evidence integrity, optional Review Contract, relative-path-only output).
 
+## Codex Dream Skin SafeCSS AST derivative
+
+- Source: Codex-Dream-Skin commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`, `runtime/safe-css-validator.mjs`.
+- Copyright: 2026 Codex Dream Skin Studio contributors.
+- License: [MIT notice](packages/agent-skin/vendor/dream-safe-css.LICENSE).
+- Derivative: the pristine source plus one fixed AST-export suffix, reproduced by `tools/derive-dream-safe-css-ast.py`. Source/patch/output hashes and the narrow local mapping boundary are recorded in [Agent Skin provenance](packages/agent-skin/UPSTREAM.md#safe-css-ast-derivative). No upstream compiled selectors or theme media are imported by this adapter.
+
 ## Codex Dream Skin official-theme contract
 
 - Source: [Codex-Dream-Skin](https://github.com/TeFuirnever/Codex-Dream-Skin), commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`.

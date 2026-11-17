@@ -499,6 +499,34 @@ raise SystemExit(code)
                     worker.terminate(); worker.communicate(timeout=3)
                 self.tool.fcntl.flock(fd, self.tool.fcntl.LOCK_UN)
 
+    def test_export_capsule_preserves_original_files_and_never_applies(self):
+        data = self.path.read_bytes()
+        result = self.tool.import_package(self.path, self.library)
+        exported = self.cli("export-capsule", result["archiveSha256"])
+        self.assertEqual(exported.returncode, 0, exported.stderr)
+        capsule = json.loads(exported.stdout)
+        self.assertEqual(set(capsule), {"schema", "archiveSha256", "files"})
+        self.assertEqual(capsule["schema"], "azhou-agent-skin.dream-capsule.v1")
+        self.assertEqual(capsule["archiveSha256"], hashlib.sha256(data).hexdigest())
+        package = self.tool.validate_package(data)
+        self.assertEqual(set(capsule["files"]), set(package.files))
+        for name, original in package.files.items():
+            record = capsule["files"][name]
+            self.assertEqual(set(record), {"bytes", "sha256", "base64"})
+            self.assertEqual(base64.b64decode(record["base64"], validate=True), original)
+            self.assertEqual(record["bytes"], len(original))
+            self.assertEqual(record["sha256"], hashlib.sha256(original).hexdigest())
+        self.assertEqual(json.loads(base64.b64decode(capsule["files"]["theme.json"]["base64"])), self.theme)
+        self.assertNotIn(str(self.root), exported.stdout.decode())
+        self.assertEqual(self.path.read_bytes(), data)
+        second = self.cli("export-capsule", result["archiveSha256"])
+        self.assertEqual(second.stdout, exported.stdout)
+        stored = self.library / "objects" / result["archiveSha256"] / "archive.zip"
+        stored.write_bytes(b"tampered")
+        blocked = self.cli("export-capsule", result["archiveSha256"])
+        self.assertEqual(blocked.returncode, 2)
+        self.assertEqual(json.loads(blocked.stdout)["reason"], "stored_archive_hash_mismatch")
+
     def test_read_requires_digest_and_never_creates_missing_library(self):
         result = self.cli('read', '../private')
         self.assertEqual(result.returncode, 2)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from contextlib import ExitStack, contextmanager
 import ctypes
 from dataclasses import dataclass
@@ -397,10 +398,19 @@ def main():
     commands.add_parser('import').add_argument('archive', type=Path)
     commands.add_parser('list')
     commands.add_parser('read').add_argument('digest')
+    commands.add_parser('export-capsule').add_argument('digest')
     args = parser.parse_args()
     try:
         if args.command == 'import':
             result = import_package(args.archive, args.library)
+        elif args.command == 'export-capsule':
+            package = read_package(args.library, args.digest)
+            capsule = {'schema': 'azhou-agent-skin.dream-capsule.v1', 'archiveSha256': package.digest,
+                       'files': {name: {'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest(),
+                                        'base64': base64.b64encode(data).decode('ascii')}
+                                 for name, data in sorted(package.files.items())}}
+            print(json.dumps(capsule, sort_keys=True, separators=(',', ':')))
+            return 0
         elif args.command == 'read':
             result = read_package(args.library, args.digest).record()
         else:

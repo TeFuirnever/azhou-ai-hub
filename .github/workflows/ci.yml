@@ -165,6 +165,7 @@ jobs:
           node --test tools/image-settings.test.mjs
           node --test tools/localization.test.mjs
           node --test tools/dream-theme-validator.test.mjs
+          python -B tools/test-production-dream-style.py
           python -B tools/test-production-theme-package-preflight.py
           python -B tools/test-production-theme-library.py
           python -B tools/test-startup-build.py

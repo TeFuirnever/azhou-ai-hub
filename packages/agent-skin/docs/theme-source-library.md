@@ -10,13 +10,14 @@ Use an existing development environment with Python, Node and Pillow with WebP s
 python3 -B tools/theme-library.py --library /physical/path/to/new-library import /physical/path/to/theme.zip
 python3 -B tools/theme-library.py --library /physical/path/to/new-library list
 python3 -B tools/theme-library.py --library /physical/path/to/new-library read ARCHIVE_SHA256
+python3 -B tools/theme-library.py --library /physical/path/to/new-library export-capsule ARCHIVE_SHA256 > theme.dream.json
 ```
 
 `--library` is mandatory. The root must either be absent or already have this library's exact ownership/layout marker. An existing empty or otherwise unowned directory is not adopted. The parent must exist. Input and library paths reject symlink components, including macOS aliases such as `/var` when the actual path is under `/private/var`. No application-data, settings, LKG or host path is discovered automatically.
 
 Successful import exits 0 and returns `storageStatus: imported`, `format: dream-simple-v1`, the archive SHA-256, the full validated theme object, each source file's size/digest, and whether the import was idempotent. It always returns `applyStatus: blocked` and `reason: hub_mapping_unimplemented`. The result is a storage receipt, not `safe: true`, a signature, publisher trust, a media license, or an application permit. Promo text, URLs, appearance, art and color values remain source data. URLs are not opened and source branding does not replace Azhou identity.
 
-`read` reads the stored ZIP into one bounded buffer, verifies its digest against the requested object name, and reruns ZIP, official JSON, image and Safe CSS validation on those bytes. The Python `read_package` result also retains the original ZIP bytes. CLI read reports the validated source metadata without exporting or executing it. Missing dependencies, corruption and unknown object contents block read. It never changes the library.
+`read` reads the stored ZIP into one bounded buffer, verifies its digest against the requested object name, and reruns ZIP, official JSON, image and Safe CSS validation on those bytes. The Python `read_package` result also retains the original ZIP bytes. CLI read reports the validated source metadata without exporting or executing it. `export-capsule` reruns the same read checks, then emits the original JSON/CSS/image bytes and per-file hashes in a deterministic bounded source envelope. It does not emit an application permit or change any active state; see the [literal-paint source contract](design/azhou-immersive-experience/dream-main-literal-paint.md#source-capsule). Missing dependencies, corruption and unknown object contents block read. It never changes the library.
 
 List reports healthy objects as imported and individual unreadable, altered or invalid objects as blocked. A mixed list has `storageStatus: partial` and exits 2. A bad ownership marker, unknown root entry, non-digest catalog name or catalog overflow blocks the whole operation. Nothing is deleted or repaired. Other errors also exit 2 with stable reasons, not filesystem paths, CSS, exception messages or stacks.
 

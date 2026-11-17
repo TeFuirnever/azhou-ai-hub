@@ -51,3 +51,13 @@ The isolated Dream source library derives `vendor/dream-theme-validator.mjs` fro
 The local extraction retains the exact source spans listed by `tools/extract-dream-theme-validator.py`. Only the official-theme constants and pure helpers are selected. Local additions are the attribution header and `export { validateOfficialTheme };`. There is no filesystem staging, version/platform comparison, signature handling, CSS compiler or reference-host selector mapping. The derived module SHA-256 is `63363d5830cd76c57483ce7bdad28b66bce5dfae596134a6c46350c3169ad3ff`.
 
 Rebuild from a separately inspected checkout at that exact commit with `python3 -B tools/extract-dream-theme-validator.py --source /path/to/reference/runtime/theme-package-validator.mjs --license /path/to/reference/LICENSE --output /path/to/rebuilt.mjs`, then compare the complete output with the vendored derivative. The generator refuses either source or notice hash drift. Review any source update as a new contract and rerun the official-theme corpus, extraction check, ZIP and source-library suites. Do not replace it with the reference package entry point, whose filesystem and CSS-compiler authority is outside this boundary.
+
+## Safe CSS AST derivative
+
+`vendor/dream-safe-css-ast.mjs` derives from the exact pristine Safe CSS source above, under the adjacent `dream-safe-css.LICENSE`. The only patch is the UTF-8 suffix `\nexport { parseSafeCss as parseSafeCssAst };\n`. It exposes the existing bounded parser without changing validation or invoking the compiler.
+
+- Source SHA-256: `98a626655a4167ba0bbbff5eab96e78de7a5a74371e4a4ff6d8ac15211e5b24e`
+- Patch SHA-256: `3b649164964b5bfadad94468c1f08f3e384502006ad4ff0ca2d1ee9928cd3fad`
+- Output SHA-256: `ed0657f061e7f500233b8723683b3e28b236721b8f6fe13af24f8ac796d8cc37`
+
+Rebuild with `python3 -B tools/derive-dream-safe-css-ast.py`; `--check` verifies exact output and the retained MIT notice without writing. `dream-theme-style.mjs` consumes AST records and never compiles upstream selectors. The local, intentionally partial profile rejects unmapped source rules and manifest fields. Run `python3 -B tools/test-production-dream-style.py` to compare the pristine and derived validators on the same corpus and test the mapping boundary. These source-stage tests do not prove host application or full Dream engine compatibility.
