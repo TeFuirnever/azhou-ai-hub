@@ -18,7 +18,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE_INPUTS = ("Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
-                 "Native/CodexSkinDriver.swift", "Native/StartupNativeTests.swift", "tools/test-startup-native.py")
+                 "Native/CodexSkinDriver.swift", "Native/StartupNativeTests.swift", "tools/test-startup-native.py",
+                 "tools/test-native-warning-contract.py")
 
 
 def source_fingerprint() -> dict[str, str]:
@@ -238,6 +239,10 @@ def main() -> int:
             return 1
         print("SKIPPED: native startup protocol tests require macOS and AppKit")
         return 0
+
+    warning_contract = subprocess.run([sys.executable, "-B", str(ROOT / "tools/test-native-warning-contract.py")], check=False)
+    if warning_contract.returncode:
+        return warning_contract.returncode
 
     source_before = source_fingerprint() if args.window_ordering else None
     output = ROOT / ".build/startup-native-tests"

@@ -1482,7 +1482,8 @@ struct StartupSettingsSnapshotReceiver {
             return .bundled(revision: revision, transparency: nil, imagesBinding: binding)
         }
         guard preference["mode"] as? String == "override", Set(preference.keys) == Set(["mode", "value"]),
-              let transparency = finiteNumber(preference["value"]), (0...100).contains(transparency) else { throw invalidSnapshot() }
+              let rawTransparency = preference["value"],
+              let transparency = finiteNumber(rawTransparency), (0...100).contains(transparency) else { throw invalidSnapshot() }
         return .bundled(revision: revision, transparency: transparency, imagesBinding: binding)
     }
 

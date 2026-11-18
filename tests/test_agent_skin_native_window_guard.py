@@ -196,7 +196,8 @@ class NativeRoutingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             def run(command, **kwargs):
-                Path(command[command.index("-o") + 1]).write_bytes(b"compiled")
+                if command[0] == "xcrun":
+                    Path(command[command.index("-o") + 1]).write_bytes(b"compiled")
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
             with patch.object(native, "ROOT", root), patch.object(native.sys, "platform", "darwin"), \
                     patch.object(native.subprocess, "run", side_effect=run) as runner, \
@@ -206,9 +207,22 @@ class NativeRoutingTests(unittest.TestCase):
                     patch.object(sys, "argv", ["native"]):
                 self.assertEqual(7, native.main())
                 bridge.assert_called_once_with(root / ".build/startup-native-tests")
-                self.assertEqual(runner.call_count, 1)
+                self.assertEqual(runner.call_count, 2)
                 handshake.assert_not_called(); graphics.assert_not_called()
                 self.assertFalse((root / ".build/startup-helper-expressions.json").exists())
+
+    def test_warning_contract_failure_stops_before_compile_or_execution(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.object(native, "ROOT", root), patch.object(native.sys, "platform", "darwin"), \
+                    patch.object(native.subprocess, "run", return_value=SimpleNamespace(returncode=9)) as runner, \
+                    patch.object(native, "theme_bridge_checks") as bridge, \
+                    patch.object(sys, "argv", ["native"]):
+                self.assertEqual(9, native.main())
+                self.assertEqual(runner.call_count, 1)
+                self.assertIn("test-native-warning-contract.py", runner.call_args.args[0][-1])
+                bridge.assert_not_called()
+                self.assertFalse((root / ".build").exists())
 
     def test_old_or_symlink_output_is_refused_before_children(self):
         for module, flag in ((native, ["--window-ordering"]), (payload, ["--native-window-ordering"])):

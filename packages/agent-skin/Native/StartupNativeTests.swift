@@ -181,7 +181,7 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
     func setNormalLevel() { normalLevelCount += 1 }
     func makeVisible() { visibleCount += 1 }
     func orderOut() { orderedOutCount += 1 }
-    func evaluateJavaScript(_ source: String, completion: ((Any?, Error?) -> Void)?) {
+    func evaluateJavaScript(_ source: String, completion: (@MainActor @Sendable (Any?, Error?) -> Void)?) {
         evaluations.append(source)
         let result = evaluationHook?(source) ?? evaluationResult
         completion?(result.0, result.1)
@@ -195,7 +195,7 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
         schedules.append(scheduled)
         return scheduled
     }
-    func takeSnapshot(_ completion: @escaping (NSImage?, Error?) -> Void) {
+    func takeSnapshot(_ completion: @escaping @MainActor @Sendable (NSImage?, Error?) -> Void) {
         completion(snapshotResult.0, snapshotResult.1)
     }
     func stopLoading() { stopCount += 1 }
@@ -460,6 +460,31 @@ struct StartupNativeTests {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
         }
+        // A transport may record sends off the main actor. All reads/writes must
+        // remain synchronized; reset is an explicit new-attempt operation only.
+        let concurrentObservation = CodexInstallObservation()
+        DispatchQueue.concurrentPerform(iterations: 4096) { _ in
+            concurrentObservation.markInstallSent()
+            _ = concurrentObservation.installSentCount
+        }
+        expect(concurrentObservation.installSentCount == 4096, "concurrent install sends are not lost")
+        concurrentObservation.reset()
+        expect(concurrentObservation.installSentCount == 0, "new attempt resets install observation")
+        let missingWebView = AppKitNativePlayerPresentation()
+        var missingEvaluationReplies = 0
+        missingWebView.evaluateJavaScript("1") { value, error in
+            MainActor.assertIsolated()
+            expect(value == nil && error != nil, "missing webview evaluation reports error")
+            missingEvaluationReplies += 1
+        }
+        var missingSnapshotReplies = 0
+        missingWebView.takeSnapshot { image, error in
+            MainActor.assertIsolated()
+            expect(image == nil && error != nil, "missing webview snapshot reports error")
+            missingSnapshotReplies += 1
+        }
+        expect(missingEvaluationReplies == 1 && missingSnapshotReplies == 1,
+               "missing webview callbacks remain synchronous and exactly once")
         let startupBridgeInput = NativeStartupBridgeInput(runNonce: "native-run-01", locale: "zh-CN", theme: "light")
         let startupBridgeSource = startupBridgeInput.documentStartSource() ?? ""
         expect(startupBridgeSource.contains("Object.defineProperty(window, '__agentSkinNativeStartup'")
