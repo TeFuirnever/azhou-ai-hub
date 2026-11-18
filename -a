@@ -1,8 +1,0 @@
-### KNOWN_RENAMES vs check_repository.RENAMED_AWAY_SKILLS (dict keys) set diff
-RENAMED_AWAY keys: 15 ['arch-doc', 'archify', 'asd-ste100', 'ask-azhou', 'azhou-doctor', 'azhou-info', 'azhou-setup', 'azhou-verify', 'eli5', 'excalidraw-diagram', 'gh-axi', 'lavish', 'llm-wiki', 'repo-pedant', 'session-insights']
-KNOWN_RENAMES keys: 17
-RENAMED_AWAY - KNOWN_RENAMES (must be empty): []
-KNOWN_RENAMES - RENAMED_AWAY (informational): ['ci-test-reliability', 'prose-standard']
-canonical-target mismatches: {}
-SET DIFF EMPTY + TARGETS CONSISTENT: OK
-EXIT=0
