@@ -48,6 +48,18 @@ KNOWN_RENAMES = {
     "repo-pedant": "super-repo-pedant",
     "lavish": "super-lavish",
     "llm-wiki": "super-llm-wiki",
+    "arch-doc": "super-arch-doc",
+    "archify": "super-archify",
+    "asd-ste100": "super-asd-ste100",
+    "ask-azhou": "super-ask-azhou",
+    "azhou-doctor": "super-azhou-doctor",
+    "azhou-info": "super-azhou-info",
+    "azhou-setup": "super-azhou-setup",
+    "azhou-verify": "super-azhou-verify",
+    "eli5": "super-eli5",
+    "excalidraw-diagram": "super-excalidraw-diagram",
+    "gh-axi": "super-gh-axi",
+    "session-insights": "super-session-insights",
 }
 
 
