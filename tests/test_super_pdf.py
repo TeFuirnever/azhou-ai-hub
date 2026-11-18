@@ -68,16 +68,23 @@ TRIGGER_SURFACE = (
 
 # Fail-closed dependency contract surface (the upstream declares none).
 SETUP_DEPENDENCIES = (
-    "pypdf",
-    "pdfplumber",
-    "pdf2image",
+    "| `pypdf` |",
+    "| `pdfplumber` |",
+    "| `pdf2image` |",
     "Pillow",
     "reportlab",
-    "pytesseract",
+    "| `pytesseract`",
+    "the `tesseract` binary",
     "poppler-utils",
-    "qpdf",
+    "| `qpdf` |",
     "pdftk",
     "numpy",
+    "pandas",
+    "openpyxl",
+    "pypdfium2",
+    "ImageMagick (`magick`",
+    "pdf-lib",
+    "pdfjs-dist",
 )
 
 RECEIPT_STATUSES = ("complete", "complete_with_holds", "hold", "failed")
