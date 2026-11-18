@@ -9,7 +9,7 @@
 | Hub设置、不可变快照和保存取消语义 | 保留复用 | Native/Wallpaper.swift、extension/renderer.mjs及settings测试 | 沿用现有命名空间和generation，不另建播放器偏好库 | 真实保存/取消/重开、快照晚到与代际失效 |
 | 原生cover、workspace协调、显式退出与清理 | 保留复用 | 已合入PR469（fa8967b3）与NH契约 | 继承已合入修复并核对当前差异，不照搬旧实现；视频只是presentation实现，不另造controller | #406/#431等价，绘制/媒体失败后真实输入，释放后资源 |
 | DSH host扩展和启动gate | 保留复用 | extension/hosts/dsh.mjs、dsh-startup-gate.js | video/主题走同一稳定能力接口，DSH源码不可改；共享载荷不可实验 | 真隔离rc.1/rc.3，Web和Desktop独立 |
-| Pet及已有Azhou身份 | 保留复用 | pet/theme.json、assets/azhou及工具 | 不重装/重选，不把大动画铺进Pet窗口；新全身动作保持IP特征 | 页面分类、方向/状态影响回归、身份审阅 |
+| 阿舟角色资产 | 保留复用 | 已获授权的 assets/azhou 素材 | 新全身动作保持角色特征 | 角色身份审阅 |
 | 图片元数据解析 | 复用已有vendor | Hub vendor/dream-image-metadata.mjs及许可证 | 已有MIT依赖，不再复制第二套；先比版本与补丁 | 既有图片格式/尺寸/损坏输入测试 |
 | SafeCSS验证及策略 | 源码引入候选 | Dream runtime/safe-css-validator.mjs、safe-css-policy.json，MIT | 分别引入验证逻辑与编译映射；compileRuntimeCss含root→body和composer-toolbar宿主class桥，须归适配边界，不整体视为宿主中立；不扩大权限 | 恶意CSS/外链/超限、应用时再次验证、合法参考主题兼容 |
 | 主题包格式/媒体验证 | 源码引入候选 | Dream runtime/theme-package-validator.mjs，MIT | 该文件验证已解压目录并写stage，不负责ZIP安全解压；manifest.sig为signatureIgnored，不证明真实性。Node依赖留在导入服务；10MiB图像限制不当视频传输上限 | ZIP穿越/符号链接/重名/损坏/超限、拒绝后当前主题不变 |

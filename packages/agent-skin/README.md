@@ -265,19 +265,3 @@ python3 tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/az
 `assets/private/`、`dist/`、`.build/`、`.local/` 均被Git忽略，构建检查禁止它们被跟踪。`assets/azhou/` 是唯一跟踪的素材目录，按 CC BY-NC-ND 4.0 发布；覆盖层素材、录屏和截图不随源码提交。来源与发布边界见 [UPSTREAM.md](UPSTREAM.md)，迁移范围见 [MIGRATION-INVENTORY.md](MIGRATION-INVENTORY.md)。知识核对工作记录不随本包迁入。
 
 原项目的历史 `extension/`、`Native/Extension.swift` 和旧默认素材没有迁入。当前构建使用本包维护的 `extension/` 实现。
-
-
-## 同主题原生 Codex pet
-
-原项目新增了 **「阿舟 · Agent 实验室」** 原生 Codex pet（ID：`azhou-agent-lab`）。本包的 Pet 工具链（manage/import 脚本、runbook 与测试）是 2026-11 独立重写后的唯一维护版本；私有图集、冻结主题与审阅证据保存在各项目根的忽略目录。旧根 `packages/codex-startup-animation/` 已于 2026-11-12 删除：其 Pet 回执属主交接以全保真隔离预演＋持久根回放指引＋维护者批准（2026-11-12）达成，工具的按设计拒绝被接受为终局，已装 Pet 回执作为指向已删根的孤儿回执存续、Pet 本身自包含继续可用。预演与机器实况见 [交接记录](evidence/codex-pet-legacy-root-handoff-2026-11-11.md)。
-
-Pet 维护命令需要已安装 Pillow（例如 `python3 -m pip install Pillow`）。
-
-```bash
-python3 -B tools/manage-codex-pet.py status
-python3 -B tools/manage-codex-pet.py sync
-```
-
-`sync` 会安装已生成、审阅且与当前主题匹配的候选包，可能修改用户级 `CODEX_HOME`。主题变更或没有候选时报告 `generation-required`：先用 `prepare` 冻结输入，再通过 ImageGen/hatch-pet 生成与审阅；脚本本身不调用生图 API。迁移与本轮验证未运行 `sync`，也未观察宿主选择后的实际播放。
-
-pet 集成保留现有 Codex 会话、12 秒启动节奏、三项固定文案和唯一应用入口。操作、拒绝条件与恢复范围见 [原生 pet 说明](docs/codex-pet.md)；本次实际图集、测试结果、运行边界与并行工作树变化见 [2026-10-25 交付验证](docs/codex-pet-verification-2026-10-25.md)。
