@@ -70,10 +70,11 @@ builder, not the old sync-based port.
 
 The quilt currently has 22 patches: 17 upstream-defect patches and five
 Hub-specific adjustments (distribution identity, test type-narrowing,
-command/agent namespace guides, Claude model-sheet alignment, and conservative
-worktree-audit classification). The 17 `Forwarded: no` upstream-defect patches
-still need upstream review/forwarding or replacement when upstream adopts a
-fix. The current pinned import is `93b916d4a1e806507e22f4716b352fa91f2b227e`
+command/agent namespace guides, Claude model-sheet alignment and Hub-kept
+playbook rows, and conservative worktree-audit classification). The 17
+`Forwarded: no` upstream-defect patches still need upstream review/forwarding
+or replacement when upstream adopts a fix. The current pinned import is
+`93b916d4a1e806507e22f4716b352fa91f2b227e`
 (upstream plugin `0.15.43`; the 0.15.37 and 0.15.38 version-stamp patches
 left the queue with the 2026-11-18 re-pin because the pristine tree now
 carries a version the installed 0.15.38 cache key already differs from);
