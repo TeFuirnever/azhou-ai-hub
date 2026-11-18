@@ -2055,7 +2055,9 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
             for relative in ("animation.js", "image-settings.js", "extension/renderer.mjs",
                              "extension/codex-page-adapter.mjs", "extension/bootstrap.mjs",
                              "extension/hosts/dsh.mjs", "wallpaper/renderer.js", "wallpaper/apply.js",
-                             "localization.js", "vendor/dream-image-metadata.mjs"):
+                             "localization.js", "vendor/dream-image-metadata.mjs",
+                             "vendor/dream-safe-css-validator.mjs", "vendor/dream-safe-css-ast.mjs",
+                             "vendor/dream-theme-validator.mjs", "dream-theme-style.mjs"):
                 target = root / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(PACKAGE / relative, target)
@@ -2100,7 +2102,9 @@ class StartupBuilderBoundaryTests(unittest.TestCase):
             for relative in ("animation.js", "image-settings.js", "extension/renderer.mjs",
                              "extension/codex-page-adapter.mjs", "extension/bootstrap.mjs",
                              "wallpaper/renderer.js", "wallpaper/apply.js", "localization.js",
-                             "vendor/dream-image-metadata.mjs"):
+                             "vendor/dream-image-metadata.mjs",
+                             "vendor/dream-safe-css-validator.mjs", "vendor/dream-safe-css-ast.mjs",
+                             "vendor/dream-theme-validator.mjs", "dream-theme-style.mjs"):
                 target = root / relative
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(PACKAGE / relative, target)
