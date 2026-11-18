@@ -170,7 +170,7 @@
     "renderers/workflow/workflow-compiler.mjs": "6e3f6979f8d777f3af74130dfcff99671f2abd686a46546b6825e80160592b8c",
     "renderers/workflow/workflow-migration-geometry.mjs": "47729f32eae163c05c249cc0a663949fae745a9c74fe9548c83eb361b31e285a",
     "renderers/workflow/workflow-placement-repair.mjs": "3ee6e83c3a5279e1af2b06db39fd39c3348264b2daa159a94cda3e1d8de5ed7c",
-    "schemas/README.md": "8746553d8b3c76bbaab19b9894141e8e082b95a7ac7463d77614b19f1cc65d0a",
+    "schemas/README.md": "7265eb9586fb2b25cd8e1b6a874cd9684a1404448791ef9492e87c132bca4e10",
     "schemas/architecture.schema.json": "aef992b585a18a4016b8207254fe43a6227b0d45322a1ba95e0f69a80fc8f8c1",
     "schemas/class.schema.json": "0ecfb9948563166c4f23df784d618ddd93f003ee61402a9349c5f63b0284ff2a",
     "schemas/common.schema.json": "3bb6bde1122ebc1d47f73cf12400015baa0c7e5650e5780b0e89773d7ead4def",

@@ -143,8 +143,9 @@ can be produced explicitly with `super-archify migrate workflow ... --to-schema 
 Lifecycle accepts only version 3, an automatic main-path layout (see the
 [lifecycle renderer](../renderers/lifecycle/README.md)).
 The other nine diagram schemas keep `schema_version` pinned to `1`; they have
-no schema-version migration command. For any of the eleven diagram types, repair
-a legacy missing or nonportable `meta.output` in the source and run `validate`.
+no schema-version migration command. For any of the five diagram types that
+require `meta.output`, repair a legacy missing or nonportable `meta.output` in
+the source and run `validate`.
 For a workflow v1-to-v2 migration specifically, `migrate workflow` also accepts
 `--output reports/diagram.html` to put that portable value in the separate v2
 destination without changing the legacy source.
