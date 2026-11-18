@@ -3,7 +3,7 @@
 | Need | Maintained source |
 |---|---|
 | Understand product direction and tradeoffs | [Principles](principles.md) |
-| Review the Agent Skin E2E deferred architecture decisions | [E2E structural trade-offs (AS-E2E-001)](decisions/agent-skin-e2e-structural-tradeoffs.md) |
+| Review the closed Agent Skin E2E decision record (obsolete since the 2026-11-11 PR #432 retirement) | [E2E structural trade-offs (AS-E2E-001)](decisions/agent-skin-e2e-structural-tradeoffs.md) |
 | Understand why retired Hub surfaces were physically deleted while frozen identifiers stay | [Hub retirement: physical deletion (HUB-RET-001)](decisions/hub-retirement-physical-deletion.md) |
 | Install a skill | [Installation](installation.md) |
 | Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
@@ -12,7 +12,8 @@
 | Try the Super Repo Pedant reference demo | [Super Repo Pedant demo](demos/super-repo-pedant.md) |
 | Try the Excalidraw Diagram reference demo | [Excalidraw Diagram demo](demos/super-excalidraw-diagram.md) |
 | Try the Arch Doc reference demo | [Arch Doc demo](demos/super-arch-doc.md) |
-| Know what each harness really supports | [Support matrix](support-matrix.md) |
+| Know what each harness really supports | [Support matrix](support-matrix.md) and its derived [per-skill platform view](skill-platform-view.md) |
+| Write a minimal behavior eval case for a package without a behavior benchmark | [Eval-case contract](eval-case-contract.md) |
 | Understand repository boundaries | [Architecture](architecture.md) |
 | Build or evolve a skill | [Azhou Skill Standard](skill-standard.md) |
 | Release a version | [Releasing](releasing.md) |

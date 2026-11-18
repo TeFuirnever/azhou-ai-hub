@@ -11,7 +11,7 @@
 | PRD | [prd.md](prd.md) | Why / Who / What / Success | 产品、设计、工程、QA、决策人 |
 | 产品软件实现架构设计说明书 | [software-implementation-architecture.md](software-implementation-architecture.md) | 整个产品如何组织、部署、运行并满足质量属性？ | 架构、技术负责人、运维、安全、下位设计 Owner |
 | 功能详细设计说明书 | [feature-detailed-design.md](feature-detailed-design.md) | 一个特性具体如何实现、测试、失败、兼容和交付？ | 实现、QA、评审人、维护者 |
-| ADR | 尚未建立统一模板；沿用仓库现有 ADR 约定 | 为什么选择一个难逆、意外或有真实取舍的决定？ | 决策参与者、未来维护者 |
+| ADR | [adr-template.md](../adr-template.md)（Nygard 五段式） | 为什么选择一个难逆、意外或有真实取舍的决定？ | 决策参与者、未来维护者 |
 | Test/Eval Report | 尚未建立统一模板；使用版本化 Report/Receipt | 实际运行是否达标，证据是什么？ | QA、算法、产品、发布决策人 |
 
 模板采用的外部标准、厂商一手实践与 MCC 仓库约定，统一登记在[业界最佳实践基线](industry-best-practice-baseline.md)。该文件用于追踪依据与适用边界，不把厂商文章包装成官方模板。

@@ -5,7 +5,7 @@ execution-evidence.md §3.3): the super-ask-azhou routing catalog is generated f
 the canonical skills manifest and gate-checked for parity; super-eli5's frontmatter
 carries a paired positive/negative trigger-phrase list (the repo-pedant C1
 precedent); every canonical description declares its trigger surface; and
-unrouted routing misses are recorded under `.azhou/ask-azhou/` as
+unrouted routing misses are recorded under `.azhou/super-ask-azhou/` as
 count-plus-hash telemetry with negative controls.
 """
 
