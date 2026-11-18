@@ -38,17 +38,17 @@
 
 | 组件 | 出现位置 | 结论 |
 |---|---|---|
-| pypdf | pdf/scripts/ 四脚本 | 运行时外部依赖，U1 setup 合同承接 |
-| pdf2image | pdf/scripts/convert_pdf_to_images.py | 同上 |
-| pdfplumber | pdf/scripts/extract_form_structure.py | 同上；差距设计抽查清单未含，本单元实测新增 |
-| PIL (Pillow) | pdf/scripts/create_validation_image.py、pptx/scripts/thumbnail.py | 同上 |
-| defusedxml | office/ 六脚本（validators/base、docx、redlining、soffice、validate、helpers/pptx_chart）、docx/scripts/comment.py、merge_runs.py、pptx/scripts/add_slide.py、clean.py、thumbnail.py、xlsx/scripts/recalc.py（:293、:353） | 同上 |
-| lxml.etree | office/validators/base.py、docx.py、pptx.py（8 处缩进 import） | 同上；差距设计抽查清单未含，本单元实测新增 |
-| python-pptx (`pptx.package`) | pptx/scripts/slide_text.py | 同上 |
-| openpyxl | xlsx/scripts/recalc.py:418–419（缩进 import；`_scan_xml` 异常时 `_report` 回落 `_scan_with_openpyxl`，:458–462） | 同上；初版扫描漏项，本版复算补录 |
-| pptxgenjs、jszip（Node） | pptx/scripts/apply_theme.js:29（jszip 经 pptxgenjs 解析路径加载，缺失即 throw） | 同上；初版扫描漏项，本版复算补录 |
-| anthropic、mcp | mcp-builder/scripts/evaluation.py、connections.py | 同上（mcp-builder 本轮暂缓，见 R3） |
-| playwright.sync_api | webapp-testing/examples/ 三个示例脚本 | 同上；`scripts/with_server.py` 仅 stdlib，实测无 playwright |
+| pypdf | pdf/scripts/ 四脚本 | 运行时外部依赖，U1（pdf）setup 合同承接 |
+| pdf2image | pdf/scripts/convert_pdf_to_images.py | U1（pdf）承接 |
+| pdfplumber | pdf/scripts/extract_form_structure.py | U1（pdf）承接；差距设计抽查清单未含，本单元实测新增 |
+| PIL (Pillow) | pdf/scripts/create_validation_image.py、pptx/scripts/thumbnail.py | U1（pdf）与 U4（pptx）两侧承接 |
+| defusedxml | office/ 六脚本（validators/base、docx、redlining、soffice、validate、helpers/pptx_chart）、docx/scripts/comment.py、merge_runs.py、pptx/scripts/add_slide.py、clean.py、thumbnail.py、xlsx/scripts/recalc.py（:293、:353） | U2–U4 承接（office/ 共享子树与各包脚本均消费） |
+| lxml.etree | office/validators/base.py、docx.py、pptx.py（8 处缩进 import） | U2–U4 共享 office 子树承接；差距设计抽查清单未含，本单元实测新增 |
+| python-pptx (`pptx.package`) | pptx/scripts/slide_text.py | U4（pptx）承接 |
+| openpyxl | xlsx/scripts/recalc.py:418–419（缩进 import；`_scan_xml` 异常时 `_report` 回落 `_scan_with_openpyxl`，:458–462） | U3（xlsx）承接；初版扫描漏项，本版复算补录 |
+| pptxgenjs、jszip（Node） | pptx/scripts/apply_theme.js:29（jszip 经 pptxgenjs 解析路径加载，缺失即 throw） | U4（pptx）承接；初版扫描漏项，本版复算补录 |
+| anthropic、mcp | mcp-builder/scripts/evaluation.py、connections.py | 运行时外部依赖（R3 暂缓，不排期） |
+| playwright.sync_api | webapp-testing/examples/ 三个示例脚本 | 运行时外部依赖（R3 暂缓，不排期）；`scripts/with_server.py` 仅 stdlib，实测无 playwright |
 
 office/ 子树的 import 扫描以 docx 名下副本为源；pptx/xlsx 副本经 git blob SHA 相等证明字节一致（§5），import 面随字节相等而覆盖。
 
@@ -101,7 +101,7 @@ office/ 子树的 import 扫描以 docx 名下副本为源；pptx/xlsx 副本经
 ## 9. 对后续采用单元的输出契约
 
 - vendor manifest 钉值来源 = 附录 A（101 条唯一路径；office/ 段标注三包共享，U2–U4 复用）。
-- setup 依赖合同输入：pdf（pypdf、pdf2image、pdfplumber、Pillow）；office 家族（defusedxml、lxml，及各格式自身运行时：LibreOffice soffice、python-pptx、openpyxl、Node 侧 pptxgenjs/jszip 等）；mcp-builder（anthropic>=0.39.0、mcp>=1.1.0，暂缓不排期）；webapp-testing（Playwright，落在 examples，暂缓不排期）。
+- setup 依赖合同输入（import 扫描口径，非完整清单；完整运行时依赖以各采用包上游 SKILL.md 的依赖声明与脚本实际消费交叉判定，SKILL.md 字节已钉附录 A；pdf 无独立 Dependencies 节、声明散见 Python Libraries/Command-Line Tools/Common Tasks 节，docx/pptx/xlsx 的 Dependencies 节亦可能漏列脚本侧 import）：pdf（pypdf、pdf2image、pdfplumber、Pillow）；office 家族（defusedxml、lxml，及各格式自身运行时：LibreOffice soffice、python-pptx、openpyxl、Node 侧 pptxgenjs/jszip 等）；mcp-builder（anthropic>=0.39.0、mcp>=1.1.0，暂缓不排期）；webapp-testing（Playwright，落在 examples，暂缓不排期）。本次复核补记非 import 口径的已知运行时项：docx 侧 npm `docx`、pandoc、pdftoppm/Poppler；pptx 侧 Poppler 与 react-icons、react、react-dom、sharp；xlsx 侧 pandas、markitdown；pdf 侧 pytesseract、reportlab、poppler 工具（pdftotext/pdfimages）、qpdf、pdftk（上游标注 if available）；Pillow 同属 pdf 与 pptx 两侧（pptx/scripts/thumbnail.py:30 顶层 import）。
 - fidelity 分类预登记 `faithful`（skill-standard §2.3：能力原样保留，本地层仅包装中性 frontmatter 与 fail-closed setup）；「preinstalled 依赖 → fail-closed setup」的逐条 delta 在各采用 PR 的 provenance 终判。
 - R1–R3 是各采用 PR 的前置引证；本记录是唯一裁决载体。
 
