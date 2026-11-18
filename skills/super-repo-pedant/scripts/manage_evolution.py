@@ -752,13 +752,27 @@ def cmd_health(args: argparse.Namespace) -> int:
     try:
         project = args.project.expanduser().resolve()
         state_root = safe_state_root(project, args.state_root)
-        archive_paths = sorted((state_root / "archive").glob("*.jsonl")) if (state_root / "archive").is_dir() else []
-        rows, parse_errors = read_jsonl([state_root / "signals.jsonl", *archive_paths])
+        # Archives are published before live rows are removed. Read live first
+        # so an archive published during this scan cannot hide a moved row.
+        rows, parse_errors = read_jsonl([state_root / "signals.jsonl"])
+        archived, archive_errors = read_jsonl(sorted((state_root / "archive").glob("*.jsonl")))
+        rows.extend(archived)
+        parse_errors += archive_errors
+        project_id = project_identity(project)
+        unique: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if row["project_id"] != project_id:
+                continue
+            signal_id = row["signal_id"]
+            previous = unique.get(signal_id)
+            if previous is not None and previous != row:
+                raise EvolutionError(f"conflicting signal records share an identity: {signal_id}")
+            unique[signal_id] = row
         now = parse_time(args.now) if args.now else now_utc()
         week_start = now - timedelta(days=7)
         month_start = now - timedelta(days=30)
         recent, monthly = [], []
-        for row in rows:
+        for row in unique.values():
             observed_at = parse_time(row["observed_at"])
             if month_start <= observed_at <= now:
                 monthly.append(row)
@@ -769,7 +783,7 @@ def cmd_health(args: argparse.Namespace) -> int:
         declining = rate_7d is not None and rate_30d is not None and rate_30d - rate_7d >= args.warn_threshold
         result = {
             "schema_version": "super-repo-pedant.evolution-health.v1",
-            "signals": len(rows),
+            "signals": len(unique),
             "parse_errors": parse_errors,
             "success_rate_7d": rate_7d,
             "success_rate_30d": rate_30d,
