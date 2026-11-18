@@ -229,7 +229,7 @@ pstack keeps its upstream MIT notices. Agent Skin code is covered by the Hub roo
 
 [Integration runbook](docs/integrations.md) · [Provenance](docs/integration-provenance.md) · [Support matrix](docs/support-matrix.md#optional-integrations)
 
-Read-only host inventory on 2026-11-11 found the `0.15.37` pstack plugin **listed as installed** by Codex and Claude Code. This is not source-byte attestation, a successful live pstack workflow, verified SessionStart trust, or release approval. See the [dated acceptance inventory](evidence/pstack-host-readonly-inventory-2026-11-11.md) and [mirror GAP audit](docs/research/2026-11-11-pstack-upstream-gap.md); the pristine upstream source is unchanged and the patch queue is tracked at [patches/series](packages/pstack-agent-harness/patches/series).
+Read-only host inventory on 2026-11-11 found the `0.15.37` pstack plugin **listed as installed** by Codex and Claude Code. A 2026-11-18 update brought the maintainer host's Claude Code plugin to `0.15.38` ([receipt](evidence/pstack-azhouzhou-claude-update-2026-11-18.md)), adding installed-file identity only. This is not source-byte attestation, a successful live pstack workflow, verified SessionStart trust, or release approval. See the [dated acceptance inventory](evidence/pstack-host-readonly-inventory-2026-11-11.md) and [mirror GAP audit](docs/research/2026-11-11-pstack-upstream-gap.md); the pristine upstream source is unchanged and the patch queue is tracked at [patches/series](packages/pstack-agent-harness/patches/series).
 
 During Hub pstack removal, keep the target `CODEX_HOME` free of concurrent native plugin and marketplace changes; the plan states this requirement but cannot verify other processes.
 

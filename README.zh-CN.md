@@ -229,7 +229,7 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
-2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码未变，补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
+2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。2026-11-18 的更新已把维护者主机的 Claude Code 插件升到 `0.15.38`（[回执](evidence/pstack-azhouzhou-claude-update-2026-11-18.md)），仅新增安装文件身份证据。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码未变，补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
 
 通过 Hub 移除 pstack 期间，请确保目标 `CODEX_HOME` 没有其他原生插件或 marketplace 变更；计划会提示此要求，但无法验证其他进程。
 
