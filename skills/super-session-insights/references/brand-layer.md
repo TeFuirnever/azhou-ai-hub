@@ -37,7 +37,7 @@ Session Insights 的品牌感来自"先有数字，再有故事"的纪律：品�
 每次 report 运行结束产出稳定收据，字段：
 
 - `schema`：`super-session-insights.report.v1`
-- `status`：`pass | fail | hold`
+- `status`：`pass`（唯一产出值）
 - `inputs`：逐 harness 的文件计数与复合 SHA-256（排序后的（相对路径摘要、mtime、大小）元组；不含内容，不含明文绝对路径）
 - `artifacts`：报告文件名与对收据小节之前正文的 SHA-256
 - `verification`：报告只从 `super-session-insights.aggregate.v1` 渲染、不重算指标的声明

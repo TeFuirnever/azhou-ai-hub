@@ -71,8 +71,9 @@ Windows cp1252 编码导致的 session_insights.py 输出崩溃(#236);离线依�
 
 ### P1(证据充分、用户显式要求或前提已失效)
 
-**U1 session-insights zcode 适配器:重启只读格式侦察**
-证据:§3.1。提案:按 #162 模式对 ZCode 3.14.4 的 `~/.zcode/cli/db/db.sqlite` 做只读结构侦察(表 schema、角色/轮次语义、目录字段、版本稳定性;不读正文入仓),产出 go/no-go 研究文档;go 才立项适配器,维持同源去重(claude-import 不进 zcode 范围)。验收:新研究文档 + support-matrix/support 声明同步(仅当 go)。
+**U1 session-insights zcode 适配器：只读格式侦察已完成；适配器未立项**
+
+状态（2026-11-18）：issue #252 的 [3.14.4 侦察报告](2026-10-06-zcode-3.14.4-session-store-scout.md)已给出 go，确认当时的 `cli/db/db.sqlite` 可解析，但附带同源去重、子会话过滤、版本漂移等强制边界。侦察本身没有立适配器票，也没有修改 support-matrix；当前 Skill 与支持矩阵仍把 zcode 标为 unsupported。若要实现适配器，需单独立项，并对目标版本重新核验边界；该 go 不等于当前支持或发布许可。
 
 **U2 改名与宿主安装的迁移闭环**
 证据:§3.2。提案:(a) azhou-doctor 增加"陈旧 hook 路径 / 指向已改名 skill 的残留安装"探测(只读,报告清单);(b) 未来任何 canonical 改名的落地提交附带宿主侧迁移指引(或 `migrate_state.py` 同族的 hook 重写入口,显式 apply)。验收:doctor 对已知旧路径样本报出清单的负控测试;改名 runbook 增加宿主迁移步骤。

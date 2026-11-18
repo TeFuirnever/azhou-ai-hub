@@ -40,7 +40,7 @@ Emoji 只属于展示层。文件名、JSON 字段、状态枚举、命令、dig
 依赖、dry-run、安装和验证命令都在 [setup.md](references/setup.md)。先设置真实安装路径，不猜测 harness 目录：
 
 ```bash
-SKILL_DIR=/absolute/path/to/excalidraw-diagram
+SKILL_DIR=/absolute/path/to/super-excalidraw-diagram
 ```
 
 需要改配色时，只修改 [color-palette.md](references/color-palette.md)。依赖或上游素材变化时，同时核对 [provenance.md](references/provenance.md) 与第三方许可证。

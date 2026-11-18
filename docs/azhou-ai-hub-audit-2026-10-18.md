@@ -10,6 +10,8 @@
 
 **性质**：只读检视、隔离复验与最小处理建议；未修改产品实现、升级依赖、发布、部署或写入真实业务数据。
 
+> **后续状态（2026-11-18）**：本文保留 2026-10-18 的审计证据。F01 和 F07 已由后续提交修复，逐项状态见对应发现；此说明不代表其他发现已修复或复核。
+
 ## 1. 总体判断
 
 **这是已经具备真实运行能力、明确工程约束和相当数量确定性测试的 Agent Skill 仓库，不是只有 README 的概念项目。但它还不能把“门禁通过”解释为“既定安全边界、证据有效性和自进化效果都已经成立”。**
@@ -140,12 +142,12 @@ lease_holder：azhou-audit-20261018
 |---|---|---|---|
 | 完整公开仓库门禁可复现 | `scripts/verify.py:26-44` | V1 | 8 个门禁通过；597 测试；并非所有行为都验证 |
 | 原始批准能绑定当前演化树 | Caveman benchmark + Git 外部记录 | V5 | 仓库定义的认证门禁通过；不是新一轮效果证明 |
-| 运行状态留在授权项目且默认私有 | 状态辅助模块及各模块写入点 | V2、V3 | 部分实际写入绕过约束，F01 |
+| 运行状态留在授权项目且默认私有 | 状态辅助模块及各模块写入点 | V2、V3 | 审计时部分写入绕过约束；已由 #308 修复，见 F01 |
 | 归档保留未转换及并发信号 | Pedant `cmd_archive` | V2 | 可丢失已成功追加的信号，F02 |
 | 晋升需要奇数评委多数 | Pedant `validate_promotion` | V2 | 1 票 candidate + 2 票 tie 仍通过，F03 |
 | Wiki 能查询并冻结决策 | Wiki CLI | V3 | 正常链通过；损坏锁下发生部分写入，F05 |
 | MCP 错误按请求隔离 | Wiki stdio server | V3 | 非法参数导致进程退出；文件名契约不一致，F06 |
-| 缓存坏掉只损失性能 | Session Insights 聚合 | V3 | 坏 JSON 有处理；合法 JSON 的坏 entry 可崩溃，F07 |
+| 缓存坏掉只损失性能 | Session Insights 聚合 | V3 | 审计时合法 JSON 的坏 entry 可崩溃（F07）；已在 2026-10-19 的后续实现中修复，见 F07 状态回写 |
 | Archify 真浏览器交付 | `bin/archify.mjs finalize` | V4 | validate/deliver/check/browser-check 通过；视觉审查未请求 |
 | Excalidraw 官方导出 | render 与 export-official-svg | V7、V8 | 一个英语参考场景 PNG/SVG 成功并查看了 PNG |
 | 绘图首轮可用必须有有效视觉结论 | benchmark verify/report | V9 | 矛盾收据、第二次尝试及多余案例可进入成功统计，F04 |
@@ -185,17 +187,19 @@ lease_holder：azhou-audit-20261018
 
 优先级含义：**P1** 是在依赖相应机制保护真实状态或判定演化/评测成功前应处理；**P2** 是有明确触发条件和用户后果的局部正确性/可靠性问题；**P3** 是已证实的低风险指令一致性问题。它们不是事故概率或安全认证等级。
 
-### F01 — P1｜部分私有运行状态允许越界写入，且未落实私有权限
+### F01 — P1｜部分私有运行状态允许越界写入（审计时；当前已修复）
 
-**证据状态：已复现缺陷。** 项目承诺 `.azhou/<skill>` 状态约束在授权项目内、拒绝 symlink、目录 0700、文件 0600（`docs/skill-standard.md:34-39`）。但 Pedant 的 root 检查不覆盖后续所有 leaf/子目录写入，Session Insights 的默认报告路径也未执行同等级检查。
+**证据状态：已复现的 Pedant 缺陷；Session Insights 的同类默认报告路径缺陷已在后续修复。** 项目承诺 `.azhou/<skill>` 状态约束在授权项目内、拒绝 symlink、目录 0700、文件 0600（`docs/skill-standard.md:34-39`）。审计时，Pedant 的 root 检查不覆盖后续所有 leaf/子目录写入；Session Insights 的默认报告路径也未执行同等级检查。
 
 **位置**：`skills/super-repo-pedant/scripts/manage_evolution.py:95-112,159-171,200-204,247-297`；`skills/super-session-insights/scripts/session_insights.py:172-197,859-868,1099-1100`。
 
-**触发与后果**：把合成项目中的 `signals.jsonl` 链接到合成项目外的 sentinel，追加成功且外部文件增长；把 `candidates/` 链接到外部目录，候选创建在外部；把 `.azhou/session-insights` 链接到外部目录，默认报告仍成功写入。umask 022 下相关状态目录为 0755、文件为 0644，而不是契约要求的私有权限。触发要求调用者具有对应文件系统权限及项目状态可被预置；本次没有利用真实敏感文件，不声称远程攻击已发生。
+**触发与后果（审计时）**：把合成项目中的 `signals.jsonl` 链接到合成项目外的 sentinel，追加成功且外部文件增长；把 `candidates/` 链接到外部目录，候选创建在外部；把 `.azhou/session-insights` 链接到外部目录，默认报告仍成功写入。umask 022 下相关状态目录为 0755、文件为 0644，而不是契约要求的私有权限。触发要求调用者具有对应文件系统权限及项目状态可被预置；本次没有利用真实敏感文件，不声称远程攻击已发生。
 
 **复核**：V2 `signal_leaf_symlink`、`candidate_parent_symlink`、`private_permissions`；V3 `session_default_namespace`、`session_private_permissions`。目标均在 A 内；查看 `outside_changed`、`outside_created`、`outside_files` 与 mode 字段。
 
-**最小动作与验收**：在实际写入端复用仓内已有安全辅助逻辑，不只验证根路径；父链和叶节点都检查，新建私有权限不依赖 umask。上述 symlink 场景必须拒绝且外部字节不变；umask 022 下仍得到 0700/0600。保留“用户显式选择的交付物路径”和“默认私有状态路径”的区别，不把一切导出都限制回项目。
+**最小动作与验收（审计时提出）**：在实际写入端复用仓内已有安全辅助逻辑，不只验证根路径；父链和叶节点都检查，新建私有权限不依赖 umask。上述 symlink 场景必须拒绝且外部字节不变；umask 022 下仍得到 0700/0600。保留“用户显式选择的交付物路径”和“默认私有状态路径”的区别，不把一切导出都限制回项目。
+
+**后续状态（2026-11-18）**：提交 `b48095f6`（#308）修复了审计涉及的默认状态写入边界。当前 Pedant 使用 `secure_state_target`，Session Insights 使用 `secure_private_state` / `write_private_file`；`tests/test_manage_evolution.py` 与 `tests/test_session_insights_benchmark.py` 覆盖 symlink 拒绝和 0700/0600 权限。F01 对当前实现已关闭，审计时复现保留为历史证据。
 
 ### F02 — P1｜归档会丢失已经成功追加的并发演化信号
 
@@ -257,17 +261,19 @@ lease_holder：azhou-audit-20261018
 
 **最小动作与验收**：逐请求验证类型，错误调用返回结构化错误但不使下一条正常请求失效；统一文件名/标题查找或收窄 schema。相同消息序列必须收到错误响应及后续 ping，文件名和标题接受范围与公布契约一致。
 
-### F07 — P2｜Session Insights 的合法 JSON 坏缓存导致聚合崩溃
+### F07 — P2｜Session Insights 的合法 JSON 坏缓存导致聚合崩溃（审计时；当前已修复）
 
-**证据状态：已复现缺陷。** 缓存契约是可丢弃、坏缓存回退源扫描，不应让缓存变成可靠性依赖。
+**证据状态：在审计时版本复现；当前实现已修复。** 缓存契约是可丢弃、坏缓存回退源扫描，不应让缓存变成可靠性依赖。
 
-**位置**：`skills/super-session-insights/scripts/session_insights.py:172-181,217-225,599`；`references/report-contract.md:40-46`。现有相关测试验证了损坏 JSON 的回退，但不充分验证每个已命中 entry 的结构。
+**位置（审计时版本）**：`skills/super-session-insights/scripts/session_insights.py:172-181,217-225,599`；`references/report-contract.md:40-46`。当时相关测试验证了损坏 JSON 的回退，但未充分验证每个已命中 entry 的结构。
 
 **触发与后果**：保留匹配的 mtime/size，将 metadata 改为 `{}`。缓存外层仍可解码，命中后读取 `malformed_lines` 触发 KeyError，聚合退出 1。正常 cold/warm 合成结果一致，源会话没有变化，因此问题限于缓存 entry 的信任边界。
 
 **复核**：V3 `session_cache_shape_recovery`，并与 `session_golden_and_cache` 正向控制对照。
 
-**最小动作与验收**：命中前验证实际消费字段的类型和必要键，不合法即 cache miss；不要只加特定 KeyError 吞错。空 metadata、字段缺失、字段类型错误均应重新扫描并产生与冷运行一致结果，输入文件保持不变。
+**最小动作与验收（审计时提出）**：命中前验证实际消费字段的类型和必要键，不合法即 cache miss；不要只加特定 KeyError 吞错。空 metadata、字段缺失、字段类型错误均应重新扫描并产生与冷运行一致结果，输入文件保持不变。
+
+**后续状态（2026-11-18）**：提交 `711b8b60`（#314）增加 `CACHED_METADATA_TYPES` 与 `cached_metadata` 校验，缺字段、错误类型及嵌套 `tool_calls` 损坏均转为 miss 并重解析。`benchmarks/super-session-insights/benchmark.py` 保留对应 poison-entry 负控；合并提交 `c34f7a5` 上的全仓校核已通过。F07 对当前代码已关闭，原审计复现仍作为历史证据保留。
 
 ### F08 — P2｜Doctor 把合法第三方 Skill 和现存 hook 误报为 Azhou 更名残留
 

@@ -12,7 +12,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——15 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——16 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -39,6 +39,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
+npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
@@ -47,7 +48,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills.zh-CN-dark.jpg">
-  <img src="assets/github/readme-banner-skills.zh-CN.jpg" alt="15 个 Skill：每个都能独立安装" width="100%">
+  <img src="assets/github/readme-banner-skills.zh-CN.jpg" alt="16 个 Skill：每个都能独立安装" width="100%">
 </picture>
 
 | Skill | 解决的真实任务 | 验证依据 |
@@ -62,11 +63,12 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 | [Ask Azhou](skills/super-ask-azhou/SKILL.md) | 全目录路由：说清意图，得到技能、模式与边界。只推荐不代调用。 | 路由模式改编自锁定上游；路由图奇偶校验是带负控的仓库门禁检查。尚无行为 benchmark。 |
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | 从上游真源文档端到端产出、校准与评审架构设计文档。 | 沉淀自 MCC ARCH-2026-001 v0.1–v0.17 流水线；附确定性脚手架（`new_doc.py`）、收尾门检查器（`verify_doc.py`）与 `benchmarks/super-arch-doc/` 黄金用例。 |
 | [Session Insights](skills/super-session-insights/SKILL.md) | 从本机会话存储产出事实绑定的使用报告（Claude Code 与 Codex；zcode fail closed）；显式请求时，反思用户选定并授权模型分析的脱敏材料。 | 合成数据上的统计接线和反思合同检查。尚无行为 benchmark。反思的实际价值与独立语义评审尚未验证。 |
-| [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的受控英语结构规则改写面向 agent 的英文；保留每个 hedge、事实和范围限定语。 | 在锁定的上游 commit 上 faithful 导入，vendored 文件钉有 SHA-256 完整性测试；`scripts/ste-lint.py` 是确定性标准库门禁，配正负测试。尚无行为 benchmark。 |
-| [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成交互图示地图——共十种 typed-JSON 模式，交付为自包含可探索 HTML。 | 同步到正式稳定版 v3.2.0（<code>208acba8</code>），选定子树有 SHA-256 完整性校验；浏览器与视觉验收按实际产物分别报告。不宣称模型质量提升。 |
+| [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的受控英语结构规则改写面向 agent 的英文；保留每个 hedge、事实和范围限定语。 | 在锁定的上游 commit 上 faithful 导入，vendored 文件钉有 SHA-256 完整性测试；`skills/super-asd-ste100/scripts/ste-lint.py` 是确定性标准库门禁，配正负测试。尚无行为 benchmark。 |
+| [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成交互图示地图——共十种 typed-JSON 模式外加 Markdown 创作的 explainer 模式，交付为自包含可探索 HTML。 | 同步到正式稳定版 v3.2.0（<code>208acba8</code>），选定子树有 SHA-256 完整性校验；浏览器与视觉验收按实际产物分别报告。不宣称模型质量提升。 |
 | [Lavish](skills/super-lavish/SKILL.md) | 把复杂或视觉性回答变成可审阅的 HTML 产物；用户在浏览器里圈点标注，反馈经锁定的 <code>lavish-axi</code> CLI 审阅回路回到 agent。 | 在锁定的上游正式发布 <code>lavish-axi-v0.1.97</code>（commit <code>79aa0a18</code>）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
 | [Imagegen](skills/super-imagegen/SKILL.md) | 经本机已装的私有 <code>azhou-imagegen</code> 运行时执行准备好的本地生图请求：分流请求、跑 doctor 门禁、遵守运行锁，交付带不可变回执的输出；运行时缺失即拒绝。 | 仅契约层包装私有本地运行时：provenance 钉有基线哈希，仓库零私有字节；fail-closed setup。尚无行为 benchmark。 |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | 为 ADHD 读者塑形输出：下一步动作先行、多步工作编号分步、每回合重述状态、压制岔题；直到读者说出停止短语才解除。 | 在冻结上游 commit <code>1ecea199</code>（MIT）上 adapted 引入：指令正文逐字保留，上游双 SHA-256 钉入 provenance；完整性测试钉住 provenance、许可副本与五条 Azhou 呈现约束。尚无行为 benchmark。 |
+| [Gh Axi](skills/super-gh-axi/SKILL.md) | 经 agent 人体工学的封装 CLI 操作 GitHub：issues、PR、堆叠 PR、讨论、CI 运行与触发、release、仓库、label、gist、Projects (v2)、Actions secrets/variables、搜索与原始 API；仓库规则点名了自己的工具时以仓库规则为准。 | 在锁定的上游正式发布 <code>gh-axi-v0.1.51</code>（commit <code>911a0868</code>，[kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi)）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try.zh-CN-dark.jpg">
@@ -151,7 +153,13 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 
 ![i-have-adhd 效果图](assets/skills/super-i-have-adhd-effect.png)
 
-<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish、Imagegen 与 i-have-adhd：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
+## Gh Axi
+
+> ⚙️ 开个 PR、排进队列、绿勾入篮——一次走完整个 GitHub 回合。
+
+![Gh Axi 效果图](assets/skills/super-gh-axi-effect.png)
+
+<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish、Imagegen、i-have-adhd 与 Gh Axi：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust.zh-CN-dark.jpg">
@@ -225,7 +233,7 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
-2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码未变，补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
+2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。2026-11-18 的更新已把维护者主机的 Claude Code 插件升到 `0.15.38`（[回执](evidence/pstack-azhouzhou-claude-update-2026-11-18.md)），仅新增安装文件身份证据。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码未变，补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
 
 通过 Hub 移除 pstack 期间，请确保目标 `CODEX_HOME` 没有其他原生插件或 marketplace 变更；计划会提示此要求，但无法验证其他进程。
 

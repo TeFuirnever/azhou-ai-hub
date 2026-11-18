@@ -24,6 +24,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
+npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
 
 Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.
@@ -53,7 +54,7 @@ The four Foundation Skills are portable UX wrappers around a local checkout. The
 
 ## Checkout-assisted setup
 
-Examples invoke the unversioned `python` interpreter (Python ≥3.10 required). If your system only installs a versioned name — common on macOS — substitute it in the examples, or add the unversioned name via `brew install python`.
+Examples invoke the unversioned `python` interpreter (Python ≥3.11 required). If your system only installs a versioned name — common on macOS — substitute it in the examples, or add the unversioned name via `brew install python`.
 
 For a local checkout, the foundation CLI can plan and reconcile a manual copy or contributor symlink. It requires the exact harness skill root and defaults to a read-only dry-run:
 
@@ -152,7 +153,7 @@ Multiple copies cause stale selection, ambiguous provenance and updates landing 
 ## Skill-specific dependencies
 
 - Repo Pedant uses Python standard library for its deterministic scripts. See [super-repo-pedant setup](../skills/super-repo-pedant/references/setup.md).
-- Excalidraw Diagram needs Python 3.11, uv, Node.js 20+, Playwright Chromium and npm packages for full render/export paths. Run its read-only browser preflight first and install Chromium only when the checker exits `2`: [excalidraw setup](../skills/super-excalidraw-diagram/references/setup.md).
+- Excalidraw Diagram needs Python 3.11, uv, Node.js 22.22.2+, Playwright Chromium and npm packages for full render/export paths. Run its read-only browser preflight first and install Chromium only when the checker exits `2`: [excalidraw setup](../skills/super-excalidraw-diagram/references/setup.md).
 - Azhou Info, Doctor, Setup and Verify require Python 3.11+ plus an explicit Azhou AI Hub checkout. Their package-local setup references state the narrower Git, Treehouse and write-access requirements.
 - Arch Doc uses the Python 3 standard library for its `new_doc.py` scaffold and `verify_doc.py` closing gates. An optional local PlantUML CLI enables the per-diagram render gate and is skipped honestly when absent: [Arch Doc setup](../skills/super-arch-doc/references/setup.md).
 - Archify runs a self-contained Node.js CLI and needs Node.js 18+ (`package.json` `engines.node`); do not run `npm install`. A local Chrome or Chromium is required for the native-diagram `finalize` browser gate and explicit explainer browser checks: [Archify setup](../skills/super-archify/references/setup.md).
@@ -174,10 +175,10 @@ uv cache dir
 npm config get cache
 # default: ~/.npm
 
-cd /absolute/path/to/excalidraw-diagram/references
+cd /absolute/path/to/super-excalidraw-diagram/references
 uv sync --frozen
 
-cd /absolute/path/to/excalidraw-diagram/scripts
+cd /absolute/path/to/super-excalidraw-diagram/scripts
 npm ci --ignore-scripts
 ~~~
 
@@ -186,11 +187,11 @@ Copy both cache directories to the same locations on the offline host.
 ### Recover offline
 
 ~~~bash
-cd /absolute/path/to/excalidraw-diagram/references
+cd /absolute/path/to/super-excalidraw-diagram/references
 uv sync --frozen --offline
-uv run python /absolute/path/to/excalidraw-diagram/scripts/check-playwright-runtime.py
+uv run python /absolute/path/to/super-excalidraw-diagram/scripts/check-playwright-runtime.py
 
-cd /absolute/path/to/excalidraw-diagram/scripts
+cd /absolute/path/to/super-excalidraw-diagram/scripts
 npm ci --offline --ignore-scripts
 ~~~
 
@@ -199,7 +200,7 @@ npm ci --offline --ignore-scripts
 If the runtime check exits `2`, the Chromium build for the locked Playwright version is absent. A browser cannot come from the package caches alone: on the online host, print the exact artifact and install location, install once, and copy the browser cache directory over.
 
 ~~~bash
-cd /absolute/path/to/excalidraw-diagram/references
+cd /absolute/path/to/super-excalidraw-diagram/references
 uv run playwright install --dry-run chromium
 # prints the install location, e.g. ~/Library/Caches/ms-playwright/chromium-1234 on macOS arm64
 

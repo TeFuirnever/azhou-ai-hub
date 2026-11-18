@@ -22,6 +22,6 @@ This map records the imported `lavish` baseline at commit `79aa0a18dba9c1a1dcec6
 | Spec Relay relay mode and `relay_state.py` | retired with the 2026-11-09 retirement | not resurrected; the maintainer does not operate the relay-handoff surface |
 | Azhou interaction branding outside HTML | local enhancement | stable agent stage anchors and receipts; HTML artifacts, commands, and evidence stay brand-neutral |
 | Publication, global-install, and hook authorization checkpoints | local enhancement | Authorization boundaries in `SKILL.md` |
-| Boundary carve with `super-archify` and `super-excalidraw-diagram` | local enhancement | description records the static-map/explainer and editable-scene boundaries |
+| Boundary carve with `super-archify`, `super-excalidraw-diagram`, and `super-imagegen` | local enhancement | description records the static-map/explainer, editable-scene and raster-image boundaries |
 
 A future removal or replacement needs a documented safety conflict or implementation disadvantage plus regression evidence.

@@ -6,7 +6,7 @@ of waiting for the same natural-language failure to repeat before anyone
 counts it. The privacy contract is count-plus-hash only: the store keeps a
 SHA-256 of the request text with a counter and day stamps, and never the
 text itself, so nothing conversational can leak into receipts, reports, or
-Git. The store lives under ``<root>/.azhou/ask-azhou/`` — the Azhou
+Git. The store lives under ``<root>/.azhou/super-ask-azhou/`` — the Azhou
 runtime-state namespace convention, git-ignored repository-wide.
 
 Usage from the working checkout:
