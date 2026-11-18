@@ -207,7 +207,7 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.38 **候选版**：Codex／Claude 原生插件、自带 commands 与捆绑 skills 的 zcode 插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的 pstack 共享根服务随 2026-11-14 链接退役终止）。2026-11-14 的 GUI 探针验证了 zcode 命令面，且当日共享根技能链接在位时其引用技能已加载并驱动会话；捆绑构建已于 2026-11-14 装机，经插件自带技能发现验证后共享根链接同日退役，且应用重启后当天即有真实 GUI 会话从载荷加载捆绑技能（[回执](evidence/zcode-plugin-bundled-skills-2026-11-14.md)）。完整捆绑命令→技能工作流运行、完整只读 pstack 任务运行、hook 信任与发布批准仍需独立证据。 |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**（2026-11-18 自上游 `cursor/plugins` `0.15.43` 重新钉位；各宿主装机仍停留在其回执记录的版本）：Codex／Claude 原生插件、自带 commands 与捆绑 skills 的 zcode 插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的 pstack 共享根服务随 2026-11-14 链接退役终止）。2026-11-14 的 GUI 探针验证了 zcode 命令面，且当日共享根技能链接在位时其引用技能已加载并驱动会话；捆绑构建已于 2026-11-14 装机，经插件自带技能发现验证后共享根链接同日退役，且应用重启后当天即有真实 GUI 会话从载荷加载捆绑技能（[回执](evidence/zcode-plugin-bundled-skills-2026-11-14.md)）。完整捆绑命令→技能工作流运行、完整只读 pstack 任务运行、hook 信任与发布批准仍需独立证据。 |
 
 ![Agent Skin 效果图](assets/github/integration-agent-skin-effect.png)
 
@@ -229,7 +229,7 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
-2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。2026-11-18 的更新已把维护者主机的 Claude Code 插件升到 `0.15.38`（[回执](evidence/pstack-azhouzhou-claude-update-2026-11-18.md)），仅新增安装文件身份证据。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码未变，补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
+2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。2026-11-18 的更新已把维护者主机的 Claude Code 插件升到 `0.15.38`（[回执](evidence/pstack-azhouzhou-claude-update-2026-11-18.md)），仅新增安装文件身份证据。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；该次清单时原始上游源码未变（后于 2026-11-18 重新钉位），补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
 
 通过 Hub 移除 pstack 期间，请确保目标 `CODEX_HOME` 没有其他原生插件或 marketplace 变更；计划会提示此要求，但无法验证其他进程。
 

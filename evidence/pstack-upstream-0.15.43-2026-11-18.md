@@ -1,0 +1,135 @@
+# pstack upstream re-pin to 0.15.43 (2026-11-18)
+
+**Scope:** authorized upstream-maintenance task under the
+[pstack source and generation chain](../docs/integration-provenance.md#pstack-source-and-generation-chain)
+contract. Treehouse worktree lease `a1aed31f0b5854ef260e11b61184964c`
+(holder `pstack-upstream-01543-20261118`), branch
+`codex/pstack-upstream-0.15.43` off `origin/main` at
+`8097fc7ac5c9d49ed4db435514e18126907c5f27`. This is a **Hub source
+candidate**, not a release: no host installation, reinstall, model dispatch,
+hook trust or workflow run is claimed, and the four-host rolling upgrade is a
+separate task.
+
+## Upstream evidence (re-verified this date, not reused from 2026-11-17)
+
+- `gh api repos/cursor/plugins/commits/main` → HEAD
+  `93b916d4a1e806507e22f4716b352fa91f2b227e` ("Merge pull request #1230 from
+  cursor/add-rillet-plugin", committer date 2026-11-17T22:49:29Z). Same HEAD
+  as the 2026-11-17 read-only check: upstream had not moved again when this
+  task ran.
+- `gh api "repos/cursor/plugins/contents/pstack/plugin.json?ref=main"` →
+  `"version": "0.15.43"` (name `pstack`, MIT, Lauren Tan).
+- `gh api "repos/cursor/plugins/compare/c742dd61706fbacc1b95f1a20b7b988cf096ce6c...93b916d4a1e806507e22f4716b352fa91f2b227e"`
+  → `ahead_by: 96`, `files: 300` (GitHub caps the compare file list at 300;
+  the component subset it returned was 106, all under `pstack/`, with zero
+  entries under `cursor-team-kit/` or `thermos/`).
+- Ground truth for the refresh was the per-commit tarball
+  (`repos/cursor/plugins/tarball/<sha>`, downloaded into fresh empty `/tmp`
+  directories, artifacts not committed): a `diff -rq` comparison of the two
+  pins' `pstack/` trees shows **80 modified, 24 deleted, 2 added = 106
+  file-level changes**, all under `pstack/`, agreeing with the compare API's
+  component subset. (An initial checksum-`rsync` tally of 111 overcounted: it
+  booked 29 deletions where the authoritative diff shows 24 — the five extra
+  were `references`/`sources` directory entries, not files — and this
+  machine's openrsync `-c` comparison proved unreliable for this purpose, so
+  the tarball `diff -rq` and `git diff --name-status` (2A/24D/80M) are the
+  recorded authority; count corrected post-review on 2026-11-18.)
+- Before refresh, `diff -rq` confirmed the package's `pstack/`,
+  `components/cursor-team-kit/skills/`, `components/thermos/skills/` and
+  `components/thermos/agents/` were byte-pristine mirrors of the old pin
+  `c742dd61706fbacc1b95f1a20b7b988cf096ce6c` (team-kit carries only the six
+  named skills by design). After the refresh, the independent review's
+  tarball `diff -r` confirmed the refreshed `pstack/` tree byte-identical to
+  the new pin (an interim checksum-rsync pass had also reported zero
+  differences, but per the corrected count above the tarball diff is the
+  recorded authority).
+
+## Pin change
+
+- `pstack/` re-imported at `93b916d4a1e806507e22f4716b352fa91f2b227e`.
+  Notable upstream deltas: plugin version 0.15.36→0.15.43; #1236's new
+  default models and Opus xhigh routing cap (new Claude adapter defaults
+  `claude-opus-5-5-xhigh-fast`/`-high-fast`, `claude-fable-5-2-high`,
+  `gemini-4-carbon-high` as `inherit-parent`; `grok-*`/`gpt-*` dropped from
+  the adapter's non-Claude slug row in favor of `gemini-*`); the
+  `orchestrate` playbook, `check-plan.mjs`, and the `why`/`how`/`architect`/
+  `reflect` reference files removed upstream; `poteto-mode` playbooks 23→22
+  with a new `worker.md`.
+- `components/cursor-team-kit/` and `components/thermos/`: zero upstream
+  commits between the pins; left untouched.
+- `UPSTREAM.md` source table pin rows updated to the new commit;
+  `hub-package.json` `version` → `0.15.43`, `commit` → new pin.
+
+## Patch queue disposition (24 → 22 patches)
+
+- `0001`–`0017`, `0019`, `0023`: applied unchanged; their declared files
+  (watch-pr scripts, log.sh, generator, worktree-audit.sh) were untouched by
+  upstream between the pins.
+- `0018-rename-distribution-identity`: rebased — only its context line moved
+  (`"version": "0.15.36"` → `"0.15.43"`); upstream still ships the name
+  `pstack`, so the rename stays.
+- `0020-hub-claude-namespace-guides`: rebased — upstream reworded the
+  claude-code.md todolist row and inserted a `model:` subagent row; the Hub's
+  identity replacements themselves were unchanged.
+- `0022-hub-claude-sheet-hook-path`: rebased onto upstream's new Models table
+  (the `grok-*`/`gpt-*` non-Claude row became `gemini-*`), and extended to
+  restore `gpt-*` in that row. Reason: the Hub distribution still names
+  `gpt-*` slugs (hub-skills `pi-tools.md`/copilot references), and upstream's
+  unmodified generator requires the adapter to carry a row for every slug
+  family the assembled skills mention — without it the build fails with
+  `Claude Code adapter has no row for gpt-, used by poteto-mode, setup-pstack`.
+- `0021-hub-distribution-version-0.15.37` and
+  `0024-hub-distribution-version-0.15.38`: **removed from the queue** (patch
+  files deleted, `series` lines dropped). A patch is a loan; these stamped
+  Hub-only payload releases past the pinned upstream `0.15.36` so the plugin
+  would not reuse an installed cache key. The new pristine tree itself
+  carries `0.15.43`, which already differs from every installed Hub cache key
+  (`0.15.36`/`0.15.37`/`0.15.38`), so re-stamping would only push the version
+  backwards. They cannot rebase non-vacuously and are recorded here.
+- Version convention: the Hub line follows upstream (the fork-era
+  distribution shipped upstream's `0.15.36` verbatim; Hub stamps only ever
+  bumped past the pin for Hub-only payload changes). With the pin at
+  `0.15.43` ≥ the last Hub stamp, the Hub distribution takes `0.15.43`
+  directly — same convention as `fcf2606b` keeping `commit` at the pin while
+  `version` tracks the distribution line.
+
+## #1236 model-routing adaptation (hub-adapters / hub-runtime)
+
+- `hub-runtime/` hooks carry no model slugs (grep over all hook files:
+  zero hits); no change needed.
+- `hub-adapters/codex.md` `Defaults.` line enumerated the retired upstream
+  default pair (`claude-opus-5-5-xhigh`, `grok-4.7-xhigh-fast`); realigned to
+  upstream's new four-slug default set. The `claude-fable-5-2-high` →
+  `gpt-6-astra high` Codex example follows the Hub's own cross-host table
+  (`hub-skills/poteto-mode/references/pi-tools.md`: fable →
+  `openai-codex/gpt-6-astra`); flagged for review confirmation in the task
+  result since that mapping is Hub-chosen, not upstream-decreed.
+- `hub-adapters/zcode.md` and `skills-root.md` Defaults lines are generic
+  ("a default with no host model is `inherit-parent`") and needed no change.
+  Their `grok-*, gpt-*` example prefix rows stay: upstream's own new
+  `setup-pstack/SKILL.md` still routes legacy `grok-*` slugs, and the
+  copilot overlay still names the grok vendor, so the prefix remains a live
+  example of "other non-Claude slug", not a stale default.
+
+## Build summary
+
+`node tools/build-harness.mjs` (run in the package directory): all 22 series
+patches applied; upstream's unmodified `generate-pstack-harness-trees.mjs`
+ran clean and emitted the four committed trees (`claude-code/`, `codex/`,
+`zcode/`, `skills-root/`, each 68 skills), plus the ZCode plugin surface
+(41 commands, 68 bundled skills) and 41 Codex prompts. All generated
+`plugin.json` manifests carry `0.15.43` with name `pstack-azhouzhou`.
+`scripts/verify.py` was **not** run (unified gate, out of this task's red
+line); the repository gate runs in the pipeline on the pushed branch.
+
+## Docs aligned
+
+- `docs/integration-provenance.md`: Current package inputs row, pstack
+  chain paragraph pin, and "The Hub candidate is now `0.15.43`".
+- `docs/support-matrix.md`: candidate line re-pinned to `0.15.43` with the
+  previous candidate recorded; install-state paragraph now states no
+  `0.15.43` host installation is claimed (ZCode at `0.15.38`, Codex/Claude
+  Code inventory-observed at `0.15.37`).
+- `packages/pstack-agent-harness/UPSTREAM.md`: pin rows and quilt-count
+  paragraph (22 patches; stamp patches' exit recorded).
+- `CHANGELOG.md`: Unreleased entry added.

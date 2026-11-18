@@ -16,7 +16,7 @@ through the queue.
    "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
 -  "name": "pstack",
 +  "name": "pstack-azhouzhou",
-   "version": "0.15.36",
+   "version": "0.15.43",
    "description": "if you want to go fast, go deep first. pstack helps you write less, but higher quality code. rigorous agent workflows you can parallelize with confidence.",
    "author": {
 @@ -10,12 +10,13 @@

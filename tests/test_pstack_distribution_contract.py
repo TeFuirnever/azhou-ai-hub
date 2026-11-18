@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "packages" / "pstack-agent-harness"
 HARNESS = PACKAGE / "harness" / "pstack"
 EXPECTED_PLUGIN = "pstack-azhouzhou"
-EXPECTED_VERSION = "0.15.38"
+EXPECTED_VERSION = "0.15.43"
 EXPECTED_SKILLS = 68
 EXPECTED_COMMANDS = 41
 
@@ -164,9 +164,15 @@ class PstackDistributionContractTest(unittest.TestCase):
     def test_hub_portable_orchestration_overlays_preserve_recovery_and_gates(self) -> None:
         overlay = PACKAGE / "hub-skills/poteto-mode/playbooks"
         pristine = PACKAGE / "pstack/skills/poteto-mode/playbooks"
+        # Upstream removed its orchestrate playbook before the 0.15.43 pin, so
+        # the Hub overlay ships alone; autopilot-full still has a pristine
+        # counterpart the overlay must differ from.
+        self.assertFalse((pristine / "orchestrate.md").exists())
+        self.assertTrue((overlay / "orchestrate.md").is_file())
         for name in ("orchestrate.md", "autopilot-full.md"):
             source = (overlay / name).read_bytes()
-            self.assertNotEqual(source, (pristine / name).read_bytes())
+            if (pristine / name).exists():
+                self.assertNotEqual(source, (pristine / name).read_bytes())
             for host in ("claude-code", "codex", "zcode", "skills-root"):
                 with self.subTest(host=host, playbook=name):
                     generated = HARNESS / host / "skills/poteto-mode/playbooks" / name
@@ -213,19 +219,27 @@ class PstackDistributionContractTest(unittest.TestCase):
                     self.assertIsNone(test_import.search(file.read_text(encoding="utf-8")),
                                       f"{host}: production code imports test oracle {file}")
 
-    def test_hub_distribution_version_is_distinct_from_immutable_upstream(self) -> None:
+    def test_hub_distribution_version_follows_the_re_pinned_upstream(self) -> None:
+        # Since the 2026-11-18 re-pin, the pristine tree itself carries a
+        # version newer than every past Hub stamp, so the distribution takes
+        # the upstream version directly (#372 precedent) and the stamp
+        # patches are gone from the queue. A future Hub-only payload change
+        # re-introduces a stamp past the then-current pin.
         pinned = json_file(PACKAGE / "pstack/plugin.json")
         hub = json_file(PACKAGE / "hub-package.json")
         native_marketplace = json_file(PACKAGE / ".claude-plugin/marketplace.json")
-        self.assertEqual(pinned["version"], "0.15.36")
+        self.assertEqual(pinned["version"], "0.15.43")
         self.assertEqual(hub["version"], EXPECTED_VERSION)
-        self.assertNotEqual(hub["version"], pinned["version"])
+        self.assertEqual(hub["version"], pinned["version"])
         self.assertEqual(native_marketplace["plugins"][0]["version"], EXPECTED_VERSION)
-        series = (PACKAGE / "patches/series").read_text(encoding="utf-8").splitlines()
-        self.assertIn("0021-hub-distribution-version-0.15.37.patch", series)
+        series = [line for line in
+                  (PACKAGE / "patches/series").read_text(encoding="utf-8").splitlines()
+                  if line and not line.startswith("#")]
+        self.assertNotIn("0021-hub-distribution-version-0.15.37.patch", series)
+        self.assertNotIn("0024-hub-distribution-version-0.15.38.patch", series)
         self.assertIn("0022-hub-claude-sheet-hook-path.patch", series)
         self.assertIn("0023-hub-worktree-audit-preserve-untracked.patch", series)
-        self.assertEqual(series[-1], "0024-hub-distribution-version-0.15.38.patch")
+        self.assertEqual(series[-1], "0023-hub-worktree-audit-preserve-untracked.patch")
 
     def test_codex_adapter_model_and_agent_paths_match_native_hook(self) -> None:
         source = (PACKAGE / "hub-adapters/codex.md").read_text(encoding="utf-8")
@@ -256,7 +270,7 @@ class PstackDistributionContractTest(unittest.TestCase):
                 rows = [line for line in content.splitlines()
                         if line.startswith("| `pstack` |")]
                 self.assertEqual(len(rows), 1)
-                for marker in ("pstack-azhouzhou", "0.15.38", "MiMo", "DeepSeek Harness"):
+                for marker in ("pstack-azhouzhou", "0.15.43", "MiMo", "DeepSeek Harness"):
                     self.assertIn(marker, rows[0])
                 self.assertTrue(any("DeepSeek Harness" in line and
                                     "pstack-azhouzhou" in line
