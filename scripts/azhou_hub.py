@@ -10,10 +10,12 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from contextlib import nullcontext
@@ -30,6 +32,8 @@ except ModuleNotFoundError:  # Direct `verify` fixtures intentionally copy only 
 
 ROOT = Path(__file__).resolve().parents[1]
 MIN_PYTHON = (3, 11)
+DOCTOR_VERIFY_TIMEOUT_SECONDS = 600
+DOCTOR_VERIFY_TAIL_BYTES = 8192
 COMMANDS = ["doctor", "info", "setup", "verify", "version"]
 RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v2"
 LEGACY_RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v1"
@@ -1206,6 +1210,76 @@ def _referenced_skill_directory(text: str, match: re.Match) -> Path | None:
     return Path(prefix.group(0) + match.group(0))
 
 
+def _doctor_verify(root: Path) -> tuple[str, str]:
+    command = [sys.executable, "-u", "scripts/verify.py"]
+    posix = os.name == "posix"
+    deadline = time.monotonic() + DOCTOR_VERIFY_TIMEOUT_SECONDS
+    process = subprocess.Popen(
+        command, cwd=root, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        bufsize=0, start_new_session=posix,
+    )
+    stream = process.stdout
+    assert stream is not None
+    tail = b""
+    read_error = None
+    stop = threading.Event()
+
+    def drain_output() -> None:
+        nonlocal tail, read_error
+        try:
+            with stream:
+                while not stop.is_set():
+                    chunk = stream.read(DOCTOR_VERIFY_TAIL_BYTES)
+                    if not chunk:
+                        break
+                    tail = (tail + chunk)[-DOCTOR_VERIFY_TAIL_BYTES:]
+        except OSError as exc:
+            read_error = exc
+
+    # A descendant can retain the pipe after the verifier exits. Bound both waits.
+    reader = threading.Thread(target=drain_output, daemon=True)
+    finished = False
+    details = "verification interrupted"
+    try:
+        reader.start()
+        remaining = max(0, deadline - time.monotonic())
+        returncode = process.wait(timeout=remaining)
+        reader.join(timeout=max(0, deadline - time.monotonic()))
+        if reader.is_alive():
+            raise subprocess.TimeoutExpired(command, DOCTOR_VERIFY_TIMEOUT_SECONDS)
+        finished = True
+        if read_error is not None:
+            return "fail", f"could not read verification output: {read_error}"
+        status = "pass" if returncode == 0 else "fail"
+        details = f"exit {returncode}"
+    except subprocess.TimeoutExpired:
+        status = "fail"
+        details = f"timed out after {DOCTOR_VERIFY_TIMEOUT_SECONDS}s"
+        if not posix:
+            details += "; descendant process state unverified"
+    finally:
+        if not finished:
+            stop.set()
+            try:
+                if posix:
+                    os.killpg(process.pid, signal.SIGKILL)
+                else:
+                    process.kill()
+            except ProcessLookupError:
+                pass
+            except OSError as exc:
+                details += f"; could not stop verification: {exc}"
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                details = f"{details}; verifier termination unconfirmed"
+
+    lines = tail.decode("utf-8", errors="replace").strip().splitlines()
+    if lines:
+        details += f"; last output: {lines[-1]}"
+    return status, details
+
+
 def run_doctor(
     *,
     root: Path,
@@ -1310,22 +1384,8 @@ def run_doctor(
 
     if run_verification:
         try:
-            result = subprocess.run(
-                [sys.executable, "scripts/verify.py"],
-                cwd=root,
-                check=False,
-                capture_output=True,
-                text=True, encoding="utf-8",
-            )
-            output = (result.stderr or result.stdout or "").strip().splitlines()
-            suffix = f"; {output[-1]}" if output else ""
-            checks.append(
-                _check(
-                    "repository_verification",
-                    "pass" if result.returncode == 0 else "fail",
-                    f"exit {result.returncode}{suffix}",
-                )
-            )
+            status, details = _doctor_verify(root)
+            checks.append(_check("repository_verification", status, details))
         except OSError as exc:
             checks.append(_check("repository_verification", "fail", str(exc)))
     else:
