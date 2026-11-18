@@ -63,6 +63,7 @@ Absolute scores and 7-day/30-day health trends are triage signals only. Unpaired
 - Explicit `evolve` invocation starts candidate generation. Lifecycle hooks may append bounded, redacted signals only when separately enabled.
 - Use a minimum batch size, bounded sample, cooldown, re-entrancy guard, and processing cap.
 - Retain unprocessed evidence after failure. Archive a batch only after its proposal bundle validates and its receipt is written.
+- Health and proposal receipts count malformed signal rows in `parse_errors`. Archive reports how many malformed rows it leaves in the live batch and preserves their original bytes, including line endings. An unterminated live batch blocks new appends until it is reconciled.
 - Signal appends and archive transactions serialize on the state directory's `.transaction.lock`: contention waits bounded, permanent lock failures exit with their cause, and a confirmed append survives any concurrent archive.
 - The lock is mandatory on every supported OS. An archive writes a private pending receipt before removing live signals; while it exists, new signal writes stop with a retry instruction. A retry verifies the recorded archive digest and any still-live selected signals before finishing the live batch and candidate receipt; conflicting evidence stops without rewriting either.
 - Expire stale pending candidates; never delete accepted evidence history silently.

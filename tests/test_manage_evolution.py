@@ -279,6 +279,57 @@ class ManageEvolutionTest(unittest.TestCase):
             repeated = self.run_cli("archive", "--project", str(project), "--candidate", proposal["candidate"])
             self.assertEqual(2, repeated.returncode)
 
+    def test_malformed_signal_types_do_not_block_valid_records(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            for session in ("one", "two"):
+                added = self.add_signal(project, session=session)
+                self.assertEqual(0, added.returncode, added.stderr)
+            proposal = self.propose(project)
+            self.assertEqual(0, proposal.returncode, proposal.stderr)
+            candidate = json.loads(proposal.stdout)
+            live = project / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            valid = live.read_bytes()
+            first = json.loads(valid.splitlines()[0])
+            bad_rows = [
+                json.dumps(first | {"severity": []}).encode() + b"\r\n",
+                json.dumps(first | {"observed_at": 42}).encode() + b"\n",
+                json.dumps(first | {"signal_id": {}}).encode() + b"\r\n",
+                b"  {not JSON",
+            ]
+            live.write_bytes(valid + b"".join(bad_rows))
+
+            with self.subTest(command="health"):
+                health = self.run_cli("health", "--project", str(project), "--now", "2026-08-23T00:00:00Z")
+                self.assertEqual(0, health.returncode, health.stderr)
+                report = json.loads(health.stdout)
+                self.assertEqual(2, report["signals"])
+                self.assertEqual(4, report["parse_errors"])
+                self.assertEqual(0.0, report["success_rate_7d"])
+
+            with self.subTest(command="propose"):
+                proposal = self.propose(project)
+                self.assertEqual(0, proposal.returncode, proposal.stderr)
+                report = json.loads(proposal.stdout)
+                self.assertEqual(4, report["parse_errors"])
+                self.assertEqual(candidate["signal_ids"], report["signal_ids"])
+                self.assertEqual(2, report["independent_sessions"])
+
+            with self.subTest(command="archive"):
+                archived = self.run_cli("archive", "--project", str(project), "--candidate", candidate["candidate"])
+                self.assertEqual(0, archived.returncode, archived.stderr)
+                report = json.loads(archived.stdout)
+                self.assertEqual(2, report["archived"])
+                self.assertIn("retained 4 malformed signal rows", archived.stderr)
+                self.assertEqual(b"".join(bad_rows), live.read_bytes())
+                self.assertEqual([json.loads(line) for line in valid.splitlines()],
+                                 [json.loads(line) for line in Path(report["archive"]).read_bytes().splitlines()])
+
+            added = self.add_signal(project, session="later")
+            self.assertEqual(2, added.returncode, added.stdout + added.stderr)
+            self.assertIn("unterminated signal batch", added.stderr)
+            self.assertEqual(b"".join(bad_rows), live.read_bytes())
+
     def test_archive_retries_after_archive_file_was_published(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
