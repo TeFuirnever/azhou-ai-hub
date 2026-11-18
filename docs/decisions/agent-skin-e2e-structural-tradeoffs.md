@@ -1,6 +1,6 @@
 # AS-E2E-001: Defer two Agent Skin E2E structural simplifications
 
-- **Status:** Accepted — defer; follow-up implementation not authorized by this ADR
+- **Status:** Closed — obsolete (recorded 2026-11-18). PR #432 was closed on 2026-11-11 as obsolete per the decommission spec (#442): the Agent Skin ZCode host layer was retired, so the layered ZCode E2E system and fail-closed ship chain have no surviving target and neither deferred simplification has a follow-up. This page stays as the dated decision record; the pinned reviewed commit `01d37f90` survives only on the archived branch `no-mistakes/codex/agent-skin-e2e-system`, so the "Current code" links below resolve from that branch, not from `main`.
 - **Decision date:** 2026-11-10
 - **Identifier:** `AS-E2E-001` — scoped to Agent Skin (`AS`) E2E tooling. `docs/decisions/` deliberately avoids bare `ADR-NNNN` numbers, which belong to the lazily created domain-modeling [`docs/adr/`](../agents/domain.md) numbering space, so the two namespaces can never collide on one ID.
 - **Scope:** Agent Skin E2E tooling proposed in [PR #432](https://github.com/TeFuirnever/azhou-ai-hub/pull/432)
@@ -11,7 +11,7 @@
 
 PR #432 introduces layered E2E checks for Agent Skin. The quick layer uses synthetic inputs and isolated unit tests; the cold-start (L4) and daily (L5) paths have different host-state and evidence boundaries. The review identified two *non-blocking structural* concerns, not demonstrated current failures.
 
-Review approval means only that these refactors are deferred. It does **not** certify L4/L5 real-host acceptance, authorize installation or use of a daily user profile, waive required CI or coverage, approve unresolved security findings, or resolve the original worktree 13 lease-holder attribution. Keep PR #432 Draft until its own delivery requirements are met. Source links below pin the reviewed commit even if the branch later changes.
+Review approval means only that these refactors are deferred. It does **not** certify L4/L5 real-host acceptance, authorize installation or use of a daily user profile, waive required CI or coverage, approve unresolved security findings, or resolve the original worktree 13 lease-holder attribution. Keep PR #432 Draft until its own delivery requirements are met. (2026-11-18 note: PR #432 was closed on 2026-11-11 as obsolete per decommission spec #442 — see Status; this instruction no longer applies.) Source links below pin the reviewed commit even if the branch later changes.
 
 ## Decision 1 — One journal-verdict engine versus duplicated implementations
 

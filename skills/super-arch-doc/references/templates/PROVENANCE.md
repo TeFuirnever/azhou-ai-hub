@@ -7,8 +7,8 @@
 | 模板 | 用途 | SHA-256 |
 |---|---|---|
 | [software-implementation-architecture.md](software-implementation-architecture.md) | 软件实现架构说明书（ARCH）剖面 | `d2351055543c444c4a3ec874460c584228419dc1b363624771709611941ca52d` |
-| [design-doc.md](design-doc.md) | 设计文档通用剖面 | `bb03fb8648b5d4faca82efd802d853fe61e26053879faf3ff712e5c1cd0cb73c` |
-| [feature-detailed-design.md](feature-detailed-design.md) | 功能详细设计（DETAIL）剖面 | `09a7c19d61619c686d561cfe5456c324ab566ab3a9f9be7bb02c5426f9bce862` |
+| [design-doc.md](design-doc.md) | 设计文档通用剖面 | `29d3d36482ce0914dde426869566d30751032c4fe668417c1b7c48bcaa89e774` |
+| [feature-detailed-design.md](feature-detailed-design.md) | 功能详细设计（DETAIL）剖面 | `2e94ff773d492aab7494b5f3cca6f75a08d333e8fc8738e2e8d5cfa66d5c33a1` |
 | [prd.md](prd.md) | 产品需求文档（PRD）剖面 | `a2ceb916621d130559634dda2c266ddfd817fb2f761970a2d510eed9998db617` |
 | [industry-best-practice-baseline.md](industry-best-practice-baseline.md) | 业界基线引用（RFC 2119 / 42010 等） | `1606c765747e8b3a5ff008d0d14b1a9b45f16c744dc3a6d91c6cd60160b9ca63` |
 
