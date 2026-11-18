@@ -28,7 +28,7 @@ In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<pro
 - 要求对标业界最佳实践或打分：`review`。
 - 要求补时序图或校验既有图：`sequence`。
 - 只要求评审不要求修改：review 模式只产出报告文件（落盘到目标文档同目录 `REVIEW.md` 或仓库 `evidence/`），不改文档。
-- 模式 → 步骤映射：draft = 1→2→3→4→6；calibrate = 1（增量）→5→6；review = 独立评审线（报告模板见 review-guide）；sequence = 4→6。
+- 模式 → 步骤映射：draft = 1→2→3→4→5→6；calibrate = 1（增量）→5→6；review = 独立评审线（报告模板见 review-guide）；sequence = 4→6。
 
 ## 六步工作流
 
@@ -85,7 +85,7 @@ PlantUML 是文档唯一权威图形式。每张图带四联注：目的 / 范�
 
 ## 交付收据
 
-mode、源文档与产物路径、已跑校验清单（链接 / 配平 / changelog / 状态词）、评审对标分数与 Top 发现、holds 与一个具体 next action。
+mode、源文档与产物路径、已跑校验清单（配平 / 链接 / 图注版本入账 / changelog 有序 / 空白；状态词人工复核）、评审对标分数与 Top 发现、holds 与一个具体 next action。
 
 ## References
 

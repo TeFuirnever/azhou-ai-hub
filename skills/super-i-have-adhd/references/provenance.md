@@ -13,7 +13,7 @@ Repository-wide notice and the retained license copy live in [THIRD_PARTY_NOTICE
 | Upstream LICENSE SHA-256 | `8acbb618089b738404f76ac60fca1aaa995d9a87995eddf95f0b777acd7f7d2c` |
 | License | MIT, copyright 2026 Ayoub Ghriss |
 
-The recorded hashes identify the unmodified upstream skill at the locked commit; the upstream ships only the instruction file and its license, so nothing else exists to vendor. The upstream entry carries host-specific frontmatter (`disable-model-invocation: true`, metadata tags); the package replaces it with the neutral frontmatter contract and does not copy host-specific keys.
+The recorded hashes identify the unmodified upstream skill at the locked commit; this package vendors only the upstream `skills/i-have-adhd/SKILL.md` instruction body and the root `LICENSE`. The upstream repository at that commit additionally ships hooks, agent adapters (`skills/i-have-adhd/agents/gemini.toml`, `skills/i-have-adhd/agents/openai.yaml`), evals, extensions, plugin manifests and tests, none of which are vendored here; `agents/openai.yaml` in particular is model-specific package identity this repository forbids copying. The upstream entry carries host-specific frontmatter (`disable-model-invocation: true`, metadata tags); the package replaces it with the neutral frontmatter contract and does not copy host-specific keys.
 
 ## Adoption evidence
 

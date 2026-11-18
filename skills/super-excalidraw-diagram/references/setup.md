@@ -7,7 +7,7 @@ Read this before first use or when rendering, conversion, export, or font toolin
 | Requirement | Minimum | Purpose |
 |---|---:|---|
 | Python | 3.11 | renderer, official export, converters, validation gates |
-| Node.js + npm | Node 20 | local rough-SVG renderer |
+| Node.js + npm | Node 22.22.2+ | local rough-SVG renderer |
 | uv | maintained release | locked Python environment |
 | Chromium for Playwright | version selected by Playwright | offline render and official export |
 | Disk | about 750 MB | current macOS arm64 Python environment, browser, vendored assets, Node modules; varies by platform |
@@ -32,7 +32,7 @@ Rendering is offline after dependency installation. Interactive MCP preview is o
 Set `SKILL_DIR` to the installed skill directory. Do not assume a Codex-, Claude-, zcode-, or project-specific location.
 
 ```bash
-SKILL_DIR=/absolute/path/to/excalidraw-diagram
+SKILL_DIR=/absolute/path/to/super-excalidraw-diagram
 python --version
 node --version
 npm --version
@@ -56,7 +56,7 @@ Install Node.js/npm with the operating system's package manager or an existing v
 ## Install
 
 ```bash
-SKILL_DIR=/absolute/path/to/excalidraw-diagram
+SKILL_DIR=/absolute/path/to/super-excalidraw-diagram
 
 cd "$SKILL_DIR/references"
 uv sync --frozen
@@ -79,7 +79,7 @@ Exit `0` means the browser is already ready and must not be reinstalled. Exit `1
 ## Verify
 
 ```bash
-SKILL_DIR=/absolute/path/to/excalidraw-diagram
+SKILL_DIR=/absolute/path/to/super-excalidraw-diagram
 
 test -s "$SKILL_DIR/references/vendor/excalidraw-all.esm.js"
 test -d "$SKILL_DIR/references/fonts/Excalifont"

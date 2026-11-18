@@ -11,17 +11,20 @@ from a shallow clone of [excalidraw/excalidraw-libraries](https://github.com/exc
 
 | Entity type | Library | Item (substring for merge) |
 |---|---|---|
-| Server / node machine | `anna-pastushko/architecture-diagram-components` | `Server` |
-| User, user group | `anna-pastushko/architecture-diagram-components` | `User`, `Users` |
-| Client device / monitor | `anna-pastushko/architecture-diagram-components` | `Device` |
-| Firewall / security appliance | `dwelle/network-topology-icons` | `Firewall` |
-| Network client computer | `dwelle/network-topology-icons` | `Client` |
-| Kubernetes pod | `boemska-nik/kubernetes-icons` | `pod` |
-| Database / storage (GCP-style) | `mguidoti/google-icons` | `Cloud SQL`, `Cloud Storage` |
-| AWS service icons | `childishgirl/aws-architecture-icons` | service name |
+| Server / node machine | `anna-pastushko/architecture-diagram-components.excalidrawlib` | `Server` |
+| User, user group | `anna-pastushko/architecture-diagram-components.excalidrawlib` | `User`, `Users` |
+| Client device / monitor | `anna-pastushko/architecture-diagram-components.excalidrawlib` | `Device` |
+| Firewall / security appliance | `dwelle/network-topology-icons.excalidrawlib` | `Firewall` |
+| Network client computer | `dwelle/network-topology-icons.excalidrawlib` | `Client` |
+| Kubernetes pod | `boemska-nik/kubernetes-icons.excalidrawlib` | `pod` |
+| Database / storage (GCP-style) | `mguidoti/google-icons.excalidrawlib` | `Cloud SQL`, `Cloud Storage` |
+| AWS service icons | `childishgirl/aws-architecture-icons.excalidrawlib` | service name |
 
-No official library ships a vetted **gear / robot / AI** icon — draw those from
-primitives. Items flagged `[HAS IMAGE]` by `items` embed raster images and will
+No official library ships a vetted **gear** icon — draw those from primitives.
+`kaligule/robots.excalidrawlib` matches *robot* but its 7 items are unnamed and
+not visually vetted; the *AI* matches are cloud-service brand icons (Vertex AI,
+Document AI…), not a general AI icon. Items flagged `[HAS IMAGE]` by `items`
+embed raster images and will
 NOT render through the export pipeline — pick a vector sibling instead.
 
 Merge calibration (from production use): `--scale 1.0–1.3` for a 50–70px icon;

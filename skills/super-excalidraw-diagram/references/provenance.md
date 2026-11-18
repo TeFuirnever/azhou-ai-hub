@@ -25,7 +25,7 @@ The consolidated engine retains its generated bundled-license comment. Its upstr
 
 The mirrored Excalidraw production font tree enables offline rendering. Virgil and Excalifont use SIL OFL 1.1; keep `Virgil-LICENSE.md` and `Excalifont-LICENSE.md` beside the assets.
 
-The gzipped component-library snapshot lives in `references/libraries/`. It is resolved locally by `scripts/excalidraw_lib.py`; network lookup is fallback-only for a library absent from the snapshot. Its sorted per-file SHA-256 manifest digest is `bb265f168a10338f095143d7d56387e9fc44d3d4ad994521b1be989a87ab124a`. Recompute it from the repository root with `find skills/super-excalidraw-diagram/references/libraries -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256`. The standard-library equivalent of that pipeline (same digest, no Unix toolchain):
+The gzipped component-library snapshot lives in `references/libraries/`. It is resolved locally by `scripts/excalidraw_lib.py`; network lookup is fallback-only for a library absent from the snapshot. Its sorted per-file SHA-256 manifest digest is `ace4d177acdf26dea0e9566743b2f2ad7eb9a00eb08993b6e62c58e37830deeb`. Recompute it from the repository root with `find skills/super-excalidraw-diagram/references/libraries -type f -print0 | sort -z | xargs -0 shasum -a 256 | shasum -a 256`. The standard-library equivalent of that pipeline (same digest, no Unix toolchain):
 
 ```bash
 python - <<'PY'

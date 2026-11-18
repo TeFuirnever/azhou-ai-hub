@@ -94,7 +94,7 @@ if (process.argv.includes('--check')) {
     ? fs.readFileSync(output, 'utf8').replace(/\r\n?/g, '\n')
     : '';
   if (current !== generated) {
-    console.error('generated validators are stale — run npm run generate:validators');
+    console.error('generated validators are stale — run node scripts/generate-validators.mjs');
     process.exit(1);
   }
 } else {

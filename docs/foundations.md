@@ -2,7 +2,7 @@
 
 `scripts/azhou_hub.py` is the repository-level, harness-neutral control surface for local information, diagnostics, explicit skill setup, opt-in checkout lifecycle operations and verification. It uses only Python 3.11+ standard library modules.
 
-The separate `integrations` command exposes exactly three optional external integrations. Its [contract](integrations.md) distinguishes fixed source snapshots and native installation ownership from the Skill setup and receipt commands below. Installing Skills never enables these integrations. `info` adds an `optional_integrations` list and `integration_entry`; the five existing `primary_commands` and their v1 alias remain unchanged.
+The separate `integrations` command exposes exactly two optional external integrations. Its [contract](integrations.md) distinguishes fixed source snapshots and native installation ownership from the Skill setup and receipt commands below. Installing Skills never enables these integrations. `info` adds an `optional_integrations` list and `integration_entry`; the five existing `primary_commands` and their v1 alias remain unchanged.
 
 ## Agent Skill UX layer
 

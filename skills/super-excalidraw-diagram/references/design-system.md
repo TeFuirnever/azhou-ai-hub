@@ -25,7 +25,7 @@ Fix any alignment or binding issues before rendering.
 
 **Phase 3: Render & validate**
 
-Now run the render-view-fix loop from the Render & Validate section. This is where you'll catch visual issues that aren't obvious from JSON — overlaps, clipping, imbalanced composition.
+Now run the render-view-fix loop from the "5. 渲染与修复循环" section of SKILL.md. This is where you'll catch visual issues that aren't obvious from JSON — overlaps, clipping, imbalanced composition.
 
 ### Section Boundaries
 

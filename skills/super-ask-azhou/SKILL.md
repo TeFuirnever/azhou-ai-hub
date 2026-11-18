@@ -30,7 +30,7 @@ In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<pro
 
 The catalog below is generated from every canonical skill's frontmatter description — the same text a model router sees. Never edit the generated block by hand: change the owning skill's description, then run `python skills/super-ask-azhou/scripts/generate_routing_index.py` from the checkout root to regenerate; the repository gate fails on parity when the block drifts.
 
-Match the request to a family first, then to the catalog's intent keywords: install, diagnose, or prove the hub itself (发行基建); produce or polish a visible artifact (内容生产力); keep knowledge and quality honest across sessions (工程纪律); long-running experiments; and this skill for routing questions.
+Match the request to a family first, then to the catalog's intent keywords: install, diagnose, or prove the hub itself (发行基建); produce or polish a visible artifact (内容生产力); keep knowledge and quality honest across sessions (工程纪律); and this skill for routing questions.
 
 <!-- generated-routing-index:begin -->
 - `super-arch-doc` — Azhou skill. Renamed from arch-doc (the old name still triggers this skill). End-to-end authoring and calibration of an architecture design document from upstream sources. MUST trigger for 写架构设计文档, 架构说明书, ARCH 文档, 软件实现架构说明书, 架构文档补时序图, PlantUML 时序图（架构文档内）, 交叉校准, 回源核对, 上游研读, 上游真源, 最佳实践评审, 架构评审对标, 架构文档模板, PRD 模板, 产品需求文档模板, 功能详细设计模板, 校准架构文档, 质量场景卡, or whenever a repository needs a software-implementation-architecture document drafted, calibrated against upstream design docs, or reviewed against industry best practices. Distilled from the MCC ARCH-2026-001 authoring pipeline. Output shaping for a reader with ADHD belongs to super-i-have-adhd.
@@ -65,7 +65,7 @@ A routing miss is evidence. When no canonical skill fits — the `❌ 验证失�
 python skills/super-ask-azhou/scripts/record_unrouted.py --prompt "<the user's request as asked>"
 ```
 
-Quote the request through `--stdin` when shell quoting or history is a concern. The store is `.azhou/ask-azhou/unrouted-telemetry.json` (git-ignored runtime state): per-request SHA-256 hashes with counts and day stamps only — the raw text is never written, so it cannot leak into receipts, reports, or Git. `--summary` prints the aggregate; accumulated misses are trigger-candidate evidence under the same paired positive/negative standard as the trigger-phrase inventory.
+Quote the request through `--stdin` when shell quoting or history is a concern. The store is `.azhou/super-ask-azhou/unrouted-telemetry.json` (git-ignored runtime state): per-request SHA-256 hashes with counts and day stamps only — the raw text is never written, so it cannot leak into receipts, reports, or Git. `--summary` prints the aggregate; accumulated misses are trigger-candidate evidence under the same paired positive/negative standard as the trigger-phrase inventory.
 
 ## Verification
 

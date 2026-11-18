@@ -9,7 +9,7 @@
   2. verify_doc.py 对产物退出码 0。
   3. 模板选择器链接已改写为纯文本（产物零 Markdown 断链）。
   4. 模板本体 SHA-256 与 references/templates/PROVENANCE.md 表一致。
-输出: 逐项 PASS/FAIL + JSON 收据（schema/status/skill-tree digest/artifact digest）。
+输出: 逐项 PASS/FAIL + JSON 收据（schema/status/skill-tree digest/artifacts 产物说明字段）。
 退出码: 0 全过；1 有失败。
 """
 import hashlib

@@ -10,7 +10,7 @@
 python3 benchmarks/super-arch-doc/run_case.py [--receipt <path.json>]
 ```
 
-`run_case.py` 逐项断言下列期望，输出逐项 PASS/FAIL 与 JSON 收据（schema / status / skill-tree digest / artifact digest），退出码 0 全过、1 有失败：
+`run_case.py` 逐项断言下列期望，输出逐项 PASS/FAIL 与 JSON 收据（schema / status / skill-tree digest / artifacts 产物说明字段），退出码 0 全过、1 有失败：
 
 1. `new_doc.py` 脚手架退出码 0；产物含文档控制行 `文档 ID：\`ARCH-2026-099\``（及版本 / 状态 / 日期）。
 2. `verify_doc.py` 退出码 0（空图配平、零断链、无未入账图注、空白合规）。

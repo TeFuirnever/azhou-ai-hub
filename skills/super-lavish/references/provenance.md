@@ -28,7 +28,7 @@ Azhou AI Hub keeps the upstream CLI-first design: the current workflow, design d
 - adds the Azhou identity, stage language, status dictionary, and stable receipt ([brand-layer](brand-layer.md));
 - adds setup, provenance, capability mapping, and explicit authorization checkpoints (publication, global installs, hook installs, session reopening);
 - keeps the pre-rename `/lavish` name working as a compatibility trigger;
-- names the functional boundaries with `super-archify` and `super-excalidraw-diagram` in the description.
+- names the functional boundaries with `super-archify`, `super-excalidraw-diagram`, and `super-imagegen` in the description.
 
 No Lavish application code, browser bundle, logos, screenshots, or runtime assets are vendored. `npx` downloads the external CLI at execution time; `skills/super-lavish/` contains the Azhou-authored orchestration layer only. The CLI's own bundled third-party components are attributed by the upstream `THIRD-PARTY-NOTICES.md` shipped inside the npm package (SHA-256 `882673c8dec1bd8ad6ab936a08e83eb0ed86cba7c79780ab9cfb055dae67aeef` at this release); they are consumed at run time through `npx`, not redistributed from this repository.
 

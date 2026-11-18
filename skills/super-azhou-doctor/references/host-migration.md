@@ -38,4 +38,6 @@ Canonical renames recorded in `CHANGELOG.md` (#178-#183):
 | lavish | super-lavish |
 | llm-wiki | super-llm-wiki |
 
+`super-ci-test-reliability`, `super-prose-standard` and `super-llm-wiki` are maintainer retirements recorded in `CHANGELOG.md`: no canonical replacement exists, so the reinstall clause of migration step 3 does not apply to them — confirm and remove the residue, and record the removal.
+
 A future canonical rename lands its host-side migration guidance in the same commit as the rename; this page is the runbook step those commits update.
