@@ -384,3 +384,39 @@ for (const change of ['document', 'loader', 'load-function', 'unmatched', 'throw
   const next=a.identify().documentToken;
   assert.notStrictEqual(next,first);assert.strictEqual(a.identify().documentToken,next);
 });
+
+for (const version of ['0.2.2-rc.1', '0.2.2-rc.3']) test(`source-pinned ${version} main-slot fixture admits the documented paint plane`, async () => {
+  const {readFile}=await import('node:fs/promises');
+  const f=JSON.parse(await readFile(new URL(`./fixtures/dsh/${version}/manifest.json`,import.meta.url),'utf8'));
+  assert.equal(f.source.releaseVersion,version);
+  assert.equal(f.source.commit,version.endsWith('rc.1') ? '66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db' : '38a6a5c965aa99ab525161efb7cc5cf1fe62fced');
+  assert.deepEqual(f.shape,{panelClass:'mainPanel',panelDisplay:'flex',slot:'main',anchorDisplay:'contents'});
+  const {createHash}=await import('node:crypto');
+  const source={};
+  for(const file of f.source.files){
+    const bytes=await readFile(new URL(`./fixtures/dsh/${version}/${file.local}`,import.meta.url));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256);
+    source[file.local]=bytes.toString();
+  }
+  assert.match(source['AppFrame.tsx'], /className=\{css\.mainPanel\}[\s\S]*?renderSlot\('main'/);
+  assert.match(source['AppFrame.module.css'], /\.mainPanel\s*\{\s*display: flex;/);
+  assert.match(source['scoped-slots.tsx'], /const ANCHOR_STYLE = \{ display: 'contents' \}/);
+  assert.match(source['scoped-slots.tsx'], /<Anchor data-slot=\{slotKey\} style=\{ANCHOR_STYLE\}>/);
+  assert.equal(f.installedPackageSourceAttested,false);
+  assert.equal(f.evidence,'source-derived-synthetic');
+  assert.equal(f.liveAccepted,false);
+  const h=host();
+  const anchor={isConnected:true,closest:()=>null};
+  const panel={isConnected:true,closest:()=>null,classList:['synthetic_'+f.shape.panelClass],children:[anchor],getClientRects:()=>[{}]};
+  anchor.parentElement=panel;
+  const root={isConnected:true,contains:n=>n===anchor||n===panel};
+  h.document.getElementById=()=>root;
+  h.document.querySelectorAll=s=>s===`[data-slot="${f.shape.slot}"]`?[anchor]:[];
+  h.getComputedStyle=n=>({display:n===anchor?f.shape.anchorDisplay:f.shape.panelDisplay,visibility:'visible'});
+  h.MutationObserver=class{observe(){}disconnect(){}takeRecords(){return [];}};
+  const a=createDSHPageAdapter(h),lease=a.captureThemeSurface();
+  assert.equal(lease.node,panel);assert.equal(lease.current(),true);
+  panel.classList=['future_unknown'];
+  assert.equal(lease.current(),false,'upstream class drift cannot expand admission');
+  lease.dispose();
+});

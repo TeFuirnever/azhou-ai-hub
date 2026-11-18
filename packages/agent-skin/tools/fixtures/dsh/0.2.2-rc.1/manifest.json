@@ -1,0 +1,39 @@
+{
+  "evidence": "source-derived-synthetic",
+  "liveAccepted": false,
+  "installedPackageSourceAttested": false,
+  "source": {
+    "repository": "https://github.com/deepseek-ai/deepseek-harness",
+    "commit": "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db",
+    "tag": "dsh-v0.2.2-rc.1",
+    "releaseVersion": "0.2.2-rc.1",
+    "files": [
+      {
+        "path": "packages/client/ui-layout/src/client/AppFrame.tsx",
+        "local": "AppFrame.tsx",
+        "sha256": "e36de99599c4072f58366621eb508747d0b57156a5569870257b9215c13c12a1"
+      },
+      {
+        "path": "packages/client/ui-layout/src/client/AppFrame.module.css",
+        "local": "AppFrame.module.css",
+        "sha256": "ba2b1a8b01d19ba0e5b5d73d70ec686fef1752ddc6f4e2273943a76dc8d871be"
+      },
+      {
+        "path": "packages/client/ui-renderer/src/client/scoped-slots.tsx",
+        "local": "scoped-slots.tsx",
+        "sha256": "ff53b648f9a6fbd59bc13b89fbe33c67b32421c99ab7923689bfa1b47cea95c1"
+      },
+      {
+        "path": "LICENSE",
+        "local": "LICENSE",
+        "sha256": "ebb4f09972aee8608be255debaf78451a68e95c290f55c240dec2ecfa16ea6be"
+      }
+    ]
+  },
+  "shape": {
+    "panelClass": "mainPanel",
+    "panelDisplay": "flex",
+    "slot": "main",
+    "anchorDisplay": "contents"
+  }
+}
