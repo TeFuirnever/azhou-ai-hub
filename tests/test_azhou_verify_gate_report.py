@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import unittest
@@ -71,6 +72,39 @@ class AzhouVerifyGateReportTest(unittest.TestCase):
         code, out = run_validator(0, captured)
         self.assertEqual(0, code)
         self.assertIn("verdict: green", out)
+
+    def test_setup_receipts_with_pass_status_keep_capture_green(self) -> None:
+        for status in ("pass", "dry_run"):
+            with self.subTest(status=status):
+                receipt = json.dumps({
+                    "schema_version": "azhou-ai-hub.setup.v1",
+                    "status": status,
+                    "mode": "copy",
+                    "target": "/temporary/skills",
+                    "applied": status == "pass",
+                    "skills": [],
+                }, indent=2)
+                code, out = run_validator(0, receipt + "\nverification passed\n")
+                self.assertEqual(0, code)
+                self.assertIn("verdict: green", out)
+
+    def test_setup_receipt_conflicts_override_outer_success(self) -> None:
+        start = '{"schema_version": "azhou-ai-hub.setup.v1", '
+        for case, receipt in {
+            "truncated": start + '"status": "pass"',
+            "invalid JSON": start + '"status": pass}',
+            "trailing damage": start + '"status": "pass"}!',
+            "duplicate status": start + '"status": "fail", "status": "pass"}',
+            "fail": start + '"status": "fail"}',
+            "rolled back": start + '"status": "rolled_back"}',
+            "partial": start + '"status": "partial"}',
+            "dry-run conflict": start + '"status": "dry_run_same_source"}',
+        }.items():
+            with self.subTest(case=case):
+                code, out = run_validator(0, receipt + "\nverification passed\n")
+                self.assertEqual(1, code, out)
+                self.assertIn("verdict: red", out)
+                self.assertIn("setup receipt", out)
 
     def test_skip_lines_are_quoted_not_upgraded(self) -> None:
         code, out = run_validator(0, "skipped: benchmark not run\nverification passed\n")
