@@ -4,6 +4,8 @@
 
 ## 公开收据
 
+- [2026-11-18 skill 升级 v1.2.2 审查说明](../docs/research/2026-11-18-skill-upgrade-v1.2.2.md)：正式稳定来源（`v1.2.1`+`v1.2.2` release，commit `71cd50ff`，neat-freak skill 版本仍 `3.1.1`）、三方能力比较与兼容台账 v5 重述（28 项处置零变动）；本轮零运行时变更、无 A/B/C 评测与受控演化内容，故无机器记录，证据为该审查说明与 provenance Update path 条目；不升级为模型质量或行为变更证明。
+
 - [2026-11-10 skill 升级机器记录](skill-upgrade-2026-11-10.json) 与[审查说明](../docs/research/2026-11-10-skill-upgrade.md)：正式稳定来源、实际 A/B/C、独立合成验收、保护与恢复；C2 已获 exact-diff 人类批准，见[受控演化决定](../benchmarks/super-repo-pedant/history/project-evidence-promotion-2026-11-10.json)；该批准与整项上游同步及文档变更分别归因。
 
 - [2026-08-23 public install smoke](public-install-smoke-2026-08-23.md)：从公开 GitHub 默认分支发现并隔离安装两个 canonical skill；不升级为发布、跨 harness 或模型质量证明。

@@ -49,7 +49,7 @@ The README promo video is not stored in this repository. Both READMEs link to th
 
 ## Super Repo Pedant baseline
 
-`benchmarks/super-repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`cfa3436d4d31db9b1340af3082a914adf92f023f`](https://github.com/KKKKhazix/Khazix-Skills/commit/cfa3436d4d31db9b1340af3082a914adf92f023f) (official repository release v1.2.0, skill version 3.1.1; synchronized 2026-11-10 from the previous v3.0.0 reference at `322346ded8129436b3f64707789a73e732ae24d9`; original absorption commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791)). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the baseline.
+`benchmarks/super-repo-pedant/upstream/neat-freak/` is an exact regression snapshot of the `neat-freak` skill from [KKKKhazix/Khazix-Skills](https://github.com/KKKKhazix/Khazix-Skills) at commit [`71cd50ffe1f1f4d400b54be967dc6b59379aff8f`](https://github.com/KKKKhazix/Khazix-Skills/commit/71cd50ffe1f1f4d400b54be967dc6b59379aff8f) (official repository release v1.2.2, skill version 3.1.1; synchronized 2026-11-18 from the previous v1.2.0 reference at `cfa3436d4d31db9b1340af3082a914adf92f023f`, before that v3.0.0 at `322346ded8129436b3f64707789a73e732ae24d9`; original absorption commit [`bab178311a65f93ffd073e4fdebc9911eae35791`](https://github.com/KKKKhazix/Khazix-Skills/commit/bab178311a65f93ffd073e4fdebc9911eae35791)). Its entry file is named `SKILL.snapshot.md` so package discovery cannot install the baseline.
 
 - Copyright: 数字生命卡兹克
 - License: [MIT](LICENSES/Khazix-Skills-MIT.txt)

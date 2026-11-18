@@ -112,10 +112,10 @@ class RepoPedantParityTest(unittest.TestCase):
 
     def test_current_stable_baseline_retains_prior_lineage_and_capability_contract(self) -> None:
         # Stable metadata must agree while preserving both historical baselines.
-        self.assertIn("Contract version: v4 (2026-11-10)", CONTRACT_TEXT)
-        self.assertEqual("v1.2.0", PARITY["baseline_release"])
+        self.assertIn("Contract version: v5 (2026-11-18)", CONTRACT_TEXT)
+        self.assertEqual("v1.2.2", PARITY["baseline_release"])
         self.assertEqual("3.1.1", PARITY["baseline_skill_version"])
-        self.assertEqual("cfa3436d4d31db9b1340af3082a914adf92f023f", PARITY["baseline_commit"])
+        self.assertEqual("71cd50ffe1f1f4d400b54be967dc6b59379aff8f", PARITY["baseline_commit"])
         self.assertIn(PARITY["baseline_commit"], CONTRACT_TEXT)
         self.assertIn(PARITY["baseline_commit"], PROVENANCE_TEXT)
         self.assertIn("## Baseline", CONTRACT_TEXT)
