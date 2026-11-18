@@ -128,8 +128,10 @@ line); the repository gate runs in the pipeline on the pushed branch.
   chain paragraph pin, and "The Hub candidate is now `0.15.43`".
 - `docs/support-matrix.md`: candidate line re-pinned to `0.15.43` with the
   previous candidate recorded; install-state paragraph now states no
-  `0.15.43` host installation is claimed (ZCode at `0.15.38`, Codex/Claude
-  Code inventory-observed at `0.15.37`).
+  `0.15.43` host installation is claimed (ZCode at `0.15.38` per the
+  bundled-skills receipt; Claude Code at `0.15.38` per the 2026-11-18
+  update receipt; `0.15.37` kept only as Codex's 2026-11-11 inventory
+  observation; parenthetical corrected post-review on 2026-11-18).
 - `packages/pstack-agent-harness/UPSTREAM.md`: pin rows and quilt-count
   paragraph (22 patches; stamp patches' exit recorded).
 - `CHANGELOG.md`: Unreleased entry added.
