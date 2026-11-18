@@ -796,6 +796,26 @@ class ManageEvolutionTest(unittest.TestCase):
         }
         self.assertIn("forbidden_raw_field", MODULE.validate_signal(signal))
 
+    def test_health_windows_end_at_now(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            for session, outcome, observed_at in (
+                ("now", "success", "2026-08-23T00:00:00Z"),
+                ("seven-day-boundary", "failure", "2026-08-16T00:00:00Z"),
+                ("thirty-day-boundary", "success", "2026-07-24T00:00:00Z"),
+                ("too-old", "failure", "2026-07-23T23:59:59Z"),
+                ("future", "failure", "2026-08-23T00:00:01Z"),
+            ):
+                added = self.add_signal(project, session=session, outcome=outcome, observed_at=observed_at)
+                self.assertEqual(0, added.returncode, added.stdout + added.stderr)
+            result = self.run_cli("health", "--project", str(project), "--now", "2026-08-23T00:00:00Z")
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(5, payload["signals"])
+            for key, expected in (("success_rate_7d", 1 / 2), ("success_rate_30d", 2 / 3)):
+                with self.subTest(key=key):
+                    self.assertAlmostEqual(expected, payload[key])
+
     def test_health_trend_is_investigation_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory)
