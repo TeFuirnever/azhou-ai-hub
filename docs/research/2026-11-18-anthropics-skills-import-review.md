@@ -67,7 +67,7 @@ office/ 子树的 import 扫描以 docx 名下副本为源；pptx/xlsx 副本经
 ## 5. office/ 共享子树权威副本规则
 
 - 实际路径为 `skills/<pkg>/scripts/office/`（docx/pptx/xlsx 三包各含一份）。执行纠正：差距补齐草案与路线图按 `skills/<pkg>/office/` 表述，本单元复跑时发现并更正；`git/trees` API 按 `scripts/office/` 前缀匹配。
-- 三份副本各 50 blob，逐路径 git blob SHA 三方完全相等（实测 OFFICE-PARITY-OK；git blob SHA 相等即内容字节相等），合计 1,109,154 B。
+- 三份副本各 50 blob，逐路径 git blob SHA 三方完全相等（实测 OFFICE-PARITY-OK；git blob SHA 相等即内容字节相等），单份 50 blob 合计 1,109,154 B（三份副本合计 3,327,462 B）。
 - 本仓采用「逐包 byte-identical 副本」以满足 skill-standard §2 的独立安装（包不依赖兄弟目录）；U2–U4 的 parity 测试以本节与附录 A 的 office/ 段为对照源。
 
 ## 6. 采源范围与排除声明
