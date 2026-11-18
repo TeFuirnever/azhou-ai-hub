@@ -25,7 +25,7 @@ User-facing hook messages use the fixed `🟡 阿舟提醒` and `🧠 阿舟记�
 | Bounded continuation | Opt-in gate requires a current unfinished closeout marker, recursion guard, progress since the last block, and a small cap. |
 | Fixed control output | Hook control messages use constants plus validated state labels; no transcript, spec body, plan body, or arbitrary file text enters a continuation reason. |
 | Pre-compaction flush | Only remind when a super-repo-pedant closeout run is already active and has unrecorded progress. |
-| Doctor | Verify host feature flag, hook location, duplicate installs, executable runtime, workspace containment, and event output. |
+| Doctor | Verify host feature flag, hook config readability, duplicate installs, workspace containment, and state marker validity. |
 
 ## Deliberately not imported
 

@@ -17,12 +17,19 @@ against one of the schemas in this folder before any layout work happens.
 | `class.schema.json` | `diagram_type: "class"` | `types`, `relationships` |
 | `timeline.schema.json` | `diagram_type: "timeline"` | `events` (`lanes` optional) |
 | `waterfall.schema.json` | `diagram_type: "waterfall"` | `spans` (each with optional `parent`) |
+| `explainer.schema.json` | `diagram_type: "explainer"` | `answer` (object), `panels`, `sources` |
 | `common.schema.json` | shared `$defs` only (no top-level document) | — |
 
 Every diagram schema requires `schema_version`, `diagram_type`, `meta` (with
-`title` and a durable portable `output`), and its structural arrays — except `segments`, `activations`, ERD and class
-`relationships`, and `cards`, which are optional — and sets `additionalProperties: false` at every
-level, so unknown fields are rejected rather than silently ignored.
+`title`; `timeline` and `waterfall` additionally require `meta.evidence`, and
+`explainer` additionally requires `meta.id`; only `workflow`, `sequence`,
+`dataflow`, `lifecycle`, and `architecture` also require a durable portable
+`output`), and its structural arrays — except
+`segments`, `activations`, ERD and class `relationships`, and `cards`, plus
+workflow `phases`, `groups`, and `mainPath`, architecture `boundaries` and
+`connections`, and timeline `lanes`, which are optional — and sets
+`additionalProperties: false` at every level, so unknown fields are rejected
+rather than silently ignored.
 
 Every `meta` object also accepts `animation: "trace"` for opt-in SVG/CSS motion
 in generated HTML. Omit it, or set `"none"`, for the default static output.
@@ -109,15 +116,17 @@ by exact compiled node facts receive the interactive Semantic Legend bridge;
 this includes Dataflow `database` when a real `nodes[].type: "database"` fact
 exists.
 
-Every relationship collection (`connections`, `edges`, `messages`, `flows`, and
-`transitions`) accepts an optional author-controlled `id` using the shared ID
+Every relationship collection (`connections`, `edges`, `messages`, `flows`,
+`transitions`, and the ERD and class `relationships`) accepts an optional
+author-controlled `id` using the shared ID
 pattern. The renderer keeps its source-order runtime key separately, while the
 authored ID enables a stable `#relation=<id>` viewer link that survives array
 reordering. ID-less documents remain valid and their relationship pins stay
 local to the current page.
 
-Every semantic node collection (`components`, `nodes`, `participants`, and
-`states`) also accepts one optional `brand`: either a canonical string returned
+The semantic node collections that accept one optional `brand` are architecture
+`components`, workflow and dataflow `nodes`, sequence `participants`, and
+lifecycle `states`; the `brand` value is either a canonical string returned
 by `super-archify brands --json`, or a digest-pinned `{ "url", "sha256" }` object
 returned by `super-archify brands capture <url> --json`. Known IDs and known-brand
 domains use the bundled vector catalogue. Unknown URLs must be captured in that
@@ -133,8 +142,8 @@ compatibility contract; version 2 opts into the readable workflow compiler and
 can be produced explicitly with `super-archify migrate workflow ... --to-schema 2`.
 Lifecycle accepts only version 3, an automatic main-path layout (see the
 [lifecycle renderer](../renderers/lifecycle/README.md)).
-The other three diagram schemas keep `schema_version` pinned to `1`; they have
-no schema-version migration command. For any of the five diagram types, repair
+The other nine diagram schemas keep `schema_version` pinned to `1`; they have
+no schema-version migration command. For any of the eleven diagram types, repair
 a legacy missing or nonportable `meta.output` in the source and run `validate`.
 For a workflow v1-to-v2 migration specifically, `migrate workflow` also accepts
 `--output reports/diagram.html` to put that portable value in the separate v2
@@ -164,7 +173,7 @@ version; additive, backwards-compatible fields do not.
 
 ## Shared definitions (common.schema.json)
 
-The five diagram schemas reference `common.schema.json#/$defs/...`:
+The eleven diagram schemas reference `common.schema.json#/$defs/...`:
 
 - `id` — element identifiers, pattern `^[a-zA-Z][a-zA-Z0-9_-]*$`
 - `point` — an `[x, y]` pair of numbers (used by `via` and `labelAt`)
@@ -195,18 +204,17 @@ that need the same cross-platform acceptance boundary should use that wrapper.
 
 ## Runtime validation
 
-At development time, `scripts/generate-validators.mjs` compiles all five
+At development time, `scripts/generate-validators.mjs` compiles all eleven
 schemas with ajv's draft 2020-12 standalone generator using `strict: true` and
 `allErrors: true`. The generated `renderers/shared/generated-validators.mjs`
 is committed and shipped with the skill, so runtime validation has no npm or
 network dependency. `renderers/shared/validator.mjs` applies the matching
 standalone validator before the renderer's own layout checks.
-The shared loader then checks cross-collection facts that JSON Schema cannot
-express cleanly here: duplicate view IDs, duplicate focus IDs, focus IDs that do
-not exist in the diagram's semantic collection, and duplicate authored
-relationship IDs within the mode's relationship collection.
+The shared loader then checks one cross-collection fact that JSON Schema cannot
+express cleanly here: duplicate authored relationship IDs within the mode's
+relationship collection.
 
-All five modes support opt-in, revision-pinned repository evidence.
+All eleven modes support opt-in, revision-pinned repository evidence.
 `meta.repository` names the repository URL and full commit SHA, with optional
 `provider` (`github`, `gitee`, or `gitlab`) and `link_mode` (`web` or `local-only`; see the
 authoring contract); a node may carry one to three `sources` with repo-relative POSIX paths, optional line
@@ -222,7 +230,7 @@ exports carry no repository evidence.
 ## Visual quality and engineering truth
 
 `meta.quality_profile` and `meta.engineering_profile` answer different
-questions. `quality_profile` is available in all five modes and controls how
+questions. `quality_profile` is available in all eleven modes and controls how
 strictly Archify judges composition. `engineering_profile` is an optional
 Architecture-only semantic contract; omitting it preserves the ordinary v1
 behavior.
@@ -240,8 +248,8 @@ The profile validates only authored IR. It does not discover infrastructure,
 infer owners, or prove that a diagram matches a live environment. If a fact is
 unknown, leave the profile unset or obtain the fact instead of inventing it.
 
-`npm test` runs the generator in check mode and fails when the committed
-validators drift from their schemas.
+`node scripts/generate-validators.mjs --check` runs the generator in check mode
+and fails when the committed validators drift from their schemas.
 
 ## Error format
 

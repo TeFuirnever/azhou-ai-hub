@@ -70,8 +70,8 @@ reader text floor, so a deep rightward tree scrolls instead of shrinking.
 
 Every node with children gets a toggle on its outgoing side, a separate
 focusable button after the node, with `aria-expanded` and a localized label
-that states how many descendants it hides. The Viewer module
-`viewer/tree-branches.js` owns the state:
+that states how many descendants it hides. The `Archify.treeBranches` module
+(inlined in `assets/template.html`) owns the state:
 
 - Collapsing hides descendants and their links only. Positions are computed
   once for the complete tree, so nothing visible moves and the reader keeps
@@ -91,6 +91,6 @@ the clone and leaves the live view unchanged.
 
 ## Tested size
 
-`examples/archify-repository.tree.json` (31 nodes, depth 4, unbalanced, four
+`examples/archify-repository.tree.json` (31 nodes, depth 4, unbalanced, five
 stacked lists) renders in about 0.2s and passes the showcase gates;
 a toggle updates the DOM in under a few milliseconds.

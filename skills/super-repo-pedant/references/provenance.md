@@ -14,7 +14,7 @@
 
 - 2026-10-18 — reference baseline moved from the pre-v3 absorption pin `bab17831` to upstream v3.0.0 `322346de` (owner-directed re-baseline; upstream unchanged since 2026-10-01). The hash-locked snapshot refreshed to the v3 files and gained `references/governance.md` + `references/verification.md`; `scripts/check_repository.py` `BASELINE_HASHES` re-locked (5 entries); the compatibility contract moves to v3 (8 changed ledger rows restated to v3 wording, three converged replacement rows annotated, dispositions and the bare-tidy divergence retained); parity controls flipped in `tests/test_super_repo_pedant_parity.py`; both READMEs re-scope the 28/28 claim. Local skill behavior is byte-unchanged; evidence: `python scripts/verify.py` green on the branch tip (repository policy, unit tests, super-repo-pedant benchmark).
 
-Local source binding uses standard Git plumbing in `scripts/promotion_binding.py`; it is Azhou-authored and does not change the upstream pin. Exact patch replay/reverse, clean-version and post-application checks extend the existing gate without installing a second evolution platform or automatic source writer. See the current evolution contract for supported cases and limitations.
+Local source binding uses standard Git plumbing in `skills/super-repo-pedant/scripts/promotion_binding.py`; it is Azhou-authored and does not change the upstream pin. Exact patch replay/reverse, clean-version and post-application checks extend the existing gate without installing a second evolution platform or automatic source writer. See the current evolution contract for supported cases and limitations.
 
 ## Fidelity classification
 

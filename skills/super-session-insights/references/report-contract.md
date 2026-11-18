@@ -33,7 +33,7 @@
 - `repeated_first_prompt_count`：trim 后完全相同的首条提示，每组只计首次之外的部分之和。
 - `inputs`：`file_count` 与复合 SHA-256——排序后的（`sha256(相对路径)`、`mtime_ns`、`size`）元组；永不含文件内容，永不含明文绝对路径。
 
-Codex 适配器（已接入）：只扫描 `sessions/YYYY/MM/DD/rollout-*.jsonl`；`session_meta.thread_source != "user"` 的 rollout（subagent、guardian review、缺失该字段的旧形状）整体计入 `skipped_subagent_sessions`；developer 角色消息与注入型 user 文本（含 `<environment_context>`、以标签开头的簿记通知）计入 `skipped_lines`；工具调用取 `function_call` 的 `name`（带 `namespace` 时记 `namespace.name`）；中断取 `event_msg` 的 `turn_aborted{reason: interrupted}`；Codex 无已核实的 API 错误标记，`error_count` 恒为 0。项目脱敏标签与 narrowing 比较值由 `session_meta.cwd` 现算，明文 cwd 与可逆编码名不入任何产物或缓存。
+Codex 适配器（已接入）：只扫描 `sessions/` 下递归匹配的 `rollout-*.jsonl`（任意深度；日期分层目录是常见布局而非前提）；`session_meta.thread_source != "user"` 的 rollout（subagent、guardian review、缺失该字段的旧形状）整体计入 `skipped_subagent_sessions`；developer 角色消息与注入型 user 文本（含 `<environment_context>`、以标签开头的簿记通知）计入 `skipped_lines`；工具调用取 `function_call` 的 `name`（带 `namespace` 时记 `namespace.name`）；中断取 `event_msg` 的 `turn_aborted{reason: interrupted}`；Codex 无已核实的 API 错误标记，`error_count` 恒为 0。项目脱敏标签与 narrowing 比较值由 `session_meta.cwd` 现算，明文 cwd 与可逆编码名不入任何产物或缓存。
 
 zcode 分节恒为 `{"status": "unsupported", "hold": "zcode unsupported"}`：可检测，不解析，不产出任何猜测数字（#162 侦察结论：3.11.2 无明文会话转写存储）。store 目录不存在时 Claude Code 分节为 `{"status": "missing"}`。
 
@@ -41,7 +41,7 @@ zcode 分节恒为 `{"status": "unsupported", "hold": "zcode unsupported"}`：�
 
 - 只服务 `aggregate` 且仅在未开摘录时启用；`metadata`、`discover`、`--include-excerpts` 运行绕过。
 - 位置：`<cwd>/.azhou/super-session-insights/metadata-cache.json`（gitignored 运行时命名空间；永不写入会话 store 内部）。
-- 寻址：`stores[<sha256(harness + 解析后 store 根)>].files[<sha256(相对路径)>]`，条目以 `mtime_ns`+`size` 判活；不匹配即重解析该文件。扫描结束后条目集重写为当次所见文件，删除的会话自然失效。
+- 寻址：`stores[<sha256(harness + "\n" + 解析后 store 根)>].files[<sha256(相对路径)>]`，条目以 `mtime_ns`+`size` 判活；不匹配即重解析该文件。扫描结束后条目集重写为当次所见文件，删除的会话自然失效。
 - 内容边界：只存逐会话元数据与聚合级字段；`first_prompt` 文本与 `project` 标签不入缓存——首条提示以 `first_prompt_sha256` 留存，`repeated_first_prompt_count` 按摘要计数，与全量解析数值一致。project 标签每次扫描现算。
 - 可丢弃性：文件缺失、损坏或 schema 不符按空缓存处理；条目即使 `mtime_ns`+`size` 命中，其 metadata 缺失任何被消费字段、类型不符或嵌套 `tool_calls` 形状损坏也按 miss 重解析该文件并由写回自愈（benchmark 投毒负控钉死）。写入为尽力而为的原子发布（临时文件 + `os.replace`），写失败静默。冷/热/删除缓存三种状态下聚合输出逐字节一致（由 benchmark 负控钉死）。
 

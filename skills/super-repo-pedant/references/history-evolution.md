@@ -110,7 +110,7 @@ Run structural validation and script tests. Execute baseline and candidate again
 
 Use this paired evolution protocol:
 
-1. score the baseline on all nine rubric dimensions for triage only;
+1. score the baseline for triage only;
 2. compare anonymized baseline/candidate outputs in the same judge context;
 3. use an odd number of independent judges, default `N=3`, reversing A/B order;
 4. reject any candidate with a new safety or authorization regression;

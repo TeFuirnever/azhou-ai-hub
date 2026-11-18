@@ -24,8 +24,8 @@ imply sponsorship, endorsement, or partnership.
 Edit `catalog.json`, then regenerate the committed zero-runtime-dependency bundle:
 
 ```bash
-npm run generate:brand-marks
-npm run check:brand-marks
+node scripts/generate-brand-marks.mjs
+node scripts/generate-brand-marks.mjs --check
 ```
 
 Do not hand-edit `renderers/shared/generated-brand-marks.mjs`.

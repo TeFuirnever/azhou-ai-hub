@@ -42,4 +42,4 @@ python skills/super-repo-pedant/scripts/validate_evidence_bundle.py report.json 
   --require-runtime zcode
 ```
 
-Add `--receipt response.md` to validate branded `repo-pedant.receipt.v2` fields and status invariants. Legacy v1 receipts remain accepted as historical evidence. Add `--allow-excerpts` only for a local, non-committed review artifact.
+Add `--receipt response.md` to validate branded `super-repo-pedant.receipt.v2` fields and status invariants. Legacy v1 receipts remain accepted as historical evidence. Add `--allow-excerpts` only for a local, non-committed review artifact.
