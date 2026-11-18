@@ -335,6 +335,7 @@ class ManageEvolutionTest(unittest.TestCase):
             project = Path(directory)
             self.add_signal(project, session="one")
             self.add_signal(project, session="two")
+            self.add_signal(project, session="success", outcome="success")
             proposal = json.loads(self.propose(project).stdout)
             args = argparse.Namespace(project=project, state_root=None, candidate=Path(proposal["candidate"]))
             evolution = project / ".azhou" / "super-repo-pedant" / "evolution"
@@ -352,7 +353,13 @@ class ManageEvolutionTest(unittest.TestCase):
                 self.assertEqual(2, MODULE.cmd_archive(args))
             archive = next((evolution / "archive").glob("*.jsonl"))
             archived_bytes = archive.read_bytes()
-            self.assertEqual(2, len((evolution / "signals.jsonl").read_text().splitlines()))
+            self.assertEqual(3, len((evolution / "signals.jsonl").read_text().splitlines()))
+            health = self.run_cli("health", "--project", str(project), "--now", "2026-08-23T00:00:00Z")
+            self.assertEqual(0, health.returncode, health.stderr)
+            trend = json.loads(health.stdout)
+            with self.subTest(phase="archive published before live file rewritten"):
+                self.assertEqual((3, 1 / 3, 1 / 3),
+                                 (trend["signals"], trend["success_rate_7d"], trend["success_rate_30d"]))
             blocked = self.add_signal(project, session="later")
             self.assertEqual(2, blocked.returncode)
             self.assertIn("pending archive", blocked.stderr)
@@ -362,7 +369,7 @@ class ManageEvolutionTest(unittest.TestCase):
             later = self.add_signal(project, session="later")
             self.assertEqual(0, later.returncode)
             live = (evolution / "signals.jsonl").read_text(encoding="utf-8")
-            self.assertEqual(1, len(live.splitlines()))
+            self.assertEqual(2, len(live.splitlines()))
             self.assertIn(json.loads(later.stdout)["signal_id"], live)
             candidate = json.loads(Path(proposal["candidate"]).read_text(encoding="utf-8"))
             self.assertEqual(2, candidate["archived_signal_count"])
@@ -866,6 +873,42 @@ class ManageEvolutionTest(unittest.TestCase):
             for key, expected in (("success_rate_7d", 1 / 2), ("success_rate_30d", 2 / 3)):
                 with self.subTest(key=key):
                     self.assertAlmostEqual(expected, payload[key])
+
+    def test_health_excludes_foreign_project_records(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            local = Path(directory) / "local"
+            foreign = Path(directory) / "foreign"
+            for project, outcome in ((local, "success"), (foreign, "failure")):
+                project.mkdir()
+                added = self.add_signal(project, session="one", outcome=outcome)
+                self.assertEqual(0, added.returncode, added.stderr)
+            batch = Path(".azhou/super-repo-pedant/evolution/signals.jsonl")
+            with (local / batch).open("ab") as live:
+                live.write((foreign / batch).read_bytes())
+
+            result = self.run_cli("health", "--project", str(local), "--now", "2026-08-23T00:00:00Z")
+            self.assertEqual(0, result.returncode, result.stderr)
+            report = json.loads(result.stdout)
+            self.assertEqual((1, 1.0, 1.0),
+                             (report["signals"], report["success_rate_7d"], report["success_rate_30d"]))
+
+    def test_health_rejects_conflicting_rows_with_same_signal_id(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            live = project / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            rows = []
+            for outcome in ("success", "failure"):
+                added = self.add_signal(project, session="same", outcome=outcome)
+                self.assertEqual(0, added.returncode, added.stderr)
+                rows.append(json.loads(added.stdout))
+            self.assertEqual(rows[0]["signal_id"], rows[1]["signal_id"])
+            before = live.read_bytes()
+
+            result = self.run_cli("health", "--project", str(project), "--now", "2026-08-23T00:00:00Z")
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+            self.assertIn(f"conflicting signal records share an identity: {rows[0]['signal_id']}", result.stderr)
+            self.assertEqual("", result.stdout)
+            self.assertEqual(before, live.read_bytes())
 
     def test_health_trend_is_investigation_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
