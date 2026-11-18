@@ -98,7 +98,10 @@ separate task.
   and the list counted twenty-two titles against the twenty-three shipped
   playbooks. The patch restores the standing project-scale-program routing
   sentence and the `Orchestrate` enumeration entry in the pristine poteto-mode
-  `SKILL.md` before the generator mirrors it into all five trees.
+  `SKILL.md`, and the Orchestrate guide sentences the same deletion dropped in
+  `docs/guide/07-overnight.md`, `docs/guide/02-poteto-mode.md` and
+  `skills/poteto-help/SKILL.md`, before the generator mirrors them into all
+  five trees.
 - `0021-hub-distribution-version-0.15.37` and
   `0024-hub-distribution-version-0.15.38`: **removed from the queue** (patch
   files deleted, `series` lines dropped). A patch is a loan; these stamped

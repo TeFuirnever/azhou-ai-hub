@@ -33,7 +33,7 @@ poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "
 
 - The plugin's four agent files register as agent definitions with scoped ids: `pstack-azhouzhou/poteto-agent`, `pstack-azhouzhou/comment-sicko`, `pstack-azhouzhou/thermo-nuclear-review-subagent`, and `pstack-azhouzhou/thermo-nuclear-code-quality-review-subagent`. Pass the scoped id as `subagent_spawn`'s `subagent_type`, or as a Workflow child's `agentType`. Map a skill's `pstack-azhouzhou:poteto-agent`, and each other `pstack-azhouzhou:<name>` dispatch, to `pstack-azhouzhou/<name>` unchanged otherwise. `general-purpose`, or no type, runs the built-in general agent. In a skills-only setup none of these definitions exist: route an ad-hoc subagent through poteto-mode's style by telling it to read the `poteto-mode` skill in full first, and a `comment-sicko` dispatch to read `agents/comment-sicko.md` from the installed distribution root (the directory containing `skills/` and `agents/`) first. If a skills-only copy omits that file, block the reviewer and report the missing file; do not guess or substitute a role.
 - `subagent_spawn` children already run alongside your turn, so `run_in_background: true` has no separate flag. Issue the dispatch and continue; the result arrives when the child finishes.
-- `readonly: true` (reviewers, explorers, critics) has no flag. Say in the objective that the child must not change files, and review its diff anyway.
+- `readonly: true` (reviewers and `how`'s explainer) has no flag. Say in the objective that the child must not change files, and review its diff anyway.
 - A role value's `@<level>`, or the `default effort` line, passes as the dispatch's effort field: `effort` on a Workflow child. `subagent_spawn` has no effort field and keeps the session's effort, so name the level it needs in the objective when the job turns on it. `session` sets nothing.
 - `isolation: "worktree"` maps to `worktree_isolation` on `subagent_spawn`, or `isolation` on a Workflow child. Muse runs every subagent on this machine, so the **swarm** skill's workers and the fan-out playbooks (`orchestrate`, `autopilot-full`, `autopilot-stack`) isolate writers with worktrees, as on Claude Code.
 - A completion notice on Muse means the child finished; the Claude Code caveat about a `completed` agent that keeps running does not apply. Stop an agent you abandon with `subagent_cancel` and confirm it stopped before replacing it.
@@ -46,7 +46,7 @@ Skills name Claude defaults (a single-role default for code/prose/judgment, a wo
 - Single-model roles: your primary Muse model (for example `muse-wonder-1.0`).
 - Roles that default to the Claude worker model (`feature, refactoring`): your fast Muse model (for example `muse-spark-1.3`).
 - Roles that default to the strongest Claude model (`strongest judgment`): your strongest Muse model (for example `muse-wonder-full-1.0`).
-- Diverse-model panels (`arena`, `architect`, `interrogate`, `how` critics, `reflect`): the adversarial signal comes from model diversity, so use the distinct Muse models available to you. A good default panel is `muse-wonder-full-1.0`, `muse-wonder-1.0`, `muse-spark-1.3`. Muse serves one model family, so vary reasoning effort across the panel too and note in the verdict that diversity was reduced.
+- Diverse-model panels (`arena`, `interrogate`): the adversarial signal comes from model diversity, so use the distinct Muse models available to you. A good default panel is `muse-wonder-full-1.0`, `muse-wonder-1.0`, `muse-spark-1.3`. Muse serves one model family, so vary reasoning effort across the panel too and note in the verdict that diversity was reduced.
 
 Pass a role's model where the dispatch takes one: a Workflow child's `model`, or the session model when the dispatch has no model field. `subagent_spawn` takes an agent definition, not a model, so a role dispatched that way runs on the session's model and effort; a Workflow child takes both (see Subagent policy). `inherit-parent` or `auto` omits `model`.
 
@@ -86,12 +86,12 @@ Affected skill entry points point here. Most skills need only the tables above. 
 | `maintain-formal-verification-skill` | Project skills, the formal verification skill among them, live under `.agents/skills/`. |
 | `babysit` | `loop` and `AskUserQuestion` resolve through the tables above. |
 | `automate-me` | The skill-authoring guidance resolves through the skills table above. The workspace's transcripts are its Muse sessions (see Tool actions), and the mode skill lands in the Muse user skills directory or `.agents/skills/`. |
-| `architect` | The runner panel goes through the **arena** skill, so its fan-out and model substitution apply here too. |
+| `architect` | Sketches two shapes and picks one; there is no runner panel. A large or contested design routes to the **arena** skill (see its row). |
 | `arena` | The parallel candidates and the cross-judge are Workflow children or `subagent_spawn` calls on the configured Muse models (see Model names). |
-| `how` | The parallel explorers and the explainer map to `subagent_spawn` fan-out; substitute your configured Muse models. |
-| `reflect` | The three reviewers and the synthesizer map to `subagent_spawn` fan-out. The transcript finder reads Claude Code's layout, so pass the session digest step 1 allows instead. |
+| `how` | One `subagent_spawn`, read-only (say so in the objective; see Subagent policy), explores and explains in one pass; it dispatches no panel and no role model. |
+| `reflect` | Mines this session's transcript (Tool actions) in one pass and routes each finding to a skill edit; it dispatches no reviewers or synthesizer and runs no finder script. The `.cursor/skills/<skill>/` and `~/.cursor/skills/<skill>/` destinations it names mean the Muse user skills directory or `.agents/skills/`; it never edits a skill under `plugins/cache/`. |
 | `swarm` | Each worker is a `subagent_spawn` call or a Workflow child; give each writing worker worktree isolation or its own output directory (see Subagent policy). |
-| `why` | The parallel investigators and the synthesizer map to `subagent_spawn` fan-out; substitute your configured Muse models. List MCP servers from the tools Muse exposes to the session, not from Claude Code's MCP files. |
+| `why` | Answers from the record (the commits and PR discussions that introduced the target) in one pass with citations; it dispatches no investigators or synthesizer. |
 | `typescript-best-practices` | Its frontmatter `paths` scoping is Claude Code metadata on Muse; invoke it by name for TypeScript work. |
 | `recall` | Search this workspace's Muse sessions (see Tool actions), not Claude Code's projects directory. |
 | `show-me-your-work` | Check the log against this run's Muse session file (see Tool actions), not a Claude Code transcript. |

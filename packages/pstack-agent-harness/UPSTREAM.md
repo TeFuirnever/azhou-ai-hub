@@ -71,7 +71,7 @@ builder, not the old sync-based port.
 The quilt currently has 23 patches: 17 upstream-defect patches and six
 Hub-specific adjustments (distribution identity, test type-narrowing,
 command/agent namespace guides, Claude model-sheet alignment and Hub-kept
-playbook rows, Orchestrate routing and enumeration restore, and conservative
+playbook rows, Orchestrate routing, enumeration and guide restore, and conservative
 worktree-audit classification). The 17
 `Forwarded: no` upstream-defect patches still need upstream review/forwarding
 or replacement when upstream adopts a fix. The current pinned import is
