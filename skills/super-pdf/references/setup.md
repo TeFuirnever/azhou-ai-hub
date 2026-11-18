@@ -2,7 +2,7 @@
 
 Read this before the first PDF operation on a machine, or whenever a recipe, a vendored script, or a CLI tool named by the guide fails.
 
-The upstream skill ships no dependency manifest: it declares libraries inline (section titles under "Python Libraries" and "Command-Line Tools", one `# Requires:` comment in the OCR recipe) and assumes they are already installed. This package does not assume. Every dependency below is named with what consumes it, how to verify it, and the failure boundary.
+The upstream skill ships no dependency manifest: it declares libraries inline (section titles under "Python Libraries" and "Command-Line Tools", one `# Requires:` comment in the OCR recipe, and ImageMagick named by the FORMS.md zoom-crop recipe) and assumes they are already installed. This package does not assume. Every dependency below is named with what consumes it, how to verify it, and the failure boundary.
 
 ## Runtime dependencies
 
@@ -23,7 +23,7 @@ Recipe-level optional dependencies, needed only by the recipes that name them:
 
 - `pandas` (plus an Excel engine such as `openpyxl` for `to_excel`) — the "Advanced Table Extraction" recipe in the guide.
 - `pypdfium2` and `numpy` — the REFERENCE.md advanced track (render/extract with pypdfium2; its image-extraction recipe imports numpy).
-- Node.js libraries `pdf-lib` and `pdfjs-dist` — the REFERENCE.md JavaScript track; they are project-level npm dependencies of whatever JavaScript program uses them, not Python installs.
+- ImageMagick (`magick`, falling back to `convert` per FORMS.md) — the FORMS.md Approach B.3 zoom-crop recipe; verify with `magick -version` or `convert -version`.
 - Node.js libraries `pdf-lib` and `pdfjs-dist` — the REFERENCE.md JavaScript track; they are project-level npm dependencies of whatever JavaScript program uses them, not Python installs.
 
 No dependency is vendored: the package carries instructions and vendored helper scripts only, and the scripts import the environment's libraries.

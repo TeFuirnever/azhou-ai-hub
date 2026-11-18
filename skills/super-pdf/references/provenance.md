@@ -23,7 +23,7 @@ Adoption rides the 2026-11-18 import review (docskills-U0, merged as the frozen 
 
 - **R1 (Apache-2.0 §4(a) attribution): accepted.** Its three conditions are implemented here: the LICENSE.txt copy is byte-identical including the placeholder copyright line; the repository THIRD_PARTY_NOTICES names "Anthropic PBC, from anthropics/skills @ e4bb5d960d…, Apache-2.0"; and the placeholder-line anomaly is recorded below. If the upstream ever corrects the copyright line, the stable-source rules require re-ruling before syncing.
 - **R2 (format set and order):** pdf is the first of the four document-format adoptions (pdf → docx → xlsx → pptx).
-- **§9 dependency contract:** the upstream declares no Dependencies section; library names sit in section titles ("Python Libraries", "Command-Line Tools") plus one inline `# Requires:` comment. The full runtime dependency surface (including Pillow, which the upstream SKILL.md never declares although `create_validation_image.py` imports it) is carried by [setup.md](setup.md) under a fail-closed contract.
+- **§9 dependency contract:** the upstream declares no Dependencies section; library names sit in section titles ("Python Libraries", "Command-Line Tools"), one inline `# Requires:` comment, and the FORMS.md zoom-crop recipe naming ImageMagick. The full runtime dependency surface (including Pillow, which the upstream SKILL.md never declares although `create_validation_image.py` imports it) is carried by [setup.md](setup.md) under a fail-closed contract.
 
 ## Placeholder copyright-line anomaly
 
@@ -48,6 +48,7 @@ The upstream text is unchanged; this list records where the local layer replaces
 3. `scripts/create_validation_image.py` imports Pillow with no upstream declaration anywhere in SKILL.md → declared in [setup.md](setup.md) (recorded in the U0 §9 contract as an undeclared upstream dependency).
 4. `scripts/extract_form_structure.py` imports pdfplumber, which the upstream guide uses only in its extraction recipes → declared as a FORMS.md structure-extraction dependency too.
 5. REFERENCE.md's pypdfium2 and Node (`pdf-lib`, `pdfjs-dist`) tracks and the guide's pandas example → recorded as recipe-level optional dependencies rather than assumed installs.
+6. `FORMS.md` Approach B.3's zoom-crop refinement names ImageMagick (`magick`, falling back to `convert`) as an assumed install → declared as a recipe-level dependency in [setup.md](setup.md), verified before the recipe with a named hold on absence.
 
 These are packaging gates, not capability changes: every recipe, script and doc keeps its upstream bytes, and no operation gains or loses a step.
 
