@@ -313,3 +313,17 @@ for(const change of ['route','boot','root','main','html','hidden','ancestor-aba'
   if(change==='ancestor-aba')records=[{type:'childList',removedNodes:[{contains:n=>n===main}]}];
   assert.equal(lease.current(),false);lease.dispose();assert.equal(lease.current(),false);
 });
+
+for(const routeEvent of ['hashchange','popstate'])test(`DSH ${routeEvent} notifies once without a DOM mutation and releases listeners`,()=>{
+  const h=host(),listeners=new Map();let notifications=0;
+  const main={isConnected:true,closest:()=>null},root={isConnected:true,contains:n=>n===main};
+  h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[main];
+  h.addEventListener=(name,fn)=>listeners.set(name,fn);
+  h.removeEventListener=(name,fn)=>{if(listeners.get(name)===fn)listeners.delete(name);};
+  h.MutationObserver=class{constructor(fn){this.callback=fn;}observe(){}disconnect(){}takeRecords(){return [];}};
+  const lease=createDSHPageAdapter(h).captureThemeSurface();lease.watch(()=>notifications++);
+  const queued=listeners.get(routeEvent);queued();
+  assert.equal(lease.current(),false);assert.equal(notifications,1,'route invalidation must notify synchronously');
+  queued();assert.equal(notifications,1,'duplicate events cannot repeatedly release the owner');
+  lease.dispose();assert.equal(listeners.size,0);queued();assert.equal(notifications,1,'queued event after disposal is inert');
+});

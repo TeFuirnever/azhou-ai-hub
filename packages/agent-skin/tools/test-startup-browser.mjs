@@ -6580,9 +6580,16 @@ try {
       const absentStale=absent.transaction.current(),absentFinalized=absent.transaction.finalize();
       const disabled=await apply({...base,strength:0},()=>true,null,{transactional:true});
       const disabledFinalized=disabled.transaction.finalize(),disabledRepeated=disabled.transaction.finalize();
-      return {color,rollback,same,finalized,restored,transparent,zeroStale,zeroFinalized,absentStale,absentFinalized,disabledFinalized,disabledRepeated,marker:node.getAttribute('data-azhou-dream-main')};
+      const routeCleanup=[];
+      for(const eventName of ['hashchange','popstate']){
+        const applied=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+        if(!applied.transaction.finalize())throw Error('route setup failed');
+        window.dispatchEvent(new Event(eventName));
+        routeCleanup.push(!window.__azhouWallpaper&&!document.getElementById('azhou-wallpaper-style')&&!node.hasAttribute('data-azhou-dream-main'));
+      }
+      return {color,rollback,same,finalized,restored,transparent,zeroStale,zeroFinalized,absentStale,absentFinalized,disabledFinalized,disabledRepeated,routeCleanup,marker:node.getAttribute('data-azhou-dream-main')};
     })()`);
-    assert.deepEqual(result,{color:'rgba(10, 20, 30, 0.4)',rollback:true,same:true,finalized:true,restored:true,transparent:'rgba(0, 0, 0, 0)',zeroStale:false,zeroFinalized:false,absentStale:false,absentFinalized:false,disabledFinalized:true,disabledRepeated:true,marker:null});
+    assert.deepEqual(result,{color:'rgba(10, 20, 30, 0.4)',rollback:true,same:true,finalized:true,restored:true,transparent:'rgba(0, 0, 0, 0)',zeroStale:false,zeroFinalized:false,absentStale:false,absentFinalized:false,disabledFinalized:true,disabledRepeated:true,routeCleanup:[true,true],marker:null});
     return result;
   });
 

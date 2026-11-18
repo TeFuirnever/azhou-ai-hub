@@ -164,8 +164,8 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
     if (!matched(host) || !root?.isConnected || nodes.length!==1 || !root.contains(nodes[0])
       || typeof host.MutationObserver!=='function') return null;
     const node=nodes[0], url=host.location.href, boot=Object.getOwnPropertyDescriptor(host,'__DSH_BOOT__').value;
-    let invalid=false, disposed=false, observer=null;
-    const onRoute=()=>{invalid=true;};
+    let invalid=false, disposed=false, observer=null, notify=()=>{};
+    const onRoute=()=>{invalid=true;notify();};
     const inspect=records=>{for(const record of records){
       if(record.type==='childList' && [...record.removedNodes].some(n=>n===root||n===node||n.contains?.(root)||n.contains?.(node))) invalid=true;
       if(record.type==='attributes' && (record.target===node||record.target===root||record.target?.contains?.(node))
@@ -182,9 +182,11 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
         &&(!node.getClientRects || node.getClientRects().length>0);
     };
     return Object.freeze({node,current,
-      watch(invalidated){if(observer||disposed)return false;
+      watch(invalidated){if(observer||disposed||typeof invalidated!=='function')return false;
+        let notified=false;
+        notify=()=>{if(!disposed&&!notified){notified=true;invalidated();}};
         host.addEventListener?.('hashchange',onRoute);host.addEventListener?.('popstate',onRoute);
-        observer=new host.MutationObserver(records=>{inspect(records);if(!current())invalidated();});
+        observer=new host.MutationObserver(records=>{inspect(records);if(!current())notify();});
         observer.observe(doc.documentElement,{childList:true,subtree:true,attributes:true,
           attributeFilter:['data-slot','hidden','aria-hidden','role']});return true;},
       dispose(){disposed=true;observer?.disconnect();observer=null;
