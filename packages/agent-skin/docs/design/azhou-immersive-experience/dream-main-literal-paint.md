@@ -50,10 +50,19 @@ The generated parent/child scenario is selected with `node tools/test-startup-br
 
 ## DSH explicit main-paint capability
 
-DSH uses `dsh-owned-main-paint/v1`, not the Codex workspace or mask contract.
+DSH uses `dsh-owned-main-paint/v2`, not the Codex workspace or mask contract.
 The source profile name remains the versioned source mapper identity; it does not
-license arbitrary selectors on DSH. The adapter nominates exactly one connected
-`data-slot="main"` inside the captured root. A lease binds document/html, boot,
+license arbitrary selectors on DSH. The adapter identifies exactly one connected `data-slot="main"` inside the
+captured root. A normal boxed slot paints itself. For the observed DSH
+`display:contents` slot, v2 nominates only its exclusive direct parent with a
+`_mainPanel` CSS-module class token, a real layout box, and no additional element
+children. The semantic slot and paint plane remain separately bound; unknown
+ancestors or expanded scopes fail closed. Both the semantic slot and paint plane
+reject hidden/aria-hidden/inert ancestry and computed hidden/collapsed visibility,
+including at initial admission. Added-and-removed element siblings invalidate
+the exclusive plane lease even when the final topology looks unchanged.
+No host display/layout property is
+rewritten to manufacture a box. A lease binds document/html, boot,
 route, root and main; pending mutation records are drained before checking it.
 Removal/reinsertion permanently invalidates the lease. Decode, transactional
 activation, zero-strength Restore and rollback must not revive a stale main or
@@ -71,6 +80,7 @@ claiming that rollback or database compensation necessarily succeeded.
 Run the synthetic DSH adapter/renderer transaction check in
 `test-startup-browser.mjs` and the generated client/iframe check with
 `AZHOU_TEST_PYTHON=PYTHON node tools/test-dsh-dream-browser.mjs --out NEW_DIRECTORY`
-after `tools/build-dsh-plugin.py`. The latter uses a mocked module loader/Cordis
-carrier, no React settings slot, and an isolated owned Chrome profile. These are
+after `tools/build-dsh-plugin.py`. The latter invokes the real embedded `mountSettings` path inside a synthetic
+host dialog with the observed boxless slot shape. It uses a mocked module loader/Cordis
+carrier, not the actual React component, and an isolated owned Chrome profile. These are
 regression checks, not installed-host payload identity or native IME evidence.

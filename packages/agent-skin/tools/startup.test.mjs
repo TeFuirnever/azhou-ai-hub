@@ -4143,7 +4143,7 @@ for(const target of ['codex','dsh'])test(`settings explicit ${target} theme acti
     f.host.__azhouWallpaper={owner:'azhou.codex-startup-animation',version:'0.9.0',status:()=>({applied:true,imageDecoded:true}),dispose(){}};
     return {applied:true,transaction:{current:()=>true,finalize(){log.push('finalize');return true;},rollback(){log.push('rollback');return true;}}};
   };
-  installStartup(payload,f.host,target==='codex'?pageAdapter:{...pageAdapter,workspaceContract:undefined,themeSelectionContract:'dsh-owned-main-paint/v1'});
+  installStartup(payload,f.host,target==='codex'?pageAdapter:{...pageAdapter,workspaceContract:undefined,themeSelectionContract:'dsh-owned-main-paint/v2'});
   const api=f.host.__azhouStartup;const {send,spec}=specs.at(-1);
   send({type:'azhou-startup',runId:spec.runId,action:'ready'});send({type:'azhou-startup',runId:spec.runId,action:'settings-open'});
   const result=await send({type:'azhou-startup',runId:spec.runId,action:'theme-apply',capsuleSha256:'a'.repeat(64),expectedToken:'b'.repeat(64)});

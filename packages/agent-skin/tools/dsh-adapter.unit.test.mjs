@@ -289,7 +289,7 @@ test('DSH theme surface lease binds exact root/main and rejects removal/reinsert
   const root={isConnected:true,contains:n=>n===main};
   h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[main];
   h.MutationObserver=class {constructor(cb){this.cb=cb;observer=this;} observe(){} disconnect(){} takeRecords(){const r=records;records=[];return r;}};
-  const a=createDSHPageAdapter(h);assert.equal(a.themeSelectionContract,'dsh-owned-main-paint/v1');
+  const a=createDSHPageAdapter(h);assert.equal(a.themeSelectionContract,'dsh-owned-main-paint/v2');
   const lease=a.captureThemeSurface(h);lease.watch(()=>{});assert.equal(lease.node,main);assert.equal(lease.current(),true);
   records=[{type:'childList',removedNodes:[main]}];
   assert.equal(lease.current(),false,'reattachment cannot revive old admission');lease.dispose();
@@ -326,4 +326,44 @@ for(const routeEvent of ['hashchange','popstate'])test(`DSH ${routeEvent} notifi
   assert.equal(lease.current(),false);assert.equal(notifications,1,'route invalidation must notify synchronously');
   queued();assert.equal(notifications,1,'duplicate events cannot repeatedly release the owner');
   lease.dispose();assert.equal(listeners.size,0);queued();assert.equal(notifications,1,'queued event after disposal is inert');
+});
+
+for(const validPanel of [true,false])test(`DSH display:contents anchor nominates only its known direct paint panel (${validPanel})`,()=>{
+  const h=host();const anchor={isConnected:true,closest:()=>null,getClientRects:()=>[]};
+  const panel={isConnected:true,closest:()=>null,classList:[validPanel?'fixture_mainPanel':'unrelated'],children:[anchor],getClientRects:()=>[{}]};
+  anchor.parentElement=panel;
+  const root={isConnected:true,contains:n=>n===anchor||n===panel};
+  h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[anchor];
+  h.getComputedStyle=n=>({display:n===anchor?'contents':'flex'});
+  h.MutationObserver=class{observe(){}disconnect(){}takeRecords(){return [];}};
+  const lease=createDSHPageAdapter(h).captureThemeSurface();
+  if(!validPanel){assert.equal(lease,null);return;}
+  assert.equal(lease.node,panel,'boxless semantic slot is not a paint plane');assert.equal(lease.anchor,anchor);
+  lease.watch(()=>{});assert.equal(lease.current(),true);
+  panel.children.push({});assert.equal(lease.current(),false,'unknown panel siblings expand the paint scope');
+  lease.dispose();
+});
+
+for(const state of ['hidden','aria-hidden','inert','visibility-hidden','visibility-collapse'])test(`DSH contents anchor rejects initial ${state}`,()=>{
+  const h=host();const anchor={isConnected:true,closest:selector=>['hidden','aria-hidden','inert'].includes(state)&&selector.includes('['+state)?anchor:null,getClientRects:()=>[]};
+  const panel={isConnected:true,closest:()=>null,classList:['fixture_mainPanel'],children:[anchor],getClientRects:()=>[{}]};anchor.parentElement=panel;
+  const root={isConnected:true,contains:n=>n===anchor||n===panel};h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[anchor];
+  h.getComputedStyle=n=>({display:n===anchor?'contents':'flex',visibility:n===anchor&&state.startsWith('visibility-')?state.slice(11):'visible'});
+  h.MutationObserver=class{observe(){}disconnect(){}takeRecords(){return [];}};
+  const lease=createDSHPageAdapter(h).captureThemeSurface();assert.equal(lease?.current()??false,false);lease?.dispose();
+});
+
+for(const change of ['multiple-children','boxless-panel','reparent','sibling-aba'])test(`DSH contents plane rejects ${change}`,()=>{
+ const h=host();let records=[];
+ const anchor={isConnected:true,closest:()=>null,getClientRects:()=>[]};
+ const panel={isConnected:true,closest:()=>null,classList:['fixture_mainPanel'],children:[anchor],getClientRects:()=>[{}]};anchor.parentElement=panel;
+ const root={isConnected:true,contains:n=>n===anchor||n===panel};h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[anchor];
+ h.getComputedStyle=n=>({display:n===anchor?'contents':'flex',visibility:'visible'});
+ h.MutationObserver=class{observe(){}disconnect(){}takeRecords(){const r=records;records=[];return r;}};
+ const lease=createDSHPageAdapter(h).captureThemeSurface();lease.watch(()=>{});assert.equal(lease.current(),true);
+ if(change==='multiple-children')panel.children.push({});
+ if(change==='boxless-panel')panel.getClientRects=()=>[];
+ if(change==='reparent')anchor.parentElement={};
+ if(change==='sibling-aba')records=[{type:'childList',target:panel,addedNodes:[{nodeType:1}],removedNodes:[]}];
+ assert.equal(lease.current(),false);lease.dispose();
 });

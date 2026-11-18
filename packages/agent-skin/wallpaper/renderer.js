@@ -169,7 +169,7 @@ export async function installRenderer(offered) {
     throw deny('invalid-local-payload');
   }
   const dshCapture=slotValue(hostAdapter,'captureThemeSurface');
-  const dshBound=hostBound && slotValue(hostAdapter,'themeSelectionContract')==='dsh-owned-main-paint/v1'
+  const dshBound=hostBound && slotValue(hostAdapter,'themeSelectionContract')==='dsh-owned-main-paint/v2'
     && typeof dshCapture==='function';
   const dshSurface=dshBound && (transactional || brief.mainPaint!=null)
     ? Reflect.apply(dshCapture,hostAdapter,[globalThis]):null;

@@ -1593,7 +1593,7 @@ class PageController {
     const digest = dataProperty(message,'capsuleSha256');
     const expectedToken = dataProperty(message,'expectedToken');
     if ((dataProperty(this.pageAdapter,'workspaceContract') !== 'codex-active-workspace/v1'
-      && dataProperty(this.pageAdapter,'themeSelectionContract') !== 'dsh-owned-main-paint/v1')
+      && dataProperty(this.pageAdapter,'themeSelectionContract') !== 'dsh-owned-main-paint/v2')
       || typeof this.wallpaperApply !== 'function'
       || digest !== null && (typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest))
       || typeof expectedToken !== 'string' || !/^[a-f0-9]{64}$/.test(expectedToken)) {
@@ -1672,7 +1672,7 @@ class PageController {
         const factory=dataProperty(this.payload,'createDreamThemeStyle');
         const style=typeof factory==='function'?factory():null;
         const theme=style?.validateThemeSnapshot(message.themeState);
-        if(!theme || (dataProperty(this.pageAdapter,'workspaceContract')!=='codex-active-workspace/v1' && dataProperty(this.pageAdapter,'themeSelectionContract')!=='dsh-owned-main-paint/v1')) throw new Error('unsupported-theme');
+        if(!theme || (dataProperty(this.pageAdapter,'workspaceContract')!=='codex-active-workspace/v1' && dataProperty(this.pageAdapter,'themeSelectionContract')!=='dsh-owned-main-paint/v2')) throw new Error('unsupported-theme');
         if(theme.selection.kind==='imported') {
           this.wallpaperApplication?.abort?.abort();
           admissionGeneration=++this.wallpaperGeneration;

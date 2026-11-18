@@ -6551,7 +6551,7 @@ try {
     await navigate('/fixture.html?legacy-only=1');
     const result=await cdp.evaluate(`(async()=>{
       window.__azhouWallpaper?.dispose();
-      document.getElementById('root').innerHTML='<main data-slot="main" style="width:100%;height:100vh"></main>';
+      document.getElementById('root').innerHTML='<div class="fixture_mainPanel" style="display:flex;flex-direction:column;width:100%;height:100vh"><div data-slot="main" style="display:contents"><main style="display:contents"><div style="flex:1"></div></main></div></div>';
       window.__ModuleLoader__={load(){}};window.__DSH_BOOT__={};
       const {createDSHPageAdapter}=await import('/extension/hosts/dsh.mjs');
       const {createWallpaperApplicator}=await import('/wallpaper/apply.js');
@@ -6564,7 +6564,7 @@ try {
       const prior=window.__azhouWallpaper;
       const candidate=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
       if(!candidate.applied)throw Error(JSON.stringify(candidate));
-      const node=document.querySelector('[data-slot=main]'),color=getComputedStyle(node).backgroundColor;
+      const node=document.querySelector('.fixture_mainPanel'),color=getComputedStyle(node).backgroundColor;
       const rollback=candidate.transaction.rollback(),same=window.__azhouWallpaper===prior;
       const next=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
       const finalized=next.transaction.finalize();
