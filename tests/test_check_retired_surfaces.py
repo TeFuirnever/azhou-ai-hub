@@ -29,6 +29,20 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
     def test_repository_scans_clean_after_the_cut(self) -> None:
         self.assertEqual([], run_checks(ROOT))
 
+    def test_azhou_pet_tooling_cannot_return_to_live_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tool = write(root, "packages/agent-skin/tools/manage-codex-pet.py", "")
+            guide = write(root, "packages/agent-skin/README.md", "Run tools/manage-codex-pet.py.\n")
+            record = write(root, "packages/agent-skin/evidence/old-pet.md", "Run tools/manage-codex-pet.py.\n")
+            self.assertEqual(
+                [
+                    "retired surface resurrected: packages/agent-skin/tools/manage-codex-pet.py",
+                    "retired-surface reference: packages/agent-skin/README.md:1: Codex Pet tooling",
+                ],
+                check_retired_surface_references([tool, guide, record], root),
+            )
+
     def test_kit_name_in_a_live_file_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

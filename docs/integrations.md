@@ -4,7 +4,7 @@ The sixteen canonical Skills under `skills/` keep their existing independent ins
 
 The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md) and [Agent Skin](../packages/agent-skin/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 
-The 2026-10-26 local App and Pet handoff receipts bound `packages/codex-startup-animation/`; the Agent Skin rename did not itself transfer either installation. That required handoff was completed on 2026-11-12 by a byte-faithful isolated rehearsal, its persistent-root replay instructions and maintainer approval ([receipt](../packages/agent-skin/evidence/codex-pet-legacy-root-handoff-2026-11-11.md)): the tool's designed rejection was accepted as final, the installed Pet receipt remains an orphan pointing at the deleted root while the Pet itself stays self-contained and usable, and the legacy root was then deleted. Installation ownership is still checked against the current App and Pet receipts separately.
+The 2026-10-26 local App handoff predates the Agent Skin rename. Launcher ownership follows the native installer and the current App receipt.
 
 ```sh
 python scripts/azhou_hub.py integrations list --json
@@ -19,7 +19,7 @@ Use Python 3.11+ and a verified Codex executable for operations that need the na
 | Entry | Package runtime and adapter scope | Native owner and boundary |
 |---|---|---|
 | `pstack` | `packages/pstack-agent-harness/`; current `runtime_paths` fingerprint, private snapshot, native install/doctor/remove adapter and read-only transition review | Codex plugin manager owns registration and cache; the Hub adapter owns only the coexistence model-sheet line it writes. Bun/Node support bundled scripts; forge workflows may need their declared tools. |
-| `agent-skin` | `packages/agent-skin/`; current runtime and build inputs, isolated build/test install/run/inspect; production lifecycle plans remain blocked | Azhou AI Lab, a Codex adapter with the native player and wallpaper helper, plus the assembled `azhou-agent-skin` DeepSeek Harness plugin package (`tools/build-dsh-plugin.py`, local assembly only). Owned UI supports Chinese/English and follows official host language/theme without separate preferences. The bot entry portrait is a separate asset; startup artwork and Pet remain independent. Version-aware events, independent playback smoke, read-only status and scoped restore retain their existing boundaries. Local tests do not establish official-host acceptance or installation handoff. Code is MIT since the #441 rewrite; the bundled Azhou art is CC BY-NC-ND 4.0. |
+| `agent-skin` | `packages/agent-skin/`; current runtime and build inputs, isolated build/test install/run/inspect; production lifecycle plans remain blocked | Azhou AI Lab, a Codex adapter with the native player and wallpaper helper, plus the assembled `azhou-agent-skin` DeepSeek Harness plugin package (`tools/build-dsh-plugin.py`, local assembly only). Owned UI supports Chinese/English and follows official host language/theme without separate preferences. The bot entry portrait and startup artwork are separate assets. Version-aware events, independent playback smoke, read-only status and scoped restore retain their existing boundaries. Local tests do not establish official-host acceptance or installation handoff. Code is MIT since the #441 rewrite; the bundled Azhou art is CC BY-NC-ND 4.0. |
 
 Adapters copy only manifest-selected runtime inputs below `<workspace>/.azhou/hub/sources/` and record a per-plan digest in an ignored private receipt. Receipts can contain local paths, frozen source bytes and exact rollback bytes; do not publish them. They keep recovery and owned cleanup tied to the reviewed package snapshot even after package files change. Build outputs and explicitly supplied private inputs have separate checks. A digest detects input changes; it is not a signature or an upstream license grant.
 
@@ -142,26 +142,6 @@ Plans disclose temporary locks, helper logs and the possible lifetime of a cold-
 For the test entry, use `test-uninstall --workspace ...`, then repeat with `--apply --plan-id PLAN_ID`. macOS may automatically register even a directly executed test `.app`; cleanup is limited to this receipt-owned exact path and must preserve other registrations. Cleanup uses the verified private package snapshot and receipt, so later package changes do not remove the recovery source. New build, install, run and inspect plans fingerprint the current in-repository inputs. This is separate from the native production entry. Apple describes `lsregister` as a [debugging tool, not a stable API](https://developer.apple.com/forums/thread/725805); the tested exact-path operation and NSWorkspace before/after check do not establish support for every macOS release.
 
 `install-plan` and `uninstall-plan` describe the production target and return `blocked_source_contract`. The Hub package's native installer has a narrow one-time `--migrate-from OLD_ROOT` operation for an existing launcher at the fixed user Applications entry. Run it only from the final Hub package path after building its own payload. It requires matching old schema-2 installation receipt, old build payload and installed app fingerprints, the old build marker, unique registration, a user-entry lock and both project install locks. It replaces the exact verified entry, writes a Hub-owned receipt with `sourceHandoff`, and leaves the old checkout intact for separate archival or removal. A normal install still rejects another `projectRoot`. This native handoff does not implement the Hub adapter's general production install/uninstall plans; explicit build/state/destination and native uninstall contracts remain needed there. `native-check` remains read-only. The original official Codex entry remains available.
-
-### Pet maintenance after the import
-
-The Pet toolchain — `tools/manage-codex-pet.py`, `tools/import-codex-pet.py`, their runbook and isolated tests — is maintained only in [Agent Skin](../packages/agent-skin/README.md); its current contracts live in the [Agent Skin Pet runbook](../packages/agent-skin/docs/codex-pet.md). The package tool owns Pet preparation, validation, packaging, installation, synchronization and recovery; the Hub integration CLI has no Pet subcommand.
-
-The legacy `packages/codex-startup-animation/` root was deleted on 2026-11-12. Its installed-receipt ownership handoff was completed by a byte-faithful isolated rehearsal, its persistent-root replay instructions and maintainer approval on 2026-11-12 ([handoff receipt](../packages/agent-skin/evidence/codex-pet-legacy-root-handoff-2026-11-11.md)); the tool's designed rejection was accepted as final, so the installed Pet receipt remains an orphan pointing at the deleted root while the installed Pet stays self-contained and usable. A future Pet installation from Agent Skin follows the runbook's native prepare/generate/review chain; remove the old install the native way first, because ordinary `install` refuses a receipt owned by another `projectRoot`. Historical legacy-source maintenance followed the legacy runbook that Git history now carries.
-
-From the Hub root, these commands inspect state or run the isolated tests at the maintained home. The Pet maintenance commands and the importer suites require Pillow (`python -m pip install Pillow`).
-
-```sh
-cd packages/agent-skin
-python -B tools/manage-codex-pet.py status
-```
-
-```sh
-python -B packages/agent-skin/tools/test-codex-pet.py
-python -B packages/agent-skin/tools/test-import-codex-pet.py
-```
-
-A source-only checkout carries the published Azhou theme inputs but lacks frozen snapshots and reviewed candidates. `status` is an inspection result, not a readiness or host-activation verdict; invalid source/candidate state or `unknown-target` for a receipt bound to another `projectRoot` does not establish that an installation is damaged. Private inputs, candidates and installation receipts remain local. The Pillow-dependent Pet and importer suites above run in the macOS CI leg and should both run for Pet runtime changes.
 
 ## Why these checks are necessary
 

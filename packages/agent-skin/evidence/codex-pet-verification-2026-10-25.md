@@ -56,7 +56,7 @@ python3 -B tools/manage-codex-pet.py sync
 python3 -B tools/manage-codex-pet.py prepare
 ```
 
-`prepare` 冻结主题并生成 brief；后续须通过 ImageGen/hatch-pet 生成、审阅，再执行 `validate/package/sync`。因此当前能力是“真实生成交付 + 可复用的安全同步入口”，不承诺无人值守的一条命令自动生图。完整参数见 [操作说明](codex-pet.md)。[E02、E06]
+`prepare` 冻结主题并生成 brief；后续须通过 ImageGen/hatch-pet 生成、审阅，再执行 `validate/package/sync`。因此当前能力是“真实生成交付 + 可复用的安全同步入口”，不承诺无人值守的一条命令自动生图。完整参数见 历史操作说明（见退役记录中的源码基线）。[E02、E06]
 
 ## 2. 主题身份、来源与资产事实
 
@@ -159,7 +159,7 @@ manifestSHA256= b4fc418c87d5211e57e47a8322aff861d781ad09d428fb706549c0644be12a3e
 | 中断后主题又变化 | `recover` 仍能根据已知事务恢复，不依赖当前主题相等 |
 | 安装完成但未刷新选择 | `installed` 与 `pending-refresh-selection` 同时报告 |
 
-常规候选保留当前与上一份已审阅包，未知内容不随意删除。恢复只覆盖本工具的 pet 包和选择事务，不恢复启动器、壁纸、宿主会话或宿主所选 pet。完整退出码与命令见 [操作说明](codex-pet.md)。[E06]
+常规候选保留当前与上一份已审阅包，未知内容不随意删除。恢复只覆盖本工具的 pet 包和选择事务，不恢复启动器、壁纸、宿主会话或宿主所选 pet。完整退出码与命令见 历史操作说明（见退役记录中的源码基线）。[E06]
 
 ## 6. 本轮实测、历史记录与未覆盖项
 

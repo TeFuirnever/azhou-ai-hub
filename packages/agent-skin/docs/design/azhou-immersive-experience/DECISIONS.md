@@ -9,19 +9,19 @@
 | 原生底板后读设置再播放 | 设计选择 | 无常驻同步时仍保证本次设置有效 |
 | 复用现有 driver | 设计选择 | 不增设通用 Coordinator |
 | DSH 先证明入口能力 | 实施门禁 | 客户端 DOM-ready 不证明首帧 |
-| 保留现有 Pet | 范围边界 | 不把旧回执所有权问题等同安装损坏 |
+| 宿主桌宠窗口不注入主皮肤 | 范围边界 | 按非主页面识别 |
 | 新场景母版与分层壁纸 | 待视觉审阅提案 | 用户允许重生成，不代表候选已经批准 |
 | 设计提升为受跟踪文档 | 用户方向 | 防止宝贵方案仅留在忽略目录与对话中 |
 
 ## 调查依据
 
-仓库基线及参考版本见 [DESIGN](DESIGN.md)。Hub 的现有行为依据为 `Native/`、`animation.js`、`image-settings.js`、`extension/`、`wallpaper/`、`theme-config.json`、`pet/theme.json` 和 `hub-package.json`。生命周期依据为 `docs/local-install-sop.md`、`docs/testing.md`、`docs/theme-appearance.md` 及 `docs/codex-pet.md`，路径均相对 Agent Skin 包根。
+仓库基线及参考版本见 [DESIGN](DESIGN.md)。Hub 的现有行为依据为 `Native/`、`animation.js`、`image-settings.js`、`extension/`、`wallpaper/`、`theme-config.json` 和 `hub-package.json`。生命周期依据为 `docs/local-install-sop.md`、`docs/testing.md`、`docs/theme-appearance.md`，路径均相对 Agent Skin 包根。
 
 Dream Skin 重点阅读运行时 CSS 与主题导入边界。Dragon 重点阅读 macOS 源码、配置与平台文档。其窗口就绪不能作为 Hub 壁纸和当前工作区就绪证明。这里只保留机制分析，不复制源码或美术。正式复用需另行冻结不可变来源、许可、保留声明及更新路径。
 
 先前原生交接设计保存在本包 NH 文件中。原始上层需求包包含的需求与验收编号尚未读取，不能推造编号映射。NH-00 需找回它们或由操作者明确批准替代基线。
 
-已有 Pet 的历史人工确认只支持当时选择、可见及有限动作，不支持今天完整 16 方向验收。当前原生修复分支正在变化，本包既不复制其未提交代码，也不宣称其故障已修复。历史设计任务状态与现时开发状态分开记录。
+当前原生修复分支正在变化，本包既不复制其未提交代码，也不宣称其故障已修复。历史设计任务状态与现时开发状态分开记录。
 
 ## 本次未做的工作
 

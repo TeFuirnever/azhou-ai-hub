@@ -243,7 +243,8 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 - **agent-skin 的 ZCode 宿主层**——最后支持版本 `0.9.0/build 41`。ZCode driver、页面适配器、测试、文档与 CI 线已删除；Codex 与 DSH 宿主及共享核心行为不变。已安装的 ZCode 皮肤作为冻结安装继续可用，但不再有新构建；退出时恢复安装事务保留的原始启动器，或连同回执一并移除阿舟入口。
 - **Agent Orchestration Kit（model router）**——从未发布（`version: unreleased`），末态即 2026-11-12 删除的目录树；model-router Hub 入口与共存判定一并移除，不留探测 stub。机器上仍存在的安装不再由本仓库管理：请使用保留的切割前字节中该包自带的卸载路径移除。**装过 model-router 的用户请先卸载它再安装 pstack**——pstack 适配器会拒绝仍在 `config.toml` 中提及已退役 router 且无 Hub 归属回执的目标。
-- **旧 `codex-startup-animation` 包**——末版 `0.7.1/build 8`，经维护者审阅的回执属主交接后于 2026-11-12 删除。受维护的 Pet 工具链在 [agent-skin](packages/agent-skin/README.md)；已安装的 App 或 Pet 继续可用，历史工具链可从保留的切割前字节取回。
+- **旧 `codex-startup-animation` 包**的末版为 `0.7.1/build 8`，已于 2026-11-12 删除。当前启动器由 Agent Skin 维护，旧源码仍在 Git 历史中。
+- **阿舟 Codex 桌宠**已于 2026-11-18 退役。见[退役记录](packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md)。
 
 旧 release 与 tag 全量保留。两个退役包合入仓库的时间晚于最新已发布 release，因此对它们而言，切割前的 Git 修订（可由[来源记录](docs/integration-provenance.md)各历史行记载的删除日期与溯源 commit 定位）是具体的卸载锚点。已安装态迁移依赖的持久化/协议标识按历史原名冻结；该取舍记录于 [HUB-RET-001](docs/decisions/hub-retirement-physical-deletion.md)。
 

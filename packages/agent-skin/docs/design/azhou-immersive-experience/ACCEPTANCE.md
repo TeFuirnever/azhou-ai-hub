@@ -10,7 +10,7 @@
 | ALIGN-A04 | 保存、取消、预览、恢复默认、重启 | 设置命名空间不变，取消不保存，预览不污染正式播放 |
 | ALIGN-A05 | 禁用、跳过、减弱动态及损坏图 | 立即释放或明确静态降级，不永久遮挡，不伪造 ready |
 | ALIGN-A06 | 多显示器、Spaces、窗口移动、用户切换应用 | 无越界覆盖，无反复抢焦点，失败有明确能力结论 |
-| ALIGN-A07 | Pet 开启与 mini、detached 页面 | 不注入主皮肤，不重装或重新选择 Pet，已有角色继续可用 |
+| ALIGN-A07 | 宿主桌宠窗口、mini 和 detached 页面 | 不注入主皮肤 |
 | ALIGN-A08 | 来源、摘要、授权与构建校验 | 不引入参考项目未授权代码或美术，不混入私有覆盖 |
 | ALIGN-A09 | 每端生产入口、运行身份、安装与回退证据 | Codex 与 DSH 独立结果，blocked 不是 pass |
 | ALIGN-A10 | 同设备交错运行 trunk 与 candidate | 记录首个自有帧、播放开始、自然结束、显露、可交互和资源占用 |
@@ -25,7 +25,7 @@
 
 ## 真实证据门禁
 
-产品 PR 运行 `python3 scripts/verify.py`，并按 [testing.md](../../testing.md) 运行所改运行时的专项测试与覆盖率门禁。Pet 运行时改变时另跑 Pillow 相关两套工具测试。仅文档检查通过记作 document_checked。
+产品 PR 运行 `python3 scripts/verify.py`，并按 [testing.md](../../testing.md) 运行所改运行时的专项测试与覆盖率门禁。仅文档检查通过记作 document_checked。
 
 UI 改动需截图和 30 至 60 秒视频交给操作者审阅后合并。测试使用授权且不含敏感内容的工作区。不能重启活跃宿主来迁就测试。安装遵守 [local-install-sop.md](../../local-install-sop.md)，先证明来源与所有权，安装和运行操作仍需相应授权。
 

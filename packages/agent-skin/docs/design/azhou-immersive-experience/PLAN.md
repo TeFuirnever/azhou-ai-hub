@@ -83,7 +83,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Lane 6. 核对工作区 ready 定义。Save `p01/lane-6.png`. Pass when 来源或能力得到可复核结论，未知被明确标记而非推定支持。
 - [ ] Lane 7. 核对热启动策略。Save `p01/lane-7.png`. Pass when 来源或能力得到可复核结论，未知被明确标记而非推定支持。
 - [ ] Lane 8. 核对 DSH 实际 hook。Save `p01/lane-8.png`. Pass when 来源或能力得到可复核结论，未知被明确标记而非推定支持。
-- [ ] Lane 9. 核对 Pet 当前可见与独立边界。Save `p01/lane-9.png`. Pass when 来源或能力得到可复核结论，未知被明确标记而非推定支持。
+- [ ] Lane 9. 核对宿主桌宠窗口的页面排除边界。Save `p01/lane-9.png`. Pass when 来源或能力得到可复核结论，未知被明确标记而非推定支持。
 - [ ] Lane 10. 核对回退与租约保留责任。Save `p01/lane-10.png`. Pass when 来源或能力得到可复核结论，未知被明确标记而非推定支持。
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
@@ -219,7 +219,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 
 **Build.**
 
-- [ ] 把已审场景放入经NH-00裁决的编排并匹配末帧与壁纸焦点。按REF-01至REF-08实现整窗、所有列明控件、工作面和各显示模式。保持原生控件、preview 和既有 Pet，不改 Pet 安装。 以 ALIGN-05, ALIGN-06, ALIGN-07 的对应产物作为完成证据。
+- [ ] 把已审场景放入经NH-00裁决的编排并匹配末帧与壁纸焦点。按REF-01至REF-08实现整窗、所有列明控件、工作面和各显示模式。保持原生控件和 preview。 以 ALIGN-05, ALIGN-06, ALIGN-07 的对应产物作为完成证据。
 
 **You see.**
 
@@ -239,7 +239,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Lane 6. 保存取消预览及恢复默认。Save `p04/lane-6.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 - [ ] Lane 7. 禁用和减弱动态。Save `p04/lane-7.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 - [ ] Lane 8. 末帧到壁纸完整交接。Save `p04/lane-8.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
-- [ ] Lane 9. Pet mini 与 detached 不注入。Save `p04/lane-9.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
+- [ ] Lane 9. 宿主桌宠窗口、mini 与 detached 不注入。Save `p04/lane-9.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 - [ ] Lane 10. 动画后静置与资源释放。Save `p04/lane-10.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 
 **Verify, perf.** Tests alone are not sufficient verification. A PR is verified only when its unit, live, and perf boxes are all checked.
@@ -340,7 +340,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 - [ ] Lane 4. 热启不重播。Save `p06/lane-4.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 - [ ] Lane 5. 真实故障释放。Save `p06/lane-5.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 - [ ] Lane 6. 设置持久化与预览隔离。Save `p06/lane-6.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
-- [ ] Lane 7. Pet 兼容记录。Save `p06/lane-7.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
+- [ ] Lane 7. 宿主桌宠窗口排除记录。Save `p06/lane-7.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 - [ ] Lane 8. DSH 独立完成或缺口。Save `p06/lane-8.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 - [ ] Lane 9. 回退入口与资源清理。Save `p06/lane-9.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
 - [ ] Lane 10. 双语文档和支持范围核对。Save `p06/lane-10.png`. Pass when 该场景符合 NH-ACCEPTANCE 与 ACCEPTANCE 的对应约束，有真实观察与无敏感内容证据。
@@ -569,7 +569,7 @@ Tests alone are not sufficient verification. A PR is verified only when its unit
 ## Close the program
 
 - [ ] 每个完成项都有对应证据，未完成项明确保留，不能为收尾而勾选。
-- [ ] 分别报告 Codex、DSH、素材及 Pet 范围结果，提供实际 PR 与受跟踪文档链接。
+- [ ] 分别报告 Codex、DSH 和素材范围结果，提供实际 PR 与受跟踪文档链接。
 
 ## Appendix A. Prototype evidence
 
