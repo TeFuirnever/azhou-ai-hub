@@ -65,14 +65,16 @@ def digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def parse_time(value: str) -> datetime:
+def parse_time(value: object) -> datetime:
+    if not isinstance(value, str):
+        raise EvolutionError("timestamp must be ISO-8601")
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError) as exc:
         raise EvolutionError("timestamp must be ISO-8601") from exc
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
 
 
 def project_identity(project: Path) -> str:
@@ -137,28 +139,25 @@ def validate_signal(signal: Any) -> list[str]:
     errors: list[str] = []
     if not isinstance(signal, dict):
         return ["signal: expected object"]
-    if signal.get("schema_version") not in {SIGNAL_SCHEMA, LEGACY_SIGNAL_SCHEMA}:
+    if signal.get("schema_version") not in (SIGNAL_SCHEMA, LEGACY_SIGNAL_SCHEMA):
         errors.append("schema_version")
     if not isinstance(signal.get("signal_id"), str) or not DIGEST_RE.fullmatch(signal["signal_id"]):
         errors.append("signal_id")
     for field in ("project_id", "session_digest", "evidence_digest"):
         if not isinstance(signal.get(field), str) or not re.fullmatch(r"[a-f0-9]{16,64}", signal[field]):
             errors.append(field)
-    if signal.get("severity") not in SEVERITIES:
-        errors.append("severity")
-    if signal.get("outcome") not in OUTCOMES:
-        errors.append("outcome")
-    if signal.get("category") not in CATEGORIES:
-        errors.append("category")
-    if signal.get("source") not in SOURCES:
-        errors.append("source")
-    if signal.get("provenance") not in PROVENANCE:
-        errors.append("provenance")
+    for field, choices in (
+        ("severity", SEVERITIES), ("outcome", OUTCOMES), ("category", CATEGORIES),
+        ("source", SOURCES), ("provenance", PROVENANCE),
+    ):
+        value = signal.get(field)
+        if not isinstance(value, str) or value not in choices:
+            errors.append(field)
     if not isinstance(signal.get("mechanism"), str) or not MECHANISM_RE.fullmatch(signal["mechanism"]):
         errors.append("mechanism")
     if not isinstance(signal.get("runtime"), str) or not signal["runtime"].strip():
         errors.append("runtime")
-    if signal.get("user_feedback") not in {"accepted", "corrected", "rejected", "none"}:
+    if signal.get("user_feedback") not in ("accepted", "corrected", "rejected", "none"):
         errors.append("user_feedback")
     try:
         parse_time(signal.get("observed_at", ""))
@@ -243,16 +242,28 @@ def append_jsonl(path: Path, value: dict[str, Any], *, root: Path) -> None:
     secure_state_target(path, root)
     line = json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
     try:
-        flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        flags = os.O_RDWR | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
         descriptor = os.open(path, flags, 0o600)
         if hasattr(os, "fchmod"):
             os.fchmod(descriptor, 0o600)
     except OSError as exc:
         raise EvolutionError(f"cannot append to private state file: {path} ({exc})") from exc
-    with os.fdopen(descriptor, "a", encoding="utf-8") as handle:
+    with os.fdopen(descriptor, "a", encoding="utf-8", newline="") as handle:
+        if os.lseek(handle.fileno(), 0, os.SEEK_END):
+            os.lseek(handle.fileno(), -1, os.SEEK_END)
+            if os.read(handle.fileno(), 1) != b"\n":
+                raise EvolutionError("cannot append to an unterminated signal batch; reconcile the live batch first")
         handle.write(line)
         handle.flush()
         os.fsync(handle.fileno())
+
+
+def parse_signal_line(line: str) -> dict[str, Any] | None:
+    try:
+        value = json.loads(line)
+        return None if validate_signal(value) else value
+    except (ValueError, RecursionError):
+        return None
 
 
 def read_jsonl(paths: Iterable[Path]) -> tuple[list[dict[str, Any]], int]:
@@ -262,19 +273,15 @@ def read_jsonl(paths: Iterable[Path]) -> tuple[list[dict[str, Any]], int]:
         if not path.is_file():
             continue
         try:
-            lines = path.read_text(encoding="utf-8").splitlines()
+            lines = path.read_text(encoding="utf-8").split("\n")
         except (OSError, UnicodeError):
             parse_errors += 1
             continue
         for line in lines:
             if not line.strip():
                 continue
-            try:
-                value = json.loads(line)
-            except json.JSONDecodeError:
-                parse_errors += 1
-                continue
-            if validate_signal(value):
+            value = parse_signal_line(line)
+            if value is None:
                 parse_errors += 1
                 continue
             rows.append(value)
@@ -287,7 +294,7 @@ def write_private_text(path: Path, text: str, *, root: Path) -> None:
     temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     try:
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_EXCL, 0o600)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="") as handle:
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
@@ -522,22 +529,24 @@ def cmd_archive(args: argparse.Namespace) -> int:
                 print(json.dumps({"archived": marker["archived_signal_count"], "archive": str(archive_path)}, ensure_ascii=False))
                 return 0
             try:
-                lines = signals_path.read_text(encoding="utf-8").splitlines()
+                with signals_path.open(encoding="utf-8", newline="") as handle:
+                    lines = handle.read().split("\n")
             except (OSError, UnicodeError) as exc:
-                raise EvolutionError("live signal batch missing") from exc
+                raise EvolutionError("live signal batch missing or unreadable") from exc
             selected_ids = set(candidate["signal_ids"])
             archived_lines: list[str] = []
             retained_lines: list[str] = []
-            for line in lines:
-                try:
-                    value = json.loads(line)
-                except json.JSONDecodeError:
-                    retained_lines.append(line)
-                    continue
-                if isinstance(value, dict) and value.get("signal_id") in selected_ids and not validate_signal(value):
+            malformed_rows = 0
+            for index, line in enumerate(lines):
+                value = parse_signal_line(line) if line.strip() else None
+                if value is not None and value["signal_id"] in selected_ids:
                     archived_lines.append(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
                 else:
-                    retained_lines.append(line)
+                    retained_lines.append(line + ("\n" if index < len(lines) - 1 else ""))
+                    if value is None and line.strip():
+                        malformed_rows += 1
+            if malformed_rows:
+                print(f"archive: retained {malformed_rows} malformed signal rows in the live batch", file=sys.stderr)
             if marker is None:
                 if archive_path.exists():
                     raise EvolutionError("existing candidate archive lacks a pending receipt")
@@ -558,21 +567,17 @@ def cmd_archive(args: argparse.Namespace) -> int:
                     raise EvolutionError("cannot read existing candidate archive") from exc
                 if hashlib.sha256(archive_text.encode("utf-8")).hexdigest() != marker["archive_sha256"]:
                     raise EvolutionError("existing candidate archive conflicts with pending archive")
-                archive_lines = archive_text.splitlines()
+                archive_lines = archive_text.removesuffix("\n").split("\n")
                 if (
                     len(archive_lines) != marker["archived_signal_count"]
                     or archive_text != "\n".join(archive_lines) + "\n"
                 ):
                     raise EvolutionError("existing candidate archive is invalid")
                 for line in archive_lines:
-                    try:
-                        signal = json.loads(line)
-                    except json.JSONDecodeError as exc:
-                        raise EvolutionError("existing candidate archive is invalid") from exc
+                    signal = parse_signal_line(line)
                     if (
-                        not isinstance(signal, dict)
-                        or signal.get("signal_id") not in selected_ids
-                        or validate_signal(signal)
+                        signal is None
+                        or signal["signal_id"] not in selected_ids
                         or line != json.dumps(signal, ensure_ascii=False, separators=(",", ":"))
                     ):
                         raise EvolutionError("existing candidate archive is invalid")
@@ -590,7 +595,7 @@ def cmd_archive(args: argparse.Namespace) -> int:
             if archived_lines:
                 write_private_text(
                     signals_path,
-                    ("\n".join(retained_lines) + "\n") if retained_lines else "",
+                    "".join(retained_lines),
                     root=project,
                 )
             candidate["archived_signal_count"] = len(archive_lines)
