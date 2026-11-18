@@ -39,3 +39,4 @@
 0020-hub-claude-namespace-guides.patch
 0022-hub-claude-sheet-hook-path.patch
 0023-hub-worktree-audit-preserve-untracked.patch
+0024-hub-orchestrate-routing-restore.patch

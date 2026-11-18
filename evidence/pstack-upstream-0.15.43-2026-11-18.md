@@ -90,6 +90,13 @@ separate task.
   playbook deletion trimmed. The Hub `hub-skills` overlay keeps a
   portable-host `orchestrate` playbook, so the generated trees ship
   twenty-three playbooks and the generated docs must count them.
+- `0024-hub-orchestrate-routing-restore` (added post-review on 2026-11-19,
+  addressing the resolved codex P2 thread on this PR): upstream's condensed
+  routing paragraph dropped `Orchestrate` together with the playbook, so the
+  retained playbook had no normal entry route — project-scale requests all
+  routed to `figure-it-out`. The patch restores the standing
+  project-scale-program routing sentence in the pristine poteto-mode
+  `SKILL.md` before the generator mirrors it into all five trees.
 - `0021-hub-distribution-version-0.15.37` and
   `0024-hub-distribution-version-0.15.38`: **removed from the queue** (patch
   files deleted, `series` lines dropped). A patch is a loan; these stamped
