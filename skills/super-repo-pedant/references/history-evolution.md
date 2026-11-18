@@ -153,7 +153,7 @@ Store aggregate snapshots under `benchmarks/super-repo-pedant/history/`. Store r
 
 **Complete when:** decision, evidence chain, checks, limitation, and human checkpoint outcome are reproducible without raw transcript disclosure.
 
-Use `manage_evolution.py health --project <root>` only to prioritize investigation. Its 7-day/30-day trend has no promotion or rollback authority.
+Use `manage_evolution.py health --project <root>` only to prioritize investigation. The 7-day and 30-day rates include observations through the evaluation time (or `--now`) and exclude later observations. The trend has no promotion or rollback authority.
 
 ## Failure recovery
 

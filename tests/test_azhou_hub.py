@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -636,20 +637,65 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("fail", target_check["status"])
             self.assertIn("target ancestor is not a directory", target_check["details"])
 
-    def test_doctor_verification_status_controls_exit_health(self) -> None:
-        completed = mock.Mock(returncode=7, stdout="", stderr="broken gate\n")
-        with mock.patch("scripts.azhou_hub.subprocess.run", return_value=completed):
-            report = azhou_hub.run_doctor(
-                root=azhou_hub.ROOT,
-                target=None,
-                skills=["super-repo-pedant"],
-                run_verification=True,
-            )
+    def _doctor_verify_fixture(self, script: str) -> tuple[int, dict]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for relevant in ("README.md", "docs/skill-standard.md", "scripts/verify.py"):
+                path = root / relevant
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(script if relevant == "scripts/verify.py" else "", encoding="utf-8")
+            return self._json_main(["doctor", "--verify", "--json"], root=root)
 
-        self.assertFalse(report["valid"])
+    def test_doctor_verification_status_controls_exit_health(self) -> None:
+        for child_exit, message, expected in (
+            (0, "verification passed", "pass"),
+            (7, "broken gate", "fail"),
+        ):
+            with self.subTest(child_exit=child_exit):
+                code, report = self._doctor_verify_fixture(
+                    f"import sys\nprint({message!r}, file=sys.stderr)\nraise SystemExit({child_exit})\n"
+                )
+                verification = next(check for check in report["checks"] if check["name"] == "repository_verification")
+                self.assertEqual(0 if child_exit == 0 else 1, code, report)
+                self.assertEqual(expected, verification["status"])
+                self.assertIn(f"exit {child_exit}; last output: {message}", verification["details"])
+
+    def test_doctor_verification_times_out_while_silent_or_printing(self) -> None:
+        for child_output in ("", 'print("still running " * 10000)'):
+            with self.subTest(continuous_output=bool(child_output)):
+                script = (
+                    "import time\n"
+                    "end = time.monotonic() + 6\n"
+                    "while time.monotonic() < end:\n"
+                    f"    {child_output or 'pass'}\n"
+                    "    time.sleep(0.02)\n"
+                )
+                with mock.patch.object(azhou_hub, "DOCTOR_VERIFY_TIMEOUT_SECONDS", 1):
+                    start = time.monotonic()
+                    code, report = self._doctor_verify_fixture(script)
+                verification = next(check for check in report["checks"] if check["name"] == "repository_verification")
+                self.assertLess(time.monotonic() - start, 5)
+                self.assertEqual(1, code, report)
+                self.assertEqual("fail", verification["status"])
+                self.assertIn("timed out after 1s", verification["details"])
+                self.assertLess(len(verification["details"]), azhou_hub.DOCTOR_VERIFY_TAIL_BYTES + 100)
+                if child_output:
+                    self.assertIn("still running", verification["details"])
+
+    @unittest.skipUnless(os.name == "posix", "exercises the POSIX process group")
+    def test_doctor_verification_times_out_when_descendant_holds_output_open(self) -> None:
+        script = (
+            "import subprocess, sys\n"
+            "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(6)'])\n"
+        )
+        with mock.patch.object(azhou_hub, "DOCTOR_VERIFY_TIMEOUT_SECONDS", 1):
+            start = time.monotonic()
+            code, report = self._doctor_verify_fixture(script)
         verification = next(check for check in report["checks"] if check["name"] == "repository_verification")
+        self.assertLess(time.monotonic() - start, 5)
+        self.assertEqual(1, code, report)
         self.assertEqual("fail", verification["status"])
-        self.assertIn("exit 7", verification["details"])
+        self.assertIn("timed out after 1s", verification["details"])
 
     def test_verify_command_preserves_the_authoritative_exit_code(self) -> None:
         completed = mock.Mock(returncode=9)
