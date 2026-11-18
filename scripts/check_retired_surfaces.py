@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Permanent reverse-scan gate for the retired surfaces of spec #442.
+"""Permanent reverse-scan gate for retired Hub surfaces.
 
 The decommission cut retired three objects by physical deletion:
 ``packages/agent-orchestration-kit/`` (the model router), the legacy
@@ -7,7 +7,8 @@ The decommission cut retired three objects by physical deletion:
 host layer (decision record HUB-RET-001). A clean cut is checked, not
 asserted: this gate fails deterministically when a live reference to any
 of the three objects re-enters the public repository surface, so a
-resurrection cannot ride in silently with an unrelated change.
+resurrection cannot ride in silently with an unrelated change. The same
+gate covers the Azhou Codex Pet retirement on 2026-11-18.
 
 Exactly two exemption classes exist (ticket #448, spec #442 hard bar):
 
@@ -41,12 +42,13 @@ ROOT = Path(__file__).resolve().parents[1]
 RETIRED_PACKAGE_ROOTS = (
     "packages/agent-orchestration-kit/",
     "packages/codex-startup-animation/",
+    "packages/agent-skin/pet/",
 )
 
 # Retired object 3: agent-skin's ZCode host layer, deleted with ticket #444.
 # The shared core and the Codex/DSH hosts survive; only these host-layer
-# files must never come back.
-RETIRED_AGENT_SKIN_ZCODE_FILES = (
+# files must never come back. The last five paths are retired Pet tooling.
+RETIRED_AGENT_SKIN_FILES = (
     "packages/agent-skin/Native/ZCodeSkinDriver.swift",
     "packages/agent-skin/Native/ZCodeSkinRuntime.swift",
     "packages/agent-skin/Native/ZCodeSkinDriverTests.swift",
@@ -58,6 +60,11 @@ RETIRED_AGENT_SKIN_ZCODE_FILES = (
     "packages/agent-skin/tools/zcode-adapter.unit.test.mjs",
     "packages/agent-skin/tools/native-zcode-expressions.unit.test.mjs",
     "packages/agent-skin/docs/offline-acceptance-runbook.md",
+    "packages/agent-skin/docs/codex-pet.md",
+    "packages/agent-skin/tools/manage-codex-pet.py",
+    "packages/agent-skin/tools/import-codex-pet.py",
+    "packages/agent-skin/tools/test-codex-pet.py",
+    "packages/agent-skin/tools/test-import-codex-pet.py",
 )
 
 # Live-reference tokens for the three retired objects. Kept precise on
@@ -66,6 +73,8 @@ RETIRED_AGENT_SKIN_ZCODE_FILES = (
 # publicly declared surface unrelated to agent-skin's retired host layer,
 # and the frozen identifier strings below are masked before this search.
 RETIRED_REFERENCE_TOKENS = (
+    ("Codex Pet tooling", re.compile(r"(?<![\w-])(?:manage|import|test|test-import)-codex-pet(?![\w-])")),
+    ("Codex Pet theme path", re.compile(r"(?<![\w-])pet/theme\.json(?![\w-])")),
     # agent-orchestration-kit: package name, deleted adapter script stem,
     # and the deleted Kit-shared coexistence verdict seam (#445).
     ("agent-orchestration-kit", re.compile(r"(?<![\w-])agent-orchestration-kit(?![\w-])")),
@@ -211,6 +220,9 @@ FROZEN_NARRATIVE_FRAGMENTS = {
     ),
     "packages/agent-skin/MIGRATION-INVENTORY.md": (
         "`packages/codex-startup-animation/`",
+        "`tools/manage-codex-pet.py`",
+        "`tools/test-codex-pet.py`",
+        "`pet/theme.json`",
     ),
 }
 
@@ -248,11 +260,11 @@ def _exempt(relative: str) -> bool:
 
 
 def check_retired_surface_references(files: list[Path], root: Path) -> list[str]:
-    """Fail on any live reference to the three retired objects of spec #442."""
+    """Fail when a retired path or live reference returns."""
     errors: list[str] = []
     for path in files:
         relative = path.relative_to(root).as_posix()
-        if relative.startswith(RETIRED_PACKAGE_ROOTS) or relative in RETIRED_AGENT_SKIN_ZCODE_FILES:
+        if relative.startswith(RETIRED_PACKAGE_ROOTS) or relative in RETIRED_AGENT_SKIN_FILES:
             errors.append(f"retired surface resurrected: {relative}")
             continue
         if _exempt(relative):
