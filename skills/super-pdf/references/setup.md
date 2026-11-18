@@ -12,7 +12,7 @@ The upstream skill ships no dependency manifest: it declares libraries inline (s
 | `pypdf` | merge/split/rotate/watermark/encrypt recipes; `scripts/check_fillable_fields.py`, `scripts/extract_form_field_info.py`, `scripts/fill_fillable_fields.py`, `scripts/fill_pdf_form_with_annotations.py` | `python -c "import pypdf; print(pypdf.__version__)"` |
 | `pdfplumber` | text/table extraction recipes; `scripts/extract_form_structure.py` (FORMS.md structure-first approach) | `python -c "import pdfplumber; print(pdfplumber.__version__)"` |
 | `pdf2image` | `scripts/convert_pdf_to_images.py`; OCR recipe (page rasterization) | `python -c "import pdf2image; print(pdf2image.__version__)"` |
-| Pillow | `scripts/create_validation_image.py` (FORMS.md visual-estimation overlay) — **not declared anywhere in the upstream SKILL.md**, only imported by the script; declared here | `python -c "from PIL import Image; import PIL; print(PIL.__version__)"` |
+| Pillow | `scripts/create_validation_image.py` (FORMS.md visual-estimation overlay) and the REFERENCE.md advanced-track recipes (image rendering and figure extraction) — **not declared anywhere in the upstream SKILL.md**; declared here | `python -c "from PIL import Image; import PIL; print(PIL.__version__)"` |
 | `reportlab` | create-PDF recipes (Canvas, Platypus) | `python -c "import reportlab; print(reportlab.Version)"` |
 | `pytesseract` + the `tesseract` binary | OCR recipe for scanned PDFs | `python -c "import pytesseract; print(pytesseract.get_tesseract_version())"` |
 | poppler-utils (`pdftotext`, `pdftoppm`, `pdfimages`) | command-line extraction recipes; `pdfimages` image extraction; `pdftoppm` is also the backend `pdf2image` shells out to | `pdftotext -v` and `pdfimages -v` and `pdftoppm -v` |
@@ -21,8 +21,8 @@ The upstream skill ships no dependency manifest: it declares libraries inline (s
 
 Recipe-level optional dependencies, needed only by the recipes that name them:
 
-- `pandas` (plus an Excel engine such as `openpyxl` for `to_excel`) — the "Advanced Table Extraction" recipe in the guide.
-- `pypdfium2` and `numpy` — the REFERENCE.md advanced track (render/extract with pypdfium2; its image-extraction recipe imports numpy).
+- `pandas` (plus an Excel engine such as `openpyxl` for `to_excel`) — the "Advanced Table Extraction" recipe in the guide and the REFERENCE.md "Advanced Table Extraction with Custom Settings" recipe.
+- `pypdfium2` and `numpy` — the REFERENCE.md advanced track (render/extract with pypdfium2; its image-extraction recipe imports numpy; those samples also need Pillow).
 - ImageMagick (`magick`, falling back to `convert` per FORMS.md) — the FORMS.md Approach B.3 zoom-crop recipe; verify with `magick -version` or `convert -version`.
 - Node.js libraries `pdf-lib` and `pdfjs-dist` — the REFERENCE.md JavaScript track; they are project-level npm dependencies of whatever JavaScript program uses them, not Python installs.
 
@@ -30,7 +30,7 @@ No dependency is vendored: the package carries instructions and vendored helper 
 
 ## Fail-closed boundary
 
-Fail closed per operation, not per machine: a merge needs `pypdf` only; OCR needs `pytesseract`, `tesseract`, `pdf2image` and poppler; form filling needs `pypdf` or `pdfplumber` per the FORMS.md approach; a missing dependency stops that operation with a named hold naming the requirement and its verify command. Do not fall back to a different library, an untested CLI substitution, or a partial install, and do not silently skip a declared verification step.
+Fail closed per operation, not per machine: a merge needs `pypdf` only; OCR needs `pytesseract`, `tesseract`, `pdf2image` and poppler; form filling needs `pypdf` for every fill path plus `pdfplumber` for the FORMS.md structure-first approach; a missing dependency stops that operation with a named hold naming the requirement and its verify command. Do not fall back to a different library, an untested CLI substitution, or a partial install, and do not silently skip a declared verification step.
 
 ## Vendored script inventory
 

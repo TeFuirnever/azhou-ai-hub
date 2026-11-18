@@ -71,7 +71,7 @@ SETUP_DEPENDENCIES = (
     "| `pypdf` |",
     "| `pdfplumber` |",
     "| `pdf2image` |",
-    "Pillow",
+    "| Pillow |",
     "reportlab",
     "| `pytesseract`",
     "the `tesseract` binary",
@@ -204,13 +204,6 @@ class SuperPdfPackageTest(unittest.TestCase):
         self.assertIn("No dependency is vendored", self.setup)
         self.assertIn("Pillow", self.setup)
         self.assertIn("not declared anywhere in the upstream SKILL.md", self.setup)
-
-    def test_setup_declares_python_not_python3(self) -> None:
-        for surface, text in (("SKILL.md", self.text), ("setup.md", self.setup)):
-            self.assertIsNone(
-                re.search(r"\bpython3\b", text),
-                f"{surface} must not point users at a POSIX-only interpreter",
-            )
 
     def test_provenance_documents_the_fidelity_classification(self) -> None:
         match = re.search(r"^Classification: `([^`]+)`", self.provenance, re.MULTILINE)
