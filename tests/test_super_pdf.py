@@ -155,7 +155,7 @@ class SuperPdfPackageTest(unittest.TestCase):
         actual = {
             path.relative_to(SKILL_DIR).as_posix()
             for path in SKILL_DIR.rglob("*")
-            if path.is_file()
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
         }
         self.assertEqual(ALLOWED_PACKAGE_FILES, actual)
 
