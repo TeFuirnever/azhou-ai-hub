@@ -28,6 +28,35 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def check_template_hashes(directory: Path) -> tuple[bool, str]:
+    manifest = directory / "PROVENANCE.md"
+    templates = {p.name: p for p in directory.glob("*.md") if p != manifest and p.is_file()}
+    lines = iter(manifest.read_text(encoding="utf-8").splitlines())
+    for line in lines:
+        if [cell.strip() for cell in line.strip().split("|")] == ["", "模板", "用途", "SHA-256", ""]:
+            break
+    separator = next(lines, "")
+    if not re.fullmatch(r"\s*\|(?:\s*:?-{3,}:?\s*\|){3}\s*", separator):
+        return False, "missing provenance table"
+    seen = set()
+    for line in lines:
+        if not line.lstrip().startswith("|"):
+            break
+        row = re.fullmatch(r"\s*\|\s*\[([^\]]+)\]\(\1\)\s*\|[^|]+\|\s*`([0-9a-f]{64})`\s*\|\s*", line)
+        if not row:
+            return False, "invalid provenance row"
+        name, expected = row.groups()
+        if name not in templates or name in seen:
+            return False, f"unexpected or duplicate template: {name}"
+        if sha256(templates[name]) != expected:
+            return False, f"hash drift: {name}"
+        seen.add(name)
+    missing = sorted(templates.keys() - seen)
+    if missing:
+        return False, "missing templates: " + ", ".join(missing)
+    return (True, "") if seen else (False, "empty template inventory")
+
+
 def main() -> int:
     results = []
     with tempfile.TemporaryDirectory() as td:
@@ -47,15 +76,8 @@ def main() -> int:
                         "](design-doc.md" not in body and "super-arch-doc skill 内 design-doc.md" in body, ""))
 
     # 4) 模板哈希 vs PROVENANCE
-    prov = (SKILL / "references" / "templates" / "PROVENANCE.md").read_text(encoding="utf-8")
-    hash_ok = True
-    for m in re.finditer(r"\[([a-z\-]+\.md)\]\([a-z\-]+\.md\)\s*\|[^|]+\|\s*`([0-9a-f]{64})`", prov):
-        name, expect = m.group(1), m.group(2)
-        actual = sha256(SKILL / "references" / "templates" / name)
-        if actual != expect:
-            hash_ok = False
-            results.append((f"template hash drift: {name}", False, actual[:16]))
-    results.append(("template hashes match PROVENANCE", hash_ok, ""))
+    hash_ok, detail = check_template_hashes(SKILL / "references" / "templates")
+    results.append(("template hashes match PROVENANCE", hash_ok, detail))
 
     failed = [r for r in results if not r[1]]
     for name, passed, detail in results:
