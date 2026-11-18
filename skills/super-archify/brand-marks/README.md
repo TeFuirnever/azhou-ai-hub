@@ -21,7 +21,8 @@ artwork. Contributors must review the recorded source, current brand guidelines,
 and intended referential use before adding or updating a mark. Archify does not
 imply sponsorship, endorsement, or partnership.
 
-Edit `catalog.json`, then regenerate the committed zero-runtime-dependency bundle:
+Edit `catalog.json`, then regenerate the committed zero-runtime-dependency bundle
+from the skill root (`skills/super-archify/`):
 
 ```bash
 node scripts/generate-brand-marks.mjs
