@@ -6547,6 +6547,45 @@ try {
     });
   }
 
+  await check('DSH owned main paint applies and restores through a reversible renderer transaction', async()=>{
+    await navigate('/fixture.html?legacy-only=1');
+    const result=await cdp.evaluate(`(async()=>{
+      window.__azhouWallpaper?.dispose();
+      document.getElementById('root').innerHTML='<main data-slot="main" style="width:100%;height:100vh"></main>';
+      window.__ModuleLoader__={load(){}};window.__DSH_BOOT__={};
+      const {createDSHPageAdapter}=await import('/extension/hosts/dsh.mjs');
+      const {createWallpaperApplicator}=await import('/wallpaper/apply.js');
+      const {installRenderer}=await import('/wallpaper/renderer.js');
+      const adapter=createDSHPageAdapter(window,{sidebarEntry:false});
+      const css=await(await fetch('/wallpaper.css')).text();
+      const apply=createWallpaperApplicator(installRenderer,{version:'0.9.0',css,pageAdapter:adapter},window);
+      const base={image:${JSON.stringify(pixelImage)},strength:42};
+      const first=await apply(base,()=>true);if(!first.applied)throw Error(JSON.stringify(first));
+      const prior=window.__azhouWallpaper;
+      const candidate=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+      if(!candidate.applied)throw Error(JSON.stringify(candidate));
+      const node=document.querySelector('[data-slot=main]'),color=getComputedStyle(node).backgroundColor;
+      const rollback=candidate.transaction.rollback(),same=window.__azhouWallpaper===prior;
+      const next=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+      const finalized=next.transaction.finalize();
+      const restore=await apply(base,()=>true,null,{transactional:true});
+      const restored=restore.transaction.finalize();
+      const transparent=getComputedStyle(node).backgroundColor;
+      const zero=await apply({...base,strength:0},()=>true,null,{transactional:true});
+      node.remove();document.getElementById('root').appendChild(node);
+      const zeroStale=zero.transaction.current(),zeroFinalized=zero.transaction.finalize();
+      window.__azhouWallpaper?.dispose();
+      const absent=await apply({...base,strength:0},()=>true,null,{transactional:true});
+      node.remove();document.getElementById('root').appendChild(node);
+      const absentStale=absent.transaction.current(),absentFinalized=absent.transaction.finalize();
+      const disabled=await apply({...base,strength:0},()=>true,null,{transactional:true});
+      const disabledFinalized=disabled.transaction.finalize(),disabledRepeated=disabled.transaction.finalize();
+      return {color,rollback,same,finalized,restored,transparent,zeroStale,zeroFinalized,absentStale,absentFinalized,disabledFinalized,disabledRepeated,marker:node.getAttribute('data-azhou-dream-main')};
+    })()`);
+    assert.deepEqual(result,{color:'rgba(10, 20, 30, 0.4)',rollback:true,same:true,finalized:true,restored:true,transparent:'rgba(0, 0, 0, 0)',zeroStale:false,zeroFinalized:false,absentStale:false,absentFinalized:false,disabledFinalized:true,disabledRepeated:true,marker:null});
+    return result;
+  });
+
   await check('detached startup overlay invalidates playback readiness', async () => {
     await navigate('/fixture.html?animation=1');
     await awaitGeneratedReady('actual animation playing');

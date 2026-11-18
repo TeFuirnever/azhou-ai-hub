@@ -158,7 +158,41 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
     return Array.from(nodes).filter(node => !!node.isConnected
       && !node.closest('[role="dialog"],dialog,iframe,webview'));
   }
+  // Explicit, host-owned paint capability. It never interprets imported selectors.
+  function captureThemeSurface(host = environment) {
+    const doc=host.document, html=doc?.documentElement, root=doc?.getElementById?.('root'), nodes=mainSurfaces(host);
+    if (!matched(host) || !root?.isConnected || nodes.length!==1 || !root.contains(nodes[0])
+      || typeof host.MutationObserver!=='function') return null;
+    const node=nodes[0], url=host.location.href, boot=Object.getOwnPropertyDescriptor(host,'__DSH_BOOT__').value;
+    let invalid=false, disposed=false, observer=null;
+    const onRoute=()=>{invalid=true;};
+    const inspect=records=>{for(const record of records){
+      if(record.type==='childList' && [...record.removedNodes].some(n=>n===root||n===node||n.contains?.(root)||n.contains?.(node))) invalid=true;
+      if(record.type==='attributes' && (record.target===node||record.target===root||record.target?.contains?.(node))
+        && ['data-slot','hidden','aria-hidden','role'].includes(record.attributeName)) invalid=true;
+    }};
+    const current=()=>{
+      if(observer)inspect(observer.takeRecords());
+      const mains=mainSurfaces(host);
+      return !invalid&&!disposed&&host.document===doc&&host.location.href===url&&matched(host)
+        &&Object.getOwnPropertyDescriptor(host,'__DSH_BOOT__')?.value===boot
+        &&doc.documentElement===html&&doc.getElementById('root')===root&&root.isConnected&&node.isConnected&&root.contains(node)
+        &&mains.length===1&&mains[0]===node
+        &&!node.closest('[hidden],[aria-hidden="true"]')
+        &&(!node.getClientRects || node.getClientRects().length>0);
+    };
+    return Object.freeze({node,current,
+      watch(invalidated){if(observer||disposed)return false;
+        host.addEventListener?.('hashchange',onRoute);host.addEventListener?.('popstate',onRoute);
+        observer=new host.MutationObserver(records=>{inspect(records);if(!current())invalidated();});
+        observer.observe(doc.documentElement,{childList:true,subtree:true,attributes:true,
+          attributeFilter:['data-slot','hidden','aria-hidden','role']});return true;},
+      dispose(){disposed=true;observer?.disconnect();observer=null;
+        host.removeEventListener?.('hashchange',onRoute);host.removeEventListener?.('popstate',onRoute);}});
+  }
   return Object.freeze({
+    themeSelectionContract:'dsh-owned-main-paint/v1',
+    captureThemeSurface,
     controllerOwner: 'azhou-dsh-startup',
     controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: false }),
     identify(host = environment) { return identify(host); },

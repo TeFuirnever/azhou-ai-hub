@@ -168,13 +168,21 @@ export async function installRenderer(offered) {
       || (brief.strength !== undefined && (!Number.isInteger(brief.strength) || brief.strength < 0 || brief.strength > 75))) {
     throw deny('invalid-local-payload');
   }
+  const dshCapture=slotValue(hostAdapter,'captureThemeSurface');
+  const dshBound=hostBound && slotValue(hostAdapter,'themeSelectionContract')==='dsh-owned-main-paint/v1'
+    && typeof dshCapture==='function';
+  const dshSurface=dshBound && (transactional || brief.mainPaint!=null)
+    ? Reflect.apply(dshCapture,hostAdapter,[globalThis]):null;
+  const dshCurrent=()=>!!dshSurface && slotValue(hostAdapter,'captureThemeSurface')===dshCapture
+    && dshSurface.current()===true;
+  const paintNode=workspaceBound?workspaceObservation.mainPaint?.node:dshSurface?.node;
   let mainPaint = null;
   if (brief.mainPaint != null) {
     const value = brief.mainPaint;
     const exact = (object, keys) => !!object && typeof object === 'object' && !Array.isArray(object)
       && Object.keys(object).length === keys.length && keys.every(key => Object.hasOwn(object, key));
-    if (!workspaceBound || workspaceObservation.mainPaint?.contract !== 'codex-owned-main-paint/v1'
-      || workspaceObservation.mainPaint.node !== workspaceObservation.activeMain || brief.themeState != null
+    if (!(workspaceBound && workspaceObservation.mainPaint?.contract === 'codex-owned-main-paint/v1'
+      && workspaceObservation.mainPaint.node === workspaceObservation.activeMain || dshBound && dshCurrent()) || brief.themeState != null
       || !exact(value, ['profile','rgba','backgroundImage','sourceDeclarationCount'])
       || value.profile !== 'codex-main-literal-paint/v1' || value.backgroundImage !== 'none'
       || !Array.isArray(value.rgba) || value.rgba.length !== 4
@@ -250,7 +258,7 @@ export async function installRenderer(offered) {
   };
   if (!markersAccounted(incumbent)) throw deny('namespace-conflict');
   if (slotValue(incumbent, PENDING_KEY)?.() === true) throw deny('activation-in-progress');
-  if (transactional && (!workspaceBound || incumbent && typeof slotValue(incumbent, SUSPEND_KEY) !== 'function')) {
+  if (transactional && (!(workspaceBound || dshBound && dshCurrent()) || incumbent && typeof slotValue(incumbent, SUSPEND_KEY) !== 'function')) {
     throw deny('reversible-activation-unsupported');
   }
   const residentSheet = document.getElementById(SHEET_ID);
@@ -262,19 +270,31 @@ export async function installRenderer(offered) {
     if (brief.themeState != null) throw deny('theme-surface-unsupported');
     if (signal && (typeof signal.addEventListener!=='function' || typeof signal.removeEventListener!=='function' || signal.aborted)
       || typeof isCurrent==='function' && !isCurrent()) throw deny('operation-cancelled');
+    const disableCurrent=()=> (!dshSurface || dshCurrent()) && (typeof isCurrent!=='function' || isCurrent());
+    if(dshSurface && !dshSurface.watch(()=>{}))throw deny('main-paint-unsupported');
+    const wrapDisabled=result=>{
+      if(!dshSurface)return result;
+      const original=result.transaction;let terminal=null,terminalResult=false;
+      const cleanup=()=>{dshSurface.dispose();signal?.removeEventListener('abort',rollback);};
+      const rollback=()=>{if(terminal)return terminal==='rollback'&&terminalResult;terminal='rollback';try{return terminalResult=original.rollback();}finally{cleanup();}};
+      signal?.addEventListener('abort',rollback,{once:true});
+      return {...result,transaction:Object.freeze({current:()=>disableCurrent()&&original.current(),rollback,
+        finalize(){if(terminal)return terminal==='finalize'&&terminalResult;
+          try{if(!disableCurrent()){terminal='rollback';terminalResult=original.rollback();return false;}terminal='finalize';return terminalResult=original.finalize();}finally{cleanup();}}})};
+    };
     if (incumbent) {
       const deactivate=slotValue(incumbent,DEACTIVATE_KEY);
       if (typeof deactivate!=='function') throw deny('reversible-activation-unsupported');
-      return deactivate(isCurrent,signal);
+      try{return wrapDisabled(deactivate(disableCurrent,signal));}catch(error){dshSurface?.dispose();throw error;}
     }
     let phase='pending';
-    const current=()=>phase==='pending' && !signal?.aborted && (typeof isCurrent!=='function' || isCurrent())
+    const current=()=>phase==='pending' && !signal?.aborted && disableCurrent()
       && document.documentElement===html && pageAdmitted() && shellUsable()
       && !Object.hasOwn(globalThis,CONTROLLER_SLOT) && !document.getElementById(SHEET_ID);
-    return {applied:true,disabled:true,imageDecoded:false,transaction:Object.freeze({current,
+    return wrapDisabled({applied:true,disabled:true,imageDecoded:false,transaction:Object.freeze({current,
       finalize(){if(phase!=='pending')return phase==='finalized';if(!current()){phase='rolled-back';return false;}phase='finalized';return true;},
       rollback(){if(phase!=='pending')return phase==='rolled-back';phase='rolled-back';return true;},
-    })};
+    })});
   }
 
   // ── Lease: one Blob URL with a single owner ─────────────────────────────
@@ -313,6 +333,7 @@ export async function installRenderer(offered) {
     if (urlRelinquished) return;
     urlRelinquished = true;
     cancelMasks();
+    dshSurface?.dispose();
     URL.revokeObjectURL(sceneURL);
     if (scene) scene.src = '';
   };
@@ -382,6 +403,7 @@ export async function installRenderer(offered) {
       if (typeof signal.addEventListener !== 'function' || typeof signal.removeEventListener !== 'function' || signal.aborted) throw deny('operation-cancelled');
       signal.addEventListener('abort', abortPending, { once: true });
     }
+    if(dshSurface && !dshSurface.watch(()=>{cancelMasks();invalidateWorkspace();}))throw deny('main-paint-unsupported');
     if (workspaceBound) workspaceLease = Reflect.apply(workspaceWatch, hostAdapter, [workspaceObservation,
       () => { workspaceInvalidated = true; cancelMasks(); invalidateWorkspace(); }, globalThis,
       brief.themeState ? { onThemeGeometry: geometry => { geometrySubscribed = true; geometryChanged(geometry); } } : {}]);
@@ -406,7 +428,7 @@ export async function installRenderer(offered) {
 
     // ── Reconfirm: the page the brief was admitted to still exists ────────
     if ((typeof isCurrent === 'function' && !isCurrent())
-        || !pageAdmitted() || !shell.isConnected
+        || dshSurface && !dshCurrent() || !pageAdmitted() || !shell.isConnected
         || !shellUsable()) {
       relinquishURL();
       throw deny('page-changed-during-decode');
@@ -481,11 +503,12 @@ export async function installRenderer(offered) {
       }
     }
     if (mainPaint) {
-      const node = workspaceObservation.mainPaint.node;
+      const node = paintNode;
       const attribute = 'data-azhou-dream-main';
       const marked = node.getAttribute(attribute);
       if (marked !== null && (marked !== slotValue(incumbent, MARKER_KEY)
         || !slotValue(incumbent, BASELINE_KEY)?.codexMarkers?.get(node)?.has(attribute))) throw deny('namespace-conflict');
+      if(dshBound && node===dshSurface.node && dshCurrent())markerTargets.set(node,new Set());
       if (!markerTargets.has(node)) throw deny('main-paint-unsupported');
       markerTargets.get(node).add(attribute);
     }
@@ -553,8 +576,7 @@ export async function installRenderer(offered) {
     const candidate = document.createElement('style');
     candidate.id = SHEET_ID;
     candidate.setAttribute(SHEET_OWNER_ATTRIBUTE, controllerOwner);
-    const paintRule = mainPaint ? '\nhtml[data-azhou-wallpaper="active"] [data-azhou-wallpaper-plane='
-      + JSON.stringify(sceneURL) + '][data-azhou-dream-main=' + JSON.stringify(sceneURL) + ']{background-color:rgba('
+    const paintRule = mainPaint ? '\nhtml[data-azhou-wallpaper="active"] #root [data-azhou-dream-main][data-azhou-dream-main=' + JSON.stringify(sceneURL) + ']{background-color:rgba('
       + mainPaint.rgba.join(',') + ')!important;background-image:none!important;}' : '';
     const candidateText = brief.css.replaceAll('__AZHOU_WALLPAPER_INSTANCE__', JSON.stringify(sceneURL))
       + (hostBound ? binding.css : '') + paintRule;
@@ -632,6 +654,7 @@ export async function installRenderer(offered) {
       return [...flagged].sort();
     }
     function probe() {
+      if (dshSurface && sheetCommitted && !retired && !suspended && !dshCurrent()) return dispose();
       if (workspaceBound && sheetCommitted && !retired && !suspended && !workspaceCurrent()) return dispose();
       if (retired) return { version: BUILD, applied: false, imageDecoded: false,
         matchedSurfaces: 0, transparentSurfaces: 0, backgroundMatched: false,
@@ -644,7 +667,7 @@ export async function installRenderer(offered) {
       const themeMatched = themeAlpha === null || themeApplied;
       let mainPaintApplied = false;
       if (mainPaint) {
-        const node = workspaceObservation.mainPaint.node;
+        const node = paintNode;
         const computed = getComputedStyle(node);
         const color = /^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/.exec(computed.backgroundColor);
         const rgba = color ? [+color[1],+color[2],+color[3],color[4] === undefined ? 1 : +color[4]] : null;
@@ -652,7 +675,7 @@ export async function installRenderer(offered) {
           && computed.backgroundImage === 'none' && !!rgba && rgba.every((channel, index) =>
             Math.abs(channel - (index === 3 ? mainPaint.rgba[index] : Math.round(mainPaint.rgba[index]))) < .001);
       }
-      const clearSurfaces = mainPaint ? surfaces.filter(node => node !== workspaceObservation.mainPaint.node) : surfaces;
+      const clearSurfaces = mainPaint ? surfaces.filter(node => node !== paintNode) : surfaces;
       const transparentSurfaces = clearSurfaces.filter(node => {
         const computed = getComputedStyle(node);
         return isTransparent(computed.backgroundColor) && computed.backgroundImage === 'none';
@@ -754,7 +777,7 @@ export async function installRenderer(offered) {
         if (marked === null) node.removeAttribute(surfaceMarker);
         else node.setAttribute(surfaceMarker, marked);
       }
-      if (document.documentElement === html && (!workspaceBound || ownsRootState)) {
+      if (document.documentElement === html && (!(workspaceBound || dshSurface) || ownsRootState)) {
         attemptCleanup(() => {
           if (html.getAttribute(ACTIVATION) === 'active') {
             if (restoreSnapshot.attribute === null) html.removeAttribute(ACTIVATION);
@@ -869,7 +892,7 @@ export async function installRenderer(offered) {
           if (!geometry || geometryKey(geometry)!==suspendedGeometryKey) return false;
         }
       }
-      return !retired && (!workspaceBound || workspaceCurrent());
+      return !retired && (!dshSurface || dshCurrent()) && (!workspaceBound || workspaceCurrent());
     } });
     Object.defineProperty(controller,DEACTIVATE_KEY,{value:(isDisableCurrent,disableSignal)=>{
       if (disableOperation || activationPhase!=='finalized' || retired || disableSignal?.aborted
@@ -883,7 +906,7 @@ export async function installRenderer(offered) {
       const current=()=>phase==='pending' && disableOperation===token && !disableSignal?.aborted
         && (typeof isDisableCurrent!=='function' || isDisableCurrent())
         && slotValue(globalThis,CONTROLLER_SLOT)===controller && !retired
-        && (!workspaceBound || workspaceCurrent()) && probe().applied===true;
+        && (!dshSurface || dshCurrent()) && (!workspaceBound || workspaceCurrent()) && probe().applied===true;
       function rollbackDisable(){
         if(phase!=='pending')return phase==='rolled-back';
         phase='rolled-back';detach();
@@ -918,7 +941,8 @@ export async function installRenderer(offered) {
       if (activationPhase !== 'pending') return activationPhase === 'rolled-back';
       activationPhase = 'rolled-back';
       detachAbort();
-      const canRevive = slotValue(globalThis, CONTROLLER_SLOT) === controller && residentIntact();
+      const canRevive = slotValue(globalThis, CONTROLLER_SLOT) === controller && residentIntact()
+        && (!dshSurface || dshCurrent());
       if (canRevive) restoreSnapshot = entrySnapshot;
       dispose();
       if (canRevive && !Object.hasOwn(globalThis, CONTROLLER_SLOT)) {
@@ -946,7 +970,7 @@ export async function installRenderer(offered) {
       if (retired || suspended || !sheetCommitted || slotValue(globalThis, CONTROLLER_SLOT) !== controller) return;
       dispose();
       if (typeof onWorkspaceInvalidated === 'function') attemptCleanup(() => onWorkspaceInvalidated({
-        api: controller, documentToken: workspaceObservation.documentToken, workspaceEpoch: workspaceObservation.workspaceEpoch,
+        api: controller, documentToken: workspaceObservation?.documentToken, workspaceEpoch: workspaceObservation?.workspaceEpoch,
       }));
     };
 

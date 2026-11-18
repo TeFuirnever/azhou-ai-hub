@@ -282,3 +282,34 @@ test('wallpaper group is frozen, atomic, and keyed to the dsh marker', () => {
   assert.equal(a.wallpaper.scope,
     'decoded image, viewport cover, unique validated DSH main surface; deeper layers separate');
 });
+
+test('DSH theme surface lease binds exact root/main and rejects removal/reinsert ABA', () => {
+  const h=host();let records=[];let observer;
+  const main={isConnected:true,closest:()=>null};
+  const root={isConnected:true,contains:n=>n===main};
+  h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[main];
+  h.MutationObserver=class {constructor(cb){this.cb=cb;observer=this;} observe(){} disconnect(){} takeRecords(){const r=records;records=[];return r;}};
+  const a=createDSHPageAdapter(h);assert.equal(a.themeSelectionContract,'dsh-owned-main-paint/v1');
+  const lease=a.captureThemeSurface(h);lease.watch(()=>{});assert.equal(lease.node,main);assert.equal(lease.current(),true);
+  records=[{type:'childList',removedNodes:[main]}];
+  assert.equal(lease.current(),false,'reattachment cannot revive old admission');lease.dispose();
+  assert.equal(a.captureThemeSurface({...h,document:{...h.document,querySelectorAll:()=>[main,main]}}),null);
+});
+
+for(const change of ['route','boot','root','main','html','hidden','ancestor-aba'])test(`DSH paint lease rejects ${change}`,()=>{
+  const h=host();let records=[];
+  const main={isConnected:true,closest:()=>null,getClientRects:()=>[{}]};
+  const root={isConnected:true,contains:n=>n===main};
+  h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[main];
+  h.MutationObserver=class {observe(){} disconnect(){} takeRecords(){const out=records;records=[];return out;}};
+  const lease=createDSHPageAdapter(h).captureThemeSurface();lease.watch(()=>{});
+  assert.equal(lease.current(),true);
+  if(change==='route')h.location.href+='other';
+  if(change==='boot')h.__DSH_BOOT__={};
+  if(change==='root')h.document.getElementById=()=>({});
+  if(change==='main')h.document.querySelectorAll=()=>[];
+  if(change==='html')h.document.documentElement={};
+  if(change==='hidden')main.getClientRects=()=>[];
+  if(change==='ancestor-aba')records=[{type:'childList',removedNodes:[{contains:n=>n===main}]}];
+  assert.equal(lease.current(),false);lease.dispose();assert.equal(lease.current(),false);
+});

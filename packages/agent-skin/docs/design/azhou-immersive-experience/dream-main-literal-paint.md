@@ -47,3 +47,30 @@ Fixtures use self-authored PNG/JPEG/WebP pixels and constructed official-contrac
 ## Executable UI check
 
 The generated parent/child scenario is selected with `node tools/test-startup-browser.mjs --generated-payload INSTALL_JS --out NEW_DIRECTORY --only 'generated Dream source UI applies literal main paint and restores the saved Azhou appearance'`. Build `INSTALL_JS` with the current startup builder. The scenario uses its own Chrome profile and self-authored uniform PNG/strict source packages. It calls the real CLI, imports through the actual file input, checks IDB and startup drafts, activates three source colors, checks body/main computed images and screenshot alpha composition, reloads the generated payload, and restores the saved Azhou appearance. Quota is fault-injected at a real IDB write after activation; another IDB connection writes a competing directory record; cancellation occurs after activation. These are real renderer/IDB rollback checks, not disk-exhaustion or real-host evidence.
+
+## DSH explicit main-paint capability
+
+DSH uses `dsh-owned-main-paint/v1`, not the Codex workspace or mask contract.
+The source profile name remains the versioned source mapper identity; it does not
+license arbitrary selectors on DSH. The adapter nominates exactly one connected
+`data-slot="main"` inside the captured root. A lease binds document/html, boot,
+route, root and main; pending mutation records are drained before checking it.
+Removal/reinsertion permanently invalidates the lease. Decode, transactional
+activation, zero-strength Restore and rollback must not revive a stale main or
+clobber a newer owner. The bounded owned stylesheet wins over DSH's existing
+main transparency rule without changing host inline styles.
+
+This capability supports imported literal main paint and Restore of the existing
+DSH legacy/null-theme baseline, including strength zero. It does not add P07
+Codex reading-mask geometry. An unsupported non-null mask baseline is rejected,
+not silently discarded. Main replacement fails closed; full automatic navigation
+recovery is not claimed. Reload revalidates the stored capsule before applying.
+Generic Apply failures ask the user to reconfirm the appearance rather than
+claiming that rollback or database compensation necessarily succeeded.
+
+Run the synthetic DSH adapter/renderer transaction check in
+`test-startup-browser.mjs` and the generated client/iframe check with
+`AZHOU_TEST_PYTHON=PYTHON node tools/test-dsh-dream-browser.mjs --out NEW_DIRECTORY`
+after `tools/build-dsh-plugin.py`. The latter uses a mocked module loader/Cordis
+carrier, no React settings slot, and an isolated owned Chrome profile. These are
+regression checks, not installed-host payload identity or native IME evidence.
