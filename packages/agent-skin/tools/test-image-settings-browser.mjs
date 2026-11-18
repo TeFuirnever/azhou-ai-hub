@@ -331,6 +331,24 @@ function browserChecks(maxInputBytes,dreamCapsuleText) {
       throw new Error('Keyboard focus on Appearance controls needs a clearly visible outline: '
         + JSON.stringify({ visible: keyboardTarget.matches(':focus-visible'), style: focusStyle.outlineStyle, width: focusStyle.outlineWidth }));
     }
+    const disclosures = [...settingsDialog.querySelectorAll('[data-agent-skin-disclosure]')];
+    if (disclosures.length !== 3 || disclosures.some(el => el.open)) throw new Error('Optional Appearance content must start collapsed');
+    for (const locale of ['zh-CN', 'en']) {
+      localization.setLocale(locale);
+      if (/CLI|profile|main/.test(settingsDialog.innerText)) throw new Error('Technical theme details leaked into default view');
+      for (const detail of disclosures) {
+        const summary = detail.querySelector('summary');
+        summary.focus();
+        if (childDocument.activeElement !== summary) throw new Error('Disclosure trigger is not focusable');
+        window.appearanceDisclosure = detail;
+        await new Promise(resolve => { window.finishDisclosureTest = resolve; window.disclosureTestReady = true; });
+        if (!detail.open || childDocument.activeElement !== summary) throw new Error('Keyboard disclosure loses focus or does not open: '+JSON.stringify({name:detail.dataset.agentSkinDisclosure,locale,open:detail.open,active:childDocument.activeElement?.outerHTML}));
+        await new Promise(resolve => { window.finishDisclosureTest = resolve; window.disclosureTestReady = true; });
+        if (detail.open || childDocument.activeElement !== summary) throw new Error('Keyboard disclosure does not close or loses focus');
+      }
+    }
+    localization.setLocale('zh-CN');
+    if (applyCalls !== 0 || savedCallbackCount !== 0) throw new Error('Opening help saved or applied settings');
     const selectImage = file => {
       const transfer = new child.DataTransfer();
       transfer.items.add(file);
@@ -429,6 +447,17 @@ function browserChecks(maxInputBytes,dreamCapsuleText) {
     for (const [width, height] of [[1512, 889], [800, 820], [640, 480], [390, 320]]) {
       workspacePreviewGeometry.push(await measurePreviewAt(width, height));
     }
+    for (const locale of ['zh-CN', 'en']) for (const width of [390, 640, 800]) {
+      localization.setLocale(locale);
+      await measurePreviewAt(width, 480);
+      for (const open of [false, true]) {
+        for (const detail of disclosures) detail.open = open;
+        await new Promise(resolve => child.requestAnimationFrame(resolve));
+        if (settingsDialog.scrollWidth > settingsDialog.clientWidth + 1) throw new Error('Appearance disclosure horizontal overflow: ' + locale + '/' + width + '/' + open);
+      }
+    }
+    for (const detail of disclosures) detail.open = false;
+    localization.setLocale('zh-CN');
     const zoomEquivalentGeometry = workspacePreviewGeometry.at(-1);
     const appearancePreviewMatrix = [];
     for (const [theme, colors] of [
@@ -737,6 +766,8 @@ function browserChecks(maxInputBytes,dreamCapsuleText) {
     const presetFileInput=settingsDialog.querySelector('[data-agent-skin-preset-import]');
     const presetExport=settingsDialog.querySelector('[data-agent-skin-preset-export]');
     if(presetFileInput.labels.length!==1 || presetFileInput.labels[0].textContent!=='Import Azhou preset file') throw new Error('preset import label association');
+    const presetDisclosure=settingsDialog.querySelector('[data-agent-skin-disclosure=presets]');
+    if(!presetDisclosure.open)presetDisclosure.querySelector('summary').click();
     presetFileInput.focus();if(childDocument.activeElement!==presetFileInput)throw new Error('preset import is not keyboard focusable');
     presetExport.focus();if(childDocument.activeElement!==presetExport)throw new Error('preset export is not keyboard focusable');
     presetList.value='browser-a';
@@ -1147,6 +1178,14 @@ sys.stdout.buffer.write(subprocess.check_output([*base,'export-capsule',receipt[
   await cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await cdp.evaluate('window.finishSettingsFocusTest()');
+  for (let index = 0; index < 12; index++) {
+    await until(async () => checkFailure || await cdp.evaluate('window.disclosureTestReady === true'), 10_000, 'disclosure keyboard setup');
+    if (checkFailure) throw checkFailure;
+    await cdp.evaluate('window.disclosureTestReady = false');
+    await cdp.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'});
+    await cdp.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+    await cdp.evaluate('window.finishDisclosureTest()');
+  }
   const outcome = await checks;
   if (outcome.error) throw outcome.error;
   const result = outcome.value;

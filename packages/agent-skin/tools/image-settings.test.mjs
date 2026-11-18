@@ -3138,3 +3138,28 @@ for(const outcome of ['newer-winner','compensation-quota'])test('postcommit disp
   if(winner)assert.deepEqual(storage.state.themeRecord,winner);
   else assert.equal(storage.state.themeRecord.selection.capsuleSha256,imported.capsuleSha256,'A failed compensation is reported, not claimed restored');
 });
+
+for (const locale of ['zh-CN', 'en']) test(`Appearance keeps optional instructions collapsed without changing drafts (${locale})`, async () => {
+  const localization = createLocalization({locale});
+  const storage = makeIndexedDB();
+  const fixture = makeFixture({localization,indexedDB:storage.indexedDB,imageDimensions:[[512,512],[1536,1024]]});
+  await fixture.api.load({avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[[[0,0],[1,1]]],wallpaperStrength:42});
+  let applies = 0;
+  fixture.api.openSettings({onApply(){applies++;},onThemeApply(){applies++;}});
+  for (const name of ['presets', 'theme-help', 'dream-help']) {
+    const disclosure = fixture.elements.find(el => el.getAttribute('data-agent-skin-disclosure') === name);
+    assert.ok(disclosure, `${name} offers progressive disclosure`);
+    assert.equal(disclosure.tagName, 'DETAILS');
+    assert.equal(Boolean(disclosure.open), false, 'optional content starts collapsed');
+    assert.equal(disclosure.children[0].tagName, 'SUMMARY', 'native keyboard-accessible trigger');
+    assert.ok(disclosure.children[0].textContent);
+    disclosure.open = true;
+    disclosure.open = false;
+  }
+  const note = fixture.elements.find(el => el.getAttribute('data-agent-skin-dream-import-note') === '');
+  assert.ok(note?.textContent.includes(locale === 'en' ? 'not apply' : '不应用'));
+  assert.equal(note.parentNode.tagName, 'DIV', 'import effect stays outside collapsed help');
+  assert.equal(storage.state.puts, 0);
+  assert.equal(applies, 0);
+  fixture.api.dispose();
+});

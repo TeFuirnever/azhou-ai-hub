@@ -1911,6 +1911,14 @@ function createImageSettings(environment) {
       parent.appendChild(element);
       return element;
     };
+    const addDisclosure = (name, key, parent) => {
+      const details = document.createElement('details');
+      details.setAttribute('data-agent-skin-disclosure', name);
+      details.style.cssText = 'margin-top:14px;min-width:0;overflow-wrap:anywhere';
+      addText(key, details, 'summary').style.cssText = 'cursor:pointer;overflow-wrap:anywhere';
+      parent.appendChild(details);
+      return details;
+    };
     const selectCategory = name => {
       for (const tab of tabs) {
         const selected = tab.getAttribute('data-agent-skin-settings-tab') === name;
@@ -2193,13 +2201,15 @@ function createImageSettings(environment) {
     themeStrengthNote.style.cssText = themeDescription.style.cssText;
     labels['settings.themeControl.strengthNote'] = {element: themeStrengthNote};
     strength.setAttribute('aria-describedby', themeStrengthNote.id);
-    workspacePanel.append(themeDescription, themeTransparencyReason, themeStrengthNote);
+    workspacePanel.append(themeTransparencyReason, themeStrengthNote);
+    addDisclosure('theme-help', 'settings.themeControl.help', workspacePanel).appendChild(themeDescription);
     controls.push(themeChoice, themeMode, themeTransparency);
     for (const [control, key] of [[themeChoice, 'choice'], [themeMode, 'mode'], [themeTransparency, 'transparency']]) ariaLabels.push({control, key: 'settings.themeControl.' + key});
 
+    const presetDetails = addDisclosure('presets', 'settings.presets.heading', workspacePanel);
     const presetSection = document.createElement('div');
-    presetSection.style.cssText = 'display:grid;gap:8px;margin-top:20px;min-width:0';
-    workspacePanel.appendChild(presetSection);
+    presetSection.style.cssText = 'display:grid;gap:8px;margin-top:14px;min-width:0';
+    presetDetails.appendChild(presetSection);
     const dreamSection = document.createElement('div');
     dreamSection.setAttribute('data-agent-skin-dream-section','');
     dreamSection.style.cssText = 'display:grid;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--agent-skin-border,GrayText)';
@@ -2213,6 +2223,10 @@ function createImageSettings(environment) {
     buttons['settings.dream.import'] = dreamImportButton; controls.push(dreamImportButton);
     dreamImportButton.addEventListener('click',()=>{if(panelOpen && !active && !panelCommit) dreamImport.click?.();});
     dreamSection.appendChild(dreamImportButton);
+    const dreamImportNote = addText('settings.dream.importNote', dreamSection);
+    dreamImportNote.setAttribute('data-agent-skin-dream-import-note', '');
+    dreamImportNote.id = 'agent-skin-dream-import-note';
+    dreamImportButton.setAttribute('aria-describedby', dreamImportNote.id);
     const dreamList = document.createElement('select');
     dreamList.id = 'agent-skin-dream-list'; dreamList.setAttribute('data-agent-skin-dream-list','');
     for (const [control,key] of [[dreamImport,'import'],[dreamList,'list']]) {
@@ -2251,8 +2265,8 @@ function createImageSettings(environment) {
     };
     dreamApply.addEventListener('click',()=>requestThemeApply(dreamList.value));
     dreamRestore.addEventListener('click',()=>requestThemeApply(null));
-    const dreamNote = document.createElement('p'); labels['settings.dream.note'] = {element:dreamNote};
-    dreamSection.append(dreamApply,dreamRestore,dreamNote);
+    dreamSection.append(dreamApply,dreamRestore);
+    addText('settings.dream.note', addDisclosure('dream-help', 'settings.dream.help', dreamSection));
     dreamImport.addEventListener('change',async() => {
       const file = dreamImport.files?.[0]; dreamImport.value = '';
       if (!file || !panelOpen || active || panelCommit) return;

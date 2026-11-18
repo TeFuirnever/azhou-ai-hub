@@ -18,7 +18,7 @@ const python=process.env.AZHOU_TEST_PYTHON||'python3';
 const code=await readFile(join(pkg,'.build/azhou-dsh-plugin/azhou-agent-skin/client.js'),'utf8');
 const report={scope:'actual generated DSH client.js and embedded mountSettings iframe in isolated Chrome; observed display:contents host shape, mocked module loader and Cordis effects, synthetic dialog rather than React; not native DSH acceptance',clientSha256:createHash('sha256').update(code).digest('hex'),checks:[]};
 const html=`<!doctype html><html lang="en"><head><style>html,body,#root{margin:0;width:100%;height:100%}.fixture_mainPanel{height:100vh;display:flex;flex-direction:column}main{display:contents}.hero{flex:1}</style></head><body><div id="root"><div class="fixture_mainPanel"><div data-slot="main" style="display:contents"><main><div class="hero"><textarea aria-label="test draft"></textarea></div></main></div></div></div><script>window.__DSH_BOOT__={};window.__effects=[];window.__ModuleLoader__={load(spec){const plugin=spec.factory(name=>{throw Error('synthetic platform has no '+name)});window.__plugin=plugin;window.__result=plugin.apply({effect(fn){const cleanup=fn();__effects.push(cleanup);return cleanup},slots:null})}};</script><script src="/client.js"></script></body></html>`;
-const server=createServer((req,res)=>{res.setHeader('content-type',req.url==='/client.js'?'text/javascript':'text/html');res.end(req.url==='/client.js'?code:html)});await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const server=createServer((req,res)=>{res.setHeader('content-type',req.url==='/client.js'?'text/javascript; charset=utf-8':'text/html; charset=utf-8');res.end(req.url==='/client.js'?code:html)});await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const profile=await mkdtemp(join(tmpdir(),'azhou-dsh-generated-ui-'));
 const profileOwner=await profileIdentity(profile);
 const chrome=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',['--headless=new','--no-first-run','--no-default-browser-check','--remote-debugging-port=0','--user-data-dir='+profile,'about:blank'],{stdio:['ignore','ignore','pipe']});const chromeOwner=trackOwnedChild(chrome);let stderr='';chrome.stderr.on('data',b=>stderr+=b);
@@ -45,7 +45,25 @@ try{
  await skipStartup();
  report.checks.push({initial:await ev('__azhouStartup.status()')});
  const capsule=execFileSync(python,['-B','-c',`import io,json,subprocess,sys,zipfile\nfrom pathlib import Path\nfrom PIL import Image\nr=Path(sys.argv[1]);image=io.BytesIO();Image.new('RGB',(24,16),(23,41,79)).save(image,format='PNG')\nz=r/'source.zip'\nwith zipfile.ZipFile(z,'w') as f:\n f.writestr('theme.json',json.dumps({'schemaVersion':1,'id':'dream.dsh.ui','name':'Synthetic DSH UI','image':'background.png'}))\n f.writestr('theme.css','[data-ds-part="main"]{background-color:rgba(120,60,20,.4);}')\n f.writestr('background.png',image.getvalue())\nb=[sys.executable,'-B',sys.argv[2]+'/tools/theme-library.py','--library',str(r/'library')]\nv=json.loads(subprocess.check_output([*b,'import',str(z)]))\nprint(subprocess.check_output([*b,'export-capsule',v['archiveSha256']]).decode())`,out,pkg],{encoding:'utf8'});
- await open();
+ await cdp.call('Emulation.setDeviceMetricsOverride',{width:900,height:900,deviceScaleFactor:1,mobile:false});
+ for(const locale of ['en','zh-CN']) for(const width of [390,640]) {
+  await ev(`document.documentElement.lang=${JSON.stringify(locale)}`);await delay(100);await open();
+  await ev(`document.querySelector('[data-fixture-settings]').style.width='${width}px'`);
+  for(const expanded of [false,true]) {
+   const geometry=await ev(`(async()=>{const d=${panel},dialog=d.querySelector('[data-agent-skin-settings]');
+    for(const detail of d.querySelectorAll('[data-agent-skin-disclosure]'))detail.open=${expanded};
+    d.querySelector('[data-agent-skin-dream-section]').scrollIntoView({block:'end'});
+    await new Promise(r=>d.defaultView.requestAnimationFrame(()=>d.defaultView.requestAnimationFrame(r)));
+    return {width:dialog.clientWidth,scrollWidth:dialog.scrollWidth,text:dialog.innerText};})()`);
+   assert.ok(geometry.scrollWidth<=geometry.width+1,'embedded disclosure must not overflow');
+   if(!expanded)assert.equal(/CLI|profile|main/.test(geometry.text),false,'technical help stays collapsed');
+   assert.ok(geometry.text.includes(locale==='en'?'Import theme':'导入主题'),'embedded host locale follows');
+   await writeFile(join(out,`appearance-${locale}-${width}-${expanded?'expanded':'collapsed'}.png`),Buffer.from((await cdp.call('Page.captureScreenshot',{format:'png'})).data,'base64'));
+   report.checks.push({appearance:{locale,width,expanded,overflow:false}});
+  }
+  await close();
+ }
+ await ev(`document.documentElement.lang='en'`);await delay(100);await open();
  await ev(`(()=>{const d=${panel},w=d.defaultView,input=d.querySelector('[data-agent-skin-dream-import]'),t=new w.DataTransfer();t.items.add(new w.File([${JSON.stringify(capsule)}],'dsh.json',{type:'application/json'}));input.files=t.files;input.dispatchEvent(new w.Event('change',{bubbles:true}))})()`);
  await until(()=>ev(`(()=>{const d=${panel};return d.querySelector('[data-agent-skin-dream-list]').options.length===1&&!d.querySelector('[data-agent-skin-dream-apply]').disabled})()`),'imported');
  assert.equal(await ev('window.__azhouWallpaper.status().mainPaintApplied===true'),false);report.checks.push({importStoredWithoutApplying:true});
