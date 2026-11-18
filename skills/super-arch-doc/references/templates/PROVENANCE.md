@@ -2,7 +2,7 @@
 
 模板为**只读**：生成文档时按剖面选用，一个字节都不改；需要调整时先回来源仓库更新原版，再同步副本并更新本文件的 SHA-256。
 
-有意分歧注记（2026-11-18）：对 [design-doc.md](design-doc.md)（ADR 行改为指向 [adr-template.md](adr-template.md)）与 [feature-detailed-design.md](feature-detailed-design.md)（术语表行改为生成时附加件机制）做了两处本地准确性修正，来源仓（MatrixContextController，非公开可达）未回源。未来从来源仓同步原版时，须先保留或重放这两行修正，再重算并更新本表摘要，否则同步会静默回退修正。
+有意分歧注记（2026-11-18）：对 [design-doc.md](design-doc.md)（ADR 行改为指向 [adr-template.md](../adr-template.md)）与 [feature-detailed-design.md](feature-detailed-design.md)（术语表行改为生成时附加件机制）做了两处本地准确性修正，来源仓（MatrixContextController，非公开可达）未回源。未来从来源仓同步原版时，须先保留或重放这两行修正，再重算并更新本表摘要，否则同步会静默回退修正。
 
 来源：MatrixContextController `docs/templates/`（2026-09，模板版本随 ARCH-2026-001 v0.17 流水线验证）。许可证：随来源仓库整体许可（同 owner 内部引用）；对外分发前先核对来源仓库 LICENSE。
 
