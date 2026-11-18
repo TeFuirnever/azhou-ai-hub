@@ -15,6 +15,6 @@ python3 benchmarks/super-arch-doc/run_case.py [--receipt <path.json>]
 1. `new_doc.py` 脚手架退出码 0；产物含文档控制行 `文档 ID：\`ARCH-2026-099\``（及版本 / 状态 / 日期）。
 2. `verify_doc.py` 退出码 0（空图配平、零断链、无未入账图注、空白合规）。
 3. 模板内的 3 处 `design-doc.md` 选择器链接被改写为纯文本标注（产物 `grep -c "design-doc.md#"` 为 3，但无 Markdown 断链）。
-4. 模板本体哈希不变（`references/templates/PROVENANCE.md` 表仍一致）。
+4. 来源表须逐一列出模板目录中的每份 Markdown 模板，且 SHA-256 与文件一致；空表、缺项或重复项均失败。
 
 当前状态：自动断言 runner 已交付并实跑通过，收据见 `evidence/arch-doc-benchmark-receipt-2026-09-04.json`（2026-09-04）。接入 `scripts/verify.py` 公开 gate 待排期（sibling-gap GAP#4 的剩余半步）；在接入之前，公开 gate 的 benchmark 完整性主张仍为三套（repo-pedant / super-excalidraw-diagram / super-session-insights）。
