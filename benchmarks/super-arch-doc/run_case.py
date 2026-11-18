@@ -10,10 +10,13 @@
   3. 模板选择器链接已改写为纯文本（产物零 Markdown 断链）。
   4. 模板本体 SHA-256 与 references/templates/PROVENANCE.md 表一致。
 输出: 逐项 PASS/FAIL + JSON 收据（schema/status/skill-tree digest/artifacts 产物说明字段）。
-退出码: 0 全过；1 有失败。
+退出码: 0 全过；1 检查或回执写入失败；2 参数错误。
 """
+import argparse
+from datetime import date
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -57,7 +60,34 @@ def check_template_hashes(directory: Path) -> tuple[bool, str]:
     return (True, "") if seen else (False, "empty template inventory")
 
 
+def write_receipt(path: Path, payload: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        raise OSError("receipt target must be a regular file or a new path")
+    staged = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", newline="\n", dir=path.parent,
+            prefix=".arch-doc-receipt-", suffix=".tmp", delete=False,
+        ) as stream:
+            staged = Path(stream.name)
+            content = payload + "\n"
+            if stream.write(content) != len(content):
+                raise OSError("short receipt write")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(staged, path)
+        staged = None
+    finally:
+        if staged is not None:
+            staged.unlink(missing_ok=True)
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--receipt", type=Path)
+    args = parser.parse_args()
+    run_date = date.today().isoformat()
     results = []
     with tempfile.TemporaryDirectory() as td:
         out = Path(td) / "ARCH-2026-099.md"
@@ -86,19 +116,22 @@ def main() -> int:
     receipt = {
         "schema": "super-arch-doc.benchmark.case-01.v1",
         "status": "passed" if not failed else "failed",
-        "date": "2026-09-04",
+        "date": run_date,
         "checks": [{"name": n, "pass": p, "detail": d} for n, p, d in results],
         "skill_tree_digest": skill_digest,
         "artifacts": ["(tempdir; scaffold re-runnable via commands in README)"],
         "visual_review": "n/a (deterministic checks only)",
     }
     payload = json.dumps(receipt, ensure_ascii=False)
+    if args.receipt is not None:
+        try:
+            write_receipt(args.receipt, payload)
+        except OSError as exc:
+            print(f"receipt write failed: {exc}", file=sys.stderr)
+            return 1
     print(payload)
-    receipt_path = sys.argv[sys.argv.index("--receipt") + 1] if "--receipt" in sys.argv else None
-    if receipt_path:
-        Path(receipt_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(receipt_path).write_text(payload + "\n", encoding="utf-8")
-        print(f"receipt written: {receipt_path}")
+    if args.receipt is not None:
+        print(f"receipt written: {args.receipt}")
     return 1 if failed else 0
 
 
