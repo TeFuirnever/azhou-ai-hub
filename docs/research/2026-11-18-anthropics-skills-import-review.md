@@ -34,7 +34,7 @@
 - `ffmpeg` / `imageio` 小写子串：**0 命中**。GPL-3.0 FFmpeg 与 BSD imageio/imageio-ffmpeg 不随本仓 vendored 字节进入。
 - 字体文件（`.ttf/.otf/.woff/.woff2`）：候选子树内 **0 个**（全树另有 54 个，均在候选范围之外）。OFL 组件不随 vendored 字节进入。
 
-第三方运行时依赖（import 全量扫描，58 个 .py/.js 中 211 条 import 行聚合）：
+第三方运行时依赖（import 全量扫描；口径修订 2026-11-18：初版「211 条 import 行」实为 36 个唯一 .py/.js（58 个文件面，office/ 三包重复）的顶格 `import`/`from` 正则计数，对缩进 import 与 CommonJS `require()` 不可见；本版扩为全语句口径，复算 Python AST import 语句 240 条 + `apply_theme.js` 的 `require()` 代码 2 条）：
 
 | 组件 | 出现位置 | 结论 |
 |---|---|---|
@@ -42,9 +42,11 @@
 | pdf2image | pdf/scripts/convert_pdf_to_images.py | 同上 |
 | pdfplumber | pdf/scripts/extract_form_structure.py | 同上；差距设计抽查清单未含，本单元实测新增 |
 | PIL (Pillow) | pdf/scripts/create_validation_image.py、pptx/scripts/thumbnail.py | 同上 |
-| defusedxml | office/ 验证器与 docx/pptx 多脚本 | 同上 |
-| lxml.etree | office/validators/base.py、docx.py | 同上；差距设计抽查清单未含，本单元实测新增 |
+| defusedxml | office/ 六脚本（validators/base、docx、redlining、soffice、validate、helpers/pptx_chart）、docx/scripts/comment.py、merge_runs.py、pptx/scripts/add_slide.py、clean.py、thumbnail.py、xlsx/scripts/recalc.py（:293、:353） | 同上 |
+| lxml.etree | office/validators/base.py、docx.py、pptx.py（8 处缩进 import） | 同上；差距设计抽查清单未含，本单元实测新增 |
 | python-pptx (`pptx.package`) | pptx/scripts/slide_text.py | 同上 |
+| openpyxl | xlsx/scripts/recalc.py:418–419（缩进 import；`_scan_xml` 异常时 `_report` 回落 `_scan_with_openpyxl`，:458–462） | 同上；初版扫描漏项，本版复算补录 |
+| pptxgenjs、jszip（Node） | pptx/scripts/apply_theme.js:29（jszip 经 pptxgenjs 解析路径加载，缺失即 throw） | 同上；初版扫描漏项，本版复算补录 |
 | anthropic、mcp | mcp-builder/scripts/evaluation.py、connections.py | 同上（mcp-builder 本轮暂缓，见 R3） |
 | playwright.sync_api | webapp-testing/examples/ 三个示例脚本 | 同上；`scripts/with_server.py` 仅 stdlib，实测无 playwright |
 
@@ -99,7 +101,7 @@ office/ 子树的 import 扫描以 docx 名下副本为源；pptx/xlsx 副本经
 ## 9. 对后续采用单元的输出契约
 
 - vendor manifest 钉值来源 = 附录 A（101 条唯一路径；office/ 段标注三包共享，U2–U4 复用）。
-- setup 依赖合同输入：pdf（pypdf、pdf2image、pdfplumber、Pillow）；office 家族（defusedxml、lxml，及各格式自身运行时：LibreOffice soffice、python-pptx 等）；mcp-builder（anthropic>=0.39.0、mcp>=1.1.0，暂缓不排期）；webapp-testing（Playwright，落在 examples，暂缓不排期）。
+- setup 依赖合同输入：pdf（pypdf、pdf2image、pdfplumber、Pillow）；office 家族（defusedxml、lxml，及各格式自身运行时：LibreOffice soffice、python-pptx、openpyxl、Node 侧 pptxgenjs/jszip 等）；mcp-builder（anthropic>=0.39.0、mcp>=1.1.0，暂缓不排期）；webapp-testing（Playwright，落在 examples，暂缓不排期）。
 - fidelity 分类预登记 `faithful`（skill-standard §2.3：能力原样保留，本地层仅包装中性 frontmatter 与 fail-closed setup）；「preinstalled 依赖 → fail-closed setup」的逐条 delta 在各采用 PR 的 provenance 终判。
 - R1–R3 是各采用 PR 的前置引证；本记录是唯一裁决载体。
 
