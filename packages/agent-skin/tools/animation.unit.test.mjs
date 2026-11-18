@@ -9,7 +9,9 @@ import { webcrypto } from 'node:crypto';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCE_PATH = join(ROOT, 'animation.js');
 const source = await readFile(SOURCE_PATH, 'utf8');
-const animationContext = {};
+const animationContext = {TextEncoder,TextDecoder,Uint8Array,atob,btoa};
+const dreamStyleSource = await readFile(join(ROOT,'dream-theme-style.js'),'utf8');
+new vm.Script(dreamStyleSource,{filename:'dream-theme-style.js'}).runInNewContext(animationContext);
 new vm.Script(source, { filename: SOURCE_PATH }).runInNewContext(animationContext);
 const { installAnimation, localPreviewInput } = animationContext;
 const MAX_NATIVE_SNAPSHOT_BYTES = 24 * 1024 * 1024 + 4 * 1024;
@@ -268,8 +270,8 @@ function createFixture({ intent = 'preview', assets, localization = true, settin
   class ImageMock {
     constructor() {
       const index = imageIndex++;
-      this.naturalWidth = index % 2 === 0 ? 512 : 1536;
-      this.naturalHeight = index % 2 === 0 ? 512 : 1024;
+      this.naturalWidth = index % 2 === 0 ? 512 : imageOptions.artworkDimensions?.[0] ?? 1536;
+      this.naturalHeight = index % 2 === 0 ? 512 : imageOptions.artworkDimensions?.[1] ?? 1024;
       this.complete = false;
       this.onerror = null;
       this.onload = null;
@@ -455,11 +457,11 @@ function attachPreviewIframeEnvironment(fixture) {
   };
 }
 
-async function waitReady(fixture) {
+async function waitReady(fixture, timeout = 2500) {
   await new Promise(resolve => setImmediate(resolve));
   const failed = fixture.messages.find(message => message.action === 'assetError');
   if (failed) throw new Error(`animation failed to mount or prepare: ${JSON.stringify(failed)}`);
-  await Promise.race([fixture.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('animation did not become ready')), 2500))]);
+  await Promise.race([fixture.ready, new Promise((_, reject) => setTimeout(() => reject(new Error('animation did not become ready')), timeout))]);
 }
 
 async function waitForMessage(fixture, action) {
@@ -1430,7 +1432,7 @@ test('narrow layouts preserve long localized copy and rebind legacy media listen
   const subtitle = `${'一起把过程整理'.repeat(5)}，留给后来者继续使用`;
   const fixture = createFixture({ rootWidth: 400, rootHeight: 800, theme: 'light', legacyMedia: true,
     assets: { avatar: 'data:image/png;base64,AA==', artwork: 'data:image/png;base64,AA==',
-      contours: [[[0, 0], [2, 0], { x: 50, y: 0 }, { x: 80, y: 0 }]],
+      contours: [[[0, 0], [2, 0], [50, 0], [80, 0]]],
       introTitle: title, introCaption: caption, artworkSubtitle: subtitle } });
   await waitReady(fixture);
 
@@ -1626,11 +1628,46 @@ test('explicit exits release the scene without relying on a final render', async
 test('native theme bridge consumes production Swift transfer expressions', {skip: !process.env.AZHOU_THEME_BRIDGE_OUTPUT}, async () => {
   const expressions=JSON.parse(await readFile(process.env.AZHOU_THEME_BRIDGE_OUTPUT,'utf8'));
   const nativeStartup=Object.freeze({owner:'azhou-agent-skin-native',version:1,runNonce:'test-run-1',appearance:Object.freeze({locale:'en',theme:'dark'})});
-  const fixture=createFixture({native:true,nativeMode:'launch',nativeFormal:true,nativeStartup});
+  const expected=JSON.parse(await readFile(process.env.AZHOU_THEME_BRIDGE_INPUT,'utf8'));
+  const image=expected.themeState?.selection?.kind==='imported'?expected.themeState.selection.image:null;
+  const fixture=createFixture({native:true,nativeMode:'launch',nativeFormal:true,nativeStartup,
+    imageOptions:image?{artworkDimensions:[image.width,image.height]}:{}});
   for(const expression of expressions) assert.equal(vm.runInNewContext(expression,{window:fixture.window}),true);
-  await waitReady(fixture);
+  await waitReady(fixture,image?.bytes > 9000000 ? 10000 : 2500);
   const background=fixture.messages.find(item=>item.action==='background');
-  assert.equal(background.themeState.preferencesByTheme['azhou-q-v3'].value,65);
-  assert.equal(background.strength,42);
+  if(image) {
+    assert.deepEqual(JSON.parse(JSON.stringify(background.themeState)),expected.themeState);
+    assert.equal(background.image,expected.settings.artwork);
+    assert.equal(background.strength,75);
+  } else {
+    assert.equal(background.themeState.selection.surfaceTransparency.value,65);
+    assert.equal(background.strength,42);
+  }
+  fixture.handle.dispose();
+});
+
+async function importedStartupSnapshot() {
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAIAAAA2iEnWAAAAFElEQVR4nGMUt4xmYGBgYgADKAUADMEAsTl1AMYAAAAASUVORK5CYII=','base64');
+  const digest=[...new Uint8Array(await webcrypto.subtle.digest('SHA-256',png))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+  const snapshot=startupSnapshot({avatar:'data:image/png;base64,AA==',artwork:'data:image/png;base64,AA==',contours:[[[0,0],[1,1]]]});snapshot.settings={...snapshot.settings,schemaVersion:2,artwork:'data:image/png;base64,'+png.toString('base64')};
+  snapshot.themeState={schemaVersion:2,revision:1,imagesBinding:'a'.repeat(64),selection:{kind:'imported',profile:'codex-main-literal-paint/v1',
+    capsuleSha256:'b'.repeat(64),archiveSha256:'c'.repeat(64),image:{name:'background.png',mime:'image/png',bytes:png.length,sha256:digest,width:2,height:3},
+    paint:{rgba:[17,34,51,.25],backgroundImage:'none',sourceDeclarationCount:2}}};
+  return snapshot;
+}
+test('required imported snapshot retains original image bytes and decodes its actual dimensions',async()=>{
+  const snapshot=await importedStartupSnapshot();
+  const fixture=createFixture({intent:'play',snapshotMode:true,snapshotReader:async()=>snapshot,imageOptions:{artworkDimensions:[2,3]}});
+  await waitReady(fixture);
+  const background=fixture.messages.find(message=>message.action==='background');
+  assert.equal(background.image,snapshot.settings.artwork);
+  assert.deepEqual(JSON.parse(JSON.stringify(background.themeState.selection)),snapshot.themeState.selection);
+  fixture.handle.dispose();
+});
+test('required imported snapshot rejects a changed original image digest before preparing',async()=>{
+  const snapshot=await importedStartupSnapshot();snapshot.themeState.selection.image.sha256='0'.repeat(64);
+  const fixture=createFixture({intent:'play',snapshotMode:true,snapshotReader:async()=>snapshot,imageOptions:{artworkDimensions:[2,3]}});
+  await waitForMessage(fixture,'assetError');
+  assert.equal(fixture.messages.some(message=>message.action==='ready'||message.action==='background'),false);
   fixture.handle.dispose();
 });

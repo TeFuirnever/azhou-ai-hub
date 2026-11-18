@@ -3,6 +3,7 @@ export function bootstrapStartup({
   installAnimation,
   createLocalization,
   createImageSettings,
+  createDreamThemeStyle,
   createWallpaperApplicator,
   installRenderer,
   version,
@@ -25,6 +26,7 @@ export function bootstrapStartup({
     createImageSettings: { value: createImageSettings },
     applyWallpaper: { value: applyWallpaper },
   });
+  if (typeof createDreamThemeStyle === 'function') Object.defineProperty(installAnimation,'createDreamThemeStyle',{value:createDreamThemeStyle});
   if (playbackOwner === 'page') return installStartup(installAnimation, host, pageAdapter);
   return installStartup(installAnimation, host, pageAdapter, playbackOwner);
 }

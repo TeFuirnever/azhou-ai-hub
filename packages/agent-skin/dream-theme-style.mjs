@@ -170,9 +170,9 @@ function staticImage(bytes, name) {
 }
 
 export async function readDreamCapsule(input, {crypto = globalThis.crypto, decodeImage, signal} = {}) {
-  requireValue(input instanceof Uint8Array && input.byteLength > 0 && input.byteLength <= CAPSULE_LIMIT, 'dream_capsule_size');
+  requireValue(ArrayBuffer.isView(input) && input.BYTES_PER_ELEMENT === 1 && input.byteLength > 0 && input.byteLength <= CAPSULE_LIMIT, 'dream_capsule_size');
   requireValue(typeof decodeImage === 'function' && crypto?.subtle, 'dream_decoder_unavailable');
-  const bytes = Uint8Array.prototype.slice.call(input);
+  const bytes = new Uint8Array(input.buffer, input.byteOffset, input.byteLength).slice();
   const check = () => {if (signal?.aborted) throw new Error('operation-cancelled');};
   const digest = async data => [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))]
     .map(byte => byte.toString(16).padStart(2, '0')).join('');
@@ -214,4 +214,75 @@ export async function readDreamCapsule(input, {crypto = globalThis.crypto, decod
   return {capsuleSha256, archiveSha256:capsule.archiveSha256, manifest, css, paint,
     image:{bytes:image, mime:IMAGE_MIME[manifest.image], sha256:capsule.files[manifest.image].sha256,
       width:metadata.width, height:metadata.height}};
+}
+
+// A finite rendering-plan wire contract, not permission to apply author CSS.
+// Host application must rebuild this plan from the directory's original source.
+export function validateThemeSnapshot(value) {
+  requireValue(value && typeof value === 'object' && !Array.isArray(value), 'dream_snapshot_invalid');
+  requireValue(Number.isSafeInteger(value.revision) && value.revision >= 1
+    && typeof value.imagesBinding === 'string' && HASH.test(value.imagesBinding), 'dream_snapshot_invalid');
+  let selection;
+  if (value.schemaVersion === 1) {
+    requireValue(exactKeys(value,['schemaVersion','revision','activeThemeId','preferencesByTheme','imagesBinding'])
+      && value.activeThemeId === 'azhou-q-v3' && exactKeys(value.preferencesByTheme,['azhou-q-v3']), 'dream_snapshot_invalid');
+    selection = {kind:'bundled',id:'azhou-q-v3',surfaceTransparency:value.preferencesByTheme['azhou-q-v3']};
+  } else {
+    requireValue(value.schemaVersion === 2 && exactKeys(value,['schemaVersion','revision','imagesBinding','selection']), 'dream_snapshot_invalid');
+    selection = value.selection;
+  }
+  requireValue(selection && typeof selection === 'object', 'dream_snapshot_invalid');
+  let normalized;
+  if (selection.kind === 'bundled') {
+    const preference = selection.surfaceTransparency;
+    requireValue(exactKeys(selection,['kind','id','surfaceTransparency']) && selection.id === 'azhou-q-v3'
+      && ((exactKeys(preference,['mode']) && preference.mode === 'follow')
+        || (exactKeys(preference,['mode','value']) && preference.mode === 'override'
+          && typeof preference.value === 'number' && Number.isFinite(preference.value)
+          && preference.value >= 0 && preference.value <= 100)), 'dream_snapshot_invalid');
+    normalized = Object.freeze({kind:'bundled',id:'azhou-q-v3',surfaceTransparency:Object.freeze({...preference})});
+  } else {
+    const image = selection.image, paint = selection.paint;
+    requireValue(exactKeys(selection,['kind','profile','capsuleSha256','archiveSha256','image','paint'])
+      && selection.kind === 'imported' && selection.profile === DREAM_PAINT_PROFILE
+      && typeof selection.capsuleSha256 === 'string' && HASH.test(selection.capsuleSha256)
+      && typeof selection.archiveSha256 === 'string' && HASH.test(selection.archiveSha256)
+      && exactKeys(image,['name','mime','bytes','sha256','width','height'])
+      && Object.hasOwn(IMAGE_MIME,image.name) && image.mime === IMAGE_MIME[image.name]
+      && Number.isSafeInteger(image.bytes) && image.bytes > 0 && image.bytes <= 10485760
+      && typeof image.sha256 === 'string' && HASH.test(image.sha256)
+      && Number.isSafeInteger(image.width) && image.width >= 1 && image.width <= 16384
+      && Number.isSafeInteger(image.height) && image.height >= 1 && image.height <= 16384
+      && image.width * image.height <= 50000000
+      && exactKeys(paint,['rgba','backgroundImage','sourceDeclarationCount']) && paint.backgroundImage === 'none'
+      && Number.isSafeInteger(paint.sourceDeclarationCount) && paint.sourceDeclarationCount >= 1 && paint.sourceDeclarationCount <= 128
+      && Array.isArray(paint.rgba) && paint.rgba.length === 4
+      && paint.rgba.every((channel,index)=>typeof channel === 'number' && Number.isFinite(channel)
+        && channel >= 0 && channel <= (index === 3 ? 1 : 255)), 'dream_snapshot_invalid');
+    normalized = Object.freeze({kind:'imported',profile:DREAM_PAINT_PROFILE,
+      capsuleSha256:selection.capsuleSha256,archiveSha256:selection.archiveSha256,
+      image:Object.freeze({...image}),paint:Object.freeze({...paint,rgba:Object.freeze([...paint.rgba])})});
+  }
+  return Object.freeze({schemaVersion:2,revision:value.revision,imagesBinding:value.imagesBinding,selection:normalized});
+}
+
+export async function verifyThemeSnapshotArtwork(value, artwork, {crypto=globalThis.crypto,signal}={}) {
+  const theme = validateThemeSnapshot(value);
+  if (theme.selection.kind === 'bundled') return theme;
+  const image = theme.selection.image;
+  const check = () => {if (signal?.aborted) throw new Error('operation-cancelled');};
+  check();
+  const prefix = 'data:'+image.mime+';base64,';
+  requireValue(typeof artwork === 'string' && artwork.length <= 13981039 && artwork.startsWith(prefix), 'dream_snapshot_artwork');
+  const encoded = artwork.slice(prefix.length);
+  requireValue(encoded.length === 4*Math.ceil(image.bytes/3) && /^[A-Za-z0-9+/]*={0,2}$/.test(encoded), 'dream_snapshot_artwork');
+  const binary = atob(encoded);
+  requireValue(binary.length === image.bytes && btoa(binary) === encoded && crypto?.subtle, 'dream_snapshot_artwork');
+  const bytes = Uint8Array.from(binary,character=>character.charCodeAt(0));
+  const metadata = staticImage(bytes,image.name);
+  requireValue(metadata.width === image.width && metadata.height === image.height, 'dream_snapshot_artwork');
+  const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
+  check();
+  requireValue(hash === image.sha256, 'dream_snapshot_artwork');
+  return theme;
 }

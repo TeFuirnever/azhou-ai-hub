@@ -6659,6 +6659,159 @@ try {
     assert.deepEqual(state, {disposed:1,closed:1,phase:'playing'});
   });
 
+  if(options.generatedPayload)await check('generated Dream source UI applies literal main paint and restores the saved Azhou appearance',async()=>{
+    const fixtureDirectory=join(options.out,'dream-source-fixtures');await mkdir(fixtureDirectory);
+    const {stdout}=await promisify(execFile)(process.env.AZHOU_TEST_PYTHON||'python3',['-B','-c',`
+import sys,io,json,zipfile,subprocess
+from pathlib import Path
+from PIL import Image
+root=Path(sys.argv[1]).resolve();tool=Path(sys.argv[2])/'tools/theme-library.py'
+image=io.BytesIO();Image.new('RGB',(24,16),(23,41,79)).save(image,format='PNG')
+base=[sys.executable,'-B',str(tool),'--library',str(root/'library')];capsules=[]
+for index,color in enumerate(['transparent','rgba(120,60,20,.4)','rgb(70,90,110)']):
+ source=root/(str(index)+'.zip')
+ with zipfile.ZipFile(source,'w') as z:
+  z.writestr('theme.json',json.dumps({'schemaVersion':1,'id':'dream.browser','name':'<b>Dream '+str(index)+'</b>','image':'background.png'}))
+  z.writestr('theme.css','[data-ds-part="main"]{background-color:#010203;}[data-ds-part="main"]{background-color:'+color+';}')
+  z.writestr('background.png',image.getvalue())
+ receipt=json.loads(subprocess.check_output([*base,'import',str(source)]))
+ capsule=subprocess.check_output([*base,'export-capsule',receipt['archiveSha256']]).decode()
+ (root/(str(index)+'.json')).write_text(capsule);capsules.append(capsule)
+print(json.dumps(capsules))
+`,fixtureDirectory,ROOT],{timeout:30000,maxBuffer:4*1024*1024});
+    const capsules=JSON.parse(stdout);
+    await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+    await awaitGeneratedReady('generated Dream fixture ready');
+    await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied===true'),10000,'legacy incumbent before import');
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()`);
+    await until(()=>cdp.evaluate(`__startupAPI.status().phase==='complete'`),5000,'skip preserves incumbent');
+    const open=async()=>{
+      assert.equal(await cdp.evaluate('__startupAPI.openSettings()'),true);
+      await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return !!d?.querySelector('[data-agent-skin-dream-import]')&&__startupAPI.status().phase==='settings';})()`),10000,'real generated settings panel');
+      await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;return !d.querySelector('[data-agent-skin-dream-import-button]').disabled;})()`),10000,'Dream controls ready');
+    };
+    await cdp.evaluate(`window.__dreamReadRecords=async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('azhou-codex-startup');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});try{return await new Promise((resolve,reject)=>{const t=db.transaction('settings','readonly'),s=t.objectStore('settings'),out={};for(const k of ['images','themeState','appearancePresets','dreamThemes']){const r=s.get(k);r.onsuccess=()=>{out[k]=r.result;};}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}finally{db.close();}}`);
+    const before=await cdp.evaluate('(async()=>JSON.stringify(await __dreamReadRecords()))()');
+    await open();
+    await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;const input=d.querySelector('input[maxlength="16"]');input.value='Unsaved startup';input.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));})()`);
+    for(let index=0;index<capsules.length;index++){
+      await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,w=d.defaultView,input=d.querySelector('[data-agent-skin-dream-import]'),transfer=new w.DataTransfer();transfer.items.add(new w.File([${JSON.stringify(capsules[index])}],'dream.json',{type:'application/json'}));input.files=transfer.files;input.dispatchEvent(new w.Event('change',{bubbles:true}));})()`);
+      await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;return d.querySelector('[data-agent-skin-dream-list]').options.length===${index+1}&&!d.querySelector('[data-agent-skin-dream-import-button]').disabled;})()`),10000,'source file input stored independently');
+    }
+    const imported=await cdp.evaluate(`(async()=>{const records=await __dreamReadRecords();delete records.dreamThemes;const d=document.querySelector('iframe[aria-label]').contentDocument;return {records:JSON.stringify(records),title:d.querySelector('input[maxlength="16"]').value,names:[...d.querySelector('[data-agent-skin-dream-list]').options].map(n=>n.textContent),applyEnabled:!d.querySelector('[data-agent-skin-dream-apply]').disabled};})()`);
+    assert.equal(imported.records,before,'import does not save active settings or startup draft');assert.equal(imported.title,'Unsaved startup');
+    assert.deepEqual(imported.names,['<b>Dream 0</b>','<b>Dream 1</b>','<b>Dream 2</b>']);assert.equal(imported.applyEnabled,true,'explicit apply is usable on the generated parent/child surface');
+    await cdp.evaluate(`(()=>{const b=document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-apply]');b.scrollIntoView();b.focus();})()`);
+    await screenshot('dream-apply-control.png');
+    const failureRows=[];
+    for(const failure of ['quota','conflict','cancel']){
+      await cdp.evaluate(`(async()=>{
+        window.__dreamFailure=${JSON.stringify(failure)};window.__dreamFault=null;window.__dreamPriorOwner=window.__azhouWallpaper;
+        window.__dreamBeforeFault=JSON.stringify(await __dreamReadRecords());
+        window.__dreamOriginalTransaction=IDBDatabase.prototype.transaction;
+        window.__dreamOriginalPut=IDBObjectStore.prototype.put;
+        if(__dreamFailure==='conflict'){
+          window.__dreamCompetitor=await new Promise((resolve,reject)=>{const r=indexedDB.open('azhou-codex-startup');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+        }
+        const capture=()=>{const sheet=[...document.querySelectorAll('style[data-azhou-owner]')].find(s=>s.disabled);__dreamFault={candidate:__azhouWallpaper.status().mainPaintApplied===true,incumbentRetained:!!sheet?.isConnected,oldOwnerSame:__azhouWallpaper===__dreamPriorOwner};};
+        IDBObjectStore.prototype.put=function(value,key){
+          if(__dreamFailure==='quota'&&!__dreamFault&&key==='themeState'&&value?.schemaVersion===2){capture();throw new DOMException('fault-injected quota at real IDB write','QuotaExceededError');}
+          return __dreamOriginalPut.call(this,value,key);
+        };
+        IDBDatabase.prototype.transaction=function(stores,mode,...rest){
+          if(__dreamFailure!=='quota'&&!__dreamFault&&this.name==='azhou-codex-startup'&&mode==='readwrite'&&window.__azhouWallpaper?.status().mainPaintApplied===true){
+            capture();
+            if(__dreamFailure==='conflict'){
+              const t=__dreamOriginalTransaction.call(__dreamCompetitor,'settings','readwrite');
+              const source=JSON.parse(__dreamBeforeFault).dreamThemes;
+              t.objectStore('settings').put({...source,revision:source.revision+1},'dreamThemes');
+            }else queueMicrotask(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();});
+          }
+          return __dreamOriginalTransaction.call(this,stores,mode,...rest);
+        };
+        document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-apply]').click();
+      })()`);
+      await until(()=>cdp.evaluate(`!!window.__dreamFault&&window.__azhouWallpaper===window.__dreamPriorOwner&&window.__azhouWallpaper.status().applied===true`),10000,'activated '+failure+' restores prior live owner');
+      const row=await cdp.evaluate(`(async()=>{const after=await __dreamReadRecords(),before=JSON.parse(__dreamBeforeFault);IDBDatabase.prototype.transaction=__dreamOriginalTransaction;IDBObjectStore.prototype.put=__dreamOriginalPut;window.__dreamCompetitor?.close();return {failure:__dreamFailure,...__dreamFault,imagesUnchanged:JSON.stringify(after.images)===JSON.stringify(before.images),themeUnchanged:JSON.stringify(after.themeState)===JSON.stringify(before.themeState),directoryRevision:after.dreamThemes.revision,beforeRevision:before.dreamThemes.revision};})()`);
+      assert.equal(row.candidate,true);assert.equal(row.incumbentRetained,true);assert.equal(row.oldOwnerSame,false);
+      assert.equal(row.imagesUnchanged,true);assert.equal(row.themeUnchanged,true);
+      if(failure==='conflict')assert.equal(row.directoryRevision,row.beforeRevision+1);
+      failureRows.push(row);
+      if(failure!=='cancel')await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();})()`);
+      await until(()=>cdp.evaluate(`!document.querySelector('iframe[aria-label]')`),5000,'failed attempt closes safely');
+      await open();
+    }
+    await writeFile(join(options.out,'dream-failure-observations.json'),JSON.stringify(failureRows,null,2));
+    await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;const input=d.querySelector('input[maxlength="16"]');input.value='Unsaved startup';input.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));})()`);
+    const rows=[];
+    for(let index=0;index<capsules.length;index++){
+      if(index)await open();
+      await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,s=d.querySelector('[data-agent-skin-dream-list]');s.selectedIndex=${index};s.dispatchEvent(new d.defaultView.Event('change',{bubbles:true}));d.querySelector('[data-agent-skin-dream-apply]').click();})()`);
+      await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return window.__azhouWallpaper?.status().mainPaintApplied===true&&!d?.querySelector('[data-agent-skin-dream-apply]')?.disabled;})()`),12000,'literal main paint and persisted active pointer');
+      const stored=await cdp.evaluate(`(async()=>{const r=await __dreamReadRecords(),d=document.querySelector('iframe[aria-label]').contentDocument;return {title:r.images.introTitle,kind:r.themeState.selection.kind,previous:r.themeState.previousThemeId,draft:d.querySelector('input[maxlength="16"]').value};})()`);
+      assert.equal(stored.kind,'imported');assert.notEqual(stored.title,'Unsaved startup');if(!index)assert.equal(stored.draft,'Unsaved startup');
+      await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();})()`);
+      await until(()=>cdp.evaluate(`!document.querySelector('iframe[aria-label]')`),5000,'close without saving unrelated draft');
+      const paint=await cdp.evaluate(`(()=>{const m=document.querySelector('[data-app-shell-main-surface]'),s=getComputedStyle(m),b=getComputedStyle(document.body);return {color:s.backgroundColor,mainImage:s.backgroundImage,bodyImage:b.backgroundImage,wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),marker:m.getAttribute('data-azhou-dream-main'),status:__azhouWallpaper.status()};})()`);
+      assert.equal(paint.color,['rgba(0, 0, 0, 0)','rgba(120, 60, 20, 0.4)','rgb(70, 90, 110)'][index]);assert.equal(paint.mainImage,'none');assert.match(paint.bodyImage,/blob:/);assert.equal(paint.wash,'linear-gradient(transparent,transparent)');assert.equal(paint.status.sourceDeclarationCount,2);
+      await screenshot('dream-main-'+index+'.png');
+      const screenshotBytes=await readFile(join(options.out,'dream-main-'+index+'.png'));
+      const pixel=await cdp.evaluate(`(async()=>{const i=new Image();i.src='data:image/png;base64,${screenshotBytes.toString('base64')}';await i.decode();const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);return [...x.getImageData(1200,400,1,1).data];})()`);
+      const expectedPixel=[[23,41,79],[62,49,55],[70,90,110]][index];
+      assert.ok(expectedPixel.every((channel,k)=>Math.abs(channel-pixel[k])<=1),'screenshot pixels preserve author alpha over the original artwork');
+      rows.push({stored,paint,pixel,expectedPixel});
+    }
+    await navigate('/fixture.html?generated-payload=1');await awaitGeneratedReady('fresh startup rebuilds source paint');
+    await until(()=>cdp.evaluate(`window.__azhouWallpaper?.status().mainPaintApplied===true`),10000,'fresh startup applies imported source');
+    assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-app-shell-main-surface]')).backgroundColor`),'rgb(70, 90, 110)');
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()`);
+    await until(()=>cdp.evaluate(`__startupAPI.status().phase==='complete'`),5000,'fresh startup closes');
+    await open();await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-restore]').click()`);
+    await until(()=>cdp.evaluate(`window.__azhouWallpaper?.status().applied===true&&document.querySelector('[data-azhou-dream-main]')===null`),10000,'explicit restore removes only imported plan');
+    await cdp.evaluate(`window.__dreamReadRecords=async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('azhou-codex-startup');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});try{return await new Promise((resolve,reject)=>{const t=db.transaction('settings','readonly'),s=t.objectStore('settings'),out={};for(const k of ['images','themeState','appearancePresets','dreamThemes']){const r=s.get(k);r.onsuccess=()=>{out[k]=r.result;};}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}finally{db.close();}}`);
+    await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return d&&!d.querySelector('[data-agent-skin-dream-apply]').disabled;})()`),10000,'restored panel finishes its local reload');
+    await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;for(const [selector,value,event] of [['[data-agent-skin-theme-choice]','azhou-q-v3','change'],['[data-agent-skin-theme-alpha-mode]','override','change'],['[data-agent-skin-theme-transparency]','100','input'],['#agent-skin-settings-wallpaper-strength','0','input']]){const n=d.querySelector(selector);n.value=value;n.dispatchEvent(new d.defaultView.Event(event,{bubbles:true}));}[...d.querySelectorAll('button')].find(b=>/^(保存|Save)$/.test(b.textContent.trim())).click();})()`);
+    await until(()=>cdp.evaluate(`!document.querySelector('iframe[aria-label]')&&__startupAPI.status().wallpaper.reason==='disabled'&&!window.__azhouWallpaper`),10000,'save disabled Azhou appearance with zero-strength transparent mask');
+    const savedDisabled=await cdp.evaluate('(async()=>{const r=await __dreamReadRecords();return {strength:r.images.wallpaperStrength,theme:r.themeState.activeThemeId,alpha:r.themeState.preferencesByTheme["azhou-q-v3"]};})()');
+    assert.deepEqual(savedDisabled,{strength:0,theme:'azhou-q-v3',alpha:{mode:'override',value:100}});
+    await open();
+    await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;d.querySelector('[data-agent-skin-dream-list]').selectedIndex=1;d.querySelector('[data-agent-skin-dream-apply]').click();})()`);
+    await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return window.__azhouWallpaper?.status().mainPaintApplied&&!d?.querySelector('[data-agent-skin-dream-restore]')?.disabled;})()`),12000,'imported theme remains visible over saved disabled baseline');
+    const disabledRestoreFailures=[];
+    for(const failure of ['quota','conflict','cancel']){
+      await cdp.evaluate(`(async()=>{
+        window.__disabledFailure=${JSON.stringify(failure)};window.__disabledFault=null;window.__disabledPrior=__azhouWallpaper;
+        window.__disabledBefore=JSON.stringify(await __dreamReadRecords());
+        window.__disabledTransaction=IDBDatabase.prototype.transaction;window.__disabledPut=IDBObjectStore.prototype.put;
+        if(__disabledFailure==='conflict')window.__disabledCompetitor=await new Promise((resolve,reject)=>{const r=indexedDB.open('azhou-codex-startup');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+        const capture=()=>{__disabledFault={incumbentSame:__azhouWallpaper===__disabledPrior,incumbentApplied:__disabledPrior.status().applied,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length};};
+        IDBObjectStore.prototype.put=function(value,key){if(__disabledFailure==='quota'&&!__disabledFault&&key==='themeState'&&value?.schemaVersion===1){capture();throw new DOMException('disabled restore quota injection','QuotaExceededError');}return __disabledPut.call(this,value,key);};
+        IDBDatabase.prototype.transaction=function(stores,mode,...rest){
+          if(__disabledFailure!=='quota'&&!__disabledFault&&this.name==='azhou-codex-startup'&&mode==='readwrite'){
+            capture();
+            if(__disabledFailure==='conflict'){const t=__disabledTransaction.call(__disabledCompetitor,'settings','readwrite'),r=JSON.parse(__disabledBefore).dreamThemes;t.objectStore('settings').put({...r,revision:r.revision+1},'dreamThemes');}
+            else queueMicrotask(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();});
+          }
+          return __disabledTransaction.call(this,stores,mode,...rest);
+        };
+        document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-restore]').click();
+      })()`);
+      await until(()=>cdp.evaluate(`!!window.__disabledFault&&window.__azhouWallpaper===window.__disabledPrior&&window.__azhouWallpaper.status().mainPaintApplied===true`),10000,'failed disabled Restore retains imported owner');
+      const failureRow=await cdp.evaluate(`(async()=>{const a=await __dreamReadRecords(),b=JSON.parse(__disabledBefore);IDBDatabase.prototype.transaction=__disabledTransaction;IDBObjectStore.prototype.put=__disabledPut;window.__disabledCompetitor?.close();return {failure:__disabledFailure,...__disabledFault,activeUnchanged:JSON.stringify(a.images)===JSON.stringify(b.images)&&JSON.stringify(a.themeState)===JSON.stringify(b.themeState),strength:a.images.wallpaperStrength};})()`);
+      assert.equal(failureRow.incumbentSame,true,'Disabled candidate keeps imported paint until commit');assert.equal(failureRow.incumbentApplied,true);assert.equal(failureRow.styleCount,1);assert.equal(failureRow.activeUnchanged,true);assert.equal(failureRow.strength,0);disabledRestoreFailures.push(failureRow);
+      if(failure!=='cancel')await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();})()`);
+      await until(()=>cdp.evaluate(`!document.querySelector('iframe[aria-label]')`),5000,'failed disabled Restore closes');await open();
+    }
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-restore]').click()`);
+    await until(()=>cdp.evaluate(`!window.__azhouWallpaper&&__startupAPI.status().wallpaper.reason==='disabled'`),10000,'successful disabled Restore finalizes without an owner');
+    const disabledRestore=await cdp.evaluate(`(async()=>{const r=await __dreamReadRecords();return {owner:!!window.__azhouWallpaper,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,mainImage:getComputedStyle(document.querySelector('[data-app-shell-main-surface]')).backgroundImage,bodyImage:getComputedStyle(document.body).backgroundImage,status:__startupAPI.status().wallpaper,strength:r.images.wallpaperStrength,alpha:r.themeState.preferencesByTheme['azhou-q-v3']};})()`);
+    assert.equal(disabledRestore.owner,false);assert.equal(disabledRestore.styleCount,0);assert.equal(disabledRestore.mainImage,'none');assert.equal(disabledRestore.bodyImage,'none');assert.equal(disabledRestore.status.applied,false);assert.equal(disabledRestore.status.reason,'disabled');assert.equal(disabledRestore.strength,0);assert.deepEqual(disabledRestore.alpha,{mode:'override',value:100});
+    await writeFile(join(options.out,'disabled-restore-observations.json'),JSON.stringify({savedDisabled,failures:disabledRestoreFailures,success:disabledRestore},null,2));
+    await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+    await awaitGeneratedReady('fresh isolated defaults after disabled Restore proof');
+    return {imported,failureRows,rows,disabledRestoreFailures,disabledRestore,freshStartup:true,restored:true,sourceFixture:'self-authored official-contract subset; not external visual compatibility'};
+  });
+
   if (options.generatedPayload) await check('generated full owner chain restores navigation after settings cancellation and retains native input', async () => {
     await navigate('/fixture.html?generated-payload=1');
     await awaitGeneratedReady('full owner chain starts the generated payload');

@@ -21,6 +21,7 @@ const WALLPAPER_STATUS_FIELDS = [
   'footerFadeSurfaces', 'footerFadeClear', 'topFadeSurfaces', 'topFadeClear',
   'decorationEffectsClear', 'unsupportedDecorations', 'verificationScope', 'fullCoverage',
   'themeApplied', 'themePending', 'themeFailure', 'fallbackApplied',
+  'mainPaintApplied','profile','sourceDeclarationCount',
 ];
 const WALLPAPER_FAILURE_STAGES = Object.freeze({
   'shell-timeout': 'shell',
@@ -739,9 +740,11 @@ class PageController {
     const createLocalization = dataProperty(this.payload, 'createLocalization');
     const localization = typeof createLocalization === 'function'
       ? createLocalization({ locale: appearance.locale, themeConfig: this.assets?.themeConfig }) : null;
+    const dreamFactory = dataProperty(this.payload,'createDreamThemeStyle');
     const factoryInput = {
       document: this.document,
-      crypto: this.host.crypto, TextEncoder: this.host.TextEncoder,
+      dreamThemeStyle: typeof dreamFactory === 'function' ? dreamFactory() : null,
+      crypto: this.host.crypto, TextEncoder: this.host.TextEncoder, TextDecoder: this.host.TextDecoder, Blob: this.host.Blob, AbortController: this.host.AbortController ?? AbortController,
       Image: this.host.Image,
       URL: this.host.URL ?? URL,
       indexedDB: dataProperty(injected, 'indexedDB'),
@@ -962,6 +965,16 @@ class PageController {
       if (!source || typeof source !== 'object' || !sourceText || typeof sourceText !== 'object') {
         return this.#snapshotFailure('snapshot-invalid');
       }
+      const rawTheme = dataProperty(snapshot,'themeState');
+      let themeState = null, dreamStyle = null;
+      if (rawTheme !== undefined && rawTheme !== null) {
+        const factory = dataProperty(this.payload,'createDreamThemeStyle');
+        if (typeof factory !== 'function') return this.#snapshotFailure('snapshot-invalid');
+        dreamStyle = factory();
+        try { themeState = dreamStyle.validateThemeSnapshot(rawTheme); }
+        catch { return this.#snapshotFailure('snapshot-invalid'); }
+      }
+      const importedImage = themeState?.selection.kind === 'imported' ? themeState.selection.image : null;
       const settings = Object.freeze({
         schemaVersion: dataProperty(source, 'schemaVersion'),
         avatar: dataProperty(source, 'avatar'),
@@ -977,11 +990,12 @@ class PageController {
         introCaption: dataProperty(sourceText, 'introCaption'),
         artworkSubtitle: dataProperty(sourceText, 'artworkSubtitle'),
       });
-      if (settings.schemaVersion !== 1 || typeof settings.avatar !== 'string'
+      if (settings.schemaVersion !== (importedImage ? 2 : 1) || typeof settings.avatar !== 'string'
         || settings.avatar.length > 2 * 1024 * 1024
         || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(settings.avatar)
-        || typeof settings.artwork !== 'string' || settings.artwork.length > 12 * 1024 * 1024
-        || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(settings.artwork)
+        || typeof settings.artwork !== 'string' || settings.artwork.length > (importedImage ? 13981039 : 12 * 1024 * 1024)
+        || !(importedImage ? settings.artwork.startsWith('data:'+importedImage.mime+';base64,')
+          : /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(settings.artwork))
         || !Array.isArray(settings.contours) || settings.contours.length > 1200
         || typeof settings.introTitle !== 'string' || settings.introTitle.length > 16
         || typeof settings.introCaption !== 'string' || settings.introCaption.length > 48
@@ -991,7 +1005,12 @@ class PageController {
         || Object.values(explicitText).some(value => typeof value !== 'boolean')) {
         return this.#snapshotFailure('snapshot-invalid');
       }
-      const serialized = JSON.stringify({ status, settings, explicitText, ...(dataProperty(snapshot, 'themeState') ? { themeState: dataProperty(snapshot, 'themeState') } : {}), appearance: snapshotAppearance });
+      if (importedImage) {
+        try { await dreamStyle.verifyThemeSnapshotArtwork(themeState,settings.artwork,{crypto:this.host.crypto ?? globalThis.crypto}); }
+        catch { return this.#snapshotFailure('snapshot-invalid'); }
+        if (!this.#snapshotEntryIsCurrent(entry)) return this.#snapshotFailure('snapshot-stale');
+      }
+      const serialized = JSON.stringify({ status, settings, explicitText, ...(themeState ? {themeState} : {}), appearance: snapshotAppearance });
       if (typeof serialized !== 'string' || serialized.length > SETTINGS_SNAPSHOT_MAX_BYTES) {
         return this.#snapshotFailure('snapshot-too-large');
       }
@@ -1314,6 +1333,14 @@ class PageController {
       }
       return;
     }
+    if (message.action === 'theme-apply') {
+      if (this.state.phase !== 'settings') return Promise.resolve({applied:false,reason:'operation-cancelled'});
+      return this.#applyThemeSelection(message,this.state.runId,this.frame);
+    }
+    if (message.action === 'theme-cancel') {
+      if (this.wallpaperApplication?.themeSelection && this.wallpaperApplication.runId === this.state.runId) this.wallpaperApplication.abort.abort();
+      return;
+    }
     if (message.action === 'background') {
       if (['loading', 'playing', 'settings'].includes(this.state.phase)) {
         return this.#applyWallpaper(message, this.state.runId, this.frame);
@@ -1562,7 +1589,106 @@ class PageController {
     });
   }
 
+  #applyThemeSelection(message,runId,frame,embed = null) {
+    const digest = dataProperty(message,'capsuleSha256');
+    const expectedToken = dataProperty(message,'expectedToken');
+    if (dataProperty(this.pageAdapter,'workspaceContract') !== 'codex-active-workspace/v1'
+      || typeof this.wallpaperApply !== 'function'
+      || digest !== null && (typeof digest !== 'string' || !/^[a-f0-9]{64}$/.test(digest))
+      || typeof expectedToken !== 'string' || !/^[a-f0-9]{64}$/.test(expectedToken)) {
+      return Promise.resolve({applied:false,reason:'apply-unavailable'});
+    }
+    this.#cancelWorkspaceRecovery();
+    const previous = this.wallpaperApplication;
+    previous?.abort?.abort();
+    const operation = {themeSelection:true,generation:++this.wallpaperGeneration,runId,embed,abort:new AbortController()};
+    this.wallpaperApplication=operation;
+    const current = () => !operation.abort.signal.aborted && !this.disposed && !this.pageHidden
+      && this.wallpaperApplication===operation && this.wallpaperGeneration===operation.generation
+      && this.#ownsStartupController()
+      && (embed ? embed.alive && !panelDisconnected(embed.frame) && runId===embed.runId
+        : this.state.phase==='settings' && this.#isCurrentFrame(runId,frame));
+    const requireCurrent = () => {if(!current())throw Object.assign(new Error('operation-cancelled'),{reason:'operation-cancelled'});};
+    operation.settlement=Promise.resolve().then(async()=>{
+      let settingsAPI, appliedSnapshot;
+      try {
+        if(previous?.settlement)await previous.settlement;
+        requireCurrent();
+        settingsAPI=this.#snapshotSettingsAPI(this.pageAdapter.observeAppearance(this.host));
+        const loaded=await settingsAPI.load(this.assets);
+        requireCurrent();
+        if(loaded?.reason)throw Object.assign(new Error('settings-unavailable'),{reason:'settings-unavailable'});
+        const options={expectedToken,signal:operation.abort.signal,activate:async(snapshot,{signal})=>{
+          requireCurrent();appliedSnapshot=snapshot;
+          const selection=snapshot.themeState?.selection;
+          const request={image:snapshot.settings.artwork,strength:snapshot.settings.wallpaperStrength,
+            surface:this.pageAdapter.observeAppearance(this.host).colors.surface,
+            themeState:snapshot.settings.wallpaperStrength===0 || selection?.kind==='imported'?null:snapshot.themeState ?? null,
+            ...(selection?.kind==='imported'?{mainPaint:{profile:selection.profile,...selection.paint}}:{})};
+          const candidate=await this.wallpaperApply(request,current,signal,{transactional:true,
+            onWorkspaceInvalidated:()=>operation.abort.abort()});
+          if(!current()){try{candidate?.transaction?.rollback();}catch{}requireCurrent();}
+          return candidate;
+        }};
+        const result=digest===null?await settingsAPI.restoreAzhouTheme(options):await settingsAPI.applyDreamTheme(digest,options);
+        requireCurrent();
+        const wallpaper=wallpaperRecord(this.host,this.wallpaperOwner);
+        if(appliedSnapshot.settings.wallpaperStrength===0){
+          if(wallpaper.present)throw Object.assign(new Error('apply-unavailable'),{reason:'apply-unavailable'});
+          this.wallpaperAPI=null;this.wallpaperRequest=null;this.wallpaperDisabled=true;
+          this.state.wallpaper={applied:false,reason:'disabled',imageDecoded:false};
+          this.startupWallpaperFailure=null;this.#updateStartupWallpaperNotice();
+          return {...result,disabled:true};
+        }
+        if(!wallpaper.supported)throw Object.assign(new Error('apply-unavailable'),{reason:'apply-unavailable'});
+        this.wallpaperAPI=wallpaper.api;
+        this.wallpaperRequest={image:appliedSnapshot.settings.artwork,strength:appliedSnapshot.settings.wallpaperStrength,
+          themeState:appliedSnapshot.themeState ?? null};
+        this.wallpaperDisabled=false;
+        this.state.wallpaper=this.#wallpaperStatus(wallpaper.api);
+        this.startupWallpaperFailure=null;this.#updateStartupWallpaperNotice();
+        return result;
+      } catch(error) {
+        const wallpaper=wallpaperRecord(this.host,this.wallpaperOwner);
+        if(this.wallpaperApplication===operation){
+          if(wallpaper.supported){this.wallpaperAPI=wallpaper.api;this.state.wallpaper=this.#wallpaperStatus(wallpaper.api);}
+          else this.state.wallpaper={applied:false,reason:wallpaper.present?'owner-conflict':'operation-cancelled',imageDecoded:false};
+        }
+        return {applied:false,reason:['settings-conflict','settings-quota','settings-blocked','operation-cancelled','operation-timeout'].includes(error?.reason)
+          ? error.reason:'apply-unavailable'};
+      } finally {try{settingsAPI?.dispose();}catch{}}
+    });
+    return operation.settlement;
+  }
+
   async #applyWallpaper(message, runId, frame, retry = false, embed = null, dshPreparation = null, workspaceRecovery = null) {
+    if (message.themeState != null && message.themeState.schemaVersion !== 1) {
+      let settingsAPI;
+      let admissionGeneration=this.wallpaperGeneration;
+      const runCurrent=()=>!this.disposed && admissionGeneration===this.wallpaperGeneration && this.#ownsStartupController()
+        && (embed?embed.alive && runId===embed.runId:runId===this.state.runId);
+      try {
+        const factory=dataProperty(this.payload,'createDreamThemeStyle');
+        const style=typeof factory==='function'?factory():null;
+        const theme=style?.validateThemeSnapshot(message.themeState);
+        if(!theme || dataProperty(this.pageAdapter,'workspaceContract')!=='codex-active-workspace/v1') throw new Error('unsupported-theme');
+        if(theme.selection.kind==='imported') {
+          this.wallpaperApplication?.abort?.abort();
+          admissionGeneration=++this.wallpaperGeneration;
+          settingsAPI=this.#snapshotSettingsAPI(this.pageAdapter.observeAppearance(this.host));
+          const snapshot=await settingsAPI.loadSnapshot(this.assets);
+          if(!runCurrent())return {applied:false,reason:'operation-cancelled',imageDecoded:false};
+          if(!['valid','missing'].includes(snapshot?.status) || snapshot.themeState?.selection?.kind!=='imported'
+            || snapshot.themeState.selection.capsuleSha256!==theme.selection.capsuleSha256) throw new Error('source-unavailable');
+          const mapped=style.validateThemeSnapshot(snapshot.themeState);
+          message={...message,image:snapshot.settings.artwork,strength:snapshot.settings.wallpaperStrength,themeState:mapped};
+        } else {
+          message={...message,themeState:{schemaVersion:1,revision:theme.revision,imagesBinding:theme.imagesBinding,
+            activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':theme.selection.surfaceTransparency}}};
+        }
+      } catch {return this.#setWallpaperFailure('apply-unavailable');}
+      finally {try{settingsAPI?.dispose();}catch{}}
+    }
     if (this.workspaceRecovery && workspaceRecovery !== this.workspaceRecovery) this.#cancelWorkspaceRecovery();
     if (this.dshWallpaperPreparation?.active && dshPreparation !== this.dshWallpaperPreparation) {
       this.#cancelDSHWallpaperPreparation();
@@ -1636,7 +1762,8 @@ class PageController {
       this.appearance = this.pageAdapter.observeAppearance(this.host);
       const request = Object.freeze({
         image: message.image, strength: message.strength, surface: this.appearance.colors.surface,
-        themeState: message.themeState ?? null,
+        themeState: message.themeState?.selection?.kind==='imported'?null:message.themeState ?? null,
+        ...(message.themeState?.selection?.kind==='imported'?{mainPaint:{profile:message.themeState.selection.profile,...message.themeState.selection.paint}}:{}),
       });
       let accepted = false;
       let pendingWorkspaceNotice = null;
@@ -1997,6 +2124,11 @@ class PageController {
       || message.type !== 'azhou-startup' || message.runId !== mount.runId
       || typeof message.action !== 'string') return;
     if (message.action === 'ready') return; // handshake only; the panel owns its UI state
+    if (message.action === 'theme-apply') return this.#applyThemeSelection(message,mount.runId,null,mount);
+    if (message.action === 'theme-cancel') {
+      if (this.wallpaperApplication?.embed === mount && this.wallpaperApplication.themeSelection) this.wallpaperApplication.abort.abort();
+      return;
+    }
     if (message.action === 'background') {
       return this.#applyWallpaper(message, mount.runId, null, false, mount);
     }
@@ -2021,6 +2153,7 @@ class PageController {
   #disposeSettingsEmbed(mount) {
     if (!mount || !mount.alive) return;
     mount.alive = false;
+    if (this.wallpaperApplication?.embed === mount && this.wallpaperApplication.themeSelection) this.wallpaperApplication.abort.abort();
     this.settingsEmbeds.delete(mount);
     mount.observer?.disconnect();
     mount.observer = null;

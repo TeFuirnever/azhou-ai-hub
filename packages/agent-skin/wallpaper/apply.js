@@ -168,7 +168,7 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
     if (signal?.aborted || (typeof isCurrent === 'function' && !isCurrent())) {
       return { applied: false, reason: 'operation-cancelled' };
     }
-    const { strength, surface, themeState } = value;
+    const { strength, surface, themeState, mainPaint } = value;
     const binding = captureAdapter();
     binding.waitForWorkspace = workspaceOptions?.waitForWorkspace === true;
     const onWorkspaceInvalidated = workspaceOptions?.onWorkspaceInvalidated;
@@ -198,6 +198,8 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         version, image, imageSHA256, css, strength, surface, isCurrent,
         ...(signal ? { signal } : {}),
         ...(themeState ? { themeState } : {}),
+        ...(mainPaint ? {mainPaint} : {}),
+        ...(workspaceOptions?.transactional === true ? {transactional:true} : {}),
         ...(binding.ports || binding.observation ? { pageAdapter } : {}),
         ...(binding.observation ? { workspaceObservation: binding.observation,
           ...(typeof onWorkspaceInvalidated === 'function' ? { onWorkspaceInvalidated } : {}),

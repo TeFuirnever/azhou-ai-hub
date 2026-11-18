@@ -838,6 +838,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         && sameNodes(workspaceObservation.layoutTargets, layoutTargets) && sameUnknown) return workspaceObservation;
       workspaceObservation = Object.freeze({ kind: 'observed', documentToken: identity.documentToken,
         workspaceEpoch: ++workspaceEpoch, shell, activeMain,
+        mainPaint: Object.freeze({ contract: 'codex-owned-main-paint/v1', node: activeMain }),
         themeSurfaces: Object.freeze({ contract: 'codex-theme-surfaces/v1',
           workspaceReadability: activeMain, fullCoverage: false }),
         layoutTargets: Object.freeze(layoutTargets), layoutAncestors: Object.freeze(layoutAncestors), knownPaintPlanes: Object.freeze(knownPaintPlanes),

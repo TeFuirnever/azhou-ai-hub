@@ -193,6 +193,9 @@ def decode_png(path: Path):
     return width, height, sample
 
 
+BUILD_FILES = (*BUILD_FILES, 'dream-theme-style.js', 'dream-theme-style.mjs', 'vendor/dream-safe-css-validator.mjs', 'vendor/dream-safe-css-ast.mjs', 'vendor/dream-safe-css.LICENSE', 'vendor/dream-theme-validator.mjs', 'vendor/dream-theme-validator.LICENSE')
+
+
 def clone_source_tree(destination: Path, *, private: bool = True) -> None:
     for relative in BUILD_FILES:
         source = PACKAGE / relative
@@ -255,7 +258,7 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    for name in (*IMAGE_METADATA_SOURCE_INPUTS, "extension/codex-page-adapter.mjs"):
+    for name in (*IMAGE_METADATA_SOURCE_INPUTS, *artifacts.DREAM_THEME_INPUTS, "extension/codex-page-adapter.mjs"):
         marker["inputs"].pop(name)
         manifest["sourceInputs"].pop(name)
     for name in omit_marker_inputs:
@@ -272,7 +275,7 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
 
     marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
     manifest["inputSHA256"] = marker["inputSHA256"]
-    for relative in IMAGE_METADATA_OUTPUTS:
+    for relative in (*IMAGE_METADATA_OUTPUTS, *artifacts.DREAM_PREVIEW_OUTPUTS):
         manifest["outputs"].pop(relative)
         (resources / relative).unlink()
     for relative in manifest["outputs"]:
@@ -811,8 +814,9 @@ class ImageMetadataAssemblyTests(unittest.TestCase):
         css = (PACKAGE / "wallpaper/wallpaper.css").read_text(encoding="utf-8")
         payload = builder._build_script(PACKAGE, {}, css, artifacts)
         self.assertIn(adapted, payload)
-        self.assertEqual(payload.count("function readRawDimensions("), 1)
-        self.assertNotIn("MAX_IMAGE_PIXELS", payload)
+        self.assertEqual(payload.count("function readRawDimensions("), 2)
+        self.assertEqual(payload.count("function createDreamThemeStyle("), 1)
+        self.assertIn("const MAX_IMAGE_PIXELS = 50_000_000", payload)
 
         start = "  return bootstrapStartup({"
         end = "    host: globalThis,\n    pageAdapter,\n  });\n\n})()"

@@ -184,11 +184,31 @@ class NativeRoutingTests(unittest.TestCase):
                 argv = ["native"] + (["--window-ordering", "--out", str(root / "out")] if functional else [])
                 with patch.object(native, "ROOT", root), patch.object(native.sys, "platform", "darwin"), \
                         patch.object(native, "handshake_checks"), patch.object(native.subprocess, "run", side_effect=run), \
+                        patch.object(native, "theme_bridge_checks", return_value=0) as bridge, \
                         patch.object(sys, "argv", argv):
                     self.assertEqual(0, native.main())
+                    bridge.assert_called_once_with(root / ".build/startup-native-tests")
                 self.assertEqual(functional, any("--probe-cold-window-ordering" in command for command in calls))
                 if functional:
                     self.assertTrue(json.loads((root / "out/report.json").read_text())["passed"])
+
+    def test_theme_bridge_failure_stops_before_graphics_or_helper_publication(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            def run(command, **kwargs):
+                Path(command[command.index("-o") + 1]).write_bytes(b"compiled")
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+            with patch.object(native, "ROOT", root), patch.object(native.sys, "platform", "darwin"), \
+                    patch.object(native.subprocess, "run", side_effect=run) as runner, \
+                    patch.object(native, "theme_bridge_checks", return_value=7) as bridge, \
+                    patch.object(native, "handshake_checks") as handshake, \
+                    patch.object(native, "window_ordering_checks") as graphics, \
+                    patch.object(sys, "argv", ["native"]):
+                self.assertEqual(7, native.main())
+                bridge.assert_called_once_with(root / ".build/startup-native-tests")
+                self.assertEqual(runner.call_count, 1)
+                handshake.assert_not_called(); graphics.assert_not_called()
+                self.assertFalse((root / ".build/startup-helper-expressions.json").exists())
 
     def test_old_or_symlink_output_is_refused_before_children(self):
         for module, flag in ((native, ["--window-ordering"]), (payload, ["--native-window-ordering"])):

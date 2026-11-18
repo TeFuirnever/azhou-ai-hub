@@ -123,6 +123,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 
 ![ASD-STE100 效果图](assets/skills/super-asd-ste100-effect.png)
 
+源码候选还提供[有限 Dream 主区字面颜色 profile](packages/agent-skin/docs/design/azhou-immersive-experience/dream-main-literal-paint.md)。CLI 导出的源胶囊可导入独立本机目录，经显式应用、启动重读，并恢复先前保存的阿舟外观。未映射的样式声明或清单渲染字段会阻止应用。这不代表全面 Dream 兼容或已安装宿主验收。
+
 ## Archify
 
 > 🗺️ 一张图讲清一个系统，交给读者去探索。

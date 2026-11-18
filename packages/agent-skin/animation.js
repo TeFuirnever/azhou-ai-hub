@@ -131,7 +131,7 @@ function installAnimation(
     if (!startupSnapshotRequired && typeof createImageSettingsFactory === 'function') {
       imageSettings = createImageSettingsFactory({
         document, Image, URL, indexedDB, performance, setTimeout, clearTimeout,
-        crypto: window.crypto, TextEncoder: window.TextEncoder,
+        crypto: window.crypto, TextEncoder: window.TextEncoder, TextDecoder: window.TextDecoder, Blob: window.Blob, AbortController: window.AbortController,
         localization, appearanceAvatar: frameSpec?.assets?.entryAvatar,
         themeConfig: assets?.themeConfig,
         getAppearance: () => ({ ...appearance, reducedMotion: reduced,
@@ -645,7 +645,13 @@ function installAnimation(
     context.save();
     context.translate(artworkShiftX, 0);
     context.globalAlpha = alpha;
-    context.drawImage(artworkBitmap, 0, 0, WIDTH, HEIGHT);
+    if (assets?.themeState?.selection?.kind === 'imported') {
+      const width = artworkBitmap.width || artworkBitmap.naturalWidth;
+      const height = artworkBitmap.height || artworkBitmap.naturalHeight;
+      const scale = Math.max(WIDTH / width, HEIGHT / height);
+      const sourceWidth = WIDTH / scale, sourceHeight = HEIGHT / scale;
+      context.drawImage(artworkBitmap,(width-sourceWidth)/2,(height-sourceHeight)/2,sourceWidth,sourceHeight,0,0,WIDTH,HEIGHT);
+    } else context.drawImage(artworkBitmap, 0, 0, WIDTH, HEIGHT);
     context.restore();
   }
 
@@ -926,9 +932,10 @@ function installAnimation(
     });
   }
 
-  function decodeImage(source, expectedWidth, expectedHeight, generationAtStart) {
-    const limit = expectedWidth === 512 ? 2 * 1024 * 1024 : 12 * 1024 * 1024;
-    if (typeof source !== 'string' || !source.startsWith(DATA_URL_PREFIX) || source.length > limit) {
+  function decodeImage(source, expectedWidth, expectedHeight, generationAtStart, importedImage = null) {
+    const limit = importedImage ? 13981039 : expectedWidth === 512 ? 2 * 1024 * 1024 : 12 * 1024 * 1024;
+    const prefix = importedImage ? 'data:'+importedImage.mime+';base64,' : DATA_URL_PREFIX;
+    if (typeof source !== 'string' || !source.startsWith(prefix) || source.length > limit) {
       return Promise.reject(new Error('asset-invalid'));
     }
     const image = new Image();
@@ -1378,6 +1385,10 @@ function installAnimation(
     if (!snapshot || typeof snapshot !== 'object'
       || !['missing', 'valid'].includes(snapshot.status)) throw new Error('snapshot-invalid');
     const record = snapshot.settings;
+    const themeState = snapshot.themeState == null ? null
+      : (typeof createDreamThemeStyle === 'function'
+        ? createDreamThemeStyle().validateThemeSnapshot(snapshot.themeState) : (() => {throw new Error('snapshot-invalid');})());
+    const importedImage = themeState?.selection.kind === 'imported' ? themeState.selection.image : null;
     const explicitText = snapshot.explicitText;
     const snapshotAppearance = snapshot.appearance;
     if (!snapshotAppearance || typeof snapshotAppearance !== 'object'
@@ -1385,11 +1396,12 @@ function installAnimation(
       || !['en', 'zh-CN'].includes(snapshotAppearance.locale)
       || !['light', 'dark'].includes(snapshotAppearance.theme)) throw new Error('snapshot-invalid');
     if (!record || typeof record !== 'object' || Array.isArray(record)
-      || record.schemaVersion !== 1
+      || record.schemaVersion !== (importedImage ? 2 : 1)
       || typeof record.avatar !== 'string' || record.avatar.length > 2 * 1024 * 1024
       || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(record.avatar)
-      || typeof record.artwork !== 'string' || record.artwork.length > 12 * 1024 * 1024
-      || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(record.artwork)
+      || typeof record.artwork !== 'string' || record.artwork.length > (importedImage ? 13981039 : 12 * 1024 * 1024)
+      || !(importedImage ? record.artwork.startsWith('data:'+importedImage.mime+';base64,')
+        : /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(record.artwork))
       || !Array.isArray(record.contours) || record.contours.length < 1 || record.contours.length > MAX_PATHS
       || typeof record.introTitle !== 'string' || record.introTitle.length > 16
       || typeof record.introCaption !== 'string' || record.introCaption.length > 48
@@ -1424,10 +1436,10 @@ function installAnimation(
 
     return Object.freeze({
       status: snapshot.status,
-      themeState: snapshot.themeState ?? null,
+      themeState,
       appearance: Object.freeze({ locale: snapshotAppearance.locale, theme: snapshotAppearance.theme }),
       settings: Object.freeze({
-        schemaVersion: 1,
+        schemaVersion: record.schemaVersion,
         avatar: record.avatar,
         artwork: record.artwork,
         contours: Object.freeze(contours),
@@ -1461,7 +1473,13 @@ function installAnimation(
         runId: frameSpec?.runId,
       }));
       if (disposed || currentGeneration !== generation) return null;
-      return validateStartupSnapshot(rawSnapshot);
+      const snapshot = validateStartupSnapshot(rawSnapshot);
+      if (snapshot.themeState?.selection.kind === 'imported') {
+        await createDreamThemeStyle().verifyThemeSnapshotArtwork(snapshot.themeState,snapshot.settings.artwork,
+          {crypto:window.crypto,signal:controller.signal});
+        if (disposed || currentGeneration !== generation || controller.signal.aborted) return null;
+      }
+      return snapshot;
     } catch (error) {
       if (!controller.signal.aborted) {
         try { controller.abort(); } catch {}
@@ -1645,20 +1663,27 @@ function installAnimation(
       applySettingsRecord({ ...snapshot.settings, themeState: snapshot.themeState }, undefined, snapshot.explicitText);
     } else if (imageSettings) {
       try {
-        const loadedSettings = await imageSettings.load(defaultAssets);
+        const usesSnapshot = typeof imageSettings.loadSnapshot === 'function';
+        const loadedSettings = usesSnapshot ? await imageSettings.loadSnapshot(defaultAssets,true) : await imageSettings.load(defaultAssets);
         if (disposed || currentGeneration !== generation) return;
+        if (loadedSettings?.status === 'failure' && (loadedSettings.readOnly || loadedSettings.reason === 'settings-blocked')) {
+          throw Object.assign(new Error('settings-blocked'),{settingsBlocked:true});
+        }
         settingsLoadReason = typeof loadedSettings?.reason === 'string' ? loadedSettings.reason : '';
-        applySettingsRecord({ ...loadedSettings.settings, themeState: loadedSettings.themeState }, loadedSettings.baseline);
-      } catch {
+        if (!loadedSettings?.settings) throw new Error('settings-unavailable');
+        applySettingsRecord({ ...loadedSettings.settings, themeState: loadedSettings.themeState }, loadedSettings.baseline,loadedSettings.explicitText);
+      } catch (error) {
+        if (error?.settingsBlocked) throw error;
         if (disposed || currentGeneration !== generation) return;
         settingsLoadReason = 'settings-unavailable';
         applySettingsRecord(defaultAssets);
       }
     }
     const stats = validateContours();
+    const importedImage = assets?.themeState?.selection?.kind === 'imported' ? assets.themeState.selection.image : null;
     const decodeResults = await Promise.allSettled([
       decodeImage(rawAvatar, 512, 512, currentGeneration),
-      decodeImage(rawArtwork, WIDTH, HEIGHT, currentGeneration),
+      decodeImage(rawArtwork, importedImage?.width ?? WIDTH, importedImage?.height ?? HEIGHT, currentGeneration, importedImage),
     ]);
     const decoded = decodeResults.map(result => result.status === 'fulfilled' ? result.value : null);
     const decodeFailure = decodeResults.find(result => result.status === 'rejected');
@@ -1863,6 +1888,8 @@ function installAnimation(
           if (frameSpec?.intent === 'play') message('settings-open');
         },
         onPreview(draft) { return startSettingsPreview(draft); },
+        onThemeApply(request) { return message('theme-apply',request); },
+        onThemeCancel() { return message('theme-cancel'); },
         onApply(saved) {
           finishSettingsPreview(settingsPreview, settingsPreview?.started, false);
           return applySavedWallpaper(saved);
@@ -2232,14 +2259,11 @@ function createNativeSnapshotBridge(environment, identity) {
       const exact = (object, keys) => object && typeof object === 'object' && !Array.isArray(object)
         && Object.keys(object).length === keys.length && keys.every(key => Object.hasOwn(object, key));
       const theme = value?.themeState;
-      const preference = theme?.preferencesByTheme?.['azhou-q-v3'];
-      const validTheme = exact(theme, ['schemaVersion', 'revision', 'activeThemeId', 'preferencesByTheme', 'imagesBinding'])
-        && theme.schemaVersion === 1 && Number.isSafeInteger(theme.revision) && theme.revision >= 1
-        && theme.activeThemeId === 'azhou-q-v3' && exact(theme.preferencesByTheme, ['azhou-q-v3'])
-        && typeof theme.imagesBinding === 'string' && /^[a-f0-9]{64}$/.test(theme.imagesBinding)
-        && ((exact(preference, ['mode']) && preference.mode === 'follow')
-          || (exact(preference, ['mode', 'value']) && preference.mode === 'override'
-            && Number.isFinite(preference.value) && preference.value >= 0 && preference.value <= 100));
+      let validTheme = false;
+      if (theme !== undefined && typeof createDreamThemeStyle === 'function') {
+        try { value.themeState = createDreamThemeStyle().validateThemeSnapshot(theme); validTheme = true; }
+        catch { validTheme = false; }
+      }
       if ((!exact(value, ['status', 'settings', 'explicitText', 'appearance'])
             && !(exact(value, ['status', 'settings', 'explicitText', 'appearance', 'themeState']) && validTheme))
           || value.status !== current.descriptor.status || !value.settings || !value.explicitText || !value.appearance) {

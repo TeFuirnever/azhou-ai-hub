@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createHash, webcrypto } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
+import { validateThemeSnapshot, verifyThemeSnapshotArtwork } from '../dream-theme-style.mjs';
 import { installStartup } from '../extension/renderer.mjs';
 import { createCodexPageAdapter } from '../extension/codex-page-adapter.mjs';
 import { createDSHPageAdapter } from '../extension/hosts/dsh.mjs';
@@ -529,7 +530,7 @@ test('a DSH page without the gate reads its own saved wallpaper and applies it w
   const api = fixture.host.__azhouStartup;
   await fixture.waitForWallpaper(api, wallpaper => wallpaper.applied, 'saved DSH wallpaper was not applied');
   assert.deepEqual(fixture.storage.state.opens, [{ name: 'azhou-dsh-startup', version: 1 }]);
-  assert.deepEqual(fixture.storage.state.requests.map(({key}) => key).sort(), ['images', 'themeState']);
+  assert.deepEqual(fixture.storage.state.requests.map(({key}) => key).sort(), ['appearancePresets', 'dreamThemes', 'images', 'themeState']);
   assert.equal(fixture.storage.state.transactions[0].mode, 'readonly');
   assert.deepEqual(fixture.rendererCalls, [{ image: fixture.saved.artwork, strength: 31 }]);
   assert.equal(api.status().phase, 'prepared');
@@ -3063,6 +3064,7 @@ function snapshotFixture(snapshotSource, { playbackOwner = 'page', observeAppear
     assets: { value: assets },
     ...(wallpaperApply ? { applyWallpaper: { value: (value, current, signal, options) => wallpaperApply(value, current, controlled.host, signal, options) } } : {}),
     createLocalization: { value: () => ({ t: key => key, subscribe: () => () => {} }) },
+    createDreamThemeStyle: { value: () => ({validateThemeSnapshot,verifyThemeSnapshotArtwork}) },
     createImageSettings: { value: input => {
       factoryInputs.push(input);
       return {
@@ -4098,3 +4100,113 @@ for (const defect of ['observeWorkspace','isWorkspaceCurrent','watchWorkspace','
     finally {f.host.__azhouStartup.dispose();}
   });
 }
+
+test('host exports an imported finite plan and original schema2 image without source capsule duplication',async()=>{
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAIAAAA2iEnWAAAAFElEQVR4nGMUt4xmYGBgYgADKAUADMEAsTl1AMYAAAAASUVORK5CYII=','base64');
+  const settings=snapshotSettings({schemaVersion:2,artwork:'data:image/png;base64,'+png.toString('base64')});
+  const themeState={schemaVersion:2,revision:1,imagesBinding:'a'.repeat(64),selection:{kind:'imported',profile:'codex-main-literal-paint/v1',
+    capsuleSha256:'b'.repeat(64),archiveSha256:'c'.repeat(64),image:{name:'background.png',mime:'image/png',bytes:png.length,
+      sha256:createHash('sha256').update(png).digest('hex'),width:2,height:3},paint:{rgba:[12,34,56,.4],backgroundImage:'none',sourceDeclarationCount:2}}};
+  const fixture=snapshotFixture({...snapshotResult('valid',settings),themeState},{playbackOwner:'native'});
+  const request=snapshotRequest(fixture.api,'imported-plan');const descriptor=await fixture.api.beginSettingsSnapshot(request);
+  assert.equal(descriptor.ok,true);
+  const chunk=fixture.api.readSettingsSnapshotChunk(snapshotChunkRequest(request,descriptor,0,0));
+  const result=JSON.parse(Buffer.from(chunk.dataBase64,'base64').toString('utf8'));
+  assert.deepEqual(result.settings,settings);assert.deepEqual(result.themeState,themeState);
+  assert.equal(JSON.stringify(result).split(png.toString('base64')).length-1,1);
+  assert.equal(Object.hasOwn(result,'baseline'),false);fixture.api.dispose();
+});
+for(const themeState of [{schemaVersion:2,selection:{kind:'imported'}},{schemaVersion:99,opaque:true}])test('unimplemented tagged wallpaper never silently falls through to legacy '+themeState.schemaVersion,async()=>{
+  let calls=0;const fixture=snapshotFixture(snapshotResult(),{wallpaperApply(){calls++;return {applied:true,imageDecoded:true};}});
+  const runId=fixture.api.status().runId,frame=fixture.frames[0];
+  fixture.host.send({type:'azhou-startup',action:'ready',runId},frame.contentWindow);
+  fixture.host.send({type:'azhou-startup',action:'background',runId,image:'data:image/png;base64,AA==',strength:42,themeState},frame.contentWindow);
+  for(let i=0;i<5;i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls,0);fixture.api.dispose();
+});
+
+test('settings explicit theme action delegates canonical source transaction and admits only numeric owned-main paint',async()=>{
+  const f=controlledHost();const specs=[];const log=[];let disposed=0;
+  const snapshot={settings:{artwork:'data:image/png;base64,AA==',wallpaperStrength:75},themeState:{schemaVersion:2,selection:{kind:'imported',profile:'codex-main-literal-paint/v1',
+    paint:{rgba:[4,5,6,.4],backgroundImage:'none',sourceDeclarationCount:2}}}};
+  const payload=function(...args){specs.push({send:args[13],spec:args[14]});};
+  payload.createImageSettings=()=>({async load(){log.push('load');return {reason:''};},
+    async applyDreamTheme(digest,options){
+      log.push('source-transaction');assert.equal(digest,'a'.repeat(64));assert.equal(options.expectedToken,'b'.repeat(64));
+      const candidate=await options.activate(snapshot,{signal:options.signal});assert.equal(candidate.applied,true);
+      candidate.transaction.finalize();return {applied:true,themeState:snapshot.themeState};
+    },dispose(){disposed++;}});
+  payload.applyWallpaper=async(request,current,signal,options)=>{
+    log.push('activate');assert.equal(current(),true);assert.equal(signal.aborted,false);assert.equal(options.transactional,true);
+    assert.deepEqual(request.mainPaint,{profile:'codex-main-literal-paint/v1',...snapshot.themeState.selection.paint});
+    assert.equal(request.themeState,null,'No imported pointer is interpreted by the legacy readability renderer');
+    f.host.__azhouWallpaper={owner:'azhou.codex-startup-animation',version:'0.9.0',status:()=>({applied:true,imageDecoded:true}),dispose(){}};
+    return {applied:true,transaction:{current:()=>true,finalize(){log.push('finalize');return true;},rollback(){log.push('rollback');return true;}}};
+  };
+  installStartup(payload,f.host,pageAdapter);
+  const api=f.host.__azhouStartup;const {send,spec}=specs.at(-1);
+  send({type:'azhou-startup',runId:spec.runId,action:'ready'});send({type:'azhou-startup',runId:spec.runId,action:'settings-open'});
+  const result=await send({type:'azhou-startup',runId:spec.runId,action:'theme-apply',capsuleSha256:'a'.repeat(64),expectedToken:'b'.repeat(64)});
+  assert.equal(result?.applied,true);assert.deepEqual(log,['load','source-transaction','activate','finalize']);assert.equal(disposed,1);
+  assert.equal(api.status().wallpaper.applied,true);api.dispose();
+});
+
+test('startup imported plan is rebuilt from current source before each live apply rather than trusting child paint',async()=>{
+  const f=controlledHost();const specs=[];let reads=0,applies=0;
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAIAAAA2iEnWAAAAFElEQVR4nGMUt4xmYGBgYgADKAUADMEAsTl1AMYAAAAASUVORK5CYII=','base64');
+  const themeState={schemaVersion:2,revision:1,imagesBinding:'a'.repeat(64),selection:{kind:'imported',profile:'codex-main-literal-paint/v1',
+    capsuleSha256:'b'.repeat(64),archiveSha256:'c'.repeat(64),image:{name:'background.png',mime:'image/png',bytes:png.length,sha256:createHash('sha256').update(png).digest('hex'),width:2,height:3},
+    paint:{rgba:[17,34,51,.5],backgroundImage:'none',sourceDeclarationCount:2}}};
+  const snapshot={status:'valid',settings:{schemaVersion:2,artwork:'data:image/png;base64,'+png.toString('base64'),wallpaperStrength:75},themeState};
+  const payload=function(...args){specs.push({send:args[13],spec:args[14]});};
+  payload.createDreamThemeStyle=()=>({validateThemeSnapshot,verifyThemeSnapshotArtwork});
+  payload.createImageSettings=()=>({async loadSnapshot(){reads++;return snapshot;},dispose(){}});
+  payload.applyWallpaper=async(request)=>{
+    applies++;assert.deepEqual(request.mainPaint,{profile:themeState.selection.profile,...themeState.selection.paint});
+    assert.equal(request.themeState,null);
+    f.host.__azhouWallpaper={owner:'azhou.codex-startup-animation',version:'0.9.0',status:()=>({applied:true,imageDecoded:true}),dispose(){}};
+    return {applied:true};
+  };
+  installStartup(payload,f.host,pageAdapter);const {send,spec}=specs.at(-1);send({type:'azhou-startup',runId:spec.runId,action:'ready'});
+  const forged=structuredClone(themeState);forged.selection.paint.rgba=[255,0,0,1];
+  const result=await send({type:'azhou-startup',runId:spec.runId,action:'background',image:snapshot.settings.artwork,strength:75,themeState:forged});
+  assert.equal(result.applied,true);assert.equal(reads,1);assert.equal(applies,1);f.host.__azhouStartup.dispose();
+});
+
+test('newer imported source admission wins even when the older source read completes first',async()=>{
+  const f=controlledHost();const specs=[],reads=[],paints=[];
+  const image='data:image/png;base64,AA==';
+  const theme=digest=>({schemaVersion:2,revision:1,imagesBinding:'a'.repeat(64),selection:{kind:'imported',profile:'codex-main-literal-paint/v1',
+    capsuleSha256:digest,archiveSha256:'d'.repeat(64),image:{name:'background.png',mime:'image/png',bytes:1,sha256:'e'.repeat(64),width:1,height:1},
+    paint:{rgba:digest==='b'.repeat(64)?[1,2,3,1]:[7,8,9,1],backgroundImage:'none',sourceDeclarationCount:1}}});
+  const payload=function(...args){specs.push({send:args[13],spec:args[14]});};
+  payload.createDreamThemeStyle=()=>({validateThemeSnapshot});
+  payload.createImageSettings=()=>({loadSnapshot(){return new Promise(resolve=>reads.push(resolve));},dispose(){}});
+  payload.applyWallpaper=async request=>{paints.push(request.mainPaint.rgba);f.host.__azhouWallpaper={owner:'azhou.codex-startup-animation',version:'0.9.0',status:()=>({applied:true,imageDecoded:true}),dispose(){}};return {applied:true};};
+  installStartup(payload,f.host,pageAdapter);const {send,spec}=specs.at(-1);send({type:'azhou-startup',runId:spec.runId,action:'ready'});
+  const request=digest=>send({type:'azhou-startup',runId:spec.runId,action:'background',image,strength:75,themeState:theme(digest)});
+  const a=request('b'.repeat(64)),b=request('c'.repeat(64));assert.equal(reads.length,2);
+  reads[0]({status:'valid',settings:{artwork:image,wallpaperStrength:75},themeState:theme('b'.repeat(64))});const first=await a;
+  reads[1]({status:'valid',settings:{artwork:image,wallpaperStrength:75},themeState:theme('c'.repeat(64))});const second=await b;
+  assert.equal(first.applied,false);assert.equal(second.applied,true);assert.deepEqual(paints,[[7,8,9,1]]);f.host.__azhouStartup.dispose();
+});
+
+test('explicit restore of saved zero strength publishes disabled without requiring a wallpaper owner',async()=>{
+  const f=controlledHost();const specs=[];let finalized=false;
+  const payload=function(...args){specs.push({send:args[13],spec:args[14]});};
+  payload.createImageSettings=()=>({async load(){return {reason:''};},async restoreAzhouTheme(options){
+    const candidate=await options.activate({settings:{artwork:'data:image/png;base64,AA==',wallpaperStrength:0},
+      themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value:100}}}},{signal:options.signal});
+    assert.equal(candidate.disabled,true);assert.equal(candidate.transaction.finalize(),true);return {applied:true};
+  },dispose(){}});
+  payload.applyWallpaper=async(request,current,signal,options)=>{
+    assert.equal(request.strength,0);assert.equal(options.transactional,true);
+    return {applied:true,disabled:true,transaction:{current:()=>true,rollback:()=>true,finalize(){finalized=true;delete f.host.__azhouWallpaper;return true;}}};
+  };
+  installStartup(payload,f.host,pageAdapter);const {send,spec}=specs.at(-1);
+  send({type:'azhou-startup',runId:spec.runId,action:'ready'});send({type:'azhou-startup',runId:spec.runId,action:'settings-open'});
+  const result=await send({type:'azhou-startup',runId:spec.runId,action:'theme-apply',capsuleSha256:null,expectedToken:'a'.repeat(64)});
+  assert.equal(finalized,true);assert.equal(result.applied,true);assert.equal(f.host.__azhouWallpaper,undefined);
+  assert.equal(f.host.__azhouStartup.status().wallpaper.applied,false);assert.equal(f.host.__azhouStartup.status().wallpaper.reason,'disabled');
+  f.host.__azhouStartup.dispose();
+});

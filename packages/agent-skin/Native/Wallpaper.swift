@@ -1173,15 +1173,49 @@ struct StartupSettingsSnapshotPoint: Sendable, Equatable {
     let y: Double
 }
 
-struct StartupThemeState: Sendable {
+struct StartupDreamImage: Sendable {
+    let name: String
+    let mime: String
+    let bytes: Int
+    let sha256: String
+    let width: Int
+    let height: Int
+    var object: [String: Any] { ["name": name, "mime": mime, "bytes": bytes, "sha256": sha256, "width": width, "height": height] }
+}
+
+struct StartupImportedThemeState: Sendable {
     let revision: Int
-    let transparency: Double?
     let imagesBinding: String
+    let capsuleSha256: String
+    let archiveSha256: String
+    let image: StartupDreamImage
+    let rgba: [Double]
+    let sourceDeclarationCount: Int
+    var selection: [String: Any] {
+        ["kind": "imported", "profile": "codex-main-literal-paint/v1", "capsuleSha256": capsuleSha256,
+         "archiveSha256": archiveSha256, "image": image.object,
+         "paint": ["rgba": rgba, "backgroundImage": "none", "sourceDeclarationCount": sourceDeclarationCount]]
+    }
+}
+
+enum StartupThemeState: Sendable {
+    case bundled(revision: Int, transparency: Double?, imagesBinding: String)
+    case imported(StartupImportedThemeState)
+
+    var revision: Int { switch self { case let .bundled(value, _, _): return value; case let .imported(value): return value.revision } }
+    var transparency: Double? { switch self { case let .bundled(_, value, _): return value; case .imported: return nil } }
+    var imagesBinding: String { switch self { case let .bundled(_, _, value): return value; case let .imported(value): return value.imagesBinding } }
+    var importedImage: StartupDreamImage? { switch self { case .bundled: return nil; case let .imported(value): return value.image } }
 
     var object: [String: Any] {
-        let preference: [String: Any] = transparency.map { ["mode": "override", "value": $0] } ?? ["mode": "follow"]
-        return ["schemaVersion": 1, "revision": revision, "activeThemeId": "azhou-q-v3",
-                "preferencesByTheme": ["azhou-q-v3": preference], "imagesBinding": imagesBinding]
+        let selection: [String: Any]
+        switch self {
+        case let .bundled(_, transparency, _):
+            let preference: [String: Any] = transparency.map { ["mode": "override", "value": $0] } ?? ["mode": "follow"]
+            selection = ["kind": "bundled", "id": "azhou-q-v3", "surfaceTransparency": preference]
+        case let .imported(value): selection = value.selection
+        }
+        return ["schemaVersion": 2, "revision": revision, "imagesBinding": imagesBinding, "selection": selection]
     }
 }
 
@@ -1374,37 +1408,101 @@ struct StartupSettingsSnapshotReceiver {
         return appearance
     }
 
+    private static func themeHash(_ value: Any?) -> String? {
+        guard let value = value as? String, value.utf8.count == 64,
+              value.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else { return nil }
+        return value
+    }
+
+    private static func importedTheme(_ selection: [String: Any], revision: Int, binding: String) throws -> StartupThemeState {
+        guard Set(selection.keys) == Set(["kind", "profile", "capsuleSha256", "archiveSha256", "image", "paint"]),
+              selection["kind"] as? String == "imported", selection["profile"] as? String == "codex-main-literal-paint/v1",
+              let capsule = themeHash(selection["capsuleSha256"]), let archive = themeHash(selection["archiveSha256"]),
+              let image = selection["image"] as? [String: Any], Set(image.keys) == Set(["name", "mime", "bytes", "sha256", "width", "height"]),
+              let name = image["name"] as? String, let mime = image["mime"] as? String,
+              ["background.png": "image/png", "background.jpg": "image/jpeg", "background.webp": "image/webp"][name] == mime,
+              let count = integer(image["bytes"]), (1...10_485_760).contains(count), let digest = themeHash(image["sha256"]),
+              let width = integer(image["width"]), (1...16_384).contains(width),
+              let height = integer(image["height"]), (1...16_384).contains(height), width * height <= 50_000_000,
+              let paint = selection["paint"] as? [String: Any], Set(paint.keys) == Set(["rgba", "backgroundImage", "sourceDeclarationCount"]),
+              paint["backgroundImage"] as? String == "none", let declarations = integer(paint["sourceDeclarationCount"]),
+              (1...128).contains(declarations), let raw = paint["rgba"] as? [Any], raw.count == 4 else { throw invalidSnapshot() }
+        let rgba = raw.compactMap { finiteNumber($0) }
+        guard rgba.count == 4, rgba.enumerated().allSatisfy({ index, value in value >= 0 && value <= (index == 3 ? 1 : 255) }) else {
+            throw invalidSnapshot()
+        }
+        return .imported(StartupImportedThemeState(revision: revision, imagesBinding: binding, capsuleSha256: capsule,
+            archiveSha256: archive, image: StartupDreamImage(name: name, mime: mime, bytes: count, sha256: digest, width: width, height: height),
+            rgba: rgba, sourceDeclarationCount: declarations))
+    }
+
+    private static func validImportedArtwork(_ value: String, image: StartupDreamImage) -> Bool {
+        let prefix = "data:\(image.mime);base64,"
+        guard value.utf8.count <= 13_981_039, value.hasPrefix(prefix) else { return false }
+        let encoded = String(value.dropFirst(prefix.count))
+        guard encoded.utf8.count == 4 * ((image.bytes + 2) / 3),
+              encoded.range(of: "^[A-Za-z0-9+/]+={0,2}$", options: .regularExpression) != nil,
+              let data = Data(base64Encoded: encoded), data.count == image.bytes,
+              data.base64EncodedString() == encoded else { return false }
+        let magic: Bool
+        switch image.mime {
+        case "image/png": magic = data.starts(with: [137, 80, 78, 71, 13, 10, 26, 10])
+        case "image/jpeg": magic = data.starts(with: [255, 216, 255])
+        case "image/webp": magic = data.count >= 12 && data.starts(with: [82, 73, 70, 70]) && data.dropFirst(8).starts(with: [87, 69, 66, 80])
+        default: magic = false
+        }
+        return magic && SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() == image.sha256
+    }
+
     private static func validateThemeState(_ value: Any) throws -> StartupThemeState {
         guard let object = value as? [String: Any],
-              Set(object.keys) == Set(["schemaVersion", "revision", "activeThemeId", "preferencesByTheme", "imagesBinding"]),
-              integer(object["schemaVersion"]) == 1,
               let revision = integer(object["revision"]), (1...9_007_199_254_740_991).contains(revision),
-              object["activeThemeId"] as? String == "azhou-q-v3",
-              let preferences = object["preferencesByTheme"] as? [String: Any], Set(preferences.keys) == Set(["azhou-q-v3"]),
-              let preference = preferences["azhou-q-v3"] as? [String: Any],
-              let mode = preference["mode"] as? String,
               let binding = object["imagesBinding"] as? String,
               binding.utf8.count == 64, binding.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else {
             throw invalidSnapshot()
         }
-        if mode == "follow", Set(preference.keys) == Set(["mode"]) {
-            return StartupThemeState(revision: revision, transparency: nil, imagesBinding: binding)
+        let preference: [String: Any]
+        if integer(object["schemaVersion"]) == 1 {
+            guard Set(object.keys) == Set(["schemaVersion", "revision", "activeThemeId", "preferencesByTheme", "imagesBinding"]),
+                  object["activeThemeId"] as? String == "azhou-q-v3",
+                  let preferences = object["preferencesByTheme"] as? [String: Any], Set(preferences.keys) == Set(["azhou-q-v3"]),
+                  let legacyPreference = preferences["azhou-q-v3"] as? [String: Any] else { throw invalidSnapshot() }
+            preference = legacyPreference
+        } else {
+            guard integer(object["schemaVersion"]) == 2,
+                  Set(object.keys) == Set(["schemaVersion", "revision", "imagesBinding", "selection"]),
+                  let selection = object["selection"] as? [String: Any] else { throw invalidSnapshot() }
+            if selection["kind"] as? String == "imported" { return try importedTheme(selection, revision: revision, binding: binding) }
+            guard Set(selection.keys) == Set(["kind", "id", "surfaceTransparency"]),
+                  selection["kind"] as? String == "bundled", selection["id"] as? String == "azhou-q-v3",
+                  let taggedPreference = selection["surfaceTransparency"] as? [String: Any] else { throw invalidSnapshot() }
+            preference = taggedPreference
         }
-        guard mode == "override", Set(preference.keys) == Set(["mode", "value"]),
+        if preference["mode"] as? String == "follow", Set(preference.keys) == Set(["mode"]) {
+            return .bundled(revision: revision, transparency: nil, imagesBinding: binding)
+        }
+        guard preference["mode"] as? String == "override", Set(preference.keys) == Set(["mode", "value"]),
               let transparency = finiteNumber(preference["value"]), (0...100).contains(transparency) else { throw invalidSnapshot() }
-        return StartupThemeState(revision: revision, transparency: transparency, imagesBinding: binding)
+        return .bundled(revision: revision, transparency: transparency, imagesBinding: binding)
     }
 
     private static func validateSnapshotObject(_ object: [String: Any], status: String) throws -> StartupSettingsSnapshotValues {
+        let themeState = try object["themeState"].map(validateThemeState)
+        let sourceSettings = object["settings"] as? [String: Any]
+        let artworkValue = sourceSettings?["artwork"] as? String
+        let artworkValid: Bool
+        if let image = themeState?.importedImage, let artwork = artworkValue { artworkValid = validImportedArtwork(artwork, image: image) }
+        else if let artwork = artworkValue { artworkValid = validPNGDataURL(artwork, maximum: 12 * 1024 * 1024) }
+        else { artworkValid = false }
         guard (Set(object.keys) == Set(["status", "settings", "explicitText", "appearance"])
                || Set(object.keys) == Set(["status", "settings", "explicitText", "appearance", "themeState"])),
               object["status"] as? String == status,
               let settings = object["settings"] as? [String: Any],
               Set(settings.keys) == Set(["schemaVersion", "avatar", "artwork", "contours", "introTitle",
                                          "introCaption", "artworkSubtitle", "wallpaperStrength"]),
-              integer(settings["schemaVersion"]) == 1,
+              integer(settings["schemaVersion"]) == (themeState?.importedImage == nil ? 1 : 2),
               let avatar = settings["avatar"] as? String, validPNGDataURL(avatar, maximum: 2 * 1024 * 1024),
-              let artwork = settings["artwork"] as? String, validPNGDataURL(artwork, maximum: 12 * 1024 * 1024),
+              let artwork = artworkValue, artworkValid,
               let rawContours = settings["contours"] as? [Any], rawContours.count <= 1200,
               let introTitle = settings["introTitle"] as? String, introTitle.utf16.count <= 16,
               let introCaption = settings["introCaption"] as? String, introCaption.utf16.count <= 48,
@@ -1438,7 +1536,7 @@ struct StartupSettingsSnapshotReceiver {
             wallpaperStrength: wallpaperStrength,
             explicitText: ["introTitle": explicitTitle, "introCaption": explicitCaption,
                            "artworkSubtitle": explicitSubtitle],
-            themeState: try object["themeState"].map(validateThemeState))
+            themeState: themeState)
     }
 
     private static func validPNGDataURL(_ value: String, maximum: Int) -> Bool {

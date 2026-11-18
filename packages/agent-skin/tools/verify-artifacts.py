@@ -279,6 +279,10 @@ STARTUP_REQUIRED_INPUTS = (
     'wallpaper/renderer.js', 'wallpaper/apply.js',
     'wallpaper/wallpaper.css', 'index.html', 'style.css', 'animation.js', 'hub-package.json', 'theme-config.json',
 )
+DREAM_THEME_INPUTS = ('dream-theme-style.mjs', 'dream-theme-style.js', 'vendor/dream-safe-css-validator.mjs', 'vendor/dream-safe-css-ast.mjs', 'vendor/dream-safe-css.LICENSE', 'vendor/dream-theme-validator.mjs', 'vendor/dream-theme-validator.LICENSE')
+PRE_DREAM_STARTUP_REQUIRED_INPUTS = STARTUP_REQUIRED_INPUTS
+INPUT_FILES = (*INPUT_FILES, *DREAM_THEME_INPUTS)
+STARTUP_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, *DREAM_THEME_INPUTS)
 # A web plugin package, never a macOS bundle.
 DSH_PLUGIN_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/dsh.mjs',
                              'extension/hosts/dsh-startup-gate.js', 'tools/build-dsh-plugin.py')
@@ -350,6 +354,13 @@ LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS = (
     'web/assets/defaults/contours.js',
 )
 DSH_STARTUP_OUTPUTS = LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS
+# Keep installed pre-Dream source/output identities readable without rewriting them.
+PRE_DREAM_STARTUP_OUTPUTS = STARTUP_OUTPUTS
+PRE_DREAM_DSH_OUTPUTS = DSH_STARTUP_OUTPUTS
+DREAM_PREVIEW_OUTPUTS = ('web/dream-theme-style.js', 'web/vendor/dream-safe-css.LICENSE', 'web/vendor/dream-theme-validator.LICENSE')
+STARTUP_OUTPUTS = (*STARTUP_OUTPUTS, *DREAM_PREVIEW_OUTPUTS)
+DSH_STARTUP_OUTPUTS = (*DSH_STARTUP_OUTPUTS, *DREAM_PREVIEW_OUTPUTS)
+
 # Exact output set from the pre-image-metadata 0.9.0 payloads, including builds 10/11/12.
 PRE_IMAGE_METADATA_STARTUP_OUTPUTS = (
     'startup/install.js',
@@ -1255,6 +1266,7 @@ def verify_startup(path, info, marker, *, current_source=True):
         if ((expected_version, expected_build) == (VERSION, BUILD)
                 or is_known_image_metadata_build):
             allowed_theme_inputs.add(current_startup_inputs)
+            allowed_theme_inputs.add(frozenset(PRE_DREAM_STARTUP_REQUIRED_INPUTS))
         # The local 17–30 line predates the adapter; C0 build 26 also exists.
         if (expected_version == '0.9.0' and is_known_image_metadata_build
                 and int(expected_build) <= PRE_PAGE_ADAPTER_STARTUP_LAST_BUILD):
@@ -1284,10 +1296,12 @@ def verify_startup(path, info, marker, *, current_source=True):
     uses_current_startup_inputs = frozenset(source_inputs) == current_startup_inputs
     uses_pre_page_adapter_startup_inputs = (
         frozenset(source_inputs) == frozenset(PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS))
-    uses_image_metadata_outputs = uses_current_startup_inputs or uses_pre_page_adapter_startup_inputs
+    uses_pre_dream_startup_inputs = frozenset(source_inputs) == frozenset(PRE_DREAM_STARTUP_REQUIRED_INPUTS)
+    uses_image_metadata_outputs = uses_current_startup_inputs or uses_pre_page_adapter_startup_inputs or uses_pre_dream_startup_inputs
     if uses_image_metadata_outputs:
         has_cover = expected_version != '0.9.0' or (expected_build.isdecimal() and int(expected_build) >= 43)
-        native_outputs = STARTUP_OUTPUTS if has_cover else PRE_COVER_STARTUP_OUTPUTS
+        current_outputs = STARTUP_OUTPUTS if uses_current_startup_inputs else PRE_DREAM_STARTUP_OUTPUTS
+        native_outputs = current_outputs if has_cover else tuple(path for path in current_outputs if path != 'web/assets/defaults/cold-cover.png')
         expected_outputs = (native_outputs if has_native_preparation
                             else LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS)
     else:
@@ -1343,6 +1357,8 @@ def verify_startup(path, info, marker, *, current_source=True):
          'image-metadata-reader.js', 'vendor/dream-image-metadata.mjs', 'vendor/dream-image-metadata.LICENSE')
         if uses_image_metadata_outputs else PRE_IMAGE_METADATA_PREVIEW_SOURCES
     )
+    if uses_current_startup_inputs:
+        preview_sources = (*preview_sources, 'dream-theme-style.js', 'vendor/dream-safe-css.LICENSE', 'vendor/dream-theme-validator.LICENSE')
     for source_name in preview_sources:
         copied = output_bytes['web/' + source_name]
         source_digest = marker['inputs'].get(source_name)

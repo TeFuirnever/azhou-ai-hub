@@ -106,3 +106,9 @@ await finalHashBarrier;
 finalHashAbort.abort();releaseFinalHash();
 await finalHashAssertion;
 assert.equal(digestCalls,4);
+
+// The same-origin settings factory can execute in the parent while TextEncoder
+// belongs to its child frame. Brand checks must accept actual cross-realm bytes.
+const {runInNewContext}=await import('node:vm');
+const childRealmBytes=runInNewContext('Uint8Array.from(input)',{input:Array.from(original)});
+assert.equal((await readDreamCapsule(childRealmBytes,options)).capsuleSha256,sha(original));

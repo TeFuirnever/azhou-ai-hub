@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Uses an isolated headless Chrome and test-generated image pixels only.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,8 +19,8 @@ for (let index = 2; index < process.argv.length; index++) {
     console.log('node tools/test-image-settings-browser.mjs [--chrome /path/to/Chrome]');
     process.exit(0);
   }
-  if (key !== '--chrome' || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
-  options.chrome = process.argv[++index];
+  if (!['--chrome','--out'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
+  options[key.slice(2)] = process.argv[++index];
 }
 options.chrome = resolve(options.chrome);
 
@@ -95,7 +95,7 @@ class CDP {
   close() { this.socket.close(); }
 }
 
-function browserChecks(maxInputBytes) {
+function browserChecks(maxInputBytes,dreamCapsuleText) {
   return (async () => {
     const frame = document.createElement('iframe');
     frame.width = '800';
@@ -152,7 +152,7 @@ function browserChecks(maxInputBytes) {
       Image: child.Image,
       URL: urlApi,
       indexedDB: child.indexedDB,
-      crypto: child.crypto, TextEncoder: child.TextEncoder,
+      crypto: child.crypto, TextEncoder: child.TextEncoder, TextDecoder:child.TextDecoder, Blob:child.Blob,
       localization,
       appearanceAvatar,
       getAppearance: () => currentAppearance,
@@ -725,7 +725,7 @@ function browserChecks(maxInputBytes) {
       const db = await new Promise((resolve,reject)=>{const r=child.indexedDB.open('azhou-codex-startup',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
       try { return await new Promise((resolve,reject)=>{
         const t=db.transaction('settings',operation==='read'?'readonly':'readwrite'), store=t.objectStore('settings'), result={};
-        for(const key of ['images','themeState','appearancePresets']) {
+        for(const key of ['images','themeState','appearancePresets','dreamThemes']) {
           if(operation==='read') {const q=store.get(key);q.onsuccess=()=>{result[key]=q.result;};}
           else if(Object.hasOwn(values,key)) store.put(values[key],key);
         }
@@ -828,6 +828,57 @@ function browserChecks(maxInputBytes) {
       await rawCatalog('write',savedP2Records);await api.load(defaults);
     }
 
+    const dreamBefore=await rawCatalog('read');
+    const dreamPaintBefore=child.getComputedStyle(childDocument.body).backgroundImage;
+    let dreamApplied=0;api.openSettings({onApply(){dreamApplied++;return {applied:true};}});
+    const dreamInput=settingsDialog.querySelector('[data-agent-skin-dream-import]');
+    const dreamList=settingsDialog.querySelector('[data-agent-skin-dream-list]');
+    const draftText=settingsDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
+    draftText.value='Unsaved during source import';draftText.dispatchEvent(new child.Event('input',{bubbles:true}));
+    const draftBeforeImport=draftText.value;
+    const importDreamFile=async()=>{
+      const transfer=new child.DataTransfer();transfer.items.add(new child.File([dreamCapsuleText],'dream-source.json',{type:'application/json'}));
+      dreamInput.files=transfer.files;dreamInput.dispatchEvent(new child.Event('change',{bubbles:true}));
+      await waitFor(()=>!api.isBusy(),'Dream source file UI import');
+    };
+    await importDreamFile();
+    const dreamStored=await rawCatalog('read');
+    if(dreamList.options.length!==1||dreamList.options[0].textContent!=='<img onerror=window.dreamXss=true>'||window.dreamXss||child.dreamXss)throw new Error('Dream UI name rendering');
+    for(const key of ['images','themeState','appearancePresets'])if(JSON.stringify(dreamBefore[key])!==JSON.stringify(dreamStored[key]))throw new Error('Dream import changed '+key);
+    const dreamUnchanged={source:dreamStored.dreamThemes.entries[0].capsule===dreamCapsuleText,notApplied:dreamApplied===0,
+      draft:draftText.value===draftBeforeImport,paint:child.getComputedStyle(childDocument.body).backgroundImage===dreamPaintBefore};
+    if(Object.values(dreamUnchanged).some(value=>!value))throw new Error('Dream source/draft/paint changed '+JSON.stringify(dreamUnchanged));
+    await importDreamFile();if((await rawCatalog('read')).dreamThemes.entries.length!==1)throw new Error('Dream duplicate source');
+    api.cancelSettings();await api.load(defaults);api.openSettings();
+    await waitFor(()=>!api.isBusy(),'Dream directory reopen');
+    if(dreamList.options.length!==1||dreamList.options[0].textContent!=='<img onerror=window.dreamXss=true>')throw new Error('Dream directory did not reopen');
+    if(!settingsDialog.querySelector('[data-agent-skin-dream-apply]').disabled)throw new Error('unimplemented Dream apply enabled');
+    api.cancelSettings();
+    const dreamFileExchange={cliSource:true,fileInput:true,originalCapsuleRetained:true,reopened:true,duplicateIdempotent:true,
+      activeRecordsUnchanged:true,draftPreserved:true,nameAsText:true,applyCalls:dreamApplied};
+
+    const disposalAPI=createImageSettings({document:childDocument,Image:child.Image,URL:urlApi,indexedDB:child.indexedDB,
+      crypto:child.crypto,TextEncoder:child.TextEncoder,TextDecoder:child.TextDecoder,Blob:child.Blob,AbortController:child.AbortController,
+      localization,appearanceAvatar,getAppearance:()=>currentAppearance,setTimeout:child.setTimeout.bind(child),
+      clearTimeout:child.clearTimeout.bind(child),performance:child.performance});
+    await disposalAPI.load(defaults);
+    const disposeBefore=await rawCatalog('read');let disposeChecks=0,disposeRollback=0,postcommitDisposed=false,disposeReason='';
+    try {
+      await disposalAPI.applyDreamTheme(dreamStored.dreamThemes.entries[0].capsuleSha256,{expectedToken:await disposalAPI.themeApplyToken(),activate:async()=>({applied:true,transaction:{
+        current(){if(++disposeChecks===2){postcommitDisposed=true;disposalAPI.dispose();return false;}return true;},
+        finalize(){throw new Error('disposed source finalized');},rollback(){disposeRollback++;return true;},
+      }})});
+    }catch(error){disposeReason=error?.reason;}
+    const disposeAfter=await rawCatalog('read');
+    if(disposeReason!=='operation-cancelled'||!postcommitDisposed||disposeRollback!==1||disposalAPI.isBusy())throw new Error('postcommit disposal settlement');
+    if(JSON.stringify(disposeBefore.images)!==JSON.stringify(disposeAfter.images)
+      ||JSON.stringify(disposeBefore.appearancePresets)!==JSON.stringify(disposeAfter.appearancePresets)
+      ||JSON.stringify(disposeBefore.dreamThemes)!==JSON.stringify(disposeAfter.dreamThemes)
+      ||disposeBefore.themeState.activeThemeId!==disposeAfter.themeState.activeThemeId
+      ||JSON.stringify(disposeBefore.themeState.preferencesByTheme)!==JSON.stringify(disposeAfter.themeState.preferencesByTheme)
+      ||disposeAfter.themeState.revision!==disposeBefore.themeState.revision+2)throw new Error('postcommit disposal left a committed candidate');
+    const dreamDisposeCompensation={realIDB:true,postcommitDisposed:true,activeRestored:true,catalogsPreserved:true,rollbackCalls:disposeRollback};
+
     const versionchange = await new Promise((resolve, reject) => {
       const request = child.indexedDB.open('azhou-codex-startup', 2);
       let blocked = false;
@@ -848,6 +899,8 @@ function browserChecks(maxInputBytes) {
     frame.height = '889';
     localization.setLocale('zh-CN');
     if (!api.openSettings()) throw new Error('could not reopen settings for the layout screenshot');
+    await waitFor(()=>!api.isBusy(),'final directory validation before measuring resources');
+    await waitFor(()=>created.length===revoked.length,'all final validation URLs released before measuring resources');
     settingsDialog.querySelector('[data-agent-skin-settings-tab="workspace"]')?.click();
     await new Promise(resolve => child.requestAnimationFrame(() => child.requestAnimationFrame(resolve)));
     const screenshotGeometry = {
@@ -938,6 +991,8 @@ function browserChecks(maxInputBytes) {
       storage: {
         p2BrowserResults,
         presetFileExchange,
+        dreamFileExchange,
+        dreamDisposeCompensation,
         initialReason: initiallyLoaded.reason,
         initialBaseline: initiallyLoaded.baseline,
         initialTitle: initialCommit.introTitle,
@@ -980,7 +1035,9 @@ async function cleanup() {
 }
 
 try {
+  if (options.out) {options.out=resolve(options.out);await mkdir(options.out);}
   assert.equal(typeof WebSocket, 'function', 'Node 22 or newer is required for the built-in WebSocket');
+  const dreamStyle = await readFile(join(PACKAGE_ROOT,'dream-theme-style.js'));
   const imageSettings = await readFile(join(PACKAGE_ROOT, 'image-settings.js'));
   const imageMetadataReader = await readFile(join(PACKAGE_ROOT, 'image-metadata-reader.js'));
   const localizationSource = await readFile(join(PACKAGE_ROOT, 'localization.js'));
@@ -997,13 +1054,15 @@ try {
     'the direct page loads the classic metadata reader before the deferred settings script');
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>image settings fixture</title></head><body>'
     + '<script src="/localization.js" defer></script><script src="/image-metadata-reader.js" defer></script>'
-    + '<script src="/image-settings.js" defer></script><script src="/image-metadata-order-probe.js" defer></script>'
+    + '<script src="/dream-theme-style.js" defer></script><script src="/image-settings.js" defer></script><script src="/image-metadata-order-probe.js" defer></script>'
     + '</body></html>';
   const orderProbe = "window.imageSettingsReady = typeof createImageSettings === 'function' "
     + "&& typeof createLocalization === 'function'; window.imageMetadataReady = "
     + "typeof window.AGENT_SKIN_READ_RAW_DIMENSIONS === 'function';";
   server = createServer((request, response) => {
-    if (request.url === '/image-settings.js') {
+    if (request.url === '/dream-theme-style.js') {
+      response.writeHead(200, {'content-type':'text/javascript; charset=utf-8','cache-control':'no-store'});response.end(dreamStyle);
+    } else if (request.url === '/image-settings.js') {
       response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
       response.end(imageSettings);
     } else if (request.url === '/image-metadata-reader.js') {
@@ -1061,7 +1120,22 @@ try {
   await until(() => cdp.evaluate('window.imageSettingsReady === true'), 10_000, 'image settings source load');
   await until(() => cdp.evaluate('window.imageMetadataReady === true'), 10_000,
     'classic metadata reader before deferred image settings script');
-  const expression = '(' + browserChecks.toString() + ')(' + MAX_INPUT_BYTES + ')';
+  const dreamCapsuleText=execFileSync(process.env.AZHOU_TEST_PYTHON || 'python3',['-B','-c',`
+import sys,io,json,zipfile,subprocess
+from pathlib import Path
+from PIL import Image
+root=Path(sys.argv[1]).resolve();tool=Path(sys.argv[2])/'tools/theme-library.py'
+image=io.BytesIO();Image.new('RGB',(2,3),(23,41,79)).save(image,format='PNG')
+source=root/'dream-source.zip'
+with zipfile.ZipFile(source,'w') as z:
+ z.writestr('theme.json',json.dumps({'schemaVersion':1,'id':'dream.browser','name':'<img onerror=window.dreamXss=true>','image':'background.png'}))
+ z.writestr('theme.css','[data-ds-part="main"]{background-color:rgba(12,34,56,.4);}')
+ z.writestr('background.png',image.getvalue())
+base=[sys.executable,'-B',str(tool),'--library',str(root/'dream-library')]
+receipt=json.loads(subprocess.check_output([*base,'import',str(source)]))
+sys.stdout.buffer.write(subprocess.check_output([*base,'export-capsule',receipt['archiveSha256']]))
+`,profile,PACKAGE_ROOT],{encoding:'utf8',timeout:20000});
+  const expression = '(' + browserChecks.toString() + ')(' + MAX_INPUT_BYTES + ',' + JSON.stringify(dreamCapsuleText) + ')';
   let checkFailure;
   const checks = cdp.evaluate(expression).then(value => ({ value }), error => {
     checkFailure = error;
@@ -1107,6 +1181,8 @@ try {
   assert.equal(downloadedPreset.name,'<img onerror=window.presetXss=true>');
   assert.deepEqual(Object.keys(downloadedPreset).sort(),['appearance','name','recipeId','schema','surfaceTransparency']);
   result.storage.presetFileExchange.downloadedFileVerified=true;
+  assert.deepEqual(result.storage.dreamFileExchange,{cliSource:true,fileInput:true,originalCapsuleRetained:true,reopened:true,duplicateIdempotent:true,activeRecordsUnchanged:true,draftPreserved:true,nameAsText:true,applyCalls:0});
+  assert.deepEqual(result.storage.dreamDisposeCompensation,{realIDB:true,postcommitDisposed:true,activeRestored:true,catalogsPreserved:true,rollbackCalls:1});
   assert.equal(result.storage.presetFileExchange.activeRecordsUnchanged,true);
   assert.equal(result.storage.presetFileExchange.onApplyCalls,0);
   assert.equal(result.storage.presetFileExchange.onSavedCalls,1);
@@ -1256,13 +1332,26 @@ try {
     'the settings connection closes on versionchange so the newer open can proceed');
   assert.equal(result.storage.versionchange.oldVersion, 1);
   assert.equal(result.storage.versionchange.version, 2);
-  const screenshotPath = join(PACKAGE_ROOT, '.build', 'startup-generated-browser-evidence',
+  const screenshotPath = options.out ? join(options.out,'appearance-settings-preview-compact.png') : join(PACKAGE_ROOT, '.build', 'startup-generated-browser-evidence',
     'appearance-settings-preview-compact.png');
   await mkdir(dirname(screenshotPath), { recursive: true });
   const screenshot = await cdp.call('Page.captureScreenshot', {
     format: 'png', fromSurface: true, captureBeyondViewport: true,
   });
   await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+  if (options.out) {
+    const dreamGeometry = await cdp.evaluate(`(async()=>{
+      const frame=document.querySelector('iframe'),doc=frame.contentDocument;
+      const section=doc.querySelector('[data-agent-skin-dream-section]');section.scrollIntoView({block:'center'});
+      await new Promise(resolve=>frame.contentWindow.requestAnimationFrame(()=>frame.contentWindow.requestAnimationFrame(resolve)));
+      const rect=section.getBoundingClientRect(),button=doc.querySelector('[data-agent-skin-dream-import-button]');
+      button.focus();return {top:rect.top,bottom:rect.bottom,buttonText:button.textContent,buttonFocused:doc.activeElement===button,inputHidden:doc.querySelector('[data-agent-skin-dream-import]').hidden};
+    })()`);
+    assert.equal(dreamGeometry.buttonFocused,true);assert.equal(dreamGeometry.inputHidden,true);
+    const image=await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true});
+    await writeFile(join(options.out,'dream-directory.png'),Buffer.from(image.data,'base64'));
+    result.dreamDirectoryGeometry=dreamGeometry;
+  }
   const previewCommand = await readFile(join(PACKAGE_ROOT, '预览动画.command'), 'utf8');
   assert.ok(previewCommand.includes('cd "$(dirname "$0")"')
     && previewCommand.includes('open "$PWD/index.html"'),
@@ -1301,6 +1390,7 @@ try {
     protocol: 'file:', readerAvailable: true,
     outcome: { reason: 'asset-invalid', causeCode: 'image-too-large' }, objectURLs: 0,
   }, 'the actual file preview must reject an oversized PNG before creating an object URL');
+  if (options.out) await writeFile(join(options.out,'result.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx'});
   console.log(JSON.stringify({
     status: 'PASS',
     scope: 'same-origin HTTP and file:// classic image parser loading, actual local preview preflight, synthetic image import recovery, host-locale settings and theme tokens, real IndexedDB save/reload, two-page conflict and versionchange close',

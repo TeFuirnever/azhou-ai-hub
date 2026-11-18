@@ -42,7 +42,14 @@
     "index.html",
     "style.css",
     "animation.js",
-    "theme-config.json"
+    "theme-config.json",
+    "dream-theme-style.mjs",
+    "dream-theme-style.js",
+    "vendor/dream-safe-css-validator.mjs",
+    "vendor/dream-safe-css-ast.mjs",
+    "vendor/dream-safe-css.LICENSE",
+    "vendor/dream-theme-validator.mjs",
+    "vendor/dream-theme-validator.LICENSE"
   ],
   "runtime_paths": [
     ".gitignore",
@@ -171,6 +178,13 @@
     "tools/dsh-startup-gate.unit.test.mjs",
     "tools/test-dsh-startup-gate.mjs",
     "tools/build-dsh-plugin.py",
-    "tools/test-dsh-build.py"
+    "tools/test-dsh-build.py",
+    "dream-theme-style.mjs",
+    "dream-theme-style.js",
+    "vendor/dream-safe-css-validator.mjs",
+    "vendor/dream-safe-css-ast.mjs",
+    "vendor/dream-safe-css.LICENSE",
+    "vendor/dream-theme-validator.mjs",
+    "vendor/dream-theme-validator.LICENSE"
   ]
 }

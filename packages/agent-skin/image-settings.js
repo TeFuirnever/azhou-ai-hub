@@ -10,6 +10,8 @@ function createImageSettings(environment) {
   const document = environment && environment.document;
   const localization = environment && environment.localization;
   const themeConfig = environment?.themeConfig;
+  const dreamThemeStyle = environment?.dreamThemeStyle
+    ?? (typeof createDreamThemeStyle === 'function' ? createDreamThemeStyle() : null);
   const appearanceAvatar = environment && typeof environment.appearanceAvatar === 'string'
     && environment.appearanceAvatar.length <= 2 * 1024 * 1024
     && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(environment.appearanceAvatar)
@@ -56,6 +58,13 @@ function createImageSettings(environment) {
     'animation.title.default': '阿舟 AI 实验室',
     'animation.caption.default': 'AZHOU / AI LAB',
     'animation.subtitle.default': '和阿舟一起，把想法做出来。',
+    "settings.dream.import": "导入 Dream 源胶囊",
+    "settings.dream.list": "本机 Dream 主题",
+    "settings.dream.apply": "应用选中 Dream 主题",
+    "settings.dream.note": "导入立即存入独立本机目录，不保存其他草稿、不应用。仅接受 CLI 导出的源胶囊，非 ZIP 或 Azhou 预设。首个 profile 仅映射 main 静态背景色字面值，拒绝其他清单字段或样式声明。",
+    "settings.dream.imported": "Dream 源胶囊已存入本机目录；当前外观与其他草稿未变。",
+    "settings.dream.readonly": "Dream 目录无法识别或验证，已设为只读；原数据保留。",
+    "settings.dream.error": "Dream 导入失败；已保存目录和当前外观未改变。请使用有效源胶囊。",
     'settings.presets.name': '本机外观预设名称（最多40个字符）',
     'settings.presets.list': '本机外观预设',
     'settings.presets.add': '新增预设',
@@ -148,6 +157,7 @@ function createImageSettings(environment) {
     'settings.error.timeout': '操作超时，面板已恢复，可以取消或重试。',
     'settings.error.invalid': '候选设置无法验证，已保存内容保持不变。',
     'settings.error.save': '保存失败，已保存内容保持不变。',
+    'settings.load.readonly': '保存记录使用较新的格式，当前只读，不会覆写。请使用支持该格式的版本。',
     'settings.load.invalid': '保存记录无法识别；当前使用默认设置，原记录保留。',
     'settings.load.timeout': '读取设置超时；当前使用默认值，已保存记录未改动。可以重试。',
     'settings.load.unavailable': '暂时无法读取保存设置；当前使用默认设置，原记录未删除。',
@@ -161,10 +171,14 @@ function createImageSettings(environment) {
   let currentBaseline;
   let currentThemeBaseline;
   let currentLibraryBaseline;
+  let currentDreamBaseline;
+  let dreamDirectoryView = {status:'missing',entries:[]};
   let currentLibrary = { schemaVersion: 1, revision: 0, entries: [] };
   let draftLibrary = null;
   let currentThemeState = null;
   let currentThemeReason = '';
+  let currentThemeReadOnly = false;
+  let currentImagesReadOnly = false;
   let defaultRecord = null;
   let defaultTextFallbacks = Object.create(null);
   let loadReason = '';
@@ -180,6 +194,7 @@ function createImageSettings(environment) {
   let panelCallbacks = null;
   let panelCommit = null;
   let panelApplying = false;
+  let panelThemeApplying = false;
   let panelSavedNotified = false;
   let panelPresentation = 'modal';
   let panelStatus = null;
@@ -258,6 +273,12 @@ function createImageSettings(environment) {
 
   function finish(task, succeeded, value) {
     if (task.settled) return;
+    if (!succeeded && task.deferSettlement) {
+      task.failure ||= value;
+      task.applyAbort.abort();
+      try { task.transaction?.abort(); } catch {}
+      return;
+    }
     task.settled = true;
     if (active === task) active = null;
     if (!succeeded && task.transaction && !task.transactionFinished) {
@@ -369,6 +390,7 @@ function createImageSettings(environment) {
   }
 
   function assertCurrent(task) {
+    if (task.failure) throw task.failure;
     if (!isCurrent(task)) throw makeError('operation-cancelled');
     let elapsed;
     try { elapsed = performance.now.call(performance) - task.startedAt; }
@@ -483,6 +505,8 @@ function createImageSettings(environment) {
       let sawTheme = false;
       let libraryValue;
       let sawLibrary = false;
+      let dreamValue;
+      let sawDream = false;
       let settled = false;
       let timer = null;
       let failure = null;
@@ -508,6 +532,9 @@ function createImageSettings(environment) {
           finish(false, failure);
         }, 5_000);
         const store = transaction.objectStore(STORE_NAME);
+        const dreamRequest = store.get(DREAM_KEY);
+        dreamRequest.onsuccess = () => { dreamValue = dreamRequest.result; sawDream = true; };
+        dreamRequest.onerror = () => { failure = storageError('settings-unavailable', 'dream-read-failed'); };
         const libraryRequest = store.get(LIBRARY_KEY);
         libraryRequest.onsuccess = () => { libraryValue = libraryRequest.result; sawLibrary = true; };
         libraryRequest.onerror = () => { failure = storageError('settings-unavailable', 'library-read-failed'); };
@@ -519,8 +546,8 @@ function createImageSettings(environment) {
         request.onerror = () => { failure = storageError('settings-unavailable', 'database-read-failed'); };
         transaction.oncomplete = () => {
           if (task && task.transaction === transaction) task.transaction = null;
-          finish(sawResult && sawTheme && sawLibrary, sawResult && sawTheme && sawLibrary
-            ? { images: value, theme: themeValue, library: libraryValue } : (failure || storageError('settings-unavailable', 'database-read-failed')));
+          finish(sawResult && sawTheme && sawLibrary && sawDream, sawResult && sawTheme && sawLibrary && sawDream
+            ? { images: value, theme: themeValue, library: libraryValue, dream: dreamValue } : (failure || storageError('settings-unavailable', 'database-read-failed')));
         };
         transaction.onerror = () => { failure ||= storageError('settings-unavailable', 'database-read-failed'); };
         transaction.onabort = () => {
@@ -640,7 +667,10 @@ function createImageSettings(environment) {
         try { resolvedTheme = await resolveTheme(stored.theme, baseline); }
         catch (error) { themeReason = error?.reason || 'settings-invalid'; }
         if (!isCurrent(task)) throw makeError('operation-cancelled');
+        currentThemeReadOnly = !!themeReason && stored.theme !== undefined && stored.theme !== null && stored.theme?.schemaVersion !== 1;
+        currentImagesReadOnly = !!baseline && typeof baseline === 'object' && own(baseline,'schemaVersion') && baseline.schemaVersion !== 1;
         currentLibraryBaseline = stored.library;
+        currentDreamBaseline = stored.dream;
         currentLibrary = null;
         currentThemeBaseline = stored.theme;
         currentThemeState = resolvedTheme;
@@ -692,7 +722,7 @@ function createImageSettings(environment) {
     return promise;
   }
 
-  async function loadSnapshot(defaults) {
+  async function loadSnapshot(defaults, includeLibrary = false) {
     const explicitDefaults = {
       introTitle: typeof defaults?.introTitle === 'string',
       introCaption: typeof defaults?.introCaption === 'string',
@@ -700,15 +730,17 @@ function createImageSettings(environment) {
     };
     let loaded;
     try {
-      loaded = await load(defaults, false);
+      loaded = await load(defaults, includeLibrary);
     } catch (error) {
       return Object.freeze({
         status: 'failure',
         reason: typeof error?.reason === 'string' ? error.reason : 'settings-unavailable',
       });
     }
+    if (currentThemeReadOnly || currentImagesReadOnly) return Object.freeze({status:'failure',reason:'settings-blocked'});
     const reason = typeof loaded?.reason === 'string' ? loaded.reason : 'settings-unavailable';
     if (reason) return Object.freeze({ status: 'failure', reason });
+    if (currentThemeState?.selection?.kind === 'imported') return loadImportedSnapshot(loaded,explicitDefaults);
 
     try {
       const contours = (Array.isArray(loaded.settings?.contours) ? loaded.settings.contours : [])
@@ -740,8 +772,58 @@ function createImageSettings(environment) {
     }
   }
 
+  async function projectImportedSnapshot(task, loaded, explicitDefaults, state, directoryRecord) {
+    const directory = dreamDirectoryShape(directoryRecord);
+    const entry = directory.entries.find(entry=>entry.capsuleSha256 === state.selection.capsuleSha256);
+    if (!entry) throw makeError('settings-invalid');
+    const verified = await verifyDreamSource(task,new environment.TextEncoder().encode(entry.capsule),true);
+    assertCurrent(task);
+    if (verified.capsuleSha256 !== entry.capsuleSha256) throw makeError('settings-invalid');
+    let binary = '';
+    for (let offset=0;offset<verified.image.bytes.length;offset+=8192) {
+      binary += String.fromCharCode(...verified.image.bytes.subarray(offset,offset+8192));
+    }
+    const encodeBase64 = environment.btoa || document.defaultView?.btoa || globalThis.btoa;
+    if (typeof encodeBase64 !== 'function') throw makeError('settings-unavailable');
+    const contours = verified.contours.map(path=>Object.freeze(path.map(point=>Object.freeze([...point]))));
+    const settings = Object.freeze({...loaded.settings,schemaVersion:2,wallpaperStrength:75,
+      artwork:'data:'+verified.image.mime+';base64,'+encodeBase64(binary),contours:Object.freeze(contours)});
+    recordByteLength(settings);
+    const binding = await imagesBinding(settings);
+    assertCurrent(task);
+    const last = verified.paint.steps[verified.paint.steps.length-1];
+    const themeState = dreamThemeStyle.validateThemeSnapshot({schemaVersion:2,revision:state.revision,imagesBinding:binding,
+      selection:{kind:'imported',profile:verified.paint.profile,capsuleSha256:verified.capsuleSha256,archiveSha256:verified.archiveSha256,
+        image:{name:verified.manifest.image,mime:verified.image.mime,bytes:verified.image.bytes.length,sha256:verified.image.sha256,
+          width:verified.image.width,height:verified.image.height},
+        paint:{rgba:[...last.rgba],backgroundImage:'none',sourceDeclarationCount:verified.paint.declarationCount}}});
+    const explicitText = Object.freeze({
+      introTitle:explicitDefaults.introTitle || typeof loaded.baseline?.introTitle === 'string',
+      introCaption:explicitDefaults.introCaption || typeof loaded.baseline?.introCaption === 'string',
+      artworkSubtitle:explicitDefaults.artworkSubtitle || typeof loaded.baseline?.artworkSubtitle === 'string',
+    });
+    const snapshot = Object.freeze({status:loaded.baseline === undefined ? 'missing' : 'valid',settings,explicitText,themeState,themeReason:''});
+    if (new environment.TextEncoder().encode(JSON.stringify(snapshot)).byteLength > 24*1024*1024+4096) throw makeError('settings-invalid');
+    assertCurrent(task);return snapshot;
+  }
+
+  function loadImportedSnapshot(loaded, explicitDefaults) {
+    const {task,promise} = beginOperation('dream-snapshot',10_000);
+    Promise.resolve().then(async() => {
+      try {
+        const snapshot = await projectImportedSnapshot(task,loaded,explicitDefaults,currentThemeState,currentDreamBaseline);
+        assertCurrent(task);finish(task,true,snapshot);
+      } catch(error) {
+        if (!task.settled) finish(task,true,Object.freeze({status:'failure',readOnly:true,reason:error?.reason === 'operation-cancelled'
+          ? 'operation-cancelled' : error?.reason === 'operation-timeout' ? 'operation-timeout' : 'settings-invalid'}));
+      }
+    });
+    return promise;
+  }
+
   const THEME_KEY = SETTINGS_KEY === 'images' ? 'themeState' : SETTINGS_KEY + ':themeState';
   const LIBRARY_KEY = SETTINGS_KEY === 'images' ? 'appearancePresets' : SETTINGS_KEY + ':appearancePresets';
+  const DREAM_KEY = SETTINGS_KEY === 'images' ? 'dreamThemes' : SETTINGS_KEY + ':dreamThemes';
   const APPROVED_THEME_ID = 'azhou-q-v3';
 
   async function imagesBinding(record) {
@@ -829,6 +911,18 @@ function createImageSettings(environment) {
 
   async function resolveTheme(record, images) {
     if (record === undefined || record === null) return null;
+    if (record.schemaVersion === 2) {
+      if (!exactKeys(record,['schemaVersion','revision','imagesBinding','selection','preferencesByTheme','commitId','previousThemeId'])
+        || !Number.isSafeInteger(record.revision) || record.revision < 1
+        || !exactKeys(record.selection,['kind','capsuleSha256']) || record.selection.kind !== 'imported'
+        || typeof record.selection.capsuleSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(record.selection.capsuleSha256)
+        || !exactKeys(record.preferencesByTheme,[APPROVED_THEME_ID]) || !validTransparency(record.preferencesByTheme[APPROVED_THEME_ID])
+        || ![null,APPROVED_THEME_ID].includes(record.previousThemeId)
+        || typeof record.commitId !== 'string' || !/^[a-f0-9]{32}$/.test(record.commitId)
+        || typeof record.imagesBinding !== 'string' || !/^[a-f0-9]{64}$/.test(record.imagesBinding)
+        || images === undefined || await imagesBinding(images) !== record.imagesBinding) throw makeError('settings-invalid');
+      return structuredCloneTheme(record);
+    }
     if (!exactKeys(record, ['schemaVersion', 'revision', 'activeThemeId', 'preferencesByTheme', 'imagesBinding'])
       || record.schemaVersion !== 1 || !Number.isSafeInteger(record.revision)
       || record.revision < 1 || (record.activeThemeId !== null && record.activeThemeId !== APPROVED_THEME_ID)
@@ -890,7 +984,7 @@ function createImageSettings(environment) {
     return storageError('settings-unavailable', operation + '-failed');
   }
 
-  function saveInTransaction(task, db, candidate, themeCandidate, libraryCandidate, preserveActive) {
+  function saveInTransaction(task, db, candidate, themeCandidate, libraryCandidate, preserveActive, dreamCandidate) {
     let transaction;
     let failure = null;
     let timer = null;
@@ -909,26 +1003,32 @@ function createImageSettings(environment) {
         finish(task, false, failure);
       }, 5_000);
       const store = transaction.objectStore(STORE_NAME);
-      let imageReady = false, themeReady = false, libraryReady = false;
+      let imageReady = false, themeReady = false, libraryReady = false, dreamReady = false;
+      const dreamRequest = store.get(DREAM_KEY);
       const libraryRequest = store.get(LIBRARY_KEY);
       const themeRequest = store.get(THEME_KEY);
       const baselineRequest = store.get(SETTINGS_KEY);
       const tryWrite = () => {
-        if (!imageReady || !themeReady || !libraryReady) return;
+        if (!imageReady || !themeReady || !libraryReady || !dreamReady) return;
 
-        if (!isCurrent(task)) {
-          failure = makeError('operation-cancelled');
+        if (!isCurrent(task) || ((currentThemeReadOnly || currentImagesReadOnly) && (themeCandidate !== undefined || !preserveActive))) {
+          failure = makeError(currentThemeReadOnly || currentImagesReadOnly ? 'settings-blocked' : 'operation-cancelled');
           try { transaction.abort(); } catch {}
           return;
         }
         if (!recordEquals(baselineRequest.result, currentBaseline)
           || !recordEquals(themeRequest.result, currentThemeBaseline)
-          || !recordEquals(libraryRequest.result, currentLibraryBaseline)) {
+          || !recordEquals(libraryRequest.result, currentLibraryBaseline)
+          || !recordEquals(dreamRequest.result, currentDreamBaseline)) {
           failure = makeError('settings-conflict', 'baseline-changed');
           try { transaction.abort(); } catch {}
           return;
         }
         try {
+          if (dreamCandidate !== undefined) {
+            const dreamPut = store.put(dreamCandidate, DREAM_KEY);
+            dreamPut.onerror = () => { failure = storageFailureFrom(dreamPut.error, 'dream-write'); };
+          }
           if (themeCandidate !== undefined) {
             const themePut = store.put(themeCandidate, THEME_KEY);
             themePut.onerror = () => { failure = storageFailureFrom(themePut.error, 'theme-write'); };
@@ -946,6 +1046,8 @@ function createImageSettings(environment) {
           try { transaction.abort(); } catch {}
         }
       };
+      dreamRequest.onerror = () => { failure = storageFailureFrom(dreamRequest.error, 'dream-read'); };
+      dreamRequest.onsuccess = () => { dreamReady = true; tryWrite(); };
       libraryRequest.onerror = () => { failure = storageFailureFrom(libraryRequest.error, 'library-read'); };
       libraryRequest.onsuccess = () => { libraryReady = true; tryWrite(); };
       baselineRequest.onerror = () => { failure = storageFailureFrom(baselineRequest.error, 'database-read'); };
@@ -969,6 +1071,7 @@ function createImageSettings(environment) {
           currentLibraryBaseline = libraryCandidate;
           currentLibrary = structuredCloneTheme(libraryCandidate);
         }
+        if (dreamCandidate !== undefined) currentDreamBaseline = dreamCandidate;
         loadReason = '';
         finish(task, true, cloneSettings(candidate));
       };
@@ -989,6 +1092,7 @@ function createImageSettings(environment) {
   }
 
   function save(candidate, themeSelection, libraryDraft) {
+    if (currentThemeReadOnly || currentImagesReadOnly) return Promise.reject(makeError('settings-blocked'));
     if (disposed) return Promise.reject(makeError('operation-cancelled'));
     if (active) return Promise.reject(makeError('operation-busy'));
     if (!indexedDB || typeof indexedDB.open !== 'function') {
@@ -1002,11 +1106,17 @@ function createImageSettings(environment) {
         const record = normalizeStoredRecord(candidate, base);
         if (!record || !['avatar', 'artwork', 'contours', ...Object.keys(TEXT_LIMITS), 'wallpaperStrength']
           .every(key => own(candidate, key))) throw makeError('settings-invalid');
+        const imported = currentThemeState?.selection?.kind === 'imported';
+        if (imported && !['artwork','contours','wallpaperStrength'].every(key=>recordEquals(record[key],currentSettings[key]))) {
+          throw makeError('settings-blocked');
+        }
         const revision = currentThemeState?.revision ?? 0;
+        if (imported && revision >= Number.MAX_SAFE_INTEGER) throw makeError('settings-blocked');
         const preserveActive = libraryDraft !== undefined && recordEquals(record, currentSettings) && sameThemeSelection(themeSelection);
         if (themeSelection !== undefined && (!validThemeSelection(themeSelection)
           || (!preserveActive && themeSelection?.activeThemeId !== null && revision >= Number.MAX_SAFE_INTEGER))) throw makeError('settings-invalid');
-        const themeCandidate = preserveActive ? undefined : themeSelection === undefined && !currentThemeState
+        const themeCandidate = preserveActive ? undefined : imported
+          ? {...structuredCloneTheme(currentThemeState),revision:revision+1,imagesBinding:await imagesBinding(record)} : themeSelection === undefined && !currentThemeState
           ? (currentThemeBaseline === undefined ? undefined : null) : {
             schemaVersion: 1, revision: revision < Number.MAX_SAFE_INTEGER ? revision + 1 : 1,
             activeThemeId: themeSelection?.activeThemeId ?? null,
@@ -1029,8 +1139,293 @@ function createImageSettings(environment) {
         saveInTransaction(task, db, record, themeCandidate, libraryCandidate, preserveActive);
       } catch (error) {
         if (!task.settled) finish(task, false,
-          error?.reason === 'operation-timeout' || error?.reason === 'operation-cancelled'
+          ['operation-timeout','operation-cancelled','settings-blocked'].includes(error?.reason)
             ? error : storageFailureFrom(error, 'candidate-validation'));
+      }
+    });
+    return promise;
+  }
+
+  function dreamDirectoryShape(record) {
+    if (record === undefined) return {schemaVersion:1,revision:0,entries:[]};
+    if (!exactKeys(record, ['schemaVersion','revision','entries']) || record.schemaVersion !== 1
+      || !Number.isSafeInteger(record.revision) || record.revision < 1
+      || !Array.isArray(record.entries) || record.entries.length > 8) throw makeError('settings-blocked');
+    recordByteLength(record);
+    const ids = new Set();
+    for (const entry of record.entries) {
+      if (!exactKeys(entry, ['capsuleSha256','capsule']) || typeof entry.capsuleSha256 !== 'string'
+        || !/^[a-f0-9]{64}$/.test(entry.capsuleSha256) || ids.has(entry.capsuleSha256)
+        || typeof entry.capsule !== 'string') throw makeError('settings-blocked');
+      ids.add(entry.capsuleSha256);
+    }
+    return record;
+  }
+
+  async function verifyDreamSource(task, bytes, withContours = false) {
+    let contours;
+    const reader = dreamThemeStyle?.readDreamCapsule;
+    if (typeof reader !== 'function' || typeof environment.Blob !== 'function') throw makeError('settings-unavailable');
+    const verified = await reader(bytes, {crypto:environment.crypto, decodeImage:async(data,mime) => {
+      let image;
+      try {
+        image = await decode(task, new environment.Blob([data], {type:mime}));
+        assertCurrent(task);
+        if (withContours) {
+          const derived = await normalizeArtwork(task,image,{contoursOnly:true});
+          assertCurrent(task);contours = derived.contours;
+        }
+        return {width:image.naturalWidth,height:image.naturalHeight};
+      } finally {
+        if (task.image) {
+          task.image.onload = null; task.image.onerror = null;
+          try { task.image.src = 'data:,'; } catch {}
+          task.image = null;
+        }
+        if (task.objectURL) {
+          try { URLObject.revokeObjectURL(task.objectURL); } catch {}
+          task.objectURL = null;
+        }
+      }
+    }});
+    assertCurrent(task);
+    return withContours ? {...verified,contours} : verified;
+  }
+
+  async function verifyDreamDirectory(task, record) {
+    const directory = dreamDirectoryShape(record);
+    const entries = [];
+    for (const entry of directory.entries) {
+      const verified = await verifyDreamSource(task, new environment.TextEncoder().encode(entry.capsule));
+      assertCurrent(task);
+      if (verified.capsuleSha256 !== entry.capsuleSha256) throw makeError('settings-invalid');
+      entries.push({capsuleSha256:entry.capsuleSha256,name:verified.manifest.name,profile:verified.paint.profile});
+    }
+    return {status:record === undefined ? 'missing' : 'valid',revision:directory.revision,entries};
+  }
+
+  function loadDreamDirectory() {
+    if (disposed) return Promise.reject(makeError('operation-cancelled'));
+    if (active) return Promise.reject(makeError('operation-busy'));
+    const {task,promise} = beginOperation('dream-directory',10_000);
+    Promise.resolve().then(async() => {
+      try {
+        const directory = await verifyDreamDirectory(task,currentDreamBaseline);
+        assertCurrent(task); finish(task,true,directory);
+      } catch(error) {
+        if (error?.reason === 'settings-blocked') finish(task,true,{status:'readonly',entries:[]});
+        else finish(task,false,storageFailureFrom(error,'dream-read'));
+      }
+    });
+    return promise;
+  }
+
+  function importDreamCapsule(file) {
+    if (disposed) return Promise.reject(makeError('operation-cancelled'));
+    if (active) return Promise.reject(makeError('operation-busy'));
+    if (!currentSettings) return Promise.reject(makeError('settings-unavailable'));
+    const {task,promise} = beginOperation('dream-file',10_000);
+    let receipt;
+    Promise.resolve().then(async() => {
+      try {
+        const directory = dreamDirectoryShape(currentDreamBaseline);
+        if (!file || !Number.isSafeInteger(file.size) || file.size < 1 || file.size > MAX_RECORD_BYTES
+          || typeof file.arrayBuffer !== 'function') throw makeError('settings-invalid');
+        const input = await file.arrayBuffer();
+        assertCurrent(task);
+        if (input.byteLength !== file.size || input.byteLength > MAX_RECORD_BYTES) throw makeError('settings-invalid');
+        const capsule = new environment.TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(input);
+        const verified = await verifyDreamSource(task,new environment.TextEncoder().encode(capsule));
+        assertCurrent(task);
+        await verifyDreamDirectory(task,currentDreamBaseline);
+        assertCurrent(task);
+        const existing = directory.entries.find(entry => entry.capsuleSha256 === verified.capsuleSha256);
+        receipt = {capsuleSha256:verified.capsuleSha256,name:verified.manifest.name,stored:true,idempotent:!!existing};
+        let candidate;
+        if (!existing) {
+          if (directory.entries.length >= 8 || directory.revision >= Number.MAX_SAFE_INTEGER) throw makeError('settings-invalid');
+          candidate = {schemaVersion:1,revision:directory.revision+1,
+            entries:[...directory.entries.map(entry=>({...entry})),{capsuleSha256:verified.capsuleSha256,capsule}]};
+          recordByteLength(candidate);
+        }
+        const db = await openDatabase();
+        assertCurrent(task);
+        saveInTransaction(task,db,currentSettings,undefined,undefined,true,candidate);
+      } catch(error) {finish(task,false,error?.reason === 'settings-blocked' ? error : storageFailureFrom(error,'dream-import'));}
+    });
+    return promise.then(()=>receipt);
+  }
+
+  function cancelDreamImport() {
+    if (active?.kind !== 'dream-file') return false;
+    finish(active,false,makeError('operation-cancelled'));
+    return true;
+  }
+
+  function themeBaselines() {
+    return {images:currentBaseline,theme:currentThemeBaseline,library:currentLibraryBaseline,dream:currentDreamBaseline};
+  }
+
+  async function baselineToken(baselines) {
+    try {
+      const records = Object.values(baselines).map(value => value === undefined ? {missing:true} : {value});
+      records.forEach(recordByteLength);
+      return await imagesBinding(records);
+    } catch { throw makeError('settings-blocked'); }
+  }
+
+  function themeApplyToken() {
+    if (disposed || !currentSettings) return Promise.reject(makeError('operation-cancelled'));
+    return baselineToken(themeBaselines());
+  }
+
+  function themeTransaction(task, db, expected, updates, compensation = false) {
+    return new Promise((resolve,reject) => {
+      let transaction, timer, failure;
+      const clear = () => { if (timer !== undefined) clearTimer.call(environment,timer); };
+      const rejectWith = error => {
+        failure ||= error;
+        try { transaction.abort(); } catch {}
+      };
+      try {
+        transaction = db.transaction(STORE_NAME,'readwrite');
+        task.transaction = transaction;
+        const store = transaction.objectStore(STORE_NAME);
+        timer = setTimer.call(environment,()=>rejectWith(makeError('operation-timeout')),5_000);
+        const keys = {images:SETTINGS_KEY,theme:THEME_KEY,library:LIBRARY_KEY,dream:DREAM_KEY};
+        const requests = {}; let pending=4;
+        for (const [name,key] of Object.entries(keys)) {
+          const request = requests[name] = store.get(key);
+          request.onerror = () => rejectWith(storageFailureFrom(request.error,'theme-read'));
+          request.onsuccess = () => {
+            if (--pending) return;
+            if (!compensation && (!isCurrent(task) || task.failure)) {
+              rejectWith(task.failure || makeError('operation-cancelled'));return;
+            }
+            const compared=compensation?['images','theme']:Object.keys(keys);
+            if (!compared.every(name=>recordEquals(requests[name].result,expected[name]))) {
+              rejectWith(makeError('settings-conflict'));return;
+            }
+            try {
+              for (const [name,value] of Object.entries(updates)) {
+                const write = value === undefined ? store.delete(keys[name]) : store.put(value,keys[name]);
+                write.onerror = () => rejectWith(storageFailureFrom(write.error,'theme-write'));
+              }
+            } catch(error) { rejectWith(storageFailureFrom(error,'theme-write')); }
+          };
+        }
+        transaction.oncomplete = () => {
+          clear();if(task.transaction===transaction)task.transaction=null;
+          resolve();
+        };
+        transaction.onerror = () => {failure ||= storageFailureFrom(transaction.error,'theme-write');};
+        transaction.onabort = () => {
+          clear();if(task.transaction===transaction)task.transaction=null;
+          reject(failure || task.failure || makeError('settings-unavailable'));
+        };
+      } catch(error) {clear();if(task.transaction===transaction)task.transaction=null;reject(storageFailureFrom(error,'theme-write'));}
+    });
+  }
+
+  function applyDreamTheme(capsuleSha256,options) {
+    return applyThemeSelection(capsuleSha256,options);
+  }
+
+  function restoreAzhouTheme(options) {
+    return applyThemeSelection(null,options);
+  }
+
+  function applyThemeSelection(capsuleSha256,options = {}) {
+    if (disposed) return Promise.reject(makeError('operation-cancelled'));
+    if (active) return Promise.reject(makeError('operation-busy'));
+    if (!currentSettings || currentThemeReadOnly || currentImagesReadOnly
+      || !dreamThemeStyle || typeof environment.AbortController !== 'function' || typeof options.activate !== 'function'
+      || typeof options.expectedToken !== 'string' || !/^[a-f0-9]{64}$/.test(options.expectedToken)
+      || capsuleSha256 !== null && (typeof capsuleSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(capsuleSha256))) {
+      return Promise.reject(makeError('settings-blocked'));
+    }
+    const expected = themeBaselines();
+    const savedSettings = cloneSettings(currentSettings);
+    const previous = currentThemeState;
+    const {task,promise} = beginOperation('theme-apply',10_000);
+    const applyAbort = task.applyAbort = new environment.AbortController();
+    const cancel = () => finish(task,false,makeError('operation-cancelled'));
+    options.signal?.addEventListener('abort',cancel,{once:true});
+    if (options.signal?.aborted) cancel();
+    Promise.resolve().then(async() => {
+      let activation, committed = false, candidate, images, db, compensationFailure;
+      try {
+        assertCurrent(task);
+        if (await baselineToken(expected) !== options.expectedToken) throw makeError('settings-conflict');
+        assertCurrent(task);
+        images = expected.images === undefined ? savedSettings : expected.images;
+        const binding = await imagesBinding(images);assertCurrent(task);
+        const revision = (previous?.revision ?? 0)+1;
+        if (!Number.isSafeInteger(revision) || revision >= Number.MAX_SAFE_INTEGER) throw makeError('settings-invalid');
+        const preferencesByTheme = previous?.preferencesByTheme || {[APPROVED_THEME_ID]:{mode:'follow'}};
+        let snapshot;
+        if (capsuleSha256 !== null) {
+          const random = environment.crypto.getRandomValues(new Uint8Array(16));
+          candidate = {schemaVersion:2,revision,imagesBinding:binding,selection:{kind:'imported',capsuleSha256},
+            preferencesByTheme:structuredCloneTheme(preferencesByTheme),
+            previousThemeId:previous?.selection?.kind === 'imported' ? previous.previousThemeId : previous?.activeThemeId ?? null,
+            commitId:Array.from(random,byte=>byte.toString(16).padStart(2,'0')).join('')};
+          snapshot = await projectImportedSnapshot(task,{settings:savedSettings,baseline:images},{},candidate,expected.dream);
+        } else {
+          if (previous?.selection?.kind !== 'imported') throw makeError('settings-blocked');
+          candidate = {schemaVersion:1,revision,imagesBinding:binding,activeThemeId:previous.previousThemeId,
+            preferencesByTheme:structuredCloneTheme(preferencesByTheme)};
+          snapshot = {status:'valid',settings:savedSettings,themeState:candidate.activeThemeId ? candidate : null};
+        }
+        assertCurrent(task);recordByteLength(candidate);
+        task.deferSettlement = true;
+        activation = await options.activate(snapshot,{signal:applyAbort.signal});
+        if (!activation?.applied || typeof activation.transaction?.current !== 'function'
+          || typeof activation.transaction?.finalize !== 'function' || typeof activation.transaction?.rollback !== 'function') {
+          throw makeError('settings-unavailable');
+        }
+        assertCurrent(task);
+        if (!activation.transaction.current()) throw makeError('operation-cancelled');
+        db = await openDatabase();assertCurrent(task);
+        const updates = expected.images === undefined ? {images,theme:candidate} : {theme:candidate};
+        await themeTransaction(task,db,expected,updates);
+        committed = true;
+        assertCurrent(task);
+        if (!activation.transaction.current() || activation.transaction.finalize() !== true) throw makeError('operation-cancelled');
+        currentBaseline = images;currentSettings = savedSettings;
+        currentThemeBaseline = candidate;currentThemeState = candidate;currentThemeReason = '';
+        task.deferSettlement = false;
+        finish(task,true,{applied:true,themeState:snapshot.themeState});
+      } catch(error) {
+        try {activation?.transaction?.rollback();} catch {}
+        if (committed) {
+          // Restore only this exact commit. A newer writer's values are never compensated away.
+          try {
+            let restoredTheme=expected.theme;
+            if (expected.images !== undefined && (previous || expected.theme == null)) {
+              restoredTheme=previous?{...structuredCloneTheme(previous),revision:candidate.revision+1}
+                :{schemaVersion:1,revision:candidate.revision+1,imagesBinding:candidate.imagesBinding,
+                  activeThemeId:null,preferencesByTheme:{[APPROVED_THEME_ID]:{mode:'follow'}}};
+              if (restoredTheme.schemaVersion===2) {
+                restoredTheme.commitId=Array.from(environment.crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
+              }
+            }
+            await themeTransaction(task,db,{...expected,images,theme:candidate},
+              {theme:restoredTheme,...(expected.images===undefined?{images:undefined}:{})},true);
+            currentBaseline=expected.images;currentThemeBaseline=restoredTheme;
+            currentThemeState=previous?structuredCloneTheme(restoredTheme):null;
+          } catch(compensationError) {
+            compensationFailure = makeError(compensationError?.reason === 'settings-conflict' ? 'settings-conflict' : 'settings-unavailable');
+          }
+        }
+        task.deferSettlement = false;
+        if (!task.settled) finish(task,false,compensationFailure || task.failure || storageFailureFrom(error,'theme-apply'));
+      } finally {
+        options.signal?.removeEventListener('abort',cancel);
+        if (disposed) {
+          try {(database || db)?.close();} catch {}
+          database=null;
+        }
       }
     });
     return promise;
@@ -1183,6 +1578,8 @@ function createImageSettings(environment) {
     const height = Number(view?.innerHeight) || 0;
     const cropPosition = width > 0 && height > 0 && width / height <= 6 / 5
       ? '88% center' : '60% center';
+    panelControls.workspacePreview.hidden = currentThemeState?.selection?.kind === 'imported';
+    panelControls.workspacePreview.style.setProperty('display',panelControls.workspacePreview.hidden?'none':'grid');
     panelControls.workspacePreview.style.setProperty('background-color', surface);
     panelControls.workspacePreviewSurface.style.setProperty('background-color', surface);
     panelControls.workspacePreviewImage.hidden = !draft?.artwork || strength === 0;
@@ -1206,7 +1603,18 @@ function createImageSettings(environment) {
     for (const control of panelControls.controls) {
       const isSave = control === panelControls.saveButton;
       const isCancel = control === panelControls.cancelButton;
-      control.disabled = (Boolean(active) && !(isCancel && active.kind === 'preset-file'))
+      control.disabled = (Boolean(active) && !(isCancel && ['preset-file','dream-file','dream-directory'].includes(active.kind)))
+        || ([panelControls.dreamImport,panelControls.dreamImportButton].includes(control) && (!dreamThemeStyle || dreamDirectoryView.status === 'readonly' || dreamDirectoryView.entries.length >= 8))
+        || (control === panelControls.dreamList && !dreamDirectoryView.entries.length)
+        || (isSave && (currentThemeReadOnly || currentImagesReadOnly))
+        || (control === panelControls.dreamApply && (!panelCallbacks?.onThemeApply || !dreamDirectoryView.entries.length || currentThemeReadOnly || currentImagesReadOnly))
+        || (control === panelControls.dreamRestore && (!panelCallbacks?.onThemeApply || currentThemeState?.selection?.kind !== 'imported'))
+        || (currentThemeState?.selection?.kind === 'imported' && (
+          [panelControls.strength,panelControls.themeChoice,panelControls.themeMode,panelControls.themeTransparency,
+            panelControls.presetAdd,panelControls.presetLoad,panelControls.buttons['settings.button.restore']].includes(control)
+          || control.getAttribute?.('data-agent-skin-image-action') === 'artwork'
+          || control.getAttribute?.('data-agent-skin-image-input') === 'artwork'
+          || control.hasAttribute?.('data-agent-skin-preview-animation')))
         || (panelApplying && !isCancel)
         || (Boolean(panelCommit) && !panelApplying && !isSave && !isCancel)
         || ([panelControls.presetName, panelControls.presetAdd, panelControls.presetList, panelControls.presetLoad, panelControls.presetImport, panelControls.presetExport].includes(control) && !draftLibrary)
@@ -1308,6 +1716,19 @@ function createImageSettings(environment) {
       event.preventDefault();
       controls[0].focus?.();
     }
+  }
+
+  function updateDreamList(preferred) {
+    if (!panelControls) return;
+    const list = panelControls.dreamList;
+    const selected = preferred || list.value;
+    while (list.firstChild) list.removeChild(list.firstChild);
+    for (const entry of dreamDirectoryView.entries) {
+      const option = document.createElement('option'); option.value = entry.capsuleSha256;
+      option.textContent = entry.name; list.appendChild(option);
+    }
+    list.value = dreamDirectoryView.entries.some(entry=>entry.capsuleSha256 === selected)
+      ? selected : dreamDirectoryView.entries[0]?.capsuleSha256 || '';
   }
 
   function updatePresetList() {
@@ -1779,6 +2200,79 @@ function createImageSettings(environment) {
     const presetSection = document.createElement('div');
     presetSection.style.cssText = 'display:grid;gap:8px;margin-top:20px;min-width:0';
     workspacePanel.appendChild(presetSection);
+    const dreamSection = document.createElement('div');
+    dreamSection.setAttribute('data-agent-skin-dream-section','');
+    dreamSection.style.cssText = 'display:grid;gap:8px;margin-top:20px;padding-top:14px;border-top:1px solid var(--agent-skin-border,GrayText)';
+    section.appendChild(dreamSection);
+    const dreamImport = document.createElement('input');
+    dreamImport.type = 'file'; dreamImport.accept = '.json,application/json';
+    dreamImport.id = 'agent-skin-dream-import'; dreamImport.setAttribute('data-agent-skin-dream-import','');
+    dreamImport.hidden = true; dreamImport.tabIndex = -1; dreamImport.setAttribute('aria-hidden','true');
+    const dreamImportButton = document.createElement('button'); dreamImportButton.type = 'button';
+    dreamImportButton.setAttribute('data-agent-skin-dream-import-button',''); styleButton(dreamImportButton);
+    buttons['settings.dream.import'] = dreamImportButton; controls.push(dreamImportButton);
+    dreamImportButton.addEventListener('click',()=>{if(panelOpen && !active && !panelCommit) dreamImport.click?.();});
+    dreamSection.appendChild(dreamImportButton);
+    const dreamList = document.createElement('select');
+    dreamList.id = 'agent-skin-dream-list'; dreamList.setAttribute('data-agent-skin-dream-list','');
+    for (const [control,key] of [[dreamImport,'import'],[dreamList,'list']]) {
+      styleInput(control);
+      const label = document.createElement('label'); label.htmlFor = control.id;
+      if (control === dreamImport) label.hidden = true;
+      labels['settings.dream.'+key] = {element:label};
+      dreamSection.append(label,control); controls.push(control);
+    }
+    const dreamApply = document.createElement('button'); dreamApply.type = 'button';
+    dreamApply.setAttribute('data-agent-skin-dream-apply',''); styleButton(dreamApply);
+    buttons['settings.dream.apply'] = dreamApply; controls.push(dreamApply);
+    const dreamRestore = document.createElement('button'); dreamRestore.type='button';
+    dreamRestore.setAttribute('data-agent-skin-dream-restore','');styleButton(dreamRestore);
+    buttons['settings.dream.restore']=dreamRestore;controls.push(dreamRestore);
+    const requestThemeApply = async capsuleSha256 => {
+      if (!panelOpen || active || panelApplying || !panelCallbacks?.onThemeApply) return;
+      const atStart=panelGeneration;
+      panelThemeApplying=true;panelApplying=true;updatePanelBusy();setPanelStatus('settings.dream.applying');
+      try {
+        const expectedToken=await themeApplyToken();
+        if (!panelOpen || atStart!==panelGeneration || !panelThemeApplying) return;
+        const result=await panelCallbacks.onThemeApply({capsuleSha256,expectedToken});
+        if (!panelOpen || atStart!==panelGeneration) return;
+        if (result?.applied !== true) throw makeError(result?.reason || 'settings-unavailable');
+        await load(defaultRecord);
+        if (!panelOpen || atStart!==panelGeneration) return;
+        updatePanelFields();setPanelStatus(capsuleSha256===null?'settings.dream.restored':'settings.dream.applied');
+      } catch(error) {
+        if (error?.reason !== 'operation-cancelled' && panelOpen && atStart===panelGeneration) {
+          setPanelStatus(error?.reason==='settings-conflict'?'settings.error.conflict':'settings.dream.applyError','alert');
+        }
+      } finally {
+        panelThemeApplying=false;panelApplying=false;updatePanelBusy();
+      }
+    };
+    dreamApply.addEventListener('click',()=>requestThemeApply(dreamList.value));
+    dreamRestore.addEventListener('click',()=>requestThemeApply(null));
+    const dreamNote = document.createElement('p'); labels['settings.dream.note'] = {element:dreamNote};
+    dreamSection.append(dreamApply,dreamRestore,dreamNote);
+    dreamImport.addEventListener('change',async() => {
+      const file = dreamImport.files?.[0]; dreamImport.value = '';
+      if (!file || !panelOpen || active || panelCommit) return;
+      const atStart = panelGeneration;
+      try {
+        const operation = importDreamCapsule(file); updatePanelBusy();
+        const receipt = await operation;
+        if (!panelOpen || atStart !== panelGeneration) return;
+        if (!dreamDirectoryView.entries.some(entry=>entry.capsuleSha256 === receipt.capsuleSha256)) {
+          dreamDirectoryView.entries.push({capsuleSha256:receipt.capsuleSha256,name:receipt.name});
+        }
+        dreamDirectoryView.status = 'valid';
+        updateDreamList(receipt.capsuleSha256); setPanelStatus('settings.dream.imported');
+      } catch(error) {
+        if (error?.reason !== 'operation-cancelled' && panelOpen && atStart === panelGeneration) {
+          setPanelStatus(error?.reason === 'settings-blocked' ? 'settings.dream.readonly' : 'settings.dream.error','alert');
+        }
+      } finally {updatePanelBusy();}
+    });
+
     const presetName = document.createElement('input');
     presetName.type = 'text'; presetName.maxLength = 40;
     presetName.setAttribute('data-agent-skin-preset-name', '');
@@ -2027,7 +2521,7 @@ function createImageSettings(environment) {
       if (!panelOpen || panelAtStart !== panelGeneration) return;
       panelCommit = {
         saved: { ...cloneSettings(saved), themeState: currentThemeState?.activeThemeId ? structuredCloneTheme(currentThemeState) : null },
-        onApply: !catalogOnly && typeof panelCallbacks?.onApply === 'function' ? panelCallbacks.onApply : null,
+        onApply: !catalogOnly && currentThemeState?.selection?.kind !== 'imported' && typeof panelCallbacks?.onApply === 'function' ? panelCallbacks.onApply : null,
         failed: false,
       };
       panelSavedNotified = false;
@@ -2057,7 +2551,7 @@ function createImageSettings(environment) {
       dialog.addEventListener('keydown', containPanelTab, true);
     }
     panelControls = {
-      presetName, presetList, presetAdd, presetLoad, presetImport, presetExport, controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, themeTransparencyValue, themeTransparencyReason, themeStrengthNote, heading, close: null, categoryNav, labels,
+      dreamImport, dreamImportButton, dreamList, dreamApply, dreamRestore, presetName, presetList, presetAdd, presetLoad, presetImport, presetExport, controls, status, fields, strength, strengthValue, themeChoice, themeMode, themeTransparency, themeTransparencyValue, themeTransparencyReason, themeStrengthNote, heading, close: null, categoryNav, labels,
       ariaLabels, buttons, readouts, previews, workspacePreview, workspacePreviewCaption,
       workspacePreviewSurface, workspacePreviewImage: backgroundImage, workspacePreviewWash: backgroundWash,
       workspacePreviewHasImage, strengthLabel, saveButton, cancelButton: cancel, footer: actions,
@@ -2089,11 +2583,13 @@ function createImageSettings(environment) {
     panelGeneration++;
     panelOpen = true;
     updatePanelFields();
-    if (loadReason === 'settings-invalid') setPanelStatus('settings.load.invalid', 'alert');
+    if (currentThemeReadOnly || currentImagesReadOnly) setPanelStatus('settings.load.readonly','alert');
+    else if (loadReason === 'settings-invalid') setPanelStatus('settings.load.invalid', 'alert');
     else if (loadReason === 'operation-timeout') setPanelStatus('settings.load.timeout', 'alert');
     else if (loadReason === 'settings-unavailable' || loadReason === 'settings-blocked') {
       setPanelStatus('settings.load.unavailable', 'alert');
-    } else if (!currentLibrary) setPanelStatus('settings.presets.unavailable', 'alert');
+    } else if (currentThemeReadOnly) setPanelStatus('settings.load.unavailable','alert');
+    else if (!currentLibrary) setPanelStatus('settings.presets.unavailable', 'alert');
     else setPanelStatus('');
     // The embedded section renders inline: show() keeps the dialog non-modal
     // with no backdrop and no native cancel event.
@@ -2103,6 +2599,20 @@ function createImageSettings(environment) {
       panelCallbacks = null;
       return false;
     }
+    if (dreamThemeStyle && currentDreamBaseline !== undefined) {
+      const atStart = panelGeneration;
+      loadDreamDirectory().then(directory => {
+        if (!panelOpen || atStart !== panelGeneration) return;
+        dreamDirectoryView = directory; updateDreamList();
+        if (directory.status === 'readonly') setPanelStatus('settings.dream.readonly','alert');
+        updatePanelBusy();
+      },error => {
+        if (error?.reason !== 'operation-cancelled' && panelOpen && atStart === panelGeneration) {
+          dreamDirectoryView = {status:'readonly',entries:[]}; updateDreamList();
+          setPanelStatus('settings.dream.readonly','alert'); updatePanelBusy();
+        }
+      });
+    } else {dreamDirectoryView = {status:'missing',entries:[]};updateDreamList();}
     syncPanelScrollPadding();
     updatePanelBusy();
     try { panelCallbacks.onOpen?.(); } catch {}
@@ -2111,6 +2621,7 @@ function createImageSettings(environment) {
 
   function closePanel(returnValue = '') {
     if (!panelOpen) return false;
+    if (panelThemeApplying) {try {panelCallbacks?.onThemeCancel?.();} catch {} panelThemeApplying=false;}
     const commit = panelCommit;
     const callback = commit && !panelSavedNotified ? panelCallbacks?.onSaved : null;
     if (commit) panelSavedNotified = true;
@@ -2131,7 +2642,7 @@ function createImageSettings(environment) {
   }
 
   function cancelPresetFile() {
-    if (active?.kind === 'preset-file') finish(active, false, makeError('operation-cancelled'));
+    if (['preset-file','dream-file','dream-directory'].includes(active?.kind)) finish(active, false, makeError('operation-cancelled'));
   }
 
   function cancelSettings() {
@@ -2169,6 +2680,7 @@ function createImageSettings(environment) {
   // fields, the save action and the stored record agree again (the modal path
   // closes the panel instead of reverting).
   function revertPanelDraft() {
+    if (panelThemeApplying) {try {panelCallbacks?.onThemeCancel?.();} catch {} return false;}
     cancelPresetFile();
     if (!panelOpen || active || panelApplying) return false;
     if (panelCommit) {
@@ -2220,8 +2732,10 @@ function createImageSettings(environment) {
     localizationUnsubscribe = null;
     dialog = null;
     panelControls = null;
-    try { database?.close(); } catch {}
-    database = null;
+    if (!active?.deferSettlement) {
+      try { database?.close(); } catch {}
+      database = null;
+    }
     return true;
   }
 
@@ -2563,7 +3077,7 @@ function createImageSettings(environment) {
     return output;
   }
 
-  async function normalizeArtwork(task, image) {
+  async function normalizeArtwork(task, image, {contoursOnly = false} = {}) {
     const width = 1536;
     const height = 1024;
     const output = canvasFor(task, width, height);
@@ -2589,7 +3103,14 @@ function createImageSettings(environment) {
     let imageData;
     try { imageData = analysis.context.getImageData(0, 0, 768, 512); }
     catch { throw invalidData('pixel-data-unavailable'); }
-    const contours = await extractContours(task, imageData);
+    let contours;
+    try { contours = await extractContours(task, imageData); }
+    catch(error) {
+      if (!contoursOnly || error?.causeCode !== 'contours-empty') throw error;
+      contours = [[[0,0],[width,0],[width,height],[0,height],[0,0]]];
+    }
+    assertCurrent(task);
+    if (contoursOnly) return {contours};
     const result = encodeOutput(output.canvas, width, height, 12 * 1024 * 1024);
     result.contours = contours;
     return result;
@@ -2691,6 +3212,12 @@ function createImageSettings(environment) {
     loadSnapshot,
     save,
     importImage,
+    loadDreamDirectory,
+    importDreamCapsule,
+    cancelDreamImport,
+    themeApplyToken,
+    applyDreamTheme,
+    restoreAzhouTheme,
     cancelImport,
     openSettings,
     cancelSettings,

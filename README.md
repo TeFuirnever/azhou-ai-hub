@@ -123,6 +123,8 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 ![ASD-STE100 effect preview](assets/skills/super-asd-ste100-effect.png)
 
+The source candidate also provides a [narrow Dream literal-main profile](packages/agent-skin/docs/design/azhou-immersive-experience/dream-main-literal-paint.md). A CLI-exported source capsule can be imported into a separate local directory, explicitly applied, reopened at startup, and restored to the saved Azhou appearance. Unsupported source declarations or manifest rendering fields block application. This is not general Dream compatibility or installed-host acceptance.
+
 ## Archify
 
 > 🗺️ One map tells the whole system — hand it to the reader to explore.
