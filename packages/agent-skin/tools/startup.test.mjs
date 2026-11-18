@@ -3039,7 +3039,7 @@ function snapshotResult(status = 'valid', settings = snapshotSettings(), explici
   });
 }
 
-function snapshotFixture(snapshotSource, { playbackOwner = 'page', observeAppearance, wallpaperApply, existingWallpaper } = {}) {
+function snapshotFixture(snapshotSource, { playbackOwner = 'page', observeAppearance, wallpaperApply, existingWallpaper, dsh = false } = {}) {
   const controlled = controlledHost();
   if (existingWallpaper) controlled.host.__azhouWallpaper = existingWallpaper;
   controlled.host.crypto = webcrypto;
@@ -3077,7 +3077,13 @@ function snapshotFixture(snapshotSource, { playbackOwner = 'page', observeAppear
       };
     } },
   });
-  const adapter = Object.freeze({ ...pageAdapter,
+  if (dsh) {
+    controlled.host.top = controlled.host;
+    controlled.host.getComputedStyle = () => ({ getPropertyValue: () => '' });
+    controlled.host.__DSH_BOOT__ = {};
+    controlled.host.__ModuleLoader__ = { load() {} };
+  }
+  const adapter = Object.freeze({ ...(dsh ? createDSHPageAdapter(controlled.host, { sidebarEntry: false }) : pageAdapter),
     ...(observeAppearance ? { observeAppearance } : {}),
     settingsEnvironment: source => ({ indexedDB: source.indexedDB, settingsNamespace }),
   });
@@ -4209,4 +4215,42 @@ test('explicit restore of saved zero strength publishes disabled without requiri
   assert.equal(finalized,true);assert.equal(result.applied,true);assert.equal(f.host.__azhouWallpaper,undefined);
   assert.equal(f.host.__azhouStartup.status().wallpaper.applied,false);assert.equal(f.host.__azhouStartup.status().wallpaper.reason,'disabled');
   f.host.__azhouStartup.dispose();
+});
+
+for (const changed of [false, true]) test(`DSH same-URL boot snapshot ${changed ? 'rejects retired authority' : 'retains stable authority'}`, async () => {
+  let finishRead;
+  const f = snapshotFixture(() => new Promise(resolve => { finishRead = resolve; }), { dsh: true });
+  try {
+    const request = snapshotRequest(f.api, 'dsh-same-url-boot');
+    const pending = f.api.beginSettingsSnapshot(request);
+    const framesBefore = f.frames.length;
+    if (changed) f.host.__DSH_BOOT__ = {};
+    finishRead(snapshotResult('valid'));
+    const descriptor = await pending;
+    if (changed) {
+      assert.deepEqual(descriptor, { ok: false, reason: 'snapshot-stale' });
+      assert.deepEqual(await f.api.beginSettingsSnapshot(request), { ok: false, reason: 'snapshot-stale' });
+      assert.equal(f.disposeCalls(), 1, 'retired snapshot store is released once');
+      assert.equal(f.frames.length, framesBefore, 'late snapshot cannot create playback');
+    } else {
+      assert.equal(descriptor.ok, true);
+      assert.equal(f.api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0)).ok, true);
+    }
+  } finally { f.api.dispose(); }
+});
+
+test('DSH ready snapshot rejects chunks after observed boot loss and same-object recovery', async () => {
+  const f = snapshotFixture(snapshotResult('valid'), { dsh: true });
+  try {
+    const request = snapshotRequest(f.api, 'dsh-ready-boot');
+    const descriptor = await f.api.beginSettingsSnapshot(request);
+    assert.equal(descriptor.ok, true);
+    const boot = f.host.__DSH_BOOT__;
+    delete f.host.__DSH_BOOT__;
+    assert.equal(f.adapter.identify(f.host).kind, 'unmatched');
+    f.host.__DSH_BOOT__ = boot;
+    assert.equal(f.api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0)).ok, false);
+    assert.equal(f.api.readSettingsSnapshotChunk(snapshotChunkRequest(request, descriptor, 0, 0)).reason, 'snapshot-not-found');
+    assert.equal(f.disposeCalls(), 1);
+  } finally { f.api.dispose(); }
 });

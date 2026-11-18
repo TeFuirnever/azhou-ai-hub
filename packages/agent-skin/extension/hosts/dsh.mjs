@@ -3,7 +3,7 @@
 export function createDSHPageAdapter(environment = globalThis, configuration = {}, dependencies = {}) {
   const namespace = Object.freeze({ databaseName: 'azhou-dsh-startup', databaseVersion: 1,
     storeName: 'settings', settingsKey: 'images' });
-  let lastDocumentURL, documentToken;
+  let lastBinding, documentToken;
   function matched(host) {
     if (host !== host.top) return false;
     if (typeof host.__ModuleLoader__?.load !== 'function') return false;
@@ -14,14 +14,24 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
     return !!boot && Object.hasOwn(boot, 'value') && !!boot.value && !!host.document?.body;
   }
   function identify(host) {
+    const unmatched = () => {
+      lastBinding = undefined;
+      documentToken = undefined;
+      return { kind: 'unmatched', reason: 'page-unsupported' };
+    };
     try {
-      if (!matched(host)) return { kind: 'unmatched', reason: 'page-unsupported' };
-      if (lastDocumentURL !== host.location.href) {
+      if (!matched(host)) return unmatched();
+      const binding = [host, host.document, host.location.href,
+        Object.getOwnPropertyDescriptor(host, '__DSH_BOOT__').value,
+        host.__ModuleLoader__, host.__ModuleLoader__.load];
+      // Identity loss is terminal for the old token, even when the same URL
+      // and boot object later return. Never reuse a prior snapshot authority.
+      if (!lastBinding || binding.some((value, index) => value !== lastBinding[index])) {
         documentToken = Object.freeze({});
-        lastDocumentURL = host.location.href;
+        lastBinding = binding;
       }
       return { kind: 'matched', documentToken };
-    } catch { return { kind: 'unmatched', reason: 'page-unsupported' }; }
+    } catch { return unmatched(); }
   }
   function appearance(host) {
     const root = host.document.documentElement;

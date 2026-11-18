@@ -11,7 +11,7 @@ function host(overrides = {}) {
     matchMedia: () => ({ matches: false }) };
   h.top = h;return Object.assign(h, overrides);
 }
-test('structural identify accepts the boot graph and caches one token per href', () => {
+test('structural identify accepts the boot graph and caches one token per stable binding', () => {
   const h = host();const a = createDSHPageAdapter(h);
   const first = a.identify(h).documentToken;
   assert.equal(a.identify(h).kind, 'matched');assert.strictEqual(a.identify(h).documentToken, first);
@@ -366,4 +366,21 @@ for(const change of ['multiple-children','boxless-panel','reparent','sibling-aba
  if(change==='reparent')anchor.parentElement={};
  if(change==='sibling-aba')records=[{type:'childList',target:panel,addedNodes:[{nodeType:1}],removedNodes:[]}];
  assert.equal(lease.current(),false);lease.dispose();
+});
+
+test("same URL boot replacement revokes the previous document identity", () => {
+ const h=host(), a=createDSHPageAdapter(h), first=a.identify().documentToken;
+ h.__DSH_BOOT__={web:true};
+ assert.notStrictEqual(a.identify().documentToken,first);
+ });
+
+for (const change of ['document', 'loader', 'load-function', 'unmatched', 'throwing']) test(`DSH identity rejects observed ${change} generation reuse`, () => {
+  const h=host(), a=createDSHPageAdapter(h), first=a.identify().documentToken;
+  if(change==='document') h.document={...h.document};
+  if(change==='loader') h.__ModuleLoader__={load(){}};
+  if(change==='load-function') h.__ModuleLoader__.load=()=>{};
+  if(change==='unmatched') {const boot=h.__DSH_BOOT__;delete h.__DSH_BOOT__;assert.equal(a.identify().kind,'unmatched');h.__DSH_BOOT__=boot;}
+  if(change==='throwing') {const location=h.location;Object.defineProperty(h,'location',{configurable:true,get(){throw Error('gone');}});assert.equal(a.identify().kind,'unmatched');Object.defineProperty(h,'location',{configurable:true,value:location});}
+  const next=a.identify().documentToken;
+  assert.notStrictEqual(next,first);assert.strictEqual(a.identify().documentToken,next);
 });
