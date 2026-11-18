@@ -63,7 +63,7 @@ separate task.
 - `UPSTREAM.md` source table pin rows updated to the new commit;
   `hub-package.json` `version` → `0.15.43`, `commit` → new pin.
 
-## Patch queue disposition (24 → 22 patches)
+## Patch queue disposition (24 → 23 patches: 22 at re-pin plus the post-review 0024)
 
 - `0001`–`0017`, `0019`, `0023`: applied unchanged; their declared files
   (watch-pr scripts, log.sh, generator, worktree-audit.sh) were untouched by
@@ -92,10 +92,12 @@ separate task.
   twenty-three playbooks and the generated docs must count them.
 - `0024-hub-orchestrate-routing-restore` (added post-review on 2026-11-19,
   addressing the resolved codex P2 thread on this PR): upstream's condensed
-  routing paragraph dropped `Orchestrate` together with the playbook, so the
-  retained playbook had no normal entry route — project-scale requests all
-  routed to `figure-it-out`. The patch restores the standing
-  project-scale-program routing sentence in the pristine poteto-mode
+  routing paragraph dropped `Orchestrate` together with the playbook and cut
+  its title from the condensed playbook list, so the retained playbook had no
+  normal entry route — project-scale requests all routed to `figure-it-out` —
+  and the list counted twenty-two titles against the twenty-three shipped
+  playbooks. The patch restores the standing project-scale-program routing
+  sentence and the `Orchestrate` enumeration entry in the pristine poteto-mode
   `SKILL.md` before the generator mirrors it into all five trees.
 - `0021-hub-distribution-version-0.15.37` and
   `0024-hub-distribution-version-0.15.38`: **removed from the queue** (patch
@@ -146,7 +148,7 @@ separate task.
 
 ## Build summary
 
-`node tools/build-harness.mjs` (run in the package directory): all 22 series
+`node tools/build-harness.mjs` (run in the package directory): all 23 series
 patches applied; upstream's unmodified `generate-pstack-harness-trees.mjs`
 ran clean and emitted the four committed trees (`claude-code/`, `codex/`,
 `zcode/`, `skills-root/`, each 68 skills), plus the ZCode plugin surface
@@ -166,5 +168,5 @@ line); the repository gate runs in the pipeline on the pushed branch.
   update receipt; `0.15.37` kept only as Codex's 2026-11-11 inventory
   observation; parenthetical corrected post-review on 2026-11-18).
 - `packages/pstack-agent-harness/UPSTREAM.md`: pin rows and quilt-count
-  paragraph (22 patches; stamp patches' exit recorded).
+  paragraph (23 patches; stamp patches' exit recorded).
 - `CHANGELOG.md`: Unreleased entry added.

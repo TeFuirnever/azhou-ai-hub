@@ -1,4 +1,4 @@
-Description: restore the Hub-kept Orchestrate routing entry
+Description: restore the Hub-kept Orchestrate routing entry and enumeration
 Author: Azhou AI Hub
 Forwarded: not-needed
 
@@ -7,8 +7,11 @@ Orchestrate from it along with the playbook itself. The Hub distribution
 still ships hub-skills/poteto-mode/playbooks/orchestrate.md into every
 tree, so the retained playbook keeps its normal entry route: standing
 project-scale programs route to Orchestrate, figure-it-out keeps the
-bespoke-run lane. Applies to the pristine poteto-mode SKILL.md before the
-generator mirrors it into all five harness trees.
+bespoke-run lane. The condensed playbook list cut Orchestrate's title
+too, while the Hub ships twenty-three playbooks, so the patch restores
+the title in its base order between Autonomous run and Autopilot-full.
+Applies to the pristine poteto-mode SKILL.md before the generator mirrors
+it into all five harness trees.
 
 --- a/pstack/skills/poteto-mode/SKILL.md
 +++ b/pstack/skills/poteto-mode/SKILL.md
@@ -19,4 +22,5 @@ generator mirrors it into all five harness trees.
 -Match the task to a playbook and open its steps at `playbooks/<title>.md`, with the title in kebab case. Copy its steps into the todolist tool first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **figure-it-out** skill.
 +Match the task to a playbook and open its steps at `playbooks/<title>.md`, with the title in kebab case. Copy its steps into the todolist tool first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **figure-it-out** skill. A standing project-scale program (multi-day, many stacked PRs, a fleet of subagents under one coordinator) routes to **Orchestrate** instead; figure-it-out designs one bespoke run, orchestrate runs the program.
  
- Investigation, Bug fix, Perf issue, Hillclimb, Runtime forensics, Trace forensics, Feature, Refactoring, Prototype, Visual parity, Authoring a skill, Eval, Babysit, Shipping, Autonomous run, Autopilot-full, Autopilot-stack, Session pickup, Pause safely, Multi-phase plan, Worktree cleanup, Opening a PR.
+-Investigation, Bug fix, Perf issue, Hillclimb, Runtime forensics, Trace forensics, Feature, Refactoring, Prototype, Visual parity, Authoring a skill, Eval, Babysit, Shipping, Autonomous run, Autopilot-full, Autopilot-stack, Session pickup, Pause safely, Multi-phase plan, Worktree cleanup, Opening a PR.
++Investigation, Bug fix, Perf issue, Hillclimb, Runtime forensics, Trace forensics, Feature, Refactoring, Prototype, Visual parity, Authoring a skill, Eval, Babysit, Shipping, Autonomous run, Orchestrate, Autopilot-full, Autopilot-stack, Session pickup, Pause safely, Multi-phase plan, Worktree cleanup, Opening a PR.
