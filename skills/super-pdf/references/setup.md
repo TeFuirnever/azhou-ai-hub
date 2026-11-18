@@ -11,7 +11,7 @@ The upstream skill ships no dependency manifest: it declares libraries inline (s
 | Python 3.11+ | all vendored `scripts/*.py` | `python --version` |
 | `pypdf` | merge/split/rotate/watermark/encrypt recipes; `scripts/check_fillable_fields.py`, `scripts/extract_form_field_info.py`, `scripts/fill_fillable_fields.py`, `scripts/fill_pdf_form_with_annotations.py` | `python -c "import pypdf; print(pypdf.__version__)"` |
 | `pdfplumber` | text/table extraction recipes; `scripts/extract_form_structure.py` (FORMS.md structure-first approach) | `python -c "import pdfplumber; print(pdfplumber.__version__)"` |
-| `pdf2image` | `scripts/convert_pdf_to_images.py`; OCR recipe (page rasterization) | `python -c "import pdf2image; print(pdf2image.__version__)"` |
+| `pdf2image` | `scripts/convert_pdf_to_images.py`; OCR recipe (page rasterization) | `python -c "import importlib.metadata as m; import pdf2image; print(m.version('pdf2image'))"` (the module defines no `__version__`; the distribution metadata is authoritative) |
 | Pillow | `scripts/create_validation_image.py` (FORMS.md visual-estimation overlay) and the REFERENCE.md advanced-track recipes (image rendering and figure extraction) — **not declared anywhere in the upstream SKILL.md**; declared here | `python -c "from PIL import Image; import PIL; print(PIL.__version__)"` |
 | `reportlab` | create-PDF recipes (Canvas, Platypus) | `python -c "import reportlab; print(reportlab.Version)"` |
 | `pytesseract` + the `tesseract` binary | OCR recipe for scanned PDFs | `python -c "import pytesseract; print(pytesseract.get_tesseract_version())"` |

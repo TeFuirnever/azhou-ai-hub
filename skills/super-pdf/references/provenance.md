@@ -84,3 +84,12 @@ Expected SHA-256: `58d1e17ffe5109a7ae296caafcadfdbe6a7d176f0bc4ab01e12a689b0499d
 ## Fidelity classification
 
 Classification: `faithful` — the upstream capability is preserved in full (guide body verbatim below the entry, FORMS.md, REFERENCE.md and eight scripts byte-identical at the pinned commit) and the local layer only repackages: neutral frontmatter with the `license:` key dropped and the upstream name kept as a compatibility trigger, the fail-closed dependency setup replacing unstated preinstalled assumptions (delta auditable above), the Azhou interaction layer, and the four-constraint boundary. No recipe is rewritten, extended or removed, and no capability route is added or dropped. Skill-standard §2.3.
+
+## Known upstream defects (observed 2026-11-19, not patched)
+
+Four defects were found by the PR #512 codex review inside the vendored upstream scripts. They are recorded here and deliberately not patched: the vendored bytes stay pinned byte-identical to the appendix A digests and the classification stays `faithful`, so a local patch would fork the package from its immutable source. Each is a candidate for the stable-source update path (skill-standard §1.2: re-pin after upstream review) or an upstream contribution, whichever lands first; none is fixed locally.
+
+- `scripts/extract_form_field_info.py` — choice options that are plain strings are unpacked per character (`['US', 'CA']` yields `U` and `C`; a one-character option raises `IndexError`) instead of being normalized to value/text pairs (review thread 4614734511).
+- `scripts/extract_form_field_info.py` — terminal fields whose `/Kids` are separate widgets are dropped by the unconditional `continue` on non-radio fields with `/Kids`, so extraction returns no entry for a supported PDF representation and `fill_fillable_fields.py` then rejects their IDs (review thread 4614734518).
+- `scripts/check_bounding_boxes.py` — the image-coordinate workflow compares `entry_height` in pixels against `font_size` in PDF points, so undersized entries pass the mandatory pre-fill check and risk clipped text after unit conversion in the fill script (review thread 4617515945).
+- `scripts/fill_pdf_form_with_annotations.py` — a non-zero `/MediaBox` origin is not preserved when transforming image-coordinate boxes to annotation rectangles, shifting placed text on cropped pages such as those produced by the REFERENCE.md cropping recipe (review thread 4618441784).
