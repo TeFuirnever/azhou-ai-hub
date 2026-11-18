@@ -78,6 +78,12 @@ separate task.
   unmodified generator requires the adapter to carry a row for every slug
   family the assembled skills mention — without it the build fails with
   `Claude Code adapter has no row for gpt-, used by poteto-mode, setup-pstack`.
+- `0022-hub-claude-sheet-hook-path` (extended post-review on 2026-11-18):
+  restores the `orchestrate` README table row and the twenty-three playbook
+  counts in the README and `docs/guide/02-poteto-mode.md` that upstream's
+  playbook deletion trimmed. The Hub `hub-skills` overlay keeps a
+  portable-host `orchestrate` playbook, so the generated trees ship
+  twenty-three playbooks and the generated docs must count them.
 - `0021-hub-distribution-version-0.15.37` and
   `0024-hub-distribution-version-0.15.38`: **removed from the queue** (patch
   files deleted, `series` lines dropped). A patch is a loan; these stamped
@@ -110,6 +116,20 @@ separate task.
   `setup-pstack/SKILL.md` still routes legacy `grok-*` slugs, and the
   copilot overlay still names the grok vendor, so the prefix remains a live
   example of "other non-Claude slug", not a stale default.
+
+## Known divergence and follow-up (adapted material)
+
+- The Hub portable-host rewrite `hub-skills/poteto-mode/playbooks/autopilot-full.md`
+  (#372) shadows the pristine playbook at assembly, so upstream 0.15.43's
+  step-2 behavior fix — "Where that playbook says to report a rebase, the
+  owner rebases its own branch and publishes it with
+  `git push --force-with-lease`." — reaches no generated tree. Absorbing
+  upstream text into the Hub rewrite is out of scope for this re-pin, so
+  the divergence is deliberate and recorded here as the adapted material's
+  reproducible update path. Follow-up (separate maintenance task):
+  reconcile the Hub rewrite with the upstream delta — adopt the
+  `force-with-lease` republish step or record its explicit rejection —
+  then regenerate the mirrors from that decision.
 
 ## Build summary
 
