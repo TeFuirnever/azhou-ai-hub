@@ -153,6 +153,7 @@ class PstackDistributionContractTest(unittest.TestCase):
         claude = (HARNESS / "claude-code/docs/harness/claude-code.md").read_text(encoding="utf-8")
         self.assertIn("pstack-azhouzhou:comment-sicko", claude)
         self.assertNotIn("pstack:comment-sicko", claude)
+        self.assertIn("pstack-azhouzhou:poteto-agent", claude)
         self.assertNotIn("pstack:poteto-agent", claude)
         codex = (HARNESS / "codex/docs/harness/codex.md").read_text(encoding="utf-8")
         self.assertIn("$poteto-mode", codex)
@@ -170,10 +171,11 @@ class PstackDistributionContractTest(unittest.TestCase):
         # counterpart the overlay must differ from.
         self.assertFalse((pristine / "orchestrate.md").exists())
         self.assertTrue((overlay / "orchestrate.md").is_file())
+        self.assertTrue((pristine / "autopilot-full.md").is_file())
+        self.assertNotEqual((overlay / "autopilot-full.md").read_bytes(),
+                            (pristine / "autopilot-full.md").read_bytes())
         for name in ("orchestrate.md", "autopilot-full.md"):
             source = (overlay / name).read_bytes()
-            if (pristine / name).exists():
-                self.assertNotEqual(source, (pristine / name).read_bytes())
             for host in ("claude-code", "codex", "zcode", "skills-root"):
                 with self.subTest(host=host, playbook=name):
                     generated = HARNESS / host / "skills/poteto-mode/playbooks" / name

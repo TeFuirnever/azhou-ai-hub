@@ -5,7 +5,10 @@
 contract. Treehouse worktree lease `a1aed31f0b5854ef260e11b61184964c`
 (holder `pstack-upstream-01543-20261118`), branch
 `codex/pstack-upstream-0.15.43` off `origin/main` at
-`8097fc7ac5c9d49ed4db435514e18126907c5f27`. This is a **Hub source
+`e6e745a6b5beeed0e8d4c153b44b486c022f9358`, the actual parent of the first
+task commit (the opening narrative named
+`8097fc7ac5c9d49ed4db435514e18126907c5f27`, never this branch's parent; base
+corrected post-review on 2026-11-18). This is a **Hub source
 candidate**, not a release: no host installation, reinstall, model dispatch,
 hook trust or workflow run is claimed, and the four-host rolling upgrade is a
 separate task.
@@ -70,7 +73,10 @@ separate task.
   `pstack`, so the rename stays.
 - `0020-hub-claude-namespace-guides`: rebased — upstream reworded the
   claude-code.md todolist row and inserted a `model:` subagent row; the Hub's
-  identity replacements themselves were unchanged.
+  identity replacements themselves were unchanged. Extended post-review on
+  2026-11-18: the 01-setup.md write path now names the config-root sheet
+  (`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md`) the SessionStart
+  hook reads, not the rules directory.
 - `0022-hub-claude-sheet-hook-path`: rebased onto upstream's new Models table
   (the `grok-*`/`gpt-*` non-Claude row became `gemini-*`), and extended to
   restore `gpt-*` in that row. Reason: the Hub distribution still names

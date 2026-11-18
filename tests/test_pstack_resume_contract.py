@@ -23,7 +23,7 @@ class PstackResumeContractTest(unittest.TestCase):
                 'function safe_path(p) { return 1 }\n'
                 'BEGIN { T[1]="read"; T[2]="--project"; T[3]="fixture"; '
                 'print script_contract("skills/poteto-mode/scripts/resume.mjs", "node", T, 1, 3); '
-                'T[1]="fixture"; print script_contract("skills/poteto-mode/scripts/check-playbooks.mjs", "node", T, 1, 1) }\n',
+                'T[1]="fixture"; print script_contract("skills/setup-pstack/scripts/check-sheet.sh", "sh", T, 1, 1) }\n',
                 encoding="utf-8",
             )
             for contract in contracts:

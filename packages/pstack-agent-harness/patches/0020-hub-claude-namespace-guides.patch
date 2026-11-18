@@ -40,7 +40,7 @@ references the local Hub package directory, not the upstream marketplace.
 @@ -14,3 +14,3 @@
 
 -In Claude Code, run `/plugin marketplace add cursor/plugins`, then `/plugin install pstack@cursor-plugins`. Claude Code prefixes plugin commands, so each command in this guide takes a `pstack:` prefix there, such as `/pstack:setup-pstack`, which writes its model rule to `~/.claude/rules/pstack-models.md`. The [Claude Code adapter](../harness/claude-code.md) covers the other differences.
-+In Claude Code, run `/plugin marketplace add <absolute-Hub-package-directory>`, then `/plugin install pstack-azhouzhou@azhou-hub`. Claude Code prefixes plugin commands, so each command in this guide takes a `pstack-azhouzhou:` prefix there, such as `/pstack-azhouzhou:setup-pstack`, which writes its model rule to `~/.claude/rules/pstack-models.md`. The [Claude Code adapter](../harness/claude-code.md) covers the other differences.
++In Claude Code, run `/plugin marketplace add <absolute-Hub-package-directory>`, then `/plugin install pstack-azhouzhou@azhou-hub`. Claude Code prefixes plugin commands, so each command in this guide takes a `pstack-azhouzhou:` prefix there, such as `/pstack-azhouzhou:setup-pstack`, which writes its model rule to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md`. The [Claude Code adapter](../harness/claude-code.md) covers the other differences.
 
 --- a/pstack/docs/harness/claude-code.md
 +++ b/pstack/docs/harness/claude-code.md
