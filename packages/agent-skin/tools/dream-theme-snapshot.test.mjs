@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { webcrypto, createHash } from 'node:crypto';
-import { validateThemeSnapshot, verifyThemeSnapshotArtwork } from '../dream-theme-style.mjs';
+import * as canonicalDream from '../dream-theme-style.mjs';
+import { generatedDream } from './test-dream-generated.mjs';
+for (const api of [canonicalDream, generatedDream]) {
+const { validateThemeSnapshot, verifyThemeSnapshotArtwork } = api;
 const hash='a'.repeat(64), audit='b'.repeat(64);
 const bundled={schemaVersion:2,revision:1,imagesBinding:hash,selection:{kind:'bundled',id:'azhou-q-v3',surfaceTransparency:{mode:'override',value:0}}};
 assert.deepEqual(validateThemeSnapshot(bundled),bundled);
@@ -40,3 +43,4 @@ const barrier=new Promise(resolve=>arrived=resolve),gate=new Promise(resolve=>re
 const pending=verifyThemeSnapshotArtwork(imported,url,{signal:abort.signal,crypto:{subtle:{async digest(...args){arrived();await gate;return webcrypto.subtle.digest(...args);}}}});
 const rejected=assert.rejects(pending,/operation-cancelled/);await barrier;abort.abort();release();await rejected;
 console.log('Tagged finite-plan snapshot exact schema, legacy normalization, original image bytes and cancellation passed');
+}

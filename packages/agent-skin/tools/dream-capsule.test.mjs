@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { webcrypto, createHash } from 'node:crypto';
-import { readDreamCapsule } from '../dream-theme-style.mjs';
+import * as canonicalDream from '../dream-theme-style.mjs';
+import { generatedDream } from './test-dream-generated.mjs';
+for (const api of [canonicalDream, generatedDream]) {
+const { readDreamCapsule } = api;
 
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAIAAAA2iEnWAAAAFElEQVR4nGMUt4xmYGBgYgADKAUADMEAsTl1AMYAAAAASUVORK5CYII=', 'base64');
 const theme = {schemaVersion:1, id:'source.demo', name:'<img src=x onerror=alert(1)>', image:'background.png'};
@@ -112,3 +115,4 @@ assert.equal(digestCalls,4);
 const {runInNewContext}=await import('node:vm');
 const childRealmBytes=runInNewContext('Uint8Array.from(input)',{input:Array.from(original)});
 assert.equal((await readDreamCapsule(childRealmBytes,options)).capsuleSha256,sha(original));
+}
