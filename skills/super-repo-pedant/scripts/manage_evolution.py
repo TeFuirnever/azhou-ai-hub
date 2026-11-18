@@ -750,8 +750,15 @@ def cmd_health(args: argparse.Namespace) -> int:
         archive_paths = sorted((state_root / "archive").glob("*.jsonl")) if (state_root / "archive").is_dir() else []
         rows, parse_errors = read_jsonl([state_root / "signals.jsonl", *archive_paths])
         now = parse_time(args.now) if args.now else now_utc()
-        recent = [row for row in rows if parse_time(row["observed_at"]) >= now - timedelta(days=7)]
-        monthly = [row for row in rows if parse_time(row["observed_at"]) >= now - timedelta(days=30)]
+        week_start = now - timedelta(days=7)
+        month_start = now - timedelta(days=30)
+        recent, monthly = [], []
+        for row in rows:
+            observed_at = parse_time(row["observed_at"])
+            if month_start <= observed_at <= now:
+                monthly.append(row)
+                if observed_at >= week_start:
+                    recent.append(row)
         rate_7d = rate(recent)
         rate_30d = rate(monthly)
         declining = rate_7d is not None and rate_30d is not None and rate_30d - rate_7d >= args.warn_threshold
