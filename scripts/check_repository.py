@@ -519,7 +519,7 @@ SKILL_BRAND_CONTRACTS = {
 }
 
 BASELINE_HASHES = {
-    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "6d10fb626bf72c53acc0b567d754837532859751ebb7be49ccd2b0ecd441c59c",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "1d5203e3ed52d8c5f57e4b44a3cc70b11be1891abde8ae865eeeed12682bd39e",
     "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md": "bcf5138f079cde8368d28c8011eee1f43b8fe2df86cc1754690a3e6c802e2c60",
     "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md": "696233e82288514b944f888e7ee09f922b00dd1af9f9797fc0b95099639dd383",
     "benchmarks/super-repo-pedant/upstream/neat-freak/references/governance.md": "b77224988faceadd5d0e67f97202565964fa8bdebd45f56fb2d7500974c3f03a",
