@@ -145,6 +145,8 @@ jobs:
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
+      - name: Install Dream image validation dependency
+        run: python -m pip install --only-binary=:all: Pillow==12.3.0
       - name: Run Agent Skin startup and two-host lifecycle checks
         working-directory: packages/agent-skin
         env:
@@ -199,7 +201,7 @@ jobs:
           node-version: "24.15.0"
       - name: Install unit coverage dependency
         run: |
-          python -m pip install --only-binary=:all: coverage==7.16.2
+          python -m pip install --only-binary=:all: coverage==7.16.2 Pillow==12.3.0
       - name: Prepare isolated Bash unit tooling
         working-directory: packages/agent-skin
         run: python -B tools/test-setup-unit-tools.py --github-env "$GITHUB_ENV" --github-path "$GITHUB_PATH"
