@@ -153,6 +153,7 @@ class PstackDistributionContractTest(unittest.TestCase):
         claude = (HARNESS / "claude-code/docs/harness/claude-code.md").read_text(encoding="utf-8")
         self.assertIn("pstack-azhouzhou:comment-sicko", claude)
         self.assertNotIn("pstack:comment-sicko", claude)
+        self.assertNotIn("pstack:poteto-agent", claude)
         codex = (HARNESS / "codex/docs/harness/codex.md").read_text(encoding="utf-8")
         self.assertIn("$poteto-mode", codex)
         self.assertNotIn("/pstack:<name>", codex)
