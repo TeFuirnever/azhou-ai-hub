@@ -34,7 +34,7 @@ Fail closed per operation, not per machine: a merge needs `pypdf` only; OCR need
 
 ## Vendored script inventory
 
-Eight scripts vendored byte-identical from the pinned upstream commit (digests in [provenance.md](provenance.md)): `check_bounding_boxes.py`, `check_fillable_fields.py`, `convert_pdf_to_images.py`, `create_validation_image.py`, `extract_form_field_info.py`, `extract_form_structure.py`, `fill_fillable_fields.py`, `fill_pdf_form_with_annotations.py`. Run them from this package's `scripts/` directory (or with it on `sys.path` — `fill_fillable_fields.py` imports its sibling `extract_form_field_info`); each prints its own usage with `--help` where applicable and reports its exit status honestly.
+Eight scripts vendored byte-identical from the pinned upstream commit (digests in [provenance.md](provenance.md)): `check_bounding_boxes.py`, `check_fillable_fields.py`, `convert_pdf_to_images.py`, `create_validation_image.py`, `extract_form_field_info.py`, `extract_form_structure.py`, `fill_fillable_fields.py`, `fill_pdf_form_with_annotations.py`. Run them from this package's `scripts/` directory (or with it on `sys.path` — `fill_fillable_fields.py` imports its sibling `extract_form_field_info`); wrong argument counts print a usage line and exit 1 where the script guards them (`check_fillable_fields.py` has no argument guard and crashes instead), no script handles `--help` (it is treated as a filename), and `check_bounding_boxes.py` reports its checks on stdout but always exits 0 — read its output and never chain a fill on its exit status.
 
 ## Upgrade
 
