@@ -17,4 +17,6 @@ python3 benchmarks/super-arch-doc/run_case.py [--receipt <path.json>]
 3. 模板内的 3 处 `design-doc.md` 选择器链接被改写为纯文本标注（产物 `grep -c "design-doc.md#"` 为 3，但无 Markdown 断链）。
 4. 来源表须逐一列出模板目录中的每份 Markdown 模板，且 SHA-256 与文件一致；空表、缺项或重复项均失败。
 
+回执的 `date` 记录运行开始时的本机日期。`--receipt` 接受新路径或现有普通文件。先在目标同目录写完临时文件，再原子替换目标。保存失败时命令返回 1、报告错误并保留旧回执。
+
 当前状态：自动断言 runner 已交付并实跑通过，收据见 `evidence/arch-doc-benchmark-receipt-2026-09-04.json`（2026-09-04）。接入 `scripts/verify.py` 公开 gate 待排期（sibling-gap GAP#4 的剩余半步）；在接入之前，公开 gate 的 benchmark 完整性主张仍为三套（repo-pedant / super-excalidraw-diagram / super-session-insights）。
