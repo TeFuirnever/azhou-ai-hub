@@ -2,6 +2,7 @@
 """Public artifact-verifier API tests with synthetic staged application bundles."""
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
 import importlib.util
@@ -481,6 +482,186 @@ class VerifierApiTests(unittest.TestCase):
         finally:
             info_path.unlink()
             info_path.write_bytes(original)
+
+    def test_marker_binds_the_approved_icon_snapshot(self):
+        verifier = self.verifier
+        icon_name = verifier.asset_name(verifier.load_theme_config(self.root)["identity"]["iconInput"])
+        icon = self.root / verifier.asset_key(self.root, icon_name)
+        approved = hashlib.sha256(icon.read_bytes()).hexdigest()
+        snapshot = self.staged.parent / "approved-icon.png"
+        marker_path = self.staged / verifier.MARKER
+        original = marker_path.read_bytes()
+        self.addCleanup(marker_path.write_bytes, original)
+
+        verifier.write_marker(self.staged, approved_icon_sha256=approved)
+        self.assertEqual(snapshot.read_bytes(), icon.read_bytes())
+        valid_marker = marker_path.read_bytes()
+        with self.assertRaisesRegex(RuntimeError, "已批准的 SHA-256 不符"):
+            verifier.write_marker(self.staged, approved_icon_sha256="0" * 64)
+        with mock.patch.object(verifier.shutil, "copyfile", side_effect=lambda source, destination:
+                               destination.write_bytes(b"changed after source fingerprint")):
+            with self.assertRaisesRegex(RuntimeError, "已批准的 SHA-256 不符"):
+                verifier.write_marker(self.staged, approved_icon_sha256=approved)
+        self.assertEqual(marker_path.read_bytes(), valid_marker)
+
+        saved_marker = marker_path.with_suffix(".saved")
+        marker_path.rename(saved_marker)
+        marker_path.symlink_to(saved_marker)
+        try:
+            with self.assertRaisesRegex(RuntimeError, "拒绝覆写符号链接来源标记"):
+                verifier.write_marker(self.staged, approved_icon_sha256=approved)
+            self.assertEqual(marker_path.read_bytes(), valid_marker)
+        finally:
+            marker_path.unlink()
+            saved_marker.rename(marker_path)
+
+    def test_startup_png_requires_a_complete_supported_image(self):
+        verify = self.verifier.png_details
+        data = valid_png()
+        header = data[:33]
+        compressed = png_chunk(b"IDAT", zlib.compress(b"\0\x10\x20\x30\xff"))
+        end = png_chunk(b"IEND", b"")
+        unsupported = b"\x89PNG\r\n\x1a\n" + png_chunk(
+            b"IHDR", struct.pack(">IIBBBBB", 1, 1, 16, 6, 0, 0, 0))
+        self.assertEqual(verify(header + png_chunk(b"tEXt", b"hi") + compressed + end, "test"),
+                         verify(data, "test"))
+        cases = (
+            (unsupported + compressed + end, "尺寸或像素格式无效"),
+            (header + end, "缺少有效图像数据"),
+            (data + b"trailing", "含有尾随数据"),
+            (header + png_chunk(b"TEST", b"") + compressed + end, "不支持的关键区块"),
+            (header + compressed, "未完整结束"),
+            (header + png_chunk(b"IDAT", b"invalid zlib") + end, "无法解码"),
+            (valid_png(filter_type=5), "解码长度或滤镜无效"),
+        )
+        for png, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(RuntimeError, message):
+                verify(png, "test")
+
+    def test_startup_rejects_inconsistent_source_and_package_identity(self):
+        verify = self.verifier.verify_startup
+        cases = (
+            (self.bundle, dict(self.info, CFBundleVersion="0"), self.marker, "App version/build"),
+            (self.bundle, self.info, dict(self.marker, build="0"), "来源标记的版本"),
+            (self.bundle, self.info, dict(self.marker, inputSHA256="0" * 64), "输入摘要无效"),
+            (self.case_dir / "missing-bundle", self.info, self.marker, "目录无效"),
+        )
+        for path, info, marker, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(RuntimeError, message):
+                verify(path, info, marker)
+        with mock.patch.object(self.verifier, "INPUT_FILES", []):
+            with self.assertRaisesRegex(RuntimeError, "源码未纳入 INPUT_FILES"):
+                verify(self.bundle, self.info, self.marker)
+
+        metadata_path = self.root / "hub-package.json"
+        original = metadata_path.read_bytes()
+        self.addCleanup(metadata_path.write_bytes, original)
+        metadata_path.write_text("{", encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "JSON 无效"):
+            verify(self.bundle, self.info, self.marker)
+        metadata = json.loads(original)
+        metadata["runtime_paths"].remove("animation.js")
+        metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "runtime_paths 未同步"):
+            verify(self.bundle, self.info, self.marker)
+
+    def test_native_preparation_has_its_own_validated_entry_and_artwork(self):
+        resources = self.bundle / "Contents/Resources"
+        prepare = "startup/prepare.js"
+        relative_install = "startup/install.js"
+        before = (resources / prepare).read_bytes()
+        install = (resources / relative_install).read_bytes()
+        assets = b"const DEFAULT_ASSETS = Object.freeze("
+        entry = b"return bootstrapStartup({"
+        self.assertIn(assets, before)
+        self.assertIn(entry, before)
+        cases = (
+            (prepare, b"", "prepare.js 必须小于"),
+            (prepare, b"\xff", "prepare.js 必须是 UTF-8"),
+            (prepare, before + b"\nexport const forbidden = 1;", "prepare.js 含有模块导入"),
+            (prepare, before.replace(entry, b"return invalidBootstrap({"), "未从受控 bootstrap"),
+            (relative_install, install.replace(entry, entry + b"playbackOwner: 'native',"),
+             "必须保留页面自动播放默认入口"),
+            (prepare, before.replace(assets, b"const WRONG_ASSETS = Object.freeze(", 1),
+             "未嵌入与预览一致的默认素材对象"),
+            (prepare, before.replace(assets, assets + b"invalid ", 1), "prepare.js 默认素材对象无效"),
+            (relative_install, install.replace(assets, b"const WRONG_ASSETS = Object.freeze(", 1),
+             "install.js 未嵌入受控默认素材对象"),
+            (relative_install, install.replace(assets, assets + b"invalid ", 1), "install.js 默认素材对象无效"),
+            ("web/assets/defaults/cold-cover.png", b"unapproved cover", "启动封面与来源标记不一致"),
+        )
+        for relative, data, message in cases:
+            with self.subTest(message=message):
+                def mutate(path):
+                    (path / "Contents/Resources" / relative).write_bytes(data)
+                    self.update_output_digest(path, relative)
+                self.assert_startup_rejected(mutate, message)
+
+        for relative, template in ((prepare, before), (relative_install, install)):
+            def different_artwork(path):
+                prefix, tail = template.split(assets, 1)
+                _, remainder = tail.split(b");\n", 1)
+                (path / "Contents/Resources" / relative).write_bytes(prefix + assets + b"{});\n" + remainder)
+                self.update_output_digest(path, relative)
+            with self.subTest(file=relative):
+                self.assert_startup_rejected(different_artwork, "没有使用同一组默认图像")
+
+    def test_wallpaper_verifier_checks_current_script_digest_and_host(self):
+        verify = self.verifier.verify_wallpaper
+        verify(self.case_dir / "old-app", dict(self.info, CFBundleShortVersionString="0.0.1"), self.marker)
+        manifest = self.bundle / "Contents/Resources/wallpaper/manifest.json"
+        original = json.loads(manifest.read_bytes())
+        for overrides, message in (({"scriptSHA256": "0" * 64}, "壁纸资源与版本或构建输入不一致"),
+                                   ({"targetHost": "dsh"}, "Wallpaper host label")):
+            manifest.write_text(json.dumps({**original, **overrides}), encoding="utf-8")
+            with self.subTest(overrides=overrides), self.assertRaisesRegex(RuntimeError, message):
+                verify(self.bundle, self.info, self.marker)
+        manifest.unlink()
+        with self.assertRaisesRegex(RuntimeError, "缺少实体壁纸脚本或素材清单"):
+            verify(self.bundle, self.info, self.marker)
+
+    def test_startup_rejects_resized_or_mismatched_default_images(self):
+        directory = "web/assets/defaults/"
+        defaults = self.verifier._parse_default_assets(
+            (self.bundle / "Contents/Resources" / (directory + "contours.js")).read_bytes())
+        tiny_png = valid_png()
+        tiny_data_url = "data:image/png;base64," + base64.b64encode(tiny_png).decode("ascii")
+
+        for key, filename, dimensions in (("avatar", "avatar.png", "512×512"),
+                                          ("entryAvatar", "entry-avatar.png", "1254×1254"),
+                                          ("artwork", "artwork.png", "1536×1024")):
+            def replace_image(path):
+                relative = directory + filename
+                (path / "Contents/Resources" / relative).write_bytes(tiny_png)
+                self.update_output_digest(path, relative)
+                self.rewrite_defaults(path, {**defaults, key: tiny_data_url})
+
+            with self.subTest(key=key):
+                self.assert_startup_rejected(replace_image, f"默认 {key} 必须为 {dimensions}")
+
+        self.assert_startup_rejected(
+            lambda path: self.rewrite_defaults(path, {**defaults, "avatar": tiny_data_url}),
+            "预览默认 avatar 与打包 PNG 字节不一致",
+        )
+        self.assert_startup_rejected(
+            lambda path: self.rewrite_defaults(path, {**defaults, "artworkSHA256": "0" * 64}),
+            "默认背景摘要与默认线稿来源不一致",
+        )
+        with mock.patch.object(self.verifier, "MAX_AVATAR_DATA_URL_BYTES", 32):
+            with self.assertRaisesRegex(RuntimeError, "默认 avatar data URL 超出允许大小"):
+                self.verifier.verify_startup(self.bundle, self.info, self.marker)
+
+    def test_native_display_name_rejects_unreadable_or_missing_localization(self):
+        verify = self.verifier.verify_localized_names
+        with self.assertRaisesRegex(RuntimeError, "fallback display name"):
+            verify(self.bundle, dict(self.info, CFBundleName="unexpected"))
+        localization = self.bundle / "Contents/Resources/en.lproj/InfoPlist.strings"
+        localization.write_bytes(b"\xff")
+        with self.assertRaisesRegex(RuntimeError, "display-name resource is unreadable"):
+            verify(self.bundle, self.info)
+        localization.unlink()
+        with self.assertRaisesRegex(RuntimeError, "display-name resource is missing"):
+            verify(self.bundle, self.info)
 
     def test_png_and_contour_parsers_reject_malformed_or_unbounded_data(self):
         parsed = self.verifier.png_details(valid_png(), "fixture.png")
