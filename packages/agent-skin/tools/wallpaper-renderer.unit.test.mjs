@@ -1636,44 +1636,101 @@ test('aborting reversible activation restores incumbent before returning and rel
   assert.equal(result.transaction.current(), false);
 }));
 
-for (const rgba of [[0,0,0,0],[23,45,67,.4],[123,45,67,1]]) {
-  test(`owned main literal paint ${rgba} replaces wash without removing body artwork`, async () => onObservedPage(async page => {
-    transactionScene(page);
-    const computed = globalThis.getComputedStyle;
-    globalThis.getComputedStyle = (node, pseudo) => {
-      const result = computed(node, pseudo);
-      const sheet = page.document.getElementById(STYLE_ID);
-      const color = sheet?.textContent.match(/background-color:(rgba\([0-9., ]+\))!important/)?.[1];
-      return node === page.main && !pseudo && node.getAttribute('data-azhou-dream-main') && color
-        ? { ...result, backgroundColor: color, backgroundImage: 'none' } : result;
-    };
-    const result = await installRenderer({ ...page.payload, mainPaint: {
-      profile:'codex-main-literal-paint/v1',rgba,backgroundImage:'none',sourceDeclarationCount:2,
-    } });
-    assert.equal(result.applied, true);
-    assert.equal(result.mainPaintApplied, true);
-    assert.match(page.document.getElementById(STYLE_ID).textContent, /data-azhou-dream-main/);
-    assert.equal(page.root.style.getPropertyValue(PROPERTY_WASH), 'linear-gradient(transparent,transparent)');
-    assert.match(globalThis.getComputedStyle(page.document.body).backgroundImage, /blob:transaction-1/);
-    assert.equal(globalThis.getComputedStyle(page.main).backgroundImage, 'none');
-    assert.equal(page.main.style.properties.size, 0, 'owned main stylesheet never edits host inline style');
-    assert.equal(page.observers.filter(observer => !observer.disconnected).length, 2);
-    globalThis.__azhouWallpaper.dispose();
+test('a retired literal main paint request cannot change an active owner', async () => onObservedPage(async page => {
+  transactionScene(page);
+  await installRenderer({...page.payload,strength:42});
+  const previous = globalThis.__azhouWallpaper;
+  const sheet = page.document.getElementById(STYLE_ID);
+  const wash = page.root.style.getPropertyValue(PROPERTY_WASH);
+  const mainPaint = {profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1};
+  const inherited = Object.assign(Object.create({mainPaint}), page.payload);
+  const accessor = Object.defineProperty({...page.payload}, 'mainPaint', {
+    get() { assert.fail('retired field must never be read'); },
+  });
+  for (const offered of [{...page.payload, mainPaint}, inherited, accessor]) {
+    await assert.rejects(installRenderer(offered), error => {
+      assert.equal(error.code, 'main-paint-unsupported');
+      assert.equal(error.cause, undefined);
+      return true;
+    });
+    assert.equal(globalThis.__azhouWallpaper, previous);
+    assert.equal(page.document.getElementById(STYLE_ID), sheet);
+    assert.equal(page.root.style.getPropertyValue(PROPERTY_WASH), wash);
     assert.equal(page.main.getAttribute('data-azhou-dream-main'), null);
-  }));
-}
-
-test('main literal paint cannot borrow readability capability or accept arbitrary CSS-shaped paint', async () => onObservedPage(async page => {
-  const paint={profile:'codex-main-literal-paint/v1',rgba:[1,2,3,.5],backgroundImage:'none',sourceDeclarationCount:1};
-  const observation = { ...page.payload.workspaceObservation, mainPaint:undefined };
-  await assert.rejects(installRenderer({...page.payload,workspaceObservation:observation,pageAdapter:{...page.adapter,isWorkspaceCurrent:()=>true},mainPaint:paint}),{code:'main-paint-unsupported'});
-  for(const invalid of [{...paint,rgba:[1,2,3,NaN]},{...paint,rgba:[1,2,3,2]},{...paint,css:'color:red'},
-    {...paint,backgroundImage:'url(https://invalid.test/x)'},{...paint,sourceDeclarationCount:129}]) {
-    await assert.rejects(installRenderer({...page.payload,mainPaint:invalid}),{code:'main-paint-unsupported'});
+    assert.deepEqual(page.revoked, []);
   }
-  assert.equal(page.main.getAttribute('data-azhou-dream-main'),null);
-  assert.deepEqual(page.revoked,[]);
 }));
+
+test('ordinary DSH renderer transactions still use the v2 lease for apply, rollback and disable', async () =>
+  onPage({ shell: false, url: 'file:///Applications/SyntheticHost.app/Contents/Resources/app.asar/out/renderer/index.html' }, async page => {
+    // Separate Image instances are required to keep the suspended owner's decode alive.
+    globalThis.Image = function() {
+      return {src:'',complete:false,naturalWidth:page.image.naturalWidth,naturalHeight:page.image.naturalHeight,
+        async decode() { this.complete = true; }};
+    };
+    transactionScene(page);
+    const main = page.applicationRoot.selectors['[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]'][1];
+    main.tagName = 'MAIN';
+    page.applicationRoot.contains = node => node === main;
+    const leases = [];
+    const adapter = {
+      controllerWallpaper: {owner:'azhou.dsh-startup-animation'},
+      wallpaper: syntheticWallpaperPorts({surfaces:() => [main]}),
+      themeSelectionContract:'dsh-owned-main-paint/v2',
+      captureThemeSurface() {
+        let current = true;
+        let notify;
+        const lease = {
+          current:() => current,
+          watch(callback) { notify = callback; return true; },
+          dispose() { current = false; },
+          invalidate() { current = false; notify?.(); },
+        };
+        leases.push(lease);
+        return lease;
+      },
+    };
+    const p = {...page.payload,pageAdapter:adapter,strength:42};
+    const owner = () => globalThis.__azhouWallpaper;
+    const sheet = () => page.document.getElementById(STYLE_ID);
+    const wash = () => page.root.style.getPropertyValue(PROPERTY_WASH);
+    await installRenderer(p);
+    const prior = owner(), priorSheet = sheet(), priorWash = wash();
+    assert.equal(leases.length,0,'ordinary non-transactional renderer is unchanged');
+
+    const prepare = strength => installRenderer({...p,strength,transactional:true});
+    const candidate = await prepare(67);
+    assert.equal(candidate.transaction.current(),true);
+    assert.notEqual(owner(),prior);
+    assert.notEqual(sheet(),priorSheet);
+    assert.notEqual(wash(),priorWash);
+    assert.equal(candidate.transaction.rollback(),true);
+    assert.equal(leases[0].current(),false);
+    assert.equal(owner(),prior);
+    assert.equal(sheet(),priorSheet);
+    assert.equal(wash(),priorWash);
+
+    const replacement = await prepare(67);
+    const next = owner();
+    assert.equal(replacement.transaction.finalize(),true);
+    assert.equal(owner(),next);
+    assert.equal(leases[1].current(),true);
+    leases[1].invalidate();
+    assert.equal(owner(),undefined);
+    assert.equal(sheet(),null);
+
+    const disabled = await prepare(0);
+    assert.equal(disabled.transaction.current(),true);
+    assert.equal(disabled.transaction.finalize(),true);
+    assert.equal(disabled.transaction.finalize(),true);
+    assert.equal(leases[2].current(),false);
+    const stale = await prepare(0);
+    leases[3].invalidate();
+    assert.equal(stale.transaction.current(),false);
+    assert.equal(stale.transaction.finalize(),false);
+    assert.equal(owner(),undefined);
+    assert.equal(sheet(),null);
+  }));
 
 test('rollback preserves an already rendered bundled mask rather than starting a lossy asynchronous refresh',async()=>onObservedPage(async page=>{
   transactionScene(page);

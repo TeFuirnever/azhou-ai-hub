@@ -93,6 +93,30 @@ test('an existing supported shell receives a verified image and the renderer res
   assert.equal(fixture.timers.length, 0);
 });
 
+test('retired literal main paint is denied before digest or shell work', async () => {
+  let digests = 0;
+  const fixture = createHost({ shell: true, digest: { subtle: { digest: (...args) => {
+    digests++;
+    return webcrypto.subtle.digest(...args);
+  } } } });
+  const renderer = rendererRecorder();
+  const apply = createWallpaperApplicator(renderer.installRenderer, { version: '0.9.0', css: '' }, fixture.host);
+  const mainPaint = {profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1};
+  const inherited = Object.assign(Object.create({mainPaint}), VALUE);
+  const accessor = Object.defineProperty({...VALUE}, 'mainPaint', {
+    get() { assert.fail('retired field must never be read'); },
+  });
+  for (const offered of [{...VALUE, mainPaint}, inherited, accessor]) {
+    assert.deepEqual(await apply(offered, () => true), {
+      applied:false, reason:'wallpaper-unsupported', failureCode:'main-paint-unsupported', imageDecoded:false,
+    });
+  }
+  assert.equal(digests, 0);
+  assert.deepEqual(renderer.calls, []);
+  assert.deepEqual(fixture.observers, []);
+  assert.deepEqual(fixture.timers, []);
+});
+
 test('the image digest and appearance use one snapshot during asynchronous preparation', async t => {
   await t.test('input changes while the image digest is pending', async () => {
     let finishDigest;

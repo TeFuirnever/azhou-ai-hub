@@ -163,6 +163,9 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
   }
 
   return async function applyWallpaper(value, isCurrent, signal, workspaceOptions) {
+    if (value != null && 'mainPaint' in Object(value)) {
+      return { applied: false, reason: 'wallpaper-unsupported', failureCode: 'main-paint-unsupported', imageDecoded: false };
+    }
     const image = value?.image;
     if (typeof image !== 'string'
         || typeof host.crypto?.subtle?.digest !== 'function' || typeof host.atob !== 'function') {
@@ -171,11 +174,11 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
     if (signal?.aborted || (typeof isCurrent === 'function' && !isCurrent())) {
       return { applied: false, reason: 'operation-cancelled' };
     }
-    const { strength, surface, themeState, mainPaint } = value;
+    const { strength, surface, themeState } = value;
     const binding = captureAdapter();
     binding.waitForWorkspace = workspaceOptions?.waitForWorkspace === true;
     const onWorkspaceInvalidated = workspaceOptions?.onWorkspaceInvalidated;
-    const handoff = !themeState && !mainPaint && strength !== 0 && binding.waitForWorkspace
+    const handoff = !themeState && strength !== 0 && binding.waitForWorkspace
       && decodedHandoff?.image === image ? decodedHandoff : null;
     const notify = typeof onWorkspaceInvalidated === 'function' ? (notice, continuation) => {
       const previous = decodedHandoff;
@@ -215,7 +218,6 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         version, image, imageSHA256, css, strength, surface, isCurrent,
         ...(signal ? { signal } : {}),
         ...(themeState ? { themeState } : {}),
-        ...(mainPaint ? {mainPaint} : {}),
         ...(workspaceOptions?.transactional === true ? {transactional:true} : {}),
         ...(binding.ports || binding.observation ? { pageAdapter } : {}),
         ...(binding.observation ? { workspaceObservation: binding.observation,

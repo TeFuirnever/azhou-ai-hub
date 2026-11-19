@@ -21,7 +21,6 @@ const WALLPAPER_STATUS_FIELDS = [
   'footerFadeSurfaces', 'footerFadeClear', 'topFadeSurfaces', 'topFadeClear',
   'decorationEffectsClear', 'unsupportedDecorations', 'verificationScope', 'fullCoverage',
   'themeApplied', 'themePending', 'themeFailure', 'fallbackApplied',
-  'mainPaintApplied','profile','sourceDeclarationCount',
 ];
 const WALLPAPER_FAILURE_STAGES = Object.freeze({
   'shell-timeout': 'shell',
