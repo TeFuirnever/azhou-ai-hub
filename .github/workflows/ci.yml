@@ -342,6 +342,7 @@ jobs:
     timeout-minutes: 2
     env:
       CHANGES_RESULT: ${{ needs.changes.result }}
+      DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
       TESTS_RESULT: ${{ needs.tests.result }}
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
@@ -360,9 +361,11 @@ jobs:
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
           test "$PSTACK_RESULT" = "success"
-          # Docs-only changes skip the three heavy platform legs; an explicit
-          # skip is a pass, any other non-success still fails the aggregate.
-          case "$WINDOWS_RESULT" in success|skipped) ;; *) exit 1;; esac
-          case "$ANIMATION_RESULT" in success|skipped) ;; *) exit 1;; esac
-          case "$AGENT_SKIN_COVERAGE_RESULT" in success|skipped) ;; *) exit 1;; esac
-          case "$AGENT_SKIN_FRESH_CLONE_RESULT" in success|skipped) ;; *) exit 1;; esac
+          # Only a confirmed docs-only change can skip a platform gate.
+          for result in "$WINDOWS_RESULT" "$ANIMATION_RESULT" "$AGENT_SKIN_COVERAGE_RESULT" "$AGENT_SKIN_FRESH_CLONE_RESULT"; do
+            case "$result" in
+              success) ;;
+              skipped) test "$DOCS_ONLY" = "true" || exit 1 ;;
+              *) exit 1 ;;
+            esac
+          done
