@@ -1675,17 +1675,8 @@ async function importedStartupSnapshot() {
     paint:{rgba:[17,34,51,.25],backgroundImage:'none',sourceDeclarationCount:2}}};
   return snapshot;
 }
-test('required imported snapshot retains original image bytes and decodes its actual dimensions',async()=>{
+test('required native snapshot rejects a retired foreign image before preparing',async()=>{
   const snapshot=await importedStartupSnapshot();
-  const fixture=createFixture({intent:'play',snapshotMode:true,snapshotReader:async()=>snapshot,imageOptions:{artworkDimensions:[2,3]}});
-  await waitReady(fixture);
-  const background=fixture.messages.find(message=>message.action==='background');
-  assert.equal(background.image,snapshot.settings.artwork);
-  assert.deepEqual(JSON.parse(JSON.stringify(background.themeState.selection)),snapshot.themeState.selection);
-  fixture.handle.dispose();
-});
-test('required imported snapshot rejects a changed original image digest before preparing',async()=>{
-  const snapshot=await importedStartupSnapshot();snapshot.themeState.selection.image.sha256='0'.repeat(64);
   const fixture=createFixture({intent:'play',snapshotMode:true,snapshotReader:async()=>snapshot,imageOptions:{artworkDimensions:[2,3]}});
   await waitForMessage(fixture,'assetError');
   assert.equal(fixture.messages.some(message=>message.action==='ready'||message.action==='background'),false);

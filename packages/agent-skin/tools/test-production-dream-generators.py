@@ -45,7 +45,7 @@ class DreamGeneratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             names = ('vendor/dream-safe-css-validator.mjs', 'vendor/dream-safe-css-ast.mjs',
-                     'vendor/dream-theme-validator.mjs', 'vendor/dream-image-metadata.mjs',
+                     'vendor/dream-theme-validator.mjs',
                      'dream-theme-style.mjs')
             for name in names:
                 dest = root / name

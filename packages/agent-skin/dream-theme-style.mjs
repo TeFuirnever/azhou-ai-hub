@@ -1,5 +1,4 @@
 import { parseSafeCssAst } from './vendor/dream-safe-css-ast.mjs';
-import { readImageMetadata } from './vendor/dream-image-metadata.mjs';
 import { validateOfficialTheme } from './vendor/dream-theme-validator.mjs';
 
 export const DREAM_PAINT_PROFILE = 'codex-main-literal-paint/v1';
@@ -40,10 +39,6 @@ export function mapDreamTheme(manifest, source) {
     declarationCount: parsed.declarationCount, steps: Object.freeze(steps)});
 }
 
-const CAPSULE_LIMIT = 20 * 1024 * 1024;
-const FILE_LIMITS = {'theme.json': 1048576, 'theme.css': 262144,
-  'background.png': 10485760, 'background.jpg': 10485760, 'background.webp': 10485760};
-const IMAGE_MIME = {'background.png': 'image/png', 'background.jpg': 'image/jpeg', 'background.webp': 'image/webp'};
 const HASH = /^[0-9a-f]{64}$/;
 
 function requireValue(condition, reason) {
@@ -55,169 +50,6 @@ function exactKeys(value, keys) {
     && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 }
 
-// JSON.parse alone erases duplicate keys, including escaped aliases. Bound depth
-// and values while retaining its string/number grammar, before trusting any shape.
-function strictJson(bytes) {
-  const source = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true}).decode(bytes);
-  let index = 0;
-  let values = 0;
-  const whitespace = () => {while (/[\t\n\r ]/.test(source[index] || '\0')) index++;};
-  function string() {
-    const start = index++;
-    while (index < source.length) {
-      const character = source[index++];
-      if (character === '\\') index++;
-      else if (character === '"') return JSON.parse(source.slice(start, index));
-    }
-    throw new Error('dream_json_invalid');
-  }
-  function value(depth) {
-    requireValue(depth <= 16 && ++values <= 8192, 'dream_json_budget');
-    whitespace();
-    const character = source[index];
-    if (character === '"') return string();
-    if (character === '{' || character === '[') {
-      index++;
-      const object = character === '{';
-      const result = object ? {} : [];
-      const end = object ? '}' : ']';
-      const keys = new Set();
-      whitespace();
-      if (source[index] === end) {index++;return result;}
-      while (index < source.length) {
-        let key;
-        if (object) {
-          requireValue(source[index] === '"', 'dream_json_invalid');
-          key = string();
-          requireValue(!keys.has(key), 'dream_json_duplicate_key');
-          keys.add(key);
-          whitespace();
-          requireValue(source[index++] === ':', 'dream_json_invalid');
-        }
-        const item = value(depth + 1);
-        if (object) Object.defineProperty(result, key, {value:item, enumerable:true, writable:true, configurable:true});
-        else result.push(item);
-        whitespace();
-        const separator = source[index++];
-        if (separator === end) return result;
-        requireValue(separator === ',', 'dream_json_invalid');
-        whitespace();
-      }
-      throw new Error('dream_json_invalid');
-    }
-    const token = /^(?:true|false|null|-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(source.slice(index));
-    requireValue(token, 'dream_json_invalid');
-    index += token[0].length;
-    const result = JSON.parse(token[0]);
-    requireValue(typeof result !== 'number' || Number.isFinite(result), 'dream_json_invalid');
-    return result;
-  }
-  const result = value(0);
-  whitespace();
-  requireValue(index === source.length, 'dream_json_invalid');
-  return result;
-}
-
-function staticImage(bytes, name) {
-  const extension = name.slice(name.lastIndexOf('.'));
-  const matches = extension === '.png'
-    ? [137,80,78,71,13,10,26,10].every((byte,index) => bytes[index] === byte)
-    : extension === '.jpg' ? bytes[0] === 0xff && bytes[1] === 0xd8
-      : String.fromCharCode(...bytes.subarray(0,4)) === 'RIFF'
-        && String.fromCharCode(...bytes.subarray(8,12)) === 'WEBP';
-  requireValue(matches, 'dream_image_type');
-  const metadata = readImageMetadata(bytes, extension);
-  requireValue(metadata, 'dream_image_invalid');
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const ascii = (offset, length) => String.fromCharCode(...bytes.subarray(offset, offset + length));
-  let offset;
-  if (extension === '.png') {
-    offset = 8;
-    while (offset + 12 <= bytes.length) {
-      const size = view.getUint32(offset);
-      const type = ascii(offset + 4, 4);
-      requireValue(size <= bytes.length - offset - 12 && !['acTL', 'fcTL', 'fdAT'].includes(type), 'dream_image_invalid');
-      offset += size + 12;
-      if (type === 'IEND') {requireValue(size === 0 && offset === bytes.length, 'dream_image_invalid');return metadata;}
-    }
-  } else if (extension === '.webp') {
-    requireValue(view.getUint32(4, true) + 8 === bytes.length, 'dream_image_invalid');
-    offset = 12;
-    while (offset + 8 <= bytes.length) {
-      const type = ascii(offset, 4);
-      const size = view.getUint32(offset + 4, true);
-      requireValue(size <= bytes.length - offset - 8 && !['ANIM', 'ANMF'].includes(type)
-        && !(type === 'VP8X' && size > 0 && (bytes[offset + 8] & 2)), 'dream_image_invalid');
-      offset += 8 + size + size % 2;
-    }
-    requireValue(offset === bytes.length, 'dream_image_invalid');
-    return metadata;
-  } else {
-    requireValue(bytes.at(-2) === 0xff && bytes.at(-1) === 0xd9, 'dream_image_invalid');
-    offset = 2;
-    while (offset + 4 <= bytes.length) {
-      requireValue(bytes[offset++] === 0xff, 'dream_image_invalid');
-      while (bytes[offset] === 0xff) offset++;
-      const marker = bytes[offset++];
-      if (marker === 0xda) return metadata;
-      requireValue(marker !== 0xd8 && marker !== 0xd9 && marker !== 0x01 && !(marker >= 0xd0 && marker <= 0xd7), 'dream_image_invalid');
-      const size = view.getUint16(offset);
-      requireValue(size >= 2 && size <= bytes.length - offset && !(marker === 0xe2 && ascii(offset + 2, 4) === 'MPF\0'), 'dream_image_invalid');
-      offset += size;
-    }
-  }
-  throw new Error('dream_image_invalid');
-}
-
-export async function readDreamCapsule(input, {crypto = globalThis.crypto, decodeImage, signal} = {}) {
-  requireValue(ArrayBuffer.isView(input) && input.BYTES_PER_ELEMENT === 1 && input.byteLength > 0 && input.byteLength <= CAPSULE_LIMIT, 'dream_capsule_size');
-  requireValue(typeof decodeImage === 'function' && crypto?.subtle, 'dream_decoder_unavailable');
-  const bytes = new Uint8Array(input.buffer, input.byteOffset, input.byteLength).slice();
-  const check = () => {if (signal?.aborted) throw new Error('operation-cancelled');};
-  const digest = async data => [...new Uint8Array(await crypto.subtle.digest('SHA-256', data))]
-    .map(byte => byte.toString(16).padStart(2, '0')).join('');
-  check();
-  const capsule = strictJson(bytes);
-  requireValue(exactKeys(capsule, ['schema', 'archiveSha256', 'files'])
-    && capsule.schema === 'azhou-agent-skin.dream-capsule.v1'
-    && typeof capsule.archiveSha256 === 'string' && HASH.test(capsule.archiveSha256), 'dream_capsule_invalid');
-  requireValue(capsule.files && typeof capsule.files === 'object' && !Array.isArray(capsule.files)
-    && Object.keys(capsule.files).length === 3, 'dream_capsule_files');
-  const files = {};
-  for (const [name, record] of Object.entries(capsule.files)) {
-    const limit = Object.hasOwn(FILE_LIMITS, name) ? FILE_LIMITS[name] : 0;
-    requireValue(limit && exactKeys(record, ['bytes', 'sha256', 'base64'])
-      && Number.isSafeInteger(record.bytes) && record.bytes > 0 && record.bytes <= limit
-      && typeof record.sha256 === 'string' && HASH.test(record.sha256)
-      && typeof record.base64 === 'string' && record.base64.length === 4 * Math.ceil(record.bytes / 3)
-      && /^[A-Za-z0-9+/]*={0,2}$/.test(record.base64), 'dream_capsule_file');
-    const binary = atob(record.base64);
-    requireValue(binary.length === record.bytes && btoa(binary) === record.base64, 'dream_capsule_file');
-    const data = Uint8Array.from(binary, character => character.charCodeAt(0));
-    requireValue(await digest(data) === record.sha256, 'dream_capsule_file_hash');
-    check();
-    files[name] = data;
-  }
-  requireValue(files['theme.json'] && files['theme.css'], 'dream_capsule_files');
-  const manifest = strictJson(files['theme.json']);
-  const css = new TextDecoder('utf-8', {fatal:true, ignoreBOM:true}).decode(files['theme.css']);
-  const paint = mapDreamTheme(manifest, css);
-  requireValue(Object.hasOwn(IMAGE_MIME, manifest.image) && Object.hasOwn(files, manifest.image), 'dream_capsule_files');
-  const image = files[manifest.image];
-  const metadata = staticImage(image, manifest.image);
-  check();
-  const decoded = await decodeImage(image.slice(), IMAGE_MIME[manifest.image], signal);
-  check();
-  requireValue(decoded && decoded.width === metadata.width && decoded.height === metadata.height, 'dream_image_decode');
-  const capsuleSha256 = await digest(bytes);
-  check();
-  return {capsuleSha256, archiveSha256:capsule.archiveSha256, manifest, css, paint,
-    image:{bytes:image, mime:IMAGE_MIME[manifest.image], sha256:capsule.files[manifest.image].sha256,
-      width:metadata.width, height:metadata.height}};
-}
-
-// A finite rendering-plan wire contract, not permission to apply author CSS.
-// Host application must rebuild this plan from the directory's original source.
 export function validateThemeSnapshot(value) {
   requireValue(value && typeof value === 'object' && !Array.isArray(value), 'dream_snapshot_invalid');
   requireValue(Number.isSafeInteger(value.revision) && value.revision >= 1
@@ -231,58 +63,13 @@ export function validateThemeSnapshot(value) {
     requireValue(value.schemaVersion === 2 && exactKeys(value,['schemaVersion','revision','imagesBinding','selection']), 'dream_snapshot_invalid');
     selection = value.selection;
   }
-  requireValue(selection && typeof selection === 'object', 'dream_snapshot_invalid');
-  let normalized;
-  if (selection.kind === 'bundled') {
-    const preference = selection.surfaceTransparency;
-    requireValue(exactKeys(selection,['kind','id','surfaceTransparency']) && selection.id === 'azhou-q-v3'
-      && ((exactKeys(preference,['mode']) && preference.mode === 'follow')
-        || (exactKeys(preference,['mode','value']) && preference.mode === 'override'
-          && typeof preference.value === 'number' && Number.isFinite(preference.value)
-          && preference.value >= 0 && preference.value <= 100)), 'dream_snapshot_invalid');
-    normalized = Object.freeze({kind:'bundled',id:'azhou-q-v3',surfaceTransparency:Object.freeze({...preference})});
-  } else {
-    const image = selection.image, paint = selection.paint;
-    requireValue(exactKeys(selection,['kind','profile','capsuleSha256','archiveSha256','image','paint'])
-      && selection.kind === 'imported' && selection.profile === DREAM_PAINT_PROFILE
-      && typeof selection.capsuleSha256 === 'string' && HASH.test(selection.capsuleSha256)
-      && typeof selection.archiveSha256 === 'string' && HASH.test(selection.archiveSha256)
-      && exactKeys(image,['name','mime','bytes','sha256','width','height'])
-      && Object.hasOwn(IMAGE_MIME,image.name) && image.mime === IMAGE_MIME[image.name]
-      && Number.isSafeInteger(image.bytes) && image.bytes > 0 && image.bytes <= 10485760
-      && typeof image.sha256 === 'string' && HASH.test(image.sha256)
-      && Number.isSafeInteger(image.width) && image.width >= 1 && image.width <= 16384
-      && Number.isSafeInteger(image.height) && image.height >= 1 && image.height <= 16384
-      && image.width * image.height <= 50000000
-      && exactKeys(paint,['rgba','backgroundImage','sourceDeclarationCount']) && paint.backgroundImage === 'none'
-      && Number.isSafeInteger(paint.sourceDeclarationCount) && paint.sourceDeclarationCount >= 1 && paint.sourceDeclarationCount <= 128
-      && Array.isArray(paint.rgba) && paint.rgba.length === 4
-      && paint.rgba.every((channel,index)=>typeof channel === 'number' && Number.isFinite(channel)
-        && channel >= 0 && channel <= (index === 3 ? 1 : 255)), 'dream_snapshot_invalid');
-    normalized = Object.freeze({kind:'imported',profile:DREAM_PAINT_PROFILE,
-      capsuleSha256:selection.capsuleSha256,archiveSha256:selection.archiveSha256,
-      image:Object.freeze({...image}),paint:Object.freeze({...paint,rgba:Object.freeze([...paint.rgba])})});
-  }
+  requireValue(exactKeys(selection,['kind','id','surfaceTransparency'])
+    && selection.kind === 'bundled' && selection.id === 'azhou-q-v3', 'dream_snapshot_invalid');
+  const preference = selection.surfaceTransparency;
+  requireValue((exactKeys(preference,['mode']) && preference.mode === 'follow')
+    || (exactKeys(preference,['mode','value']) && preference.mode === 'override'
+      && typeof preference.value === 'number' && Number.isFinite(preference.value)
+      && preference.value >= 0 && preference.value <= 100), 'dream_snapshot_invalid');
+  const normalized = Object.freeze({kind:'bundled',id:'azhou-q-v3',surfaceTransparency:Object.freeze({...preference})});
   return Object.freeze({schemaVersion:2,revision:value.revision,imagesBinding:value.imagesBinding,selection:normalized});
-}
-
-export async function verifyThemeSnapshotArtwork(value, artwork, {crypto=globalThis.crypto,signal}={}) {
-  const theme = validateThemeSnapshot(value);
-  if (theme.selection.kind === 'bundled') return theme;
-  const image = theme.selection.image;
-  const check = () => {if (signal?.aborted) throw new Error('operation-cancelled');};
-  check();
-  const prefix = 'data:'+image.mime+';base64,';
-  requireValue(typeof artwork === 'string' && artwork.length <= 13981039 && artwork.startsWith(prefix), 'dream_snapshot_artwork');
-  const encoded = artwork.slice(prefix.length);
-  requireValue(encoded.length === 4*Math.ceil(image.bytes/3) && /^[A-Za-z0-9+/]*={0,2}$/.test(encoded), 'dream_snapshot_artwork');
-  const binary = atob(encoded);
-  requireValue(binary.length === image.bytes && btoa(binary) === encoded && crypto?.subtle, 'dream_snapshot_artwork');
-  const bytes = Uint8Array.from(binary,character=>character.charCodeAt(0));
-  const metadata = staticImage(bytes,image.name);
-  requireValue(metadata.width === image.width && metadata.height === image.height, 'dream_snapshot_artwork');
-  const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
-  check();
-  requireValue(hash === image.sha256, 'dream_snapshot_artwork');
-  return theme;
 }

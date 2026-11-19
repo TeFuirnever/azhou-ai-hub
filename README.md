@@ -215,7 +215,7 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 |---|---|---|
 | `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; current source candidate `0.9.0/build 43`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT; bundled Azhou artwork is CC BY-NC-ND 4.0. |
 
-The source candidate also provides a [narrow Dream literal-main profile](packages/agent-skin/docs/design/azhou-immersive-experience/dream-main-literal-paint.md). A CLI-exported source capsule can be imported into a separate local directory, explicitly applied, reopened at startup, and restored to the saved Azhou appearance. Unsupported source declarations or manifest rendering fields block application. This is not general Dream compatibility or installed-host acceptance.
+[Azhou Appearance](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary) accepts user-selected images and Azhou JSON presets. It does not import themes or migrate data from other projects.
 
 The candidate [workspace theme slice](packages/agent-skin/docs/theme-appearance.md) supports one approved Azhou theme and workspace readability transparency, with saving and application reported separately. Full theme-library behavior, DSH theme support, and real-host visual acceptance remain unverified. Skip leaves an already-admitted background decode to finish only in its original workspace; waiting for a new shell is still cancelled. Theme settings use visible labels, native keyboard controls and explicit mask values or Follow theme.
 

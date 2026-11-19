@@ -74,6 +74,19 @@ The candidate keeps the scene image in its existing single body background plane
 
 Mask decoding shares the existing 4000 ms anti-hang ceiling with scene decoding. This is not a performance or recovery SLO: on a geometry or appearance change, the owner restores the legacy treatment synchronously before awaiting a fresh mask. `themePending`, `themeApplied`, `themeFailure`, and `fallbackApplied` distinguish a pending/degraded theme from a persisted settings record. A late decode cannot overwrite a newer generation or a foreign wash. Native-host rendering, responsiveness, and the full theme surface library still require separate acceptance.
 
+### Appearance file boundary
+
+Codex and DSH accept images selected by the user and individual Azhou JSON
+presets. They do not offer an external theme catalog or import external theme
+packages. Settings are local to the respective Azhou store; opening Appearance
+does not scan or copy another project's files.
+
+An older saved external-theme selection is not applied. The runtime uses a
+valid retained Azhou appearance when available, otherwise the configured Azhou
+default. Loading settings neither rewrites existing records nor deletes old
+theme data. This is separate from upgrading or rolling back an Azhou launcher
+or DSH package.
+
 ### Geometry and pending decode boundary
 
 The current Codex adapter admits only finite, axis-aligned workspace geometry. Ordinary ancestor overflow clips must demonstrably contain the entire workspace rectangle; partial clips, reserved scrollbar ambiguity, rounded ancestor clips, extended overflow clip margins, transforms and complex clipping are not supported for theme treatment. Same-size ancestor style changes invalidate the existing lease. This restores native presentation, not a claim that the previous wallpaper survives; a later supported workspace may be admitted by the existing recovery flow. Legacy wallpaper admission is unchanged.

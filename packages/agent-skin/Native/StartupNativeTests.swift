@@ -548,6 +548,52 @@ struct StartupNativeTests {
         expect(failedTransferExpressions.count == 3
                && failedTransferExpressions.last?.contains("cancelNativeSnapshot") == true,
                "a failed WK chunk triggers one nonce-bound cleanup call")
+        for (refusedMethod, expireDuringRefusal) in [
+            ("acceptNativeSnapshotDescriptor", false),
+            ("finishNativeSnapshot", true),
+        ] {
+            var methods: [String] = []
+            var clock: TimeInterval = 100
+            do {
+                try await NativeStartupSnapshotTransfer.send(
+                    snapshot: transferSnapshot, runNonce: "native-run-01", deadline: 110, now: { clock },
+                    evaluate: { expression, remaining in
+                        let method = ["acceptNativeSnapshotDescriptor", "acceptNativeSnapshotChunk",
+                                      "finishNativeSnapshot", "cancelNativeSnapshot"].first { expression.contains($0) }!
+                        methods.append(method)
+                        expect(remaining > 0 && remaining <= 2, "each attempted write uses the remaining absolute budget")
+                        if method != refusedMethod { return true }
+                        if expireDuringRefusal { clock = 110 }
+                        return false
+                    })
+                fatalError("refused WK handoff unexpectedly succeeded")
+            } catch let failure as StartupFailure {
+                expect(failure.reason == "snapshot-transfer-rejected", "preserve the first WK rejection")
+            }
+            expect(methods == (expireDuringRefusal
+                ? ["acceptNativeSnapshotDescriptor", "acceptNativeSnapshotChunk", "finishNativeSnapshot"]
+                : ["acceptNativeSnapshotDescriptor", "cancelNativeSnapshot"]),
+                "rejected handoff stops before later writes and only requests bound cleanup before expiry")
+        }
+        let oversizedValues = StartupSettingsSnapshotValues(
+            avatar: transferValues.avatar, artwork: String(repeating: "a", count: NativeStartupSnapshotTransfer.maximumBytes),
+            contours: transferValues.contours, introTitle: transferValues.introTitle,
+            introCaption: transferValues.introCaption, artworkSubtitle: transferValues.artworkSubtitle,
+            wallpaperStrength: transferValues.wallpaperStrength, explicitText: transferValues.explicitText)
+        let oversizedSnapshot = StartupSettingsSnapshot(
+            owner: transferSnapshot.owner, runID: transferSnapshot.runID, runNonce: transferSnapshot.runNonce,
+            snapshotID: transferSnapshot.snapshotID, status: transferSnapshot.status, sha256: transferSnapshot.sha256,
+            appearance: transferSnapshot.appearance, values: oversizedValues)
+        var oversizedCalls = 0
+        do {
+            try await NativeStartupSnapshotTransfer.send(
+                snapshot: oversizedSnapshot, runNonce: transferSnapshot.runNonce, deadline: 110, now: { 100 },
+                evaluate: { _, _ in oversizedCalls += 1; return true })
+            fatalError("an above-ceiling settings snapshot unexpectedly reached the player")
+        } catch let failure as StartupFailure {
+            expect(failure.reason == "snapshot-transfer-too-large", "oversized serialized payload receives the bounded transfer refusal")
+        }
+        expect(oversizedCalls == 0, "the byte ceiling applies before descriptor publication or page evaluation")
         var delayedFinishStarted: CheckedContinuation<Void, Never>?
         var delayedFinishResult: CheckedContinuation<Any?, Error>?
         var delayedTransferExpressions: [String] = []
@@ -1541,7 +1587,7 @@ private func startupSettingsSnapshotChecks() async throws -> Int {
         ("tagged bundled", { $0 = ["schemaVersion": 2, "revision": 1,
             "imagesBinding": String(repeating: "a", count: 64),
             "selection": ["kind": "bundled", "id": "azhou-q-v3", "surfaceTransparency": ["mode": "override", "value": 65]]] }, true),
-        ("imported png", { $0 = importedTheme }, true),
+        ("imported png", { $0 = importedTheme }, false),
         ("imported unknown profile", { $0 = importedTheme; var selection = importedSelection; selection["profile"] = "other"; $0["selection"] = selection }, false),
         ("imported extra CSS", { $0 = importedTheme; var selection = importedSelection; selection["css"] = "body{}"; $0["selection"] = selection }, false),
         ("imported boolean rgba", { $0 = importedTheme; var selection = importedSelection;
@@ -1579,12 +1625,7 @@ private func startupSettingsSnapshotChecks() async throws -> Int {
                     deadline: 110, now: { 100 }, evaluate: { expression, _ in expressions.append(expression); return true })
                 try JSONSerialization.data(withJSONObject: expressions).write(to: URL(fileURLWithPath: path))
             }
-            if received.values.themeState?.importedImage != nil {
-                expect(received.values.themeState?.transparency == nil, "imported alpha comes from the finite plan, not P07 override")
-                let selection = received.values.themeState?.object["selection"] as? [String: Any]
-                expect(selection?["profile"] as? String == "codex-main-literal-paint/v1", "imported profile survives typed receiver")
-                expect(received.values.artwork == (object["settings"] as? [String: Any])?["artwork"] as? String, "original image retained once without conversion")
-            } else { expect(received.values.themeState?.transparency == 65, "theme alpha survives receiver") }
+            expect(received.values.themeState?.transparency == 65, "theme alpha survives receiver")
             expect(received.values.themeState?.imagesBinding == (object["themeState"] as? [String: Any])?["imagesBinding"] as? String, "theme binding survives receiver without becoming authorization")
         } catch let failure as StartupFailure {
             expect(!valid && failure.reason == "snapshot-invalid", "theme validation rejects only malformed values: \(name)")
@@ -1604,6 +1645,67 @@ private func startupSettingsSnapshotChecks() async throws -> Int {
             _ = try await StartupSettingsSnapshotReceiver.receive(transport: transport, page: page, request: request, deadline: 50, now: { world.time() })
             fatalError("FAILED: imported byte allowance must not widen legacy artwork")
         } catch let failure as StartupFailure { expect(failure.reason == "snapshot-invalid", "legacy large PNG remains blocked") }
+    }
+
+    let taggedFollow: [String: Any] = [
+        "schemaVersion": 2, "revision": 7, "imagesBinding": String(repeating: "a", count: 64),
+        "selection": ["kind": "bundled", "id": "azhou-q-v3", "surfaceTransparency": ["mode": "follow"]],
+    ]
+    let nativeBoundaryCases: [(String, [String: Any], ([String: Any]) -> [String: Any], Bool)] = [
+        ("bundled follow", taggedFollow, { $0 }, true),
+        ("foreign theme with ordinary PNG transport", importedTheme, { $0 }, false),
+        ("ordinary theme with retired artwork transport schema", taggedFollow, { settings in
+            var result = settings; result["schemaVersion"] = 2; return result
+        }, false),
+        ("mislabelled JPEG artwork", taggedFollow, { settings in
+            var result = settings; result["artwork"] = "data:image/jpeg;base64,/9j/"; return result
+        }, false),
+        ("noncanonical PNG artwork", taggedFollow, { settings in
+            var result = settings; result["artwork"] = "data:image/png;base64,iVBORw0KGgp="; return result
+        }, false),
+        ("non-PNG bytes in PNG artwork", taggedFollow, { settings in
+            var result = settings; result["artwork"] = "data:image/png;base64,QUJDRA=="; return result
+        }, false),
+        ("one-point contour", taggedFollow, { settings in
+            var result = settings; result["contours"] = [[[0, 0]]]; return result
+        }, false),
+        ("above-total path point limit", taggedFollow, { settings in
+            var result = settings
+            result["contours"] = [Array(repeating: [0, 0], count: 300_001)]
+            return result
+        }, false),
+        ("negative contour coordinate", taggedFollow, { settings in
+            var result = settings; result["contours"] = [[[-1, 0], [1, 1]]]; return result
+        }, false),
+        ("boolean contour coordinate", taggedFollow, { settings in
+            var result = settings; result["contours"] = [[[true, 0] as [Any], [1, 1] as [Any]]]; return result
+        }, false),
+    ]
+    for (name, theme, editSettings, allowed) in nativeBoundaryCases {
+        var object = try JSONSerialization.jsonObject(with: StartupSnapshotWorld.makePayload()) as! [String: Any]
+        let settings = editSettings(object["settings"] as! [String: Any])
+        object["themeState"] = theme
+        object["settings"] = settings
+        let world = StartupSnapshotWorld(payload: try JSONSerialization.data(withJSONObject: object))
+        let transport = try opened(world)
+        defer { transport.close() }
+        do {
+            let snapshot = try await StartupSettingsSnapshotReceiver.receive(
+                transport: transport, page: page, request: request, deadline: 50, now: { world.time() })
+            expect(allowed, "must reject untrusted native snapshot: \(name)")
+            expect(snapshot.values.themeState?.revision == 7
+                   && snapshot.values.themeState?.transparency == nil
+                   && snapshot.values.artwork == settings["artwork"] as? String,
+                   "bundled follow preference keeps ordinary PNG bytes without external data or an alpha override")
+            let selection = snapshot.values.themeState?.object["selection"] as? [String: Any]
+            expect(selection?["kind"] as? String == "bundled"
+                   && selection?["surfaceTransparency"] as? [String: String] == ["mode": "follow"]
+                   && selection?.count == 3, "player handoff only exposes the supported bundled selection")
+        } catch let error as StartupFailure {
+            expect(!allowed && error.reason == "snapshot-invalid", "invalid settings fail closed: \(name)")
+            expect(world.operationLog.filter { $0 == "page-a:dispose" }.count == 1,
+                   "snapshot rejection disposes only the bound reader, once: \(name)")
+        }
     }
 
     let digestMismatch = StartupSnapshotWorld()
