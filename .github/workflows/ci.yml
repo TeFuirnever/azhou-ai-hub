@@ -132,7 +132,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
-    timeout-minutes: 20
+    # The expanded synthetic viewport matrix runs in this job.
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
