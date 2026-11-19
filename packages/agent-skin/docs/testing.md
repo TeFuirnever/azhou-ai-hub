@@ -4,7 +4,7 @@
 
 ## UT 范围与判定
 
-`tools/test-unit-coverage.py` 自动发现 JavaScript、Python、Swift、Bash 和 `.command` 生产源码。生产构建与安装工具、Pet 工具、原生适配器和新加入的源码都在统计范围内。测试程序、生成产物、私有素材和文档不进入生产代码分母。`wallpaper/preview.html` 是带自检按钮的合成宿主夹具，其独立交互脚本 `wallpaper/preview-controller.js` 也纳入 JavaScript 分母，由 `tools/preview-controller.unit.test.mjs` 在 Node 合成页面中执行计量；生产预览仍使用 `index.html` 加载已计入的独立 JS。CSS、HTML 标记和 JSON 配置没有可执行行覆盖率，分别通过浏览器、构建和功能用例验收。
+`tools/test-unit-coverage.py` 自动发现 JavaScript、Python、Swift、Bash 和 `.command` 生产源码。生产构建与安装工具、原生适配器和新加入的源码都在统计范围内。测试程序、生成产物、私有素材和文档不进入生产代码分母。`wallpaper/preview.html` 是带自检按钮的合成宿主夹具，其独立交互脚本 `wallpaper/preview-controller.js` 也纳入 JavaScript 分母，由 `tools/preview-controller.unit.test.mjs` 在 Node 合成页面中执行计量；生产预览仍使用 `index.html` 加载已计入的独立 JS。CSS、HTML 标记和 JSON 配置没有可执行行覆盖率，分别通过浏览器、构建和功能用例验收。
 
 每种语言及整个包都须达到 **95% 行覆盖率**。判定使用原始计数，不以四舍五入后的百分比放行；分支和函数统计可用于诊断，但不代替行覆盖率。缺失报告、漏算生产文件、工具失败或 UT 失败均阻断。Node LCOV、Coverage.py、LLVM 和 Bash 覆盖率保留各自原始结果；不把浏览器 E2E、实机启动或人工审阅混入 UT。
 
@@ -17,14 +17,14 @@ Swift 生成的固定 CDP JavaScript 也单独计量：Codex 的 10 段为 `gene
 在包目录运行：
 
 ```sh
-python3 -m pip install coverage==7.16.2
+python3 -m pip install coverage==7.16.2 Pillow==12.3.0
 python3 -B tools/test-setup-unit-tools.py
 python3 -B tools/test-coverage-policy.py
 python3 -B tools/test-functional-verdict.py
 python3 -B tools/test-unit-coverage.py
 ```
 
-需要 macOS 的 AppKit、WebKit、Xcode 命令行工具及 Node 24。工具准备脚本将固定版本 GNU Bash 5.2.37 和 Bashcov 1.7.0 放入忽略的 `.build/`，不会替换系统 Bash/Ruby 或安装 Homebrew 包。覆盖率工具仅用于开发测试，不是用户应用依赖。`--language javascript|python|swift|shell` 用于单组开发复验，只证明该组，不能用它宣称整个包通过。最新报告在 `.build/unit-coverage/report.json`，每次运行的报告和证据保存在 `.build/unit-coverage/runs/` 下；报告为失败时不得写“UT 95% 已完成”。
+需要 macOS 的 AppKit、WebKit、Xcode 命令行工具及 Node 24；Dream 图片解码与相关测试仍需 `Pillow==12.3.0`，与已退役的桌宠工具无关。工具准备脚本将固定版本 GNU Bash 5.2.37 和 Bashcov 1.7.0 放入忽略的 `.build/`，不会替换系统 Bash/Ruby 或安装 Homebrew 包。覆盖率工具仅用于开发测试，不是用户应用依赖。`--language javascript|python|swift|shell` 用于单组开发复验，只证明该组，不能用它宣称整个包通过。最新报告在 `.build/unit-coverage/report.json`，每次运行的报告和证据保存在 `.build/unit-coverage/runs/` 下；报告为失败时不得写“UT 95% 已完成”。
 
 ## 功能用例
 
@@ -111,4 +111,22 @@ Codex 的主页面接续仅在本次尚未结束的接入操作内生效，始�
 
 宿主布局回归以脱敏的实际结构为依据：核对目标控件、影响可见性和尺寸的祖先样式、滚动容器与重建行为，不复制聊天内容。合成夹具需断言目标顺序和实际几何；选择器命中或备用入口可见不能代替目标位置通过。早期跳过回归会延迟挂载合成 app shell，并验证可交互控件到达后备用入口恢复；它不证明官方加载画面的 DOM 时序。交付分别记录测试载荷版本、安装版本和页面实际运行版本；实机结果仅在同版页面检查后判定，无法核实时保持待验收。
 
-`CI / Agent Skin full production UT coverage` 运行完整 UT 门禁，并进入聚合 Required 判定；macOS Startup and Pet 作业必跑生成载荷浏览器及真实窗口功能回归。仓库通用 `python3 scripts/verify.py` 仍执行其原有完整检查，不能替代本页的包级覆盖率命令。提交/推送状态与远端 CI 结果另行报告，不因本地通过而推断远端已通过。
+`CI / Agent Skin full production UT coverage` 运行完整 UT 门禁，并进入聚合 Required 判定；macOS Agent Skin startup validation 作业必跑生成载荷浏览器及真实窗口功能回归。仓库通用 `python3 scripts/verify.py` 仍执行其原有完整检查，不能替代本页的包级覆盖率命令。提交/推送状态与远端 CI 结果另行报告，不因本地通过而推断远端已通过。
+
+
+## P08 isolated source-library developer checks
+
+`tools/theme-library.py` is an explicit-root developer CLI, not an installed host capability. Its original-ZIP import/list/read contract and failure boundaries are documented in [the source-library design](theme-source-library.md). Run `python3 -B tools/test-production-theme-package-preflight.py`, `python3 -B tools/test-production-theme-library.py` and `node --test tools/dream-theme-validator.test.mjs` in the existing Node/Pillow development environment. The dependency-equipped macOS repository gate and CI register these suites. `test-unit-coverage.py` discovers the production suites; no whole-package 95% result is inferred from their standalone success. Contract fixtures are synthetic and do not establish external-theme compatibility, visual acceptance, CSS mapping or permission to apply a theme.
+
+The source-stage literal-paint adapter and lossless capsule boundary run through `python3 -B tools/test-production-dream-style.py`, registered in repository verification and macOS CI. It checks fixed AST derivation, pristine validator corpus parity, total source-order mapping, unsupported-field rejection, exact file bytes/hashes, duplicate-key/UTF-8 bounds, static-image checks and cancelled decoding. Settings and live application are not yet covered by this source-stage suite.
+
+
+## P08 imported source UI and tagged transport candidate
+
+The current candidate has a real settings file-input path and an independent `dreamThemes` record. `node tools/test-image-settings-browser.mjs --out NEW_DIRECTORY` runs isolated Chrome plus real IndexedDB and a self-authored original ZIP through the actual library CLI/capsule/UI import flow. `AZHOU_TEST_PYTHON` may select the existing Pillow-equipped interpreter; no dependency installation occurs. Output directories must be fresh. It proves directory persistence/reopen, same-source idempotency, text-only names, retained startup drafts, unchanged active records/paint, and disabled application when no trusted host callback is available. The extra Dream-section screenshot records actual controls/focus. It does not exercise a real Codex host.
+
+`python3 -B tools/test-startup-native.py` extends the existing production bridge: original ZIP→library/capsule→canonical settings snapshot→compiled Swift receiver and transfer expressions→animation receiver. It covers bundled and original PNG/JPEG/WebP, and a legal large ancillary PNG above the old artwork URL limit. It uses existing Node/Pillow development dependencies. Native checks are injected host facts/transport only, with no real open/kill. Unknown active schemas, source loss/tampering, actual image hashes, MIME/length/numeric-plan bounds, and old legacy byte limits remain failure gates. The finite wire does not prove full Dream CSS compatibility, an installed host, rollback or a whole-package 95% coverage result.
+
+### First-profile explicit Dream application
+
+The generated startup browser check `generated Dream source UI applies literal main paint and restores the saved Azhou appearance` exercises the visible CLI-capsule/file-input/directory/Apply/fresh-startup/Restore loop. It asserts actual main computed colors, main `background-image:none`, original body artwork, alpha-composition screenshot pixels, retained unsaved startup drafts, and rollback after activated-candidate quota, independent-IDB-connection conflict and cancellation. Quota is an injected DOMException at the real write boundary, not exhausted user storage. Renderer unit tests additionally cover retained incumbent resources, bundled-mask rollback, foreign/new owners, workspace replacement and idempotent finalize/rollback. Settings tests cover four-record CAS, pending-read/put cancellation/disposal/timeouts, exact-commit compensation and monotonic restoration. Synthetic/generated checks do not establish installed Codex/IME acceptance, external theme media permission, full Dream engine parity or whole-package 95% unit coverage.

@@ -11,6 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { validateCheckSelection } from './startup-browser-selection.mjs';
+import {sourceCheckpoint,executionCheckpoint,validateRegistration,sealCollection,claimOutput,assertOutputOwner} from './theme-measurement-evidence.mjs';
 import { CDP, navigateWithLoad } from './test-startup-browser-cdp.mjs';
 import { canRemoveProfile, profileIdentity, removeOwnedProfile, trackOwnedChild } from './test-startup-browser-process.mjs';
 
@@ -28,17 +29,94 @@ for (let index = 2; index < process.argv.length; index++) {
     console.log('node tools/test-startup-browser.mjs [--chrome /path/to/Chrome] [--out /path/to/evidence] [--generated-payload /path/to/install.js] [--only <exact check name>]');
     process.exit(0);
   }
-  if (!['--chrome', '--out', '--generated-payload', '--only'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
+  if (!['--chrome', '--out', '--generated-payload', '--only', '--theme-protocol', '--theme-execution-binding', '--measurement-preflight'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
   const value = process.argv[++index];
   if (key === '--only') options.only.push(value);
   else if (key === '--generated-payload') options.generatedPayload = value;
+  else if (key === '--theme-protocol') options.themeProtocol = value;
+  else if (key === '--theme-execution-binding') options.executionBinding = value;
+  else if (key === '--measurement-preflight') { assert.equal(value,'true'); options.measurementPreflight=true; }
   else options[key.slice(2)] = value;
 }
 options.chrome = resolve(options.chrome);
 options.out = resolve(options.out);
 if (options.generatedPayload) options.generatedPayload = resolve(options.generatedPayload);
+const measurementOutput=options.themeProtocol?await claimOutput(options.out):null;
+const themeProtocol = options.themeProtocol ? JSON.parse(await readFile(resolve(options.themeProtocol),'utf8')) : null;
+if(themeProtocol){
+  assert.equal(themeProtocol.schema,1);assert.ok(['train','holdout'].includes(themeProtocol.phase));
+  assert.equal(themeProtocol.framesPerT,6);assert.equal(themeProtocol.conditions.length,4);
+  assert.deepEqual([...themeProtocol.transparencies].sort((a,b)=>a-b),[0,15,57,85,100]);
+  for(const condition of themeProtocol.conditions){assert.ok(Number.isInteger(condition.width)&&condition.width>700&&condition.width<1200);assert.ok(Number.isInteger(condition.height)&&condition.height>500&&condition.height<900);assert.ok([1.5,2].includes(condition.dpr));assert.ok([0.9,1.1].includes(condition.zoom));assert.match(condition.color,/^#[0-9a-f]{6}$/);}
+}
+const measurementStartedAt=new Date().toISOString();
+let measurementRoot=null,measurementBefore=null;
+async function checkpointMeasurement(){
+  if(options.generatedPayload){
+    assert.ok(options.executionBinding,'generated measurement requires wrapper execution binding');
+    return executionCheckpoint(options.executionBinding,ROOT,measurementRoot,options.generatedPayload);
+  }
+  assert.ok(!options.executionBinding,'execution binding requires generated payload');
+  return sourceCheckpoint(resolve(ROOT,'../..'),measurementRoot);
+}
+if(themeProtocol){try{measurementRoot=await validateRegistration(themeProtocol,measurementStartedAt);measurementBefore=await checkpointMeasurement();}
+catch(error){await assertOutputOwner(measurementOutput);await writeFile(join(options.out,'measurement-preflight-failure.json'),JSON.stringify({startedAt:measurementStartedAt,error:String(error),phase:themeProtocol.phase},null,2),{flag:'wx'});throw error;}}
+if(options.measurementPreflight){
+  assert.ok(themeProtocol&&options.generatedPayload,'preflight requires generated measurement');
+  const after=await checkpointMeasurement();
+  assert.deepEqual(after.execution,measurementBefore.execution,'execution drift');
+  await assertOutputOwner(measurementOutput);
+  await writeFile(join(options.out,'measurement-preflight.json'),JSON.stringify({status:'preflight-only',browserStarted:false,before:measurementBefore,after},null,2),{flag:'wx'});
+  await sealCollection(options.out);
+  process.exit(0);
+}
 const onlyChecks = options.only.length ? new Set(options.only) : null;
 const availableChecks = new Set();
+
+async function observedThemeStructure(transparency) {
+  const fail = message => { throw new Error('theme structure: '+message); };
+  const root=document.documentElement,body=document.body;
+  const wash=root.style.getPropertyValue('--azhou-wallpaper-wash');
+  if(!wash.startsWith('url("data:image/svg+xml,'))fail('not a local color mask');
+  let uri;try{uri=JSON.parse(wash.slice(4,-1));}catch{fail('invalid CSS URL');}
+  const source=decodeURIComponent(uri.slice(uri.indexOf(',')+1));
+  if(/<!|<\?/.test(source))fail('declarations are forbidden');
+  const doc=new DOMParser().parseFromString(source,'image/svg+xml');
+  if(doc.querySelector('parsererror'))fail('invalid XML');
+  const svg=doc.documentElement;
+  const attributes=(node,tag,names)=>{
+    if(!node||node.localName!==tag||node.namespaceURI!=='http://www.w3.org/2000/svg')fail('unexpected node '+tag);
+    if([...node.attributes].map(a=>a.name).sort().join('|')!==[...names].sort().join('|'))fail('unexpected attributes '+tag);
+    if([...node.childNodes].some(n=>n.nodeType!==1&&(n.nodeType!==3||n.textContent.trim())))fail('unexpected child node');
+    return Object.fromEntries([...node.attributes].map(a=>[a.name,a.value]).sort((a,b)=>a[0].localeCompare(b[0])));
+  };
+  const sa=attributes(svg,'svg',['xmlns','width','height','viewBox']);
+  if(sa.xmlns!=='http://www.w3.org/2000/svg'||Number(sa.width)!==innerWidth||Number(sa.height)!==innerHeight||sa.viewBox!=='0 0 '+innerWidth+' '+innerHeight)fail('viewport changed');
+  if(svg.children.length!==3)fail('root child count');
+  const [defs,outside,local]=svg.children;attributes(defs,'defs',[]);if(defs.children.length!==2)fail('defs child count');
+  const [gradient,mask]=defs.children;const ga=attributes(gradient,'linearGradient',['id']);if(ga.id!=='g')fail('gradient ID');
+  if(gradient.children.length!==7)fail('gradient stop count');
+  const stops=[...gradient.children].map(n=>{const a=attributes(n,'stop',['offset','stop-color','stop-opacity']);if(n.children.length||!Number.isFinite(Number(a['stop-opacity']))||Number(a['stop-opacity'])<0||Number(a['stop-opacity'])>1)fail('invalid gradient stop');return a;});
+  const ma=attributes(mask,'mask',['id']);if(ma.id!=='m'||mask.children.length!==2)fail('mask shape');
+  const white=attributes(mask.children[0],'rect',['width','height','fill']);if(white.width!=='100%'||white.height!=='100%'||white.fill!=='white')fail('outer mask');
+  const hole=attributes(mask.children[1],'rect',['x','y','width','height','fill']);if(hole.fill!=='black')fail('hole fill');
+  const oa=attributes(outside,'rect',['width','height','fill','mask']);if(oa.width!=='100%'||oa.height!=='100%'||oa.fill!=='url(#g)'||oa.mask!=='url(#m)')fail('outside treatment');
+  const la=attributes(local,'rect',['x','y','width','height','fill','fill-opacity']);
+  const main=document.querySelector('[data-app-shell-main-surface]'),bounds=main.getBoundingClientRect();
+  for(const name of ['x','y','width','height'])if(!Number.isFinite(bounds[name])||Number(hole[name])!==bounds[name]||Number(la[name])!==bounds[name])fail('workspace geometry '+name);
+  if([outside,local,...mask.children].some(n=>n.children.length))fail('nested paint');
+  if(!Number.isFinite(transparency)||Number(la['fill-opacity'])!==(100-transparency)/100)fail('local alpha');
+  if(stops.some(stop=>stop['stop-color']!==la.fill))fail('color mismatch');
+  const image=root.style.getPropertyValue('--azhou-wallpaper-image');
+  let scene;try{scene=JSON.parse(image.slice(4,-1));}catch{fail('scene URL');}if(!scene.startsWith('blob:'))fail('not an owned local scene');
+  const bytes=await(await fetch(scene)).arrayBuffer();
+  const sceneDigest=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
+  const computed=getComputedStyle(body);
+  const backgroundImage=computed.backgroundImage.replace(uri,'[color-mask]').replace(scene,'[scene:'+sceneDigest+']');
+  const invariant={svg:sa,gradient:ga,stops,mask:ma,white,hole,outside:oa,local:{...la,'fill-opacity':'[authorized-local-alpha]'},sceneDigest,
+    paint:{backgroundImage,size:computed.backgroundSize,position:computed.backgroundPosition,attachment:computed.backgroundAttachment,repeat:computed.backgroundRepeat}};
+  return {invariant,alpha:Number(la['fill-opacity']),wash,sceneDigest};
+}
 
 const report = {
   schema: 1,
@@ -169,6 +247,25 @@ async function walkGeneratedSettingsTabs() {
   return { boundaries, trace, textareaReached };
 }
 
+function settingsFocusHitEvidence(active, dialog, footer, doc, win) {
+  const box=active.getBoundingClientRect(),originalPoint={x:box.left+box.width/2,y:box.top+box.height/2};
+  const originalTarget=doc.elementFromPoint(originalPoint.x,originalPoint.y);
+  const panel=active.matches('section[role="tabpanel"]');
+  let point=originalPoint,visibleRect=null;
+  if(panel) {
+    const bounds=dialog.getBoundingClientRect(),bottom=footer.getBoundingClientRect().top;
+    visibleRect={left:Math.max(box.left,bounds.left+dialog.clientLeft,0),top:Math.max(box.top,bounds.top+dialog.clientTop,0),
+      right:Math.min(box.right,bounds.left+dialog.clientLeft+dialog.clientWidth,win.innerWidth),
+      bottom:Math.min(box.bottom,bounds.top+dialog.clientTop+dialog.clientHeight,win.innerHeight,bottom)};
+    point={x:(visibleRect.left+visibleRect.right)/2,y:(visibleRect.top+visibleRect.bottom)/2};
+  }
+  const nonempty=!visibleRect||(visibleRect.right>visibleRect.left&&visibleRect.bottom>visibleRect.top);
+  const target=nonempty?doc.elementFromPoint(point.x,point.y):null;
+  return {hit:!!active.getClientRects().length&&nonempty&&(target===active||active.contains(target)),
+    scope:panel?'visible-tabpanel':'control-center',originalPoint,originalTarget:originalTarget?.tagName??null,
+    point,visibleRect,target:target?.tagName??null,footerTarget:!!target&&footer.contains(target)};
+}
+
 function cleanup() {
   if (cleanupPromise) return cleanupPromise;
   cleanupPromise = (async () => {
@@ -210,7 +307,8 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
 try {
   assert.equal(typeof WebSocket, 'function', 'Use Node 22+ with its built-in WebSocket');
   await access(options.chrome);
-  await mkdir(options.out, { recursive: true });
+  if(measurementOutput)await assertOutputOwner(measurementOutput);
+  else await mkdir(options.out, { recursive: true });
   const [preview, wallpaperCSS, wallpaperRenderer, controllerRenderer, codexPageAdapterSource, imageSettingsSource, localizationSource, legacyWallpaperCSS,
     legacyWallpaperRenderer, helperExpressionJSON, generatedPayloadSource] = await Promise.all([
     readFile(join(ROOT, 'wallpaper/preview.html'), 'utf8'),
@@ -331,8 +429,9 @@ try {
         const state = mutationObserverState.get(this);
         const attributesOnly = options?.attributes === true && options?.childList !== true;
         const wallpaperShellWait = options?.childList === true && options?.subtree === true
-          && options?.attributeFilter?.includes('data-app-shell-frame');
-        state.kind = wallpaperShellWait ? 'wallpaper-shell-wait'
+          && options?.attributeFilter?.includes('data-app-shell-frame') && options?.attributeOldValue !== true;
+        const workspaceActive = options?.attributeOldValue === true && options?.attributeFilter?.includes('data-app-shell-main-surface');
+        state.kind = workspaceActive ? 'workspace-active' : wallpaperShellWait ? 'wallpaper-shell-wait'
           : attributesOnly ? 'appearance-attributes-only' : 'other';
         if (wallpaperShellWait && failFirstWallpaperShellObserver) {
           failFirstWallpaperShellObserver = false;
@@ -376,6 +475,8 @@ try {
       get activeElement() { return document.activeElement; },
       hasFocus: document.hasFocus.bind(document),
       createElement: document.createElement.bind(document),
+      addEventListener: document.addEventListener.bind(document),
+      removeEventListener: document.removeEventListener.bind(document),
       getElementById: document.getElementById.bind(document),
     };
     let host;
@@ -701,13 +802,15 @@ try {
     unknownDecoration.id = 'fixture-unknown';
     unknownDecoration.style.cssText = 'position:fixed;right:12px;top:80px;width:18px;height:18px;pointer-events:none;background-image:linear-gradient(red,blue)';
     document.getElementById('root').appendChild(unknownDecoration);
-    if (url.searchParams.has('hold-decode')) {
+    if (url.searchParams.has('hold-decode') || url.searchParams.has('hold-mask-decode')) {
       const original = HTMLImageElement.prototype.decode;
       const decodeGates = [], pendingGates = new Set();
       HTMLImageElement.prototype.decode = function () {
+        if (url.searchParams.has('hold-mask-decode') && !this.src.startsWith('data:image/svg+xml,')) return original.call(this);
         return original.call(this).then(() => new Promise(resolve => {
           const index = decodeGates.length;
           decodeGates.push({ resolve, source: this.src });
+          outerWindow.__decodeGateSources = decodeGates.map(gate => gate.source);
           pendingGates.add(index);
           outerWindow.__decodeGateCount = decodeGates.length;
           outerWindow.__decodePending = pendingGates.size > 0;
@@ -764,6 +867,7 @@ try {
       return { created: states.length, active: states.filter(state => state.active).length,
         disconnectCalls: states.reduce((total, state) => total + state.disconnectCalls, 0),
         wallpaperShellWait: summarize('wallpaper-shell-wait'),
+        workspaceActive: summarize('workspace-active'),
         appearanceAttributesOnly: summarize('appearance-attributes-only') };
     };
     outerWindow.__startupSurfaceBefore = (() => {
@@ -775,6 +879,7 @@ try {
     ['/fixture.html', ['text/html; charset=utf-8', fixtureHTML]],
     ['/csp-style.html', ['text/html; charset=utf-8', fixtureHTML]],
     ['/csp-blob.html', ['text/html; charset=utf-8', fixtureHTML]],
+    ['/csp-theme-data.html', ['text/html; charset=utf-8', fixtureHTML]],
     ['/fixture.js', ['text/javascript; charset=utf-8', fixtureModule]],
     ['/animation.js', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'animation.js'), 'utf8')]],
     ['/image-settings.js', ['text/javascript; charset=utf-8', imageSettingsSource]],
@@ -782,6 +887,9 @@ try {
     ['/wallpaper.css', ['text/css; charset=utf-8', wallpaperCSS]],
     ['/legacy-wallpaper.css', ['text/css; charset=utf-8', legacyWallpaperCSS]],
     ['/wallpaper/renderer.js', ['text/javascript; charset=utf-8', wallpaperRenderer]],
+    ['/workspace-renderer.mjs', ['text/javascript; charset=utf-8', `export function createObservedRenderer(host) { return (function(window, location, document, globalThis, Image, setTimeout, clearTimeout) { ${wallpaperRenderer.replace('export async function', 'async function')} return installRenderer; })(host, host.location, host.document, host, host.Image, host.setTimeout.bind(host), host.clearTimeout.bind(host)); }`]],
+    ['/wallpaper/apply.js', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'wallpaper/apply.js'), 'utf8')]],
+    ['/extension/bootstrap.mjs', ['text/javascript; charset=utf-8', await readFile(join(ROOT, 'extension/bootstrap.mjs'), 'utf8')]],
     ['/legacy/wallpaper/renderer.js', ['text/javascript; charset=utf-8', legacyWallpaperRenderer]],
     ['/extension/renderer.mjs', ['text/javascript; charset=utf-8', controllerRenderer]],
     ['/extension/codex-page-adapter.mjs', ['text/javascript; charset=utf-8', codexPageAdapterSource]],
@@ -797,7 +905,9 @@ try {
     response.setHeader('Content-Type', route[0]);
     response.setHeader('Cache-Control', 'no-store');
     response.setHeader('X-Content-Type-Options', 'nosniff');
-    if (pathname === '/csp-style.html') {
+    if (pathname === '/csp-theme-data.html') {
+      response.setHeader('Content-Security-Policy',"default-src 'none'; img-src 'self' blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; object-src 'none'");
+    } else if (pathname === '/csp-style.html') {
       response.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data: blob:; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'");
     } else if (pathname === '/csp-blob.html') {
       response.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; base-uri 'none'; object-src 'none'");
@@ -1184,7 +1294,8 @@ try {
       const button=entry?.shadowRoot?.querySelector('button');
       if(!button)return false;
       const rect=button.getBoundingClientRect();
-      return {x:rect.left+rect.width/2,y:rect.top+rect.height/2};
+      const x=rect.left+rect.width/2,y=rect.top+rect.height/2,hit=document.elementFromPoint(x,y);
+      return {x,y,rect:{x:rect.x,y:rect.y,width:rect.width,height:rect.height},hit:{tag:hit?.tagName,id:hit?.id,entry:hit===entry},buttonHit:entry.shadowRoot.elementFromPoint(x,y)===button};
     })()`);
     if (!point) return false;
     await cdp.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
@@ -1195,7 +1306,7 @@ try {
       return !!button&&document.activeElement===entry&&entry.shadowRoot.activeElement===button;
     })()`);
     await cdp.call('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-    return { focused, state: await cdp.evaluate('window.__startupAPI.status()') };
+    return { focused, point, after: await cdp.evaluate(`(()=>{const e=document.querySelector('[data-agent-skin-entry="appearance"]'),b=e?.shadowRoot?.querySelector('button'),r=b?.getBoundingClientRect();return {active:document.activeElement?.tagName,activeID:document.activeElement?.id,rect:r?{x:r.x,y:r.y,width:r.width,height:r.height}:null};})()`), state: await cdp.evaluate('window.__startupAPI.status()') };
   }
 
   const initialLightCheck = 'initial light appearance draws readable identity and cached path pixels from theme-only host state';
@@ -1997,7 +2108,8 @@ try {
     assertFlow(narrow, 'narrow Home nav');
 
     const opened = await clickAppearanceEntry();
-    assert.equal(opened?.focused, true, 'the appearance control receives a real pointer click');
+    if (!opened?.focused) await screenshot('home-nav-click-failure.png');
+    assert.equal(opened?.focused, true, 'the appearance control receives a real pointer click: '+JSON.stringify(opened));
     const settings = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status();
       return state.phase==='settings'&&document.querySelectorAll('iframe[aria-label]').length===1?state:false;
@@ -2653,7 +2765,7 @@ try {
     assert.equal(childAPI.state.runId, initial.runId);
     const unsavedDraft = await cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
-      const title=doc.querySelector('input[type="text"]');
+      const title=doc.querySelector('input[maxlength="16"]');
       title.value='Discard draft';title.dispatchEvent(new Event('input',{bubbles:true}));
       const strength=doc.querySelector('input[type="range"]');
       strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -2697,7 +2809,7 @@ try {
       'the settings-intent frame does not apply a fallback or draft wallpaper');
     const defaultPanel = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      return {title:doc.querySelector('input[type="text"]').value,
+      return {title:doc.querySelector('input[maxlength="16"]').value,
         strength:doc.querySelector('input[type="range"]').value,
         wallpaper:window.__startupAPI.status().wallpaper};
     })()`);
@@ -2706,7 +2818,7 @@ try {
     assert.deepEqual(defaultPanel.wallpaper, { applied: false, reason: 'disabled', imageDecoded: false });
     const previewLaunch = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const title=doc.querySelector('input[type="text"]');
+      const title=doc.querySelector('input[maxlength="16"]');
       title.value='Local draft';title.dispatchEvent(new Event('input',{bubbles:true}));
       const strength=doc.querySelector('input[type="range"]');
       strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -2726,7 +2838,7 @@ try {
       const close=overlay.querySelector('button[data-agent-skin-settings-preview-close]');
       return {
         open:overlay.hidden!==true,settingsOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open===true,
-        title:doc.querySelector('input[type="text"]')?.value,
+        title:doc.querySelector('input[maxlength="16"]')?.value,
         previewStage:!!preview.contentDocument.querySelector('[data-agent-skin-stage]'),
         hasCloseButton:!!close,modal:overlay.getAttribute('role')==='dialog'&&overlay.getAttribute('aria-modal')==='true',
         runCount:window.__startupAnimationRuns.length,state:window.__startupAPI.status()};
@@ -2806,7 +2918,7 @@ try {
     const previewClosed = await until(() => cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
       const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
-      const title=doc?.querySelector('input[type="text"]');
+      const title=doc?.querySelector('input[maxlength="16"]');
       const active=doc?.activeElement;
       return (!overlay||!overlay.isConnected||overlay.hidden===true)
         &&doc.querySelector('dialog[data-agent-skin-settings]')?.open===true
@@ -2868,7 +2980,7 @@ try {
       if(overlay?.isConnected&&overlay.hidden!==true)return false;
       const launch=doc?.querySelector('[data-agent-skin-preview-animation]');
       return {settingsOpen:doc?.querySelector('dialog[data-agent-skin-settings]')?.open===true,
-        title:doc?.querySelector('input[type="text"]')?.value,
+        title:doc?.querySelector('input[maxlength="16"]')?.value,
         focused:doc?.activeElement===launch,runCount:window.__startupAnimationRuns.length,
         state:window.__startupAPI.status()};
     })()`), 18000, 'the full-duration animation preview ends naturally');
@@ -2930,7 +3042,7 @@ try {
       return {state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
         frameCount:document.querySelectorAll('iframe[aria-label]').length,
         dialogOpen:doc?.querySelector('dialog')?.open,
-        draftTitle:doc?.querySelector('input[type="text"]')?.value||''};
+        draftTitle:doc?.querySelector('input[maxlength="16"]')?.value||''};
     })()`);
     assert.equal(conflictState.state.phase, 'settings', 'conflicted settings remain in their settings run');
     assert.equal(conflictState.state.runId, settingsRun.runId, 'conflicted settings do not start a new run');
@@ -2965,14 +3077,14 @@ try {
     assert.ok(retrySettings.runId > settingsRun.runId);
     const retryValues = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      return {title:doc.querySelector('input[type="text"]').value,
+      return {title:doc.querySelector('input[maxlength="16"]').value,
         strength:doc.querySelector('input[type="range"]').value};
     })()`);
     assert.deepEqual(retryValues, { title: 'External', strength: '42' },
       'reopening discards the stale draft and reads the value committed by the other page');
     await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const title=doc.querySelector('input[type="text"]');
+      const title=doc.querySelector('input[maxlength="16"]');
       title.value='Saved title';title.dispatchEvent(new Event('input',{bubbles:true}));
       doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
     })()`);
@@ -2985,7 +3097,7 @@ try {
         state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
         frameCount:document.querySelectorAll('iframe[aria-label]').length,
         dialogOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open,
-        title:doc.querySelector('input[type="text"]')?.value,
+        title:doc.querySelector('input[maxlength="16"]')?.value,
         retry:doc.querySelector('footer button:last-child')?.textContent,
         applications:window.__fixtureWallpaperApplications||0,status:status.textContent,
         startupNoticeDisplay:getComputedStyle(startupNotice).display,entryDisplay:getComputedStyle(entry).display}:false;
@@ -3041,6 +3153,14 @@ try {
 
     const savedSettingsRuns = [{ runId: savedRun.state.runId, intent: savedRun.run.intent,
       subtitle: 'Generated fixture only', applications: 2 }];
+    const isNewSettingsRun = (state, previousRunId) => Number.isSafeInteger(state?.runId)
+      && state.runId > previousRunId && ['loading', 'settings'].includes(state.phase);
+    for (const phase of ['loading', 'settings', 'complete', 'failed']) {
+      assert.equal(isNewSettingsRun({phase, runId: savedRun.state.runId}, savedRun.state.runId), false,
+        'no-op and old-run observations cannot satisfy a new settings transition');
+    }
+    assert.equal(isNewSettingsRun({phase: 'complete', runId: savedRun.state.runId + 1}, savedRun.state.runId), false);
+    assert.equal(isNewSettingsRun(null, savedRun.state.runId), false);
     let currentSettingsRunId = savedRun.state.runId;
     let expectedSubtitle = 'Generated fixture only';
     for (let cycle = 2; cycle <= 10; cycle++) {
@@ -3049,10 +3169,8 @@ try {
       assert.equal(entryBeforeOpen?.entryHit, true, 'appearance entry remains hit-testable after save ' + cycle);
       assert.equal(entryBeforeOpen?.buttonHit, true, 'appearance button remains hit-testable after save ' + cycle);
       const openedSettings = await clickAppearanceEntry();
-      assert.equal(openedSettings?.state?.phase, 'loading',
-        'clicking the visible appearance entry starts the next settings run: ' + JSON.stringify(openedSettings));
-      assert.ok(openedSettings.state.runId > currentSettingsRunId,
-        'each appearance click creates a newer settings run');
+      assert.ok(isNewSettingsRun(openedSettings?.state, currentSettingsRunId),
+        'clicking the appearance entry starts a newer loading or already-ready settings run: ' + JSON.stringify(openedSettings));
       const nextSettings = await until(() => cdp.evaluate(`(()=>{
         const state=window.__startupAPI.status();
         const dialog=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('dialog');
@@ -3062,7 +3180,7 @@ try {
         const state=window.__startupAPI.status();
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
         return {state:{phase:state.phase,runId:state.runId},
-          title:doc.querySelector('input[type="text"]').value,
+          title:doc.querySelector('input[maxlength="16"]').value,
           subtitle:doc.querySelector('textarea').value,
           strength:doc.querySelector('input[type="range"]').value};
       })()`);
@@ -3289,7 +3407,7 @@ try {
     })()`), 5000, 'actual settings dialog opens in the current play run');
     const draftBefore = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[title="阿舟启动动画"]').contentDocument;
-      const title=doc.querySelector('[data-agent-skin-settings] input[type="text"]');
+      const title=doc.querySelector('[data-agent-skin-settings] input[maxlength="16"]');
       const strength=doc.querySelector('[data-agent-skin-settings] input[type="range"]');
       title.value='Draft survives';title.dispatchEvent(new Event('input',{bubbles:true}));
       strength.value='33';strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -3314,7 +3432,7 @@ try {
     const updated = await until(() => cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[title="Azhou startup animation"]'),doc=frame?.contentDocument;
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),button=entry?.shadowRoot?.querySelector('button');
-      const dialog=doc?.querySelector('[data-agent-skin-settings]'),title=dialog?.querySelector('input[type="text"]');
+      const dialog=doc?.querySelector('[data-agent-skin-settings]'),title=dialog?.querySelector('input[maxlength="16"]');
       const titleLabelText=title?.labels?.[0]?.textContent.trim()||'';
       if(!frame||frame.title!=='Azhou startup animation'||doc.documentElement.lang!=='en'
         ||doc.documentElement.dataset.theme!=='light'||dialog?.querySelector('h2')?.textContent!=='Azhou · Theme & Appearance'
@@ -3368,10 +3486,12 @@ try {
       const value=key=>doc.querySelector('[data-agent-skin-setting-value="'+key+'"]').textContent;
       return {theme:value('theme'),locale:value('locale'),
         sections:[...doc.querySelectorAll('[data-agent-skin-settings-section]')].map(el=>el.dataset.agentSkinSettingsSection),
-        preferenceControls:doc.querySelectorAll('select,input[name="theme"],input[name="locale"],input[name="reducedMotion"]').length};
+        preferenceControls:doc.querySelectorAll('select:not([data-agent-skin-theme-choice]):not([data-agent-skin-theme-alpha-mode]):not([data-agent-skin-preset-list]):not([data-agent-skin-dream-list]),input[name="theme"],input[name="locale"],input[name="reducedMotion"]').length,
+        workspaceThemeControls:doc.querySelectorAll('select[data-agent-skin-theme-choice],select[data-agent-skin-theme-alpha-mode]').length,
+        directoryControls:doc.querySelectorAll('select[data-agent-skin-preset-list],select[data-agent-skin-dream-list]').length};
     })()`);
     assert.deepEqual(inheritedSettings, { theme: 'Light', locale: 'en',
-      sections: ['workspace', 'startup', 'about'], preferenceControls: 0 });
+      sections: ['workspace', 'startup', 'about'], preferenceControls: 0, workspaceThemeControls: 2, directoryControls: 2 });
     await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await until(() => cdp.evaluate(`document.querySelector('iframe[title="Azhou startup animation"]').contentDocument
       .querySelector('[data-agent-skin-setting-value="reducedMotion"]').textContent==='On'`), 5000, 'system motion readout')
@@ -3505,7 +3625,7 @@ try {
     })()`), 5000, 'settings dialog opens before the committed reload setup');
     await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const textFields=[...doc.querySelectorAll('input[type="text"]')];
+      const textFields=[doc.querySelector('input[maxlength="16"]'),doc.querySelector('input[maxlength="48"]')];
       for(const [control,value] of [[textFields[0],${JSON.stringify(fields.introTitle)}],
         [textFields[1],${JSON.stringify(fields.introCaption)}],
         [doc.querySelector('textarea'),${JSON.stringify(fields.artworkSubtitle)}]]){
@@ -3543,7 +3663,7 @@ try {
     'the refreshed top-level page opens its actual settings dialog for a field readback');
     const reloadedFields = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const textFields=[...doc.querySelectorAll('input[type="text"]')];
+      const textFields=[doc.querySelector('input[maxlength="16"]'),doc.querySelector('input[maxlength="48"]')];
       return {introTitle:textFields[0].value,
         introCaption:textFields[1].value,
         artworkSubtitle:doc.querySelector('textarea').value,
@@ -3579,7 +3699,7 @@ try {
         assert.equal(entry?.entryHit, true, 'appearance entry is clickable before settings save ' + round);
         assert.equal(entry?.buttonHit, true, 'appearance button is clickable before settings save ' + round);
         const opened = await clickAppearanceEntry();
-        assert.equal(opened?.state?.phase, 'loading', 'appearance click starts settings run ' + round);
+        assert.ok(['loading','settings'].includes(opened?.state?.phase), 'appearance click starts settings run ' + round);
         assert.ok(opened.state.runId > priorRunId, 'settings run ' + round + ' has a new run ID');
         expectedRunId = opened.state.runId;
       }
@@ -3587,7 +3707,7 @@ try {
         const state=window.__startupAPI.status();
         const frame=document.querySelector('iframe[aria-label]');
         const dialog=frame?.contentDocument.querySelector('dialog');
-        const title=frame?.contentDocument.querySelector('input[type="text"]')?.value;
+        const title=frame?.contentDocument.querySelector('input[maxlength="16"]')?.value;
         return state.phase==='settings'&&state.runId===${expectedRunId}&&dialog?.open?{state,title}:false;
       })()`), 10000, 'settings panel opens before save ' + round);
       if (expectedTitle === null) expectedTitle = panel.title;
@@ -3595,7 +3715,7 @@ try {
       const nextTitle = 'Saved run ' + String(round).padStart(2, '0');
       const draft = await cdp.evaluate(`(()=>{
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
-        const title=doc.querySelector('input[type="text"]');
+        const title=doc.querySelector('input[maxlength="16"]');
         title.value=${JSON.stringify(nextTitle)};title.dispatchEvent(new Event('input',{bubbles:true}));
         return {value:title.value,buttonLabel:doc.querySelector('[data-agent-skin-settings] footer button:last-child')?.textContent.trim()};
       })()`);
@@ -5294,7 +5414,7 @@ try {
                   overflow:dialog.scrollWidth>dialog.clientWidth+1||d.documentElement.scrollWidth>frame.contentWindow.innerWidth+1
                     ||panel?.scrollWidth>panel?.clientWidth+1};});
               const startup=dialog.querySelector('[data-agent-skin-settings-tab=startup]');startup.click();
-              const fields=[...dialog.querySelectorAll('[maxlength]')].map(e=>{const limit=e.maxLength;
+              const fields=[...dialog.querySelector('[data-agent-skin-settings-section=startup]').querySelectorAll('[maxlength]')].map(e=>{const limit=e.maxLength;
                 e.value=${JSON.stringify(locale==='en'?'A':'舟')}.repeat(limit);e.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));
                 const result={limit,length:e.value.length,name:e.labels?.[0]?.textContent.trim()||'',visible:hit(e).visible,
                   horizontalOverflow:dialog.scrollWidth>dialog.clientWidth+1||d.documentElement.scrollWidth>frame.contentWindow.innerWidth+1};
@@ -5306,6 +5426,11 @@ try {
               const detailsOpened=details.open;
               const version=dialog.querySelector('[data-agent-skin-setting-value=version]')?.textContent.trim();
               dialog.querySelector('[data-agent-skin-settings-tab=workspace]').click();
+              const presetDetails=dialog.querySelector('[data-agent-skin-disclosure=presets]'),preset=dialog.querySelector('[data-agent-skin-preset-name]');
+              presetDetails.open=true;preset.value=${JSON.stringify(locale==='en'?'A':'舟')}.repeat(preset.maxLength);
+              preset.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));
+              const presetField={limit:preset.maxLength,length:preset.value.length,name:preset.labels?.[0]?.textContent.trim()||'',...hit(preset)};
+              preset.value='';preset.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));presetDetails.open=false;
               const range=dialog.querySelector('input[type=range]'),preview=dialog.querySelector('[data-agent-skin-workspace-preview]');
               const choose=dialog.querySelector('[data-agent-skin-image-action=artwork]');
               const strength=[0,42,75].map(value=>{range.value=String(value);range.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));
@@ -5332,7 +5457,7 @@ try {
                 dialog:{left:r.left,right:r.right,scroll:dialog.scrollWidth,client:dialog.clientWidth,root:d.documentElement.scrollWidth},
                 version:dialog.querySelector('[data-agent-skin-running-version]')?.textContent.trim(),titleSize:parseFloat(css(title).fontSize),
                 titleWeight:parseInt(css(title).fontWeight,10),tabs:tabs.map(t=>t.textContent.trim()),sections,
-                activeOverflow:active.scrollWidth>active.clientWidth+1,fields,previewAction:{name:previewAction.textContent.trim(),...previewActionHit},
+                activeOverflow:active.scrollWidth>active.clientWidth+1,fields,presetField,previewAction:{name:previewAction.textContent.trim(),...previewActionHit},
                 summary:{name:summary.textContent.trim(),...summaryHit,opened:detailsOpened,version},
                 workspace:{preview:hit(preview),previewName:preview.getAttribute('aria-label'),rangeName:range.labels?.[0]?.textContent.trim(),choose:{name:choose.textContent.trim(),...hit(choose)}},
                 strength,footer,contrast};
@@ -5346,6 +5471,8 @@ try {
             assert.ok(cell.dialog.left>=-1&&cell.dialog.right<=viewport.width+1&&cell.dialog.scroll<=cell.dialog.client+1
               &&cell.dialog.root<=viewport.width+1&&!cell.activeOverflow, 'settings panel fits the CSS viewport');
             assert.deepEqual(cell.fields.map(f=>[f.limit,f.length,f.empty]), [[16,16,true],[48,48,true],[60,60,true]]);
+            assert.deepEqual([cell.presetField.limit,cell.presetField.length],[40,40]);
+            assert.ok(cell.presetField.name&&cell.presetField.visible&&cell.presetField.hit,'preset name is labeled and reachable');
             assert.ok(cell.fields.every(f=>f.name&&f.visible&&!f.horizontalOverflow),
               'bounded text fields have visible names and do not overflow horizontally: '+JSON.stringify({locale,theme,width:viewport.width,fields:cell.fields}));
             if (!cell.previewAction.hit) {
@@ -5474,7 +5601,12 @@ try {
       assert.equal(applied.state.runId, completed.runId);
       assert.equal(applied.frames, 0);
       assert.equal(applied.observers.wallpaperShellWait.active, 0);
-      return applied;
+      assert.equal(applied.observers.workspaceActive.active, 1, 'only the committed wallpaper retains an active observation lease');
+      await cdp.evaluate('window.__startupAPI.dispose()');
+      const released = await cdp.evaluate('window.__fixtureMutationObserverStats()');
+      assert.equal(released.wallpaperShellWait.active, 0);
+      assert.equal(released.workspaceActive.active, 0, 'disposing the owner releases its committed workspace lease');
+      return { ...applied, released };
     });
     await navigate('/fixture.html?generated-payload=1');
     await check('generated cold start restores saved wallpaper after natural completion without another save', async () => {
@@ -5959,7 +6091,7 @@ try {
       assert.equal(themePage.source, '默认设置');
       const draft = await cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
-        const title=doc.querySelector('input[type="text"]');
+        const title=doc.querySelector('input[maxlength="16"]');
         title.value='生成载荷保存验证';title.dispatchEvent(new Event('input',{bubbles:true}));
         const button=doc.querySelector('[data-agent-skin-settings] footer button:last-child');
         if(!button)throw new Error('generated payload settings save control is missing');
@@ -5996,7 +6128,7 @@ try {
       assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true);
       const persisted = await until(() => cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]');
-        const title=frame?.contentDocument.querySelector('input[type="text"]');
+        const title=frame?.contentDocument.querySelector('input[maxlength="16"]');
         const state=window.__startupAPI.status();
         return state.phase==='settings'&&title?{title:title.value,runId:state.runId}:false;
       })()`), 10000, 'saved generated payload settings are loaded into a newly opened settings run');
@@ -6227,9 +6359,11 @@ try {
           const textFields=[...dialog.querySelectorAll('input[type="text"],textarea')];
           const values=['阿舟的 Agent 实验室','Azhou / Intelligent Agents & Creative Workflows',
             '和阿舟一起，把真实工作里的复杂想法变成可以检查、可以复用、可以交付的结果。'];
-          textFields.forEach((field,index)=>{
-            const limit=field.maxLength>0?field.maxLength:values[index%values.length].length;
-            field.value=values[index%values.length].slice(0,limit);
+          textFields.forEach(field=>{
+            const value=field.matches('[data-agent-skin-preset-name]')?'本机外观预设名称':
+              field.maxLength===16?values[0]:field.maxLength===48?values[1]:values[2];
+            const limit=field.maxLength>0?field.maxLength:value.length;
+            field.value=value.slice(0,limit);
             field.dispatchEvent(new win.Event('input',{bubbles:true}));
           });
           const strength=dialog.querySelector('input[type="range"]');
@@ -6260,22 +6394,56 @@ try {
         if(metrics.scroller.clientHeight<48)scenarioIssues.push('content scroller has no usable space');
         for(let step=0;step<8;step++){
           await dispatchTab();
+          if(await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.activeElement?.matches('section[role="tabpanel"]')`))
+            await screenshot('settings-section-focus-'+scenario.name+'-'+step+'.png');
           const focus=await cdp.evaluate(`(()=>{
             const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
             const dialog=doc.querySelector('[data-agent-skin-settings]'),active=doc.activeElement;
             if(!active||!dialog.contains(active))return {inside:false};
             const box=active.getBoundingClientRect(),style=frame.contentWindow.getComputedStyle(active);
-            const hit=doc.elementFromPoint(box.left+box.width/2,box.top+box.height/2);
             const footer=dialog.querySelector('footer'),footerBox=footer?.getBoundingClientRect();
             const dialogBox=dialog.getBoundingClientRect();
             const fitsAboveFooter=box.height<=footerBox.top-dialogBox.top+0.5;
+            const evaluateHit=${settingsFocusHitEvidence.toString()};
+            const hitEvidence=evaluateHit(active,dialog,footer,doc,frame.contentWindow);
+            let negativeControls=null;
+            if(active.matches('section[role="tabpanel"][data-agent-skin-settings-section="workspace"]')&&frame.contentWindow.innerHeight===360) {
+              const scrollBefore=dialog.scrollTop;
+              const input=active.querySelector('#agent-skin-settings-wallpaper-strength');
+              const inputBaseline=evaluateHit(input,dialog,footer,doc,frame.contentWindow);
+              const inputVisible=!!input.getClientRects().length&&input.getBoundingClientRect().width>0&&input.getBoundingClientRect().height>0;
+              const cover=doc.createElement('div');cover.style.cssText='position:fixed;inset:0;z-index:2147483647;background:black';dialog.appendChild(cover);
+              const covered=evaluateHit(active,dialog,footer,doc,frame.contentWindow);cover.remove();
+              active.hidden=true;const hidden=evaluateHit(active,dialog,footer,doc,frame.contentWindow);active.hidden=false;
+              const inputStyle=input.style.cssText,footerStyle=footer.style.cssText;
+              let footerCovered;
+              try {
+                const f=footer.getBoundingClientRect();footer.style.zIndex='1';
+                input.style.cssText='position:fixed;left:'+ (f.left+16)+'px;top:'+(f.top+8)+'px;width:60px;height:20px;z-index:0';
+                footerCovered=evaluateHit(input,dialog,footer,doc,frame.contentWindow);
+              } finally {input.style.cssText=inputStyle;footer.style.cssText=footerStyle;}
+              active.focus({preventScroll:true});dialog.scrollTop=scrollBefore;
+              negativeControls={covered,hidden,inputBaseline,inputVisible,footerCovered,focusRestored:doc.activeElement===active,restored:evaluateHit(active,dialog,footer,doc,frame.contentWindow)};
+            }
             return {inside:true,tag:active.tagName,label:active.id||active.getAttribute('aria-label')||active.textContent?.trim()||active.type,
-              hit:hit===active||active.contains(hit),visible:box.width>0&&box.height>0
+              hit:hitEvidence.hit,hitEvidence,negativeControls,visible:box.width>0&&box.height>0
               &&box.bottom>0&&box.top<frame.contentWindow.innerHeight,
               clearFooter:!footerBox||footer.contains(active)||!fitsAboveFooter||box.bottom<=footerBox.top+0.5,
               focusVisible:active.matches(':focus-visible'),outlineStyle:style.outlineStyle,
               outlineWidth:parseFloat(style.outlineWidth),outlineColor:style.outlineColor};
           })()`);
+          if(focus.negativeControls) {
+            const n=focus.negativeControls;
+            await writeFile(join(options.out,'focus-controls-'+scenario.name+'-'+step+'.json'),JSON.stringify(n,null,2));
+            assert.equal(n.covered.hit,false,'visible tabpanel fully covered must be rejected');
+            assert.equal(n.hidden.hit,false,'hidden tabpanel must be rejected');
+            assert.equal(n.inputVisible,true,'public strength range is visible before fault injection');
+            assert.equal(n.inputBaseline.hit,true,'public strength range is hit before fault injection');
+            assert.equal(n.footerCovered.hit,false,'a real input hidden by the footer must be rejected');
+            assert.equal(n.footerCovered.footerTarget,true,'negative control actually hits the footer');
+            assert.equal(n.restored.hit,true,'removing faults restores the visible tabpanel');
+            assert.equal(n.focusRestored,true,'fault injection restores the original active element');
+          }
           keyboard.push(focus);
           if(!focus.inside||!focus.visible||!focus.hit)scenarioIssues.push('keyboard focus is outside or obscured in settings: '+JSON.stringify(focus));
           if(focus.inside&&!focus.clearFooter)scenarioIssues.push('keyboard focus is clipped by the settings footer: '+JSON.stringify(focus));
@@ -6389,6 +6557,52 @@ try {
     });
   }
 
+  await check('DSH owned main paint applies and restores through a reversible renderer transaction', async()=>{
+    await navigate('/fixture.html?legacy-only=1');
+    const result=await cdp.evaluate(`(async()=>{
+      window.__azhouWallpaper?.dispose();
+      document.getElementById('root').innerHTML='<div class="fixture_mainPanel" style="display:flex;flex-direction:column;width:100%;height:100vh"><div data-slot="main" style="display:contents"><main style="display:contents"><div style="flex:1"></div></main></div></div>';
+      window.__ModuleLoader__={load(){}};window.__DSH_BOOT__={};
+      const {createDSHPageAdapter}=await import('/extension/hosts/dsh.mjs');
+      const {createWallpaperApplicator}=await import('/wallpaper/apply.js');
+      const {installRenderer}=await import('/wallpaper/renderer.js');
+      const adapter=createDSHPageAdapter(window,{sidebarEntry:false});
+      const css=await(await fetch('/wallpaper.css')).text();
+      const apply=createWallpaperApplicator(installRenderer,{version:'0.9.0',css,pageAdapter:adapter},window);
+      const base={image:${JSON.stringify(pixelImage)},strength:42};
+      const first=await apply(base,()=>true);if(!first.applied)throw Error(JSON.stringify(first));
+      const prior=window.__azhouWallpaper;
+      const candidate=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+      if(!candidate.applied)throw Error(JSON.stringify(candidate));
+      const node=document.querySelector('.fixture_mainPanel'),color=getComputedStyle(node).backgroundColor;
+      const rollback=candidate.transaction.rollback(),same=window.__azhouWallpaper===prior;
+      const next=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+      const finalized=next.transaction.finalize();
+      const restore=await apply(base,()=>true,null,{transactional:true});
+      const restored=restore.transaction.finalize();
+      const transparent=getComputedStyle(node).backgroundColor;
+      const zero=await apply({...base,strength:0},()=>true,null,{transactional:true});
+      node.remove();document.getElementById('root').appendChild(node);
+      const zeroStale=zero.transaction.current(),zeroFinalized=zero.transaction.finalize();
+      window.__azhouWallpaper?.dispose();
+      const absent=await apply({...base,strength:0},()=>true,null,{transactional:true});
+      node.remove();document.getElementById('root').appendChild(node);
+      const absentStale=absent.transaction.current(),absentFinalized=absent.transaction.finalize();
+      const disabled=await apply({...base,strength:0},()=>true,null,{transactional:true});
+      const disabledFinalized=disabled.transaction.finalize(),disabledRepeated=disabled.transaction.finalize();
+      const routeCleanup=[];
+      for(const eventName of ['hashchange','popstate']){
+        const applied=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+        if(!applied.transaction.finalize())throw Error('route setup failed');
+        window.dispatchEvent(new Event(eventName));
+        routeCleanup.push(!window.__azhouWallpaper&&!document.getElementById('azhou-wallpaper-style')&&!node.hasAttribute('data-azhou-dream-main'));
+      }
+      return {color,rollback,same,finalized,restored,transparent,zeroStale,zeroFinalized,absentStale,absentFinalized,disabledFinalized,disabledRepeated,routeCleanup,marker:node.getAttribute('data-azhou-dream-main')};
+    })()`);
+    assert.deepEqual(result,{color:'rgba(10, 20, 30, 0.4)',rollback:true,same:true,finalized:true,restored:true,transparent:'rgba(0, 0, 0, 0)',zeroStale:false,zeroFinalized:false,absentStale:false,absentFinalized:false,disabledFinalized:true,disabledRepeated:true,routeCleanup:[true,true],marker:null});
+    return result;
+  });
+
   await check('detached startup overlay invalidates playback readiness', async () => {
     await navigate('/fixture.html?animation=1');
     await awaitGeneratedReady('actual animation playing');
@@ -6501,6 +6715,938 @@ try {
     assert.deepEqual(state, {disposed:1,closed:1,phase:'playing'});
   });
 
+  if(options.generatedPayload)await check('generated Dream source UI applies literal main paint and restores the saved Azhou appearance',async()=>{
+    const fixtureDirectory=join(options.out,'dream-source-fixtures');await mkdir(fixtureDirectory);
+    const {stdout}=await promisify(execFile)(process.env.AZHOU_TEST_PYTHON||'python3',['-B','-c',`
+import sys,io,json,zipfile,subprocess
+from pathlib import Path
+from PIL import Image
+root=Path(sys.argv[1]).resolve();tool=Path(sys.argv[2])/'tools/theme-library.py'
+image=io.BytesIO();Image.new('RGB',(24,16),(23,41,79)).save(image,format='PNG')
+base=[sys.executable,'-B',str(tool),'--library',str(root/'library')];capsules=[]
+for index,color in enumerate(['transparent','rgba(120,60,20,.4)','rgb(70,90,110)']):
+ source=root/(str(index)+'.zip')
+ with zipfile.ZipFile(source,'w') as z:
+  z.writestr('theme.json',json.dumps({'schemaVersion':1,'id':'dream.browser','name':'<b>Dream '+str(index)+'</b>','image':'background.png'}))
+  z.writestr('theme.css','[data-ds-part="main"]{background-color:#010203;}[data-ds-part="main"]{background-color:'+color+';}')
+  z.writestr('background.png',image.getvalue())
+ receipt=json.loads(subprocess.check_output([*base,'import',str(source)]))
+ capsule=subprocess.check_output([*base,'export-capsule',receipt['archiveSha256']]).decode()
+ (root/(str(index)+'.json')).write_text(capsule);capsules.append(capsule)
+print(json.dumps(capsules))
+`,fixtureDirectory,ROOT],{timeout:30000,maxBuffer:4*1024*1024});
+    const capsules=JSON.parse(stdout);
+    await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+    await awaitGeneratedReady('generated Dream fixture ready');
+    await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied===true'),10000,'legacy incumbent before import');
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()`);
+    await until(()=>cdp.evaluate(`__startupAPI.status().phase==='complete'`),5000,'skip preserves incumbent');
+    const open=async()=>{
+      assert.equal(await cdp.evaluate('__startupAPI.openSettings()'),true);
+      await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return !!d?.querySelector('[data-agent-skin-dream-import]')&&__startupAPI.status().phase==='settings';})()`),10000,'real generated settings panel');
+      await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;return !d.querySelector('[data-agent-skin-dream-import-button]').disabled;})()`),10000,'Dream controls ready');
+    };
+    await cdp.evaluate(`window.__dreamReadRecords=async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('azhou-codex-startup');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});try{return await new Promise((resolve,reject)=>{const t=db.transaction('settings','readonly'),s=t.objectStore('settings'),out={};for(const k of ['images','themeState','appearancePresets','dreamThemes']){const r=s.get(k);r.onsuccess=()=>{out[k]=r.result;};}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}finally{db.close();}}`);
+    const before=await cdp.evaluate('(async()=>JSON.stringify(await __dreamReadRecords()))()');
+    await open();
+    await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;const input=d.querySelector('input[maxlength="16"]');input.value='Unsaved startup';input.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));})()`);
+    for(let index=0;index<capsules.length;index++){
+      await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,w=d.defaultView,input=d.querySelector('[data-agent-skin-dream-import]'),transfer=new w.DataTransfer();transfer.items.add(new w.File([${JSON.stringify(capsules[index])}],'dream.json',{type:'application/json'}));input.files=transfer.files;input.dispatchEvent(new w.Event('change',{bubbles:true}));})()`);
+      await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;return d.querySelector('[data-agent-skin-dream-list]').options.length===${index+1}&&!d.querySelector('[data-agent-skin-dream-import-button]').disabled;})()`),10000,'source file input stored independently');
+    }
+    const imported=await cdp.evaluate(`(async()=>{const records=await __dreamReadRecords();delete records.dreamThemes;const d=document.querySelector('iframe[aria-label]').contentDocument;return {records:JSON.stringify(records),title:d.querySelector('input[maxlength="16"]').value,names:[...d.querySelector('[data-agent-skin-dream-list]').options].map(n=>n.textContent),applyEnabled:!d.querySelector('[data-agent-skin-dream-apply]').disabled};})()`);
+    assert.equal(imported.records,before,'import does not save active settings or startup draft');assert.equal(imported.title,'Unsaved startup');
+    assert.deepEqual(imported.names,['<b>Dream 0</b>','<b>Dream 1</b>','<b>Dream 2</b>']);assert.equal(imported.applyEnabled,true,'explicit apply is usable on the generated parent/child surface');
+    await cdp.evaluate(`(()=>{const b=document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-apply]');b.scrollIntoView();b.focus();})()`);
+    await screenshot('dream-apply-control.png');
+    const failureRows=[];
+    for(const failure of ['quota','conflict','cancel']){
+      await cdp.evaluate(`(async()=>{
+        window.__dreamFailure=${JSON.stringify(failure)};window.__dreamFault=null;window.__dreamPriorOwner=window.__azhouWallpaper;
+        window.__dreamBeforeFault=JSON.stringify(await __dreamReadRecords());
+        window.__dreamOriginalTransaction=IDBDatabase.prototype.transaction;
+        window.__dreamOriginalPut=IDBObjectStore.prototype.put;
+        if(__dreamFailure==='conflict'){
+          window.__dreamCompetitor=await new Promise((resolve,reject)=>{const r=indexedDB.open('azhou-codex-startup');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+        }
+        const capture=()=>{const sheet=[...document.querySelectorAll('style[data-azhou-owner]')].find(s=>s.disabled);__dreamFault={candidate:__azhouWallpaper.status().mainPaintApplied===true,incumbentRetained:!!sheet?.isConnected,oldOwnerSame:__azhouWallpaper===__dreamPriorOwner};};
+        IDBObjectStore.prototype.put=function(value,key){
+          if(__dreamFailure==='quota'&&!__dreamFault&&key==='themeState'&&value?.schemaVersion===2){capture();throw new DOMException('fault-injected quota at real IDB write','QuotaExceededError');}
+          return __dreamOriginalPut.call(this,value,key);
+        };
+        IDBDatabase.prototype.transaction=function(stores,mode,...rest){
+          if(__dreamFailure!=='quota'&&!__dreamFault&&this.name==='azhou-codex-startup'&&mode==='readwrite'&&window.__azhouWallpaper?.status().mainPaintApplied===true){
+            capture();
+            if(__dreamFailure==='conflict'){
+              const t=__dreamOriginalTransaction.call(__dreamCompetitor,'settings','readwrite');
+              const source=JSON.parse(__dreamBeforeFault).dreamThemes;
+              t.objectStore('settings').put({...source,revision:source.revision+1},'dreamThemes');
+            }else queueMicrotask(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();});
+          }
+          return __dreamOriginalTransaction.call(this,stores,mode,...rest);
+        };
+        document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-apply]').click();
+      })()`);
+      await until(()=>cdp.evaluate(`!!window.__dreamFault&&window.__azhouWallpaper===window.__dreamPriorOwner&&window.__azhouWallpaper.status().applied===true`),10000,'activated '+failure+' restores prior live owner');
+      const row=await cdp.evaluate(`(async()=>{const after=await __dreamReadRecords(),before=JSON.parse(__dreamBeforeFault);IDBDatabase.prototype.transaction=__dreamOriginalTransaction;IDBObjectStore.prototype.put=__dreamOriginalPut;window.__dreamCompetitor?.close();return {failure:__dreamFailure,...__dreamFault,imagesUnchanged:JSON.stringify(after.images)===JSON.stringify(before.images),themeUnchanged:JSON.stringify(after.themeState)===JSON.stringify(before.themeState),directoryRevision:after.dreamThemes.revision,beforeRevision:before.dreamThemes.revision};})()`);
+      assert.equal(row.candidate,true);assert.equal(row.incumbentRetained,true);assert.equal(row.oldOwnerSame,false);
+      assert.equal(row.imagesUnchanged,true);assert.equal(row.themeUnchanged,true);
+      if(failure==='conflict')assert.equal(row.directoryRevision,row.beforeRevision+1);
+      failureRows.push(row);
+      if(failure!=='cancel')await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();})()`);
+      await until(()=>cdp.evaluate(`!document.querySelector('iframe[aria-label]')`),5000,'failed attempt closes safely');
+      await open();
+    }
+    await writeFile(join(options.out,'dream-failure-observations.json'),JSON.stringify(failureRows,null,2));
+    await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;const input=d.querySelector('input[maxlength="16"]');input.value='Unsaved startup';input.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));})()`);
+    const rows=[];
+    for(let index=0;index<capsules.length;index++){
+      if(index)await open();
+      await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,s=d.querySelector('[data-agent-skin-dream-list]');s.selectedIndex=${index};s.dispatchEvent(new d.defaultView.Event('change',{bubbles:true}));d.querySelector('[data-agent-skin-dream-apply]').click();})()`);
+      await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return window.__azhouWallpaper?.status().mainPaintApplied===true&&!d?.querySelector('[data-agent-skin-dream-apply]')?.disabled;})()`),12000,'literal main paint and persisted active pointer');
+      const stored=await cdp.evaluate(`(async()=>{const r=await __dreamReadRecords(),d=document.querySelector('iframe[aria-label]').contentDocument;return {title:r.images.introTitle,kind:r.themeState.selection.kind,previous:r.themeState.previousThemeId,draft:d.querySelector('input[maxlength="16"]').value};})()`);
+      assert.equal(stored.kind,'imported');assert.notEqual(stored.title,'Unsaved startup');if(!index)assert.equal(stored.draft,'Unsaved startup');
+      await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();})()`);
+      await until(()=>cdp.evaluate(`!document.querySelector('iframe[aria-label]')`),5000,'close without saving unrelated draft');
+      const paint=await cdp.evaluate(`(()=>{const m=document.querySelector('[data-app-shell-main-surface]'),s=getComputedStyle(m),b=getComputedStyle(document.body);return {color:s.backgroundColor,mainImage:s.backgroundImage,bodyImage:b.backgroundImage,wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),marker:m.getAttribute('data-azhou-dream-main'),status:__azhouWallpaper.status()};})()`);
+      assert.equal(paint.color,['rgba(0, 0, 0, 0)','rgba(120, 60, 20, 0.4)','rgb(70, 90, 110)'][index]);assert.equal(paint.mainImage,'none');assert.match(paint.bodyImage,/blob:/);assert.equal(paint.wash,'linear-gradient(transparent,transparent)');assert.equal(paint.status.sourceDeclarationCount,2);
+      await screenshot('dream-main-'+index+'.png');
+      const screenshotBytes=await readFile(join(options.out,'dream-main-'+index+'.png'));
+      const pixel=await cdp.evaluate(`(async()=>{const i=new Image();i.src='data:image/png;base64,${screenshotBytes.toString('base64')}';await i.decode();const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);return [...x.getImageData(1200,400,1,1).data];})()`);
+      const expectedPixel=[[23,41,79],[62,49,55],[70,90,110]][index];
+      assert.ok(expectedPixel.every((channel,k)=>Math.abs(channel-pixel[k])<=1),'screenshot pixels preserve author alpha over the original artwork');
+      rows.push({stored,paint,pixel,expectedPixel});
+    }
+    await navigate('/fixture.html?generated-payload=1');await awaitGeneratedReady('fresh startup rebuilds source paint');
+    await until(()=>cdp.evaluate(`window.__azhouWallpaper?.status().mainPaintApplied===true`),10000,'fresh startup applies imported source');
+    assert.equal(await cdp.evaluate(`getComputedStyle(document.querySelector('[data-app-shell-main-surface]')).backgroundColor`),'rgb(70, 90, 110)');
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()`);
+    await until(()=>cdp.evaluate(`__startupAPI.status().phase==='complete'`),5000,'fresh startup closes');
+    await open();await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-restore]').click()`);
+    await until(()=>cdp.evaluate(`window.__azhouWallpaper?.status().applied===true&&document.querySelector('[data-azhou-dream-main]')===null`),10000,'explicit restore removes only imported plan');
+    await cdp.evaluate(`window.__dreamReadRecords=async()=>{const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('azhou-codex-startup');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});try{return await new Promise((resolve,reject)=>{const t=db.transaction('settings','readonly'),s=t.objectStore('settings'),out={};for(const k of ['images','themeState','appearancePresets','dreamThemes']){const r=s.get(k);r.onsuccess=()=>{out[k]=r.result;};}t.oncomplete=()=>resolve(out);t.onabort=()=>reject(t.error);});}finally{db.close();}}`);
+    await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return d&&!d.querySelector('[data-agent-skin-dream-apply]').disabled;})()`),10000,'restored panel finishes its local reload');
+    await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;for(const [selector,value,event] of [['[data-agent-skin-theme-choice]','azhou-q-v3','change'],['[data-agent-skin-theme-alpha-mode]','override','change'],['[data-agent-skin-theme-transparency]','100','input'],['#agent-skin-settings-wallpaper-strength','0','input']]){const n=d.querySelector(selector);n.value=value;n.dispatchEvent(new d.defaultView.Event(event,{bubbles:true}));}[...d.querySelectorAll('button')].find(b=>/^(保存|Save)$/.test(b.textContent.trim())).click();})()`);
+    await until(()=>cdp.evaluate(`!document.querySelector('iframe[aria-label]')&&__startupAPI.status().wallpaper.reason==='disabled'&&!window.__azhouWallpaper`),10000,'save disabled Azhou appearance with zero-strength transparent mask');
+    const savedDisabled=await cdp.evaluate('(async()=>{const r=await __dreamReadRecords();return {strength:r.images.wallpaperStrength,theme:r.themeState.activeThemeId,alpha:r.themeState.preferencesByTheme["azhou-q-v3"]};})()');
+    assert.deepEqual(savedDisabled,{strength:0,theme:'azhou-q-v3',alpha:{mode:'override',value:100}});
+    await open();
+    await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;d.querySelector('[data-agent-skin-dream-list]').selectedIndex=1;d.querySelector('[data-agent-skin-dream-apply]').click();})()`);
+    await until(()=>cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return window.__azhouWallpaper?.status().mainPaintApplied&&!d?.querySelector('[data-agent-skin-dream-restore]')?.disabled;})()`),12000,'imported theme remains visible over saved disabled baseline');
+    const disabledRestoreFailures=[];
+    for(const failure of ['quota','conflict','cancel']){
+      await cdp.evaluate(`(async()=>{
+        window.__disabledFailure=${JSON.stringify(failure)};window.__disabledFault=null;window.__disabledPrior=__azhouWallpaper;
+        window.__disabledBefore=JSON.stringify(await __dreamReadRecords());
+        window.__disabledTransaction=IDBDatabase.prototype.transaction;window.__disabledPut=IDBObjectStore.prototype.put;
+        if(__disabledFailure==='conflict')window.__disabledCompetitor=await new Promise((resolve,reject)=>{const r=indexedDB.open('azhou-codex-startup');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+        const capture=()=>{__disabledFault={incumbentSame:__azhouWallpaper===__disabledPrior,incumbentApplied:__disabledPrior.status().applied,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length};};
+        IDBObjectStore.prototype.put=function(value,key){if(__disabledFailure==='quota'&&!__disabledFault&&key==='themeState'&&value?.schemaVersion===1){capture();throw new DOMException('disabled restore quota injection','QuotaExceededError');}return __disabledPut.call(this,value,key);};
+        IDBDatabase.prototype.transaction=function(stores,mode,...rest){
+          if(__disabledFailure!=='quota'&&!__disabledFault&&this.name==='azhou-codex-startup'&&mode==='readwrite'){
+            capture();
+            if(__disabledFailure==='conflict'){const t=__disabledTransaction.call(__disabledCompetitor,'settings','readwrite'),r=JSON.parse(__disabledBefore).dreamThemes;t.objectStore('settings').put({...r,revision:r.revision+1},'dreamThemes');}
+            else queueMicrotask(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();});
+          }
+          return __disabledTransaction.call(this,stores,mode,...rest);
+        };
+        document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-restore]').click();
+      })()`);
+      await until(()=>cdp.evaluate(`!!window.__disabledFault&&window.__azhouWallpaper===window.__disabledPrior&&window.__azhouWallpaper.status().mainPaintApplied===true`),10000,'failed disabled Restore retains imported owner');
+      const failureRow=await cdp.evaluate(`(async()=>{const a=await __dreamReadRecords(),b=JSON.parse(__disabledBefore);IDBDatabase.prototype.transaction=__disabledTransaction;IDBObjectStore.prototype.put=__disabledPut;window.__disabledCompetitor?.close();return {failure:__disabledFailure,...__disabledFault,activeUnchanged:JSON.stringify(a.images)===JSON.stringify(b.images)&&JSON.stringify(a.themeState)===JSON.stringify(b.themeState),strength:a.images.wallpaperStrength};})()`);
+      assert.equal(failureRow.incumbentSame,true,'Disabled candidate keeps imported paint until commit');assert.equal(failureRow.incumbentApplied,true);assert.equal(failureRow.styleCount,1);assert.equal(failureRow.activeUnchanged,true);assert.equal(failureRow.strength,0);disabledRestoreFailures.push(failureRow);
+      if(failure!=='cancel')await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim())).click();})()`);
+      await until(()=>cdp.evaluate(`!document.querySelector('iframe[aria-label]')`),5000,'failed disabled Restore closes');await open();
+    }
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-dream-restore]').click()`);
+    await until(()=>cdp.evaluate(`!window.__azhouWallpaper&&__startupAPI.status().wallpaper.reason==='disabled'`),10000,'successful disabled Restore finalizes without an owner');
+    const disabledRestore=await cdp.evaluate(`(async()=>{const r=await __dreamReadRecords();return {owner:!!window.__azhouWallpaper,styleCount:document.querySelectorAll('#azhou-wallpaper-style').length,mainImage:getComputedStyle(document.querySelector('[data-app-shell-main-surface]')).backgroundImage,bodyImage:getComputedStyle(document.body).backgroundImage,status:__startupAPI.status().wallpaper,strength:r.images.wallpaperStrength,alpha:r.themeState.preferencesByTheme['azhou-q-v3']};})()`);
+    assert.equal(disabledRestore.owner,false);assert.equal(disabledRestore.styleCount,0);assert.equal(disabledRestore.mainImage,'none');assert.equal(disabledRestore.bodyImage,'none');assert.equal(disabledRestore.status.applied,false);assert.equal(disabledRestore.status.reason,'disabled');assert.equal(disabledRestore.strength,0);assert.deepEqual(disabledRestore.alpha,{mode:'override',value:100});
+    await writeFile(join(options.out,'disabled-restore-observations.json'),JSON.stringify({savedDisabled,failures:disabledRestoreFailures,success:disabledRestore},null,2));
+    await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+    await awaitGeneratedReady('fresh isolated defaults after disabled Restore proof');
+    return {imported,failureRows,rows,disabledRestoreFailures,disabledRestore,freshStartup:true,restored:true,sourceFixture:'self-authored official-contract subset; not external visual compatibility'};
+  });
+
+  if (options.generatedPayload) await check('generated full owner chain restores navigation after settings cancellation and retains native input', async () => {
+    await navigate('/fixture.html?generated-payload=1');
+    await awaitGeneratedReady('full owner chain starts the generated payload');
+    await until(() => cdp.evaluate(`window.__startupAPI.status().wallpaper.applied&&window.__azhouWallpaper?.status().applied`),
+      10000, 'the navigation scenario begins with a committed appearance, not a skippable pending startup request');
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()`);
+    await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='complete'&&window.__azhouWallpaper?.status().applied`),
+      10000, 'initial committed wallpaper is ready');
+    assert.equal(await cdp.evaluate('window.__startupAPI.openSettings()'), true);
+    await until(() => cdp.evaluate(`window.__startupAPI.status().phase==='settings'`), 10000, 'settings panel opens');
+    await cdp.call('Input.dispatchKeyEvent', {type:'rawKeyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27,nativeVirtualKeyCode:27});
+    await cdp.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27,nativeVirtualKeyCode:27});
+    const cancelled = await until(() => cdp.evaluate(`(()=>{const s=window.__startupAPI.status();return s.completion?.cause==='settings-cancel'?s:false;})()`),
+      10000, 'settings cancels without saving or replay');
+    await cdp.evaluate(`(()=>{
+      window.__priorWorkspaceWallpaper=window.__azhouWallpaper;
+      const old=document.querySelector('[data-app-shell-main-surface]'),next=old.cloneNode(true);
+      for(const node of [next,...next.querySelectorAll('*')]) for(const attr of ['data-azhou-wallpaper-plane','data-azhou-wallpaper-pseudo','data-azhou-wallpaper-decoration']) node.removeAttribute(attr);
+      const geometryStyle=document.createElement('style');document.head.appendChild(geometryStyle);
+      const sheet=geometryStyle.sheet;
+      const index=sheet.insertRule('.fixture-geometry-pending {flex:none!important;align-self:flex-start!important;width:0!important;height:0!important;min-width:0!important;min-height:0!important;padding:0!important;border:0!important}',sheet.cssRules.length);
+      window.__geometryRule=sheet.cssRules[index];
+      next.classList.add('fixture-geometry-pending');
+      old.replaceWith(next);
+    })()`);
+    await until(() => cdp.evaluate('window.__fixtureMutationObserverStats().wallpaperShellWait.active>0'),5000,'new zero-sized main reaches pending availability lease');
+    const zeroGeometry=await cdp.evaluate(`(()=>{const n=document.querySelector('[data-app-shell-main-surface]');return {width:n.getBoundingClientRect().width,className:n.className,style:n.getAttribute('style'),computed:getComputedStyle(n).width,rule:window.__geometryRule.cssText,connected:window.__geometryRule.parentStyleSheet.ownerNode.isConnected,all:[...document.querySelectorAll('[data-app-shell-main-surface]')].map(n=>({tag:n.tagName,classes:n.className,width:n.getBoundingClientRect().width}))};})()`);
+    assert.equal(zeroGeometry.width,0,JSON.stringify(zeroGeometry));
+    await cdp.evaluate(`window.__geometryRule.style.setProperty('width','600px','important');window.__geometryRule.style.setProperty('height','600px','important')`);
+    const restored = await until(() => cdp.evaluate(`(()=>{
+      const state=window.__startupAPI.status(),wallpaper=window.__azhouWallpaper;
+      return wallpaper&&wallpaper!==window.__priorWorkspaceWallpaper&&state.wallpaper.applied&&wallpaper.status().applied
+        ?{state,marked:!!document.querySelector('[data-app-shell-main-surface][data-azhou-wallpaper-plane]'),frames:document.querySelectorAll('iframe[aria-label]').length}:false;
+    })()`), 10000, 'actual new DOM receives wallpaper through the original owner');
+    assert.equal(restored.state.runId, cancelled.runId);
+    assert.equal(restored.frames, 0);
+    assert.equal(restored.marked, true);
+    assert.equal(restored.state.wallpaper.fullCoverage,false);
+    assert.equal(restored.state.wallpaper.coverage.auxiliary,'unknown');
+    const point = await cdp.evaluate(`(()=>{const input=document.querySelector('textarea'),r=input.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+    for(const type of ['mousePressed','mouseReleased']) await cdp.call('Input.dispatchMouseEvent',{type,...point,button:'left',clickCount:1});
+    await cdp.call('Input.insertText',{text:'工作区恢复后仍可输入'});
+    assert.equal(await cdp.evaluate(`document.querySelector('textarea').value`), '工作区恢复后仍可输入');
+    const button = await cdp.evaluate(`(()=>{const b=document.querySelector('button[aria-label="示例发送按钮"]');b.addEventListener('click',()=>{window.__hostControlClicks=(window.__hostControlClicks||0)+1;},{once:true});const r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+    for(const type of ['mousePressed','mouseReleased']) await cdp.call('Input.dispatchMouseEvent',{type,...button,button:'left',clickCount:1});
+    assert.equal(await cdp.evaluate('window.__hostControlClicks'), 1);
+    await cdp.evaluate('window.__startupAPI.dispose()');
+    assert.equal(await cdp.evaluate(`document.querySelectorAll('[data-azhou-wallpaper-plane],[data-azhou-wallpaper-pseudo],[data-azhou-wallpaper-decoration]').length`),0);
+    return {restored,actualInput:true,actualHostClick:true};
+  });
+
+  async function prepareGeneratedThemeMeasurement(scenario) {
+    await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+    await awaitGeneratedReady('formal measurement installs the generated controller');
+    assert.equal(await cdp.evaluate('!!window.__startupAPI && window.__startupInstallResult.installed===true'),true,'formal calibration must retain the generated payload controller');
+    await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied===true'),10000,'generated wallpaper applies before skip');
+    await cdp.evaluate(`document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()`);
+    await until(()=>cdp.evaluate("window.__startupAPI.status().phase==='complete'"),10000,'generated startup completes');
+    await cdp.evaluate(`(()=>{
+      window.__formalMeasurementController=window.__startupAPI;
+      const faultStyle=document.createElement('style');document.head.appendChild(faultStyle);
+      faultStyle.sheet.insertRule('html[data-azhou-wallpaper=active] body:not([data-p07-no-such-fixture]) {}',0);
+      window.__sceneFaultRule=faultStyle.sheet.cssRules[0];
+      document.documentElement.style.zoom=${scenario.zoom};
+      document.documentElement.style.setProperty('--color-surface',${JSON.stringify(scenario.color)});
+      const main=document.querySelector('[data-app-shell-main-surface]');
+      const scrollFixture=main.appendChild(document.createElement('div'));scrollFixture.style.height='1800px';scrollFixture.setAttribute('data-p07-scroll-fixture','');
+      for(const node of document.querySelectorAll('.sidebar,.topbar'))node.style.background='transparent';
+      window.__themeGeometry=()=>{const r=main.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,scroll:main.scrollTop};};
+      window.__themeStructure=${observedThemeStructure.toString()};
+      const measuredDocument=document,documentIdentity=crypto.randomUUID();
+      window.__themeEvidence=()=>{if(document!==measuredDocument||!measuredDocument.documentElement.isConnected)throw Error('measured document replaced');const status=window.__azhouWallpaper?.status();return {now:performance.now(),documentToken:documentIdentity,documentTokenSource:'collector-document-identity',workspaceEpoch:status?.workspaceEpoch,geometry:window.__themeGeometry(),wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),status};};
+      window.__themeMaskBounds=()=>{const wash=document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash');if(!wash.startsWith('url('))return null;const svg=decodeURIComponent(JSON.parse(wash.slice(4,-1)).split(',')[1]);const d=new DOMParser().parseFromString(svg,'image/svg+xml'),r=d.documentElement.lastElementChild;return Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(r.getAttribute(k))]));};
+      window.__themeApply=async value=>{
+        const wait=async predicate=>{const end=performance.now()+15000;while(performance.now()<end){const result=predicate();if(result)return result;await new Promise(r=>setTimeout(r,20));}throw Error('formal settings timeout');};
+        if(window.__startupAPI!==window.__formalMeasurementController)throw Error('formal controller replaced');
+        if(!window.__startupAPI.openSettings())throw Error('formal settings rejected');
+        const doc=await wait(()=>{const d=document.querySelector('iframe[aria-label]')?.contentDocument;return d?.querySelector('[data-agent-skin-theme-choice]')?d:false;});
+        const select=(selector,value,event)=>{const element=doc.querySelector(selector);if(!element||element.disabled)throw Error('formal setting unavailable '+selector);element.value=value;element.dispatchEvent(new doc.defaultView.Event(event,{bubbles:true}));};
+        select('[data-agent-skin-theme-choice]',value===null?'':'azhou-q-v3','change');
+        if(value!==null){select('[data-agent-skin-theme-alpha-mode]','override','change');select('[data-agent-skin-theme-transparency]',String(value),'input');}
+        const save=[...doc.querySelectorAll('button')].find(b=>/^(保存|Save)$/.test(b.textContent.trim()));
+        if(!save||save.disabled)throw Error('formal save unavailable');save.click();
+        await wait(()=>!document.querySelector('iframe[aria-label]')&&window.__startupAPI.status().wallpaper?.applied&&window.__azhouWallpaper?.status().applied);
+        const state=window.__azhouWallpaper.status();
+        if(value!==null&&state.themeApplied!==true)throw Error('saved theme not applied by controller');
+        window.__formalMeasurementApplication={generated:true,publicSettingsSaved:true,runId:window.__startupAPI.status().runId,owner:window.__azhouWallpaper.owner};
+        return state;
+      };
+    })()`);
+  }
+  async function verifyGeneratedSceneDisplacements(scenario,label) {
+    await cdp.evaluate('window.__themeApply(100)');
+    const geometry=await cdp.evaluate('window.__themeGeometry()');
+    const roi={x:geometry.x+35,y:geometry.y+35,width:12,height:12};
+    const baseline=await cdp.evaluate(`window.__sceneFaultOwner=window.__azhouWallpaper;window.__sceneFaultController=window.__startupAPI;window.__themeStructure(100)`);
+    const captureFull=async name=>{const frame=(await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true})).data;await writeFile(join(options.out,name),Buffer.from(frame,'base64'));return frame;};
+    const beforeName=label+'-scene-baseline.png',before=await captureFull(beforeName);
+    const findings=[];
+    for(const axis of ['x','y']) for(const offset of [-1,1]) {
+      const mutation=await cdp.evaluate(`(()=>{
+        const body=document.body,computed=getComputedStyle(body).backgroundPosition.split(',').map(v=>v.trim());
+        if(computed.length!==2)throw Error('expected mask and scene background layers');
+        const parts=computed[1].split(' ');if(parts.length!==2)throw Error('unsupported initial scene position');
+        window.__sceneFaultRestore={value:window.__sceneFaultRule.style.getPropertyValue('background-position'),priority:window.__sceneFaultRule.style.getPropertyPriority('background-position')};
+        const next=parts.map((value,index)=>index===${axis==='x'?0:1}?'calc('+value+' + (${offset}px))':value).join(' ');
+        window.__sceneFaultRule.style.setProperty('background-position',computed[0]+', '+next,'important');
+        return {before:computed.join(', '),after:getComputedStyle(body).backgroundPosition};
+      })()`);
+      try {
+        await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const observed=await cdp.evaluate('window.__themeStructure(100)');
+        const expected=structuredClone(baseline.invariant);expected.paint.position=mutation.after;
+        assert.notEqual(mutation.after,mutation.before,'actual scene position changed');
+        assert.deepEqual(observed.invariant,expected,'only actual scene background position changed');
+        const owner=await cdp.evaluate('window.__sceneFaultOwner===window.__azhouWallpaper&&window.__sceneFaultController===window.__startupAPI&&window.__azhouWallpaper.status().applied');
+        assert.equal(owner,true,'scene fault retained generated controller and wallpaper owner');
+        const name=label+'-scene-'+axis+'-'+offset+'.png',after=await captureFull(name);
+        const pixels=await cdp.evaluate(`(async()=>{
+          const read=async data=>{const im=new Image();im.src='data:image/png;base64,'+data;await im.decode();const c=document.createElement('canvas');c.width=im.width;c.height=im.height;const ctx=c.getContext('2d');ctx.drawImage(im,0,0);const roi=${JSON.stringify(roi)},sx=im.width/${scenario.width},sy=im.height/${scenario.height};return ctx.getImageData(Math.round(roi.x*sx),Math.round(roi.y*sy),Math.round(roi.width*sx),Math.round(roi.height*sy)).data;};
+          const a=await read(${JSON.stringify(before)}),b=await read(${JSON.stringify(after)});let max=0,changed=0;for(let i=0;i<a.length;i++)if(i%4!==3){const d=Math.abs(a[i]-b[i]);max=Math.max(max,d);if(d)changed++;}return {max,changed};
+        })()`);
+        findings.push({axis,offset,roi,mutation,structureDetected:true,ownerRetained:owner,baselineInvariant:baseline.invariant,injectedInvariant:observed.invariant,pixels,pixelDetected:pixels.max>1,rawBefore:beforeName,rawAfter:name});
+      } finally {
+        await cdp.evaluate(`(()=>{const r=window.__sceneFaultRestore;if(r.value)window.__sceneFaultRule.style.setProperty('background-position',r.value,r.priority);else window.__sceneFaultRule.style.removeProperty('background-position');})()`);
+        await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        assert.deepEqual((await cdp.evaluate('window.__themeStructure(100)')).invariant,baseline.invariant,'scene fault restored exact structure');
+        const restoredOwner=await cdp.evaluate('window.__sceneFaultOwner===window.__azhouWallpaper&&window.__sceneFaultController===window.__startupAPI&&window.__azhouWallpaper.status().applied');
+        assert.equal(restoredOwner,true);
+        if(findings.at(-1)?.axis===axis&&findings.at(-1)?.offset===offset)findings.at(-1).restored={exactStructure:true,ownerRetained:restoredOwner};
+      }
+    }
+    await writeFile(join(options.out,label+'-scene-displacements.json'),JSON.stringify({scenario,roi,findings},null,2));
+    assert.ok(findings.every(f=>f.pixelDetected),'fixed scene ROI detects actual X/Y +/-1 CSS pixel displacement');
+    return findings;
+  }
+  if(options.generatedPayload&&themeProtocol) await check('generated measurement scene detects actual image displacement in four conditions',async()=>{
+    const findings=[];
+    for(const scenario of themeProtocol.conditions){
+      await cdp.call('Emulation.setDeviceMetricsOverride',{width:scenario.width,height:scenario.height,deviceScaleFactor:scenario.dpr,mobile:false});
+      await prepareGeneratedThemeMeasurement(scenario);
+      findings.push(await verifyGeneratedSceneDisplacements(scenario,'controls-'+scenario.width+'-'+scenario.color.slice(1)));
+    }
+    await cdp.call('Emulation.clearDeviceMetricsOverride');
+    return {findings,scope:'measurement fixture detection controls, not training or acceptance'};
+  });
+
+  if(options.generatedPayload) await check('generated theme measurement uses public settings and retained payload owner',async()=>{
+    await prepareGeneratedThemeMeasurement({zoom:1,color:'#123b57'});
+    const applied=await cdp.evaluate('window.__themeApply(57)');assert.equal(applied.themeApplied,true);
+    return cdp.evaluate('window.__formalMeasurementApplication');
+  });
+
+  await check('theme readability is pixel bounded through viewport changes and legacy handover', async () => {
+    const results=[];
+    for (const scenario of themeProtocol ? themeProtocol.conditions.map(condition=>({...condition,trial:themeProtocol.session})) : Array.from({length:5},(_,trial)=>[{width:997,height:613,dpr:1.5,zoom:0.9},{width:811,height:577,dpr:2,zoom:1.1}].flatMap(v=>['#123b57','#d8c49a'].map(color=>({...v,color,trial})))).flat()) {
+      await cdp.call('Emulation.setDeviceMetricsOverride',{width:scenario.width,height:scenario.height,deviceScaleFactor:scenario.dpr,mobile:false});
+      if(options.generatedPayload&&themeProtocol) await prepareGeneratedThemeMeasurement(scenario);
+      else {
+      await navigate('/fixture.html?legacy-only=1');
+      await cdp.evaluate(`(async()=>{
+        const {createCodexPageAdapter}=await import('/extension/codex-page-adapter.mjs');
+        const {createObservedRenderer}=await import('/workspace-renderer.mjs');
+        let host; host=new Proxy(window,{get(target,key){
+          if(['window','top','self','globalThis'].includes(key))return host;
+          if(key==='location')return new URL('app://-/index.html');
+          const value=Reflect.get(target,key,target);
+          return typeof value==='function'&&['getComputedStyle','addEventListener','removeEventListener','setTimeout','clearTimeout','atob','createImageBitmap'].includes(key)?value.bind(target):value;
+        }});
+        const main=document.querySelector('[data-app-shell-main-surface]');
+        document.documentElement.style.zoom=${scenario.zoom};
+        const scrollFixture=main.appendChild(document.createElement('div'));scrollFixture.style.height='1800px';scrollFixture.setAttribute('data-p07-scroll-fixture','');
+        // Transparent synthetic chrome makes an accidental global wash observable.
+        for(const node of document.querySelectorAll('.sidebar,.topbar'))node.style.background='transparent';
+        const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=800;
+        const ctx=canvas.getContext('2d');for(let y=0;y<800;y+=17)for(let x=0;x<1200;x+=19){ctx.fillStyle=((x/19+Math.floor(y/17))%2)?'#ff6030':'#2060ff';ctx.fillRect(x,y,19,17);}
+        const css=await(await fetch('/wallpaper.css')).text();const adapter=createCodexPageAdapter(host);const render=createObservedRenderer(host);
+        const image=canvas.toDataURL('image/png');const bytes=Uint8Array.from(atob(image.split(',')[1]),c=>c.charCodeAt(0));
+        const imageSHA256=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
+        window.__themeApply=async value=>render({version:'0.9.0',css,image,imageSHA256,strength:37,surface:${JSON.stringify(scenario.color)},pageAdapter:adapter,workspaceObservation:adapter.observeWorkspace(host),
+          ...(value===null?{}:{themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value}}}})});
+        window.__themeGeometry=()=>{const r=main.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,scroll:main.scrollTop};};
+        window.__themeStructure=${observedThemeStructure.toString()};
+        window.__themeEvidence=()=>{const observation=adapter.observeWorkspace(host);return {now:performance.now(),documentToken:observation.documentToken,workspaceEpoch:observation.workspaceEpoch,geometry:window.__themeGeometry(),wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),status:window.__azhouWallpaper?.status()};};
+        window.__themeMaskBounds=()=>{const wash=document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash');if(!wash.startsWith('url('))return null;const svg=decodeURIComponent(JSON.parse(wash.slice(4,-1)).split(',')[1]);const d=new DOMParser().parseFromString(svg,'image/svg+xml'),r=d.documentElement.lastElementChild;return Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(r.getAttribute(k))]));};
+      })()`);
+      }
+      await cdp.evaluate(`window.__themePaintContext=async value=>{
+        const owner=window.__azhouWallpaper,status=owner?.status();
+        if(window.__formalMeasurementController && (window.__startupAPI!==window.__formalMeasurementController || window.__formalMeasurementApplication?.owner!==owner?.owner || !window.__startupAPI.status().wallpaper?.applied))throw Error('formal payload owner lost');
+        if(!owner||owner!==window.__themeCapturedOwner||owner!==window.__azhouWallpaper||status?.applied!==true||status.themeApplied!==true||status.themePending!==false)throw Error('measurement owner not continuously valid');
+        const structure=await window.__themeStructure(value);
+        const properties=['backgroundColor','backgroundImage','backgroundSize','backgroundPosition','backgroundAttachment','backgroundRepeat','opacity','filter','backdropFilter','transform','mixBlendMode','backgroundBlendMode','zoom'];
+        const paint={};for(const [name,node] of [['root',document.documentElement],['body',document.body],['sidebar',document.querySelector('.sidebar')],['header',document.querySelector('.topbar')]]){
+          if(!node?.isConnected)throw Error('measurement surface disconnected');const css=getComputedStyle(node);paint[name]=Object.fromEntries(properties.map(key=>[key,css[key]]));
+          if(name==='body')paint[name].backgroundImage=structure.invariant.paint.backgroundImage;
+        }
+        if(owner!==window.__azhouWallpaper||owner.status().applied!==true)throw Error('measurement owner retired during observation');
+        return {executionLane:window.__formalMeasurementController?'generated-payload-public-settings':'source-fixture',controllerOwner:window.__formalMeasurementController?.owner||null,owner:owner.owner,retained:true,mainConnected:document.querySelector('[data-app-shell-main-surface]')?.isConnected===true,paint,viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},structure};
+      }`);
+      const captureFrame=async()=> (await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true})).data;
+      // All probes in a sample derive from one fixed full-viewport raster. CDP
+      // clip capture changes the rasterization path, even for unchanged input.
+      const capture=async(x,y,frame)=>{
+        const pixels=frame??await captureFrame();
+        return cdp.evaluate(`(async()=>{const image=new Image();image.src='data:image/png;base64,'+${JSON.stringify(pixels)};await image.decode();const source=document.createElement('canvas');source.width=image.width;source.height=image.height;const ctx=source.getContext('2d');ctx.drawImage(image,0,0);const sx=image.width/${scenario.width},sy=image.height/${scenario.height};const width=Math.round(12*sx),height=Math.round(12*sy);const data=ctx.getImageData(Math.round(${x}*sx),Math.round(${y}*sy),width,height);const crop=document.createElement('canvas');crop.width=width;crop.height=height;crop.getContext('2d').putImageData(data,0,0);return crop.toDataURL('image/png').split(',')[1];})()`);
+      };
+      const delta=async(a,b)=>cdp.evaluate(`(async()=>{const read=async src=>{const img=new Image();img.src='data:image/png;base64,'+src;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const ctx=c.getContext('2d');ctx.drawImage(img,0,0);return ctx.getImageData(0,0,c.width,c.height).data;};const a=await read(${JSON.stringify(a)}),b=await read(${JSON.stringify(b)});let max=0,total=0,count=0;for(let i=0;i<a.length;i++)if(i%4!==3){const d=Math.abs(a[i]-b[i]);max=Math.max(max,d);total+=d;count++;}return {max,mean:total/count};})()`);
+      await cdp.evaluate('window.__themeApply(null)');
+      const baselineFrame=await captureFrame();
+      const baselineOutside={sidebar:await capture(24,180,baselineFrame),top:await capture(280,24,baselineFrame)};
+      // Negative control: the original global-alpha approach must be detected.
+      await cdp.evaluate("document.documentElement.style.setProperty('--azhou-wallpaper-wash','linear-gradient(transparent,transparent)')");
+      await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      assert.ok((await delta(await capture(24,180),baselineOutside.sidebar)).max>1,'transparent sidebar probe detects global wash leakage');
+      assert.ok((await delta(await capture(280,24),baselineOutside.top)).max>1,'transparent header probe detects global wash leakage');
+      const samples=[];
+      for(const value of themeProtocol?.transparencies??[0,15,57,85,100]) {
+        const applied=await cdp.evaluate(`window.__themeApply(${value})`);assert.equal(applied.applied,true);
+        await cdp.evaluate('window.__themeCapturedOwner=window.__azhouWallpaper');
+        await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const geometry=await cdp.evaluate('window.__themeGeometry()');
+        const firstBefore=await cdp.evaluate('window.__themeEvidence()');
+        const firstContextBefore=await cdp.evaluate('window.__themePaintContext('+value+')');
+        const frame=await captureFrame();
+        const firstContextAfter=await cdp.evaluate('window.__themePaintContext('+value+')');
+        const firstAfter=await cdp.evaluate('window.__themeEvidence()');
+        await writeFile(join(options.out,'full-frame-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'-'+value+'.png'),Buffer.from(frame,'base64'));
+        const sample={value,geometry,applied,sidebar:await capture(24,180,frame),top:await capture(280,24,frame),inside:await capture(geometry.x+35,geometry.y+35,frame)};
+        sample.wash=await cdp.evaluate('document.documentElement.style.getPropertyValue("--azhou-wallpaper-wash")');
+        sample.structure=await cdp.evaluate('window.__themeStructure('+value+')');
+        sample.contexts=[{before:firstContextBefore,after:firstContextAfter}];
+        sample.sameT=[];sample.evidence=[{before:firstBefore,after:firstAfter}];sample.rawFrames=['full-frame-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'-'+value+'.png'];
+        for(let repeat=0;repeat<(themeProtocol?5:3);repeat++){
+          const before=await cdp.evaluate('window.__themeEvidence()');
+          const contextBefore=await cdp.evaluate('window.__themePaintContext('+value+')');
+          const repeatedFrame=await captureFrame();
+          const contextAfter=await cdp.evaluate('window.__themePaintContext('+value+')');
+          sample.contexts.push({before:contextBefore,after:contextAfter});
+          const filename='full-frame-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'-'+value+'-repeat-'+repeat+'.png';
+          await writeFile(join(options.out,filename),Buffer.from(repeatedFrame,'base64'));sample.rawFrames.push(filename);
+          sample.sameT.push(await capture(280,24,repeatedFrame));
+          const after=await cdp.evaluate('window.__themeEvidence()');sample.evidence.push({before,after});
+        }
+
+        samples.push(sample);
+        await screenshot('theme-scope-'+scenario.width+'-'+value+'.png');
+      }
+      await writeFile(join(options.out,'outside-legacy.png'),Buffer.from(baselineOutside.sidebar,'base64'));
+      await writeFile(join(options.out,'outside-candidate.png'),Buffer.from(samples[0].sidebar,'base64'));
+      const outsideDeltas=[];for(const sample of samples)outsideDeltas.push({value:sample.value,sidebar:await delta(sample.sidebar,baselineOutside.sidebar),top:await delta(sample.top,baselineOutside.top)});
+      const legacyWithinEmpiricalBudget=outsideDeltas.every(s=>s.sidebar.max<=1&&s.top.max<=1);
+      await writeFile(join(options.out,'outside-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'.json'),JSON.stringify({baselineOutside,samples:samples.map(({value,geometry,sidebar,top,sameT,wash,evidence,applied,structure,rawFrames,contexts})=>({value,geometry,sidebar,top,sameT,wash,evidence,applied,structure,rawFrames,contexts}))}));
+      for(const sample of samples)assert.deepEqual(sample.structure.invariant,samples[0].structure.invariant,'only the authorized local opacity may change');
+      const interTheme=[];for(const sample of samples)interTheme.push({sidebar:await delta(sample.sidebar,samples[0].sidebar),top:await delta(sample.top,samples[0].top)});
+      const outsideTExact=interTheme.every(s=>s.sidebar.max===0&&s.top.max===0);
+      const sameTDeltas=[];for(const sample of samples)for(const repeated of sample.sameT)sameTDeltas.push({value:sample.value,...await delta(sample.top,repeated)});
+      const sameTExact=sameTDeltas.every(sample=>sample.max===0);
+      for(const sample of samples)for(const evidence of sample.evidence){
+        const {now:beforeTime,...before}=evidence.before,{now:afterTime,...after}=evidence.after;
+        assert.ok(afterTime>=beforeTime);assert.deepEqual(after,before,'capture must not change theme identity or geometry');
+      }
+      for(const sample of samples.slice(1)){assert.deepEqual(sample.geometry,samples[0].geometry);}
+      assert.notEqual(samples[0].inside,samples[1].inside);assert.notEqual(samples[1].inside,samples[2].inside);
+      await cdp.evaluate('window.__themeApply(0)');
+      const boundary=samples[0].geometry;
+      const boundaryBefore=await capture(boundary.x+5,boundary.y-2);
+      const injected=await cdp.evaluate(`(async()=>{const root=document.documentElement,before=root.style.getPropertyValue('--azhou-wallpaper-wash');const svg=decodeURIComponent(JSON.parse(before.slice(4,-1)).split(',')[1]);const d=new DOMParser().parseFromString(svg,'image/svg+xml');for(const r of [d.querySelector('mask rect[fill="black"]'),d.documentElement.lastElementChild])r.setAttribute('y',Number(r.getAttribute('y'))+1);const source='data:image/svg+xml,'+encodeURIComponent(new XMLSerializer().serializeToString(d));const image=new Image();image.src=source;await image.decode();image.src='';const after='url('+JSON.stringify(source)+')';root.style.setProperty('--azhou-wallpaper-wash',after);return {before,after};})()`);
+      await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      const boundaryAfter=await capture(boundary.x+5,boundary.y-2);
+      const clipFault=await delta(boundaryBefore,boundaryAfter);
+      await writeFile(join(options.out,'clip-fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'.json'),JSON.stringify({clipFault,injected}));
+      assert.ok(clipFault.max>1,'actual one-pixel clip displacement must be detected '+JSON.stringify({clipFault,injected}));
+      await cdp.evaluate('document.documentElement.style.setProperty("--azhou-wallpaper-wash",'+JSON.stringify(injected.before)+')');
+      await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      assert.equal((await delta(boundaryBefore,await capture(boundary.x+5,boundary.y-2))).max,0);
+      await cdp.evaluate(`window.__themeFaultOwner=window.__azhouWallpaper;window.__themeFaultObservation=()=>{
+        const owner=window.__themeFaultOwner,status=owner?.status();
+        if(!owner||owner!==window.__azhouWallpaper||status?.reason==='disposed'||status?.imageDecoded!==true)throw Error('fault control owner invalid');
+        const root=document.documentElement,body=getComputedStyle(document.body);
+        return {retained:true,owner:owner.owner,geometry:window.__themeGeometry(),wash:root.style.getPropertyValue('--azhou-wallpaper-wash'),image:root.style.getPropertyValue('--azhou-wallpaper-image'),paint:{image:body.backgroundImage,size:body.backgroundSize,position:body.backgroundPosition,attachment:body.backgroundAttachment},applied:status.applied};
+      }`);
+      const structuralBaseline=await cdp.evaluate('window.__themeStructure(0)');
+      const structuralFaults=[];
+      for(const fault of [{kind:'rect',delta:-1},{kind:'rect',delta:1},{kind:'outer-alpha',delta:1/255},{kind:'outer-alpha',delta:0.01},{kind:'global-wash'}]){
+        const faultIndex=structuralFaults.length;
+        const controlBefore=await cdp.evaluate('window.__themeFaultObservation()');assert.equal(controlBefore.applied,true);
+        const faultBeforeName='fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'-'+faultIndex+'-before.png';
+        await writeFile(join(options.out,faultBeforeName),Buffer.from(await captureFrame(),'base64'));
+        const controlBeforeAfter=await cdp.evaluate('window.__themeFaultObservation()');assert.deepEqual(controlBeforeAfter,controlBefore);
+        const mutation=await cdp.evaluate(`(async()=>{const root=document.documentElement,before=root.style.getPropertyValue('--azhou-wallpaper-wash');window.__themeFaultOriginal=before;const fault=${JSON.stringify(fault)};if(fault.kind==='global-wash'){root.style.setProperty('--azhou-wallpaper-wash','linear-gradient(transparent,transparent)');return {before,after:root.style.getPropertyValue('--azhou-wallpaper-wash')};}const source=decodeURIComponent(JSON.parse(before.slice(4,-1)).split(',')[1]);const xml=new DOMParser().parseFromString(source,'image/svg+xml');if(fault.kind==='rect'){for(const r of [xml.querySelector('mask rect[fill="black"]'),xml.documentElement.lastElementChild])r.setAttribute('y',Number(r.getAttribute('y'))+fault.delta);}else for(const stop of xml.querySelectorAll('stop'))stop.setAttribute('stop-opacity',Math.min(1,Number(stop.getAttribute('stop-opacity'))+fault.delta));const uri='data:image/svg+xml,'+encodeURIComponent(new XMLSerializer().serializeToString(xml));const image=new Image();image.src=uri;await image.decode();root.style.setProperty('--azhou-wallpaper-wash','url('+JSON.stringify(uri)+')');return {before,after:root.style.getPropertyValue('--azhou-wallpaper-wash')};})()`);
+        const verdict=await cdp.evaluate(`(async()=>{try{return {observed:await window.__themeStructure(0)};}catch(error){const message=String(error?.message||error);if(!['theme structure: workspace geometry y','theme structure: not a local color mask'].includes(message))throw error;return {oracleRejection:message};}})()`);
+        let rejectionReason;
+        if(fault.kind==='outer-alpha'){
+          assert.ok(verdict.observed,'alpha control must remain valid XML');
+          const expected=structuredClone(structuralBaseline.invariant);
+          for(const stop of expected.stops)stop['stop-opacity']=String(Math.min(1,Number(stop['stop-opacity'])+fault.delta));
+          assert.deepEqual(verdict.observed.invariant,expected,'only intended exterior alpha changed');
+          rejectionReason='external-alpha-invariant-mismatch';
+        }else{
+          rejectionReason=fault.kind==='rect'?'theme structure: workspace geometry y':'theme structure: not a local color mask';
+          assert.equal(verdict.oracleRejection,rejectionReason,'only expected oracle rejection counts');
+        }
+        const rejected=true;
+        const controlInjected=await cdp.evaluate('window.__themeFaultObservation()');
+        assert.equal(controlInjected.wash,mutation.after);assert.notEqual(mutation.before,mutation.after);
+        assert.deepEqual(controlInjected.geometry,controlBefore.geometry);assert.equal(controlInjected.image,controlBefore.image);
+        if(fault.kind!=='global-wash')assert.ok(controlInjected.paint.image.includes(JSON.parse(mutation.after.slice(4,-1))),'injected SVG actually painted');
+        else assert.ok(controlInjected.paint.image.startsWith('linear-gradient('),'global wash actually painted');
+        assert.equal(rejected,true,'actual applied structural fault must be detected '+JSON.stringify(fault));
+        const faultAfterName='fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'-'+faultIndex+'-after.png';
+        await writeFile(join(options.out,faultAfterName),Buffer.from(await captureFrame(),'base64'));
+        const controlInjectedAfter=await cdp.evaluate('window.__themeFaultObservation()');assert.deepEqual(controlInjectedAfter,controlInjected);
+
+        await cdp.evaluate('document.documentElement.style.setProperty("--azhou-wallpaper-wash",window.__themeFaultOriginal)');
+        assert.deepEqual((await cdp.evaluate('window.__themeStructure(0)')).invariant,structuralBaseline.invariant);
+        const controlRestored=await cdp.evaluate('window.__themeFaultObservation()');assert.deepEqual(controlRestored,controlBefore);
+        structuralFaults.push({...fault,rejected,rejectionReason,mutation,controlBefore,controlBeforeAfter,controlInjected,controlInjectedAfter,controlRestored,rawBefore:faultBeforeName,rawAfter:faultAfterName,pixelDisposition:'pending-independent-envelope-comparison'});
+      }
+
+      const sceneDisplacements=options.generatedPayload&&themeProtocol?await verifyGeneratedSceneDisplacements(scenario,'training-'+scenario.width+'-'+scenario.color.slice(1)):null;
+      await cdp.evaluate('window.__themeApply(100)');
+      const themePixels=await capture(samples[2].geometry.x+35,samples[2].geometry.y+35);
+      const before=await cdp.evaluate('window.__themeGeometry()');
+      const registrationNegative=await delta(themePixels,await capture(before.x+36,before.y+35));
+      assert.ok(registrationNegative.max>1,'one CSS pixel sampling offset must fail pixel comparison (comparator diagnostic, not actual scene mutation)');
+      await writeFile(join(options.out,'crop-theme-'+scenario.width+'.png'),Buffer.from(themePixels,'base64'));
+      const themeGeometry=await cdp.evaluate(`(()=>{const s=getComputedStyle(document.querySelector('[data-app-shell-main-surface]'));return {size:s.backgroundSize,position:s.backgroundPosition,attachment:s.backgroundAttachment};})()`);
+      const legacy=await cdp.evaluate(`(async()=>{const old=window.__azhouWallpaper;const result=await window.__themeApply(null);old.dispose();return {applied:result.applied,marker:document.querySelector('[data-azhou-theme-readability]')!==null,geometry:window.__themeGeometry()};})()`);
+      assert.equal(legacy.applied,true);assert.equal(legacy.marker,false);assert.deepEqual(legacy.geometry,before);
+      // Remove only the test renderer's wash to compare the same image at the same
+      // screen coordinate. This is fixture inspection, not a product styling path.
+      const legacyWash=await cdp.evaluate("document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash')");
+      await cdp.evaluate("document.documentElement.style.setProperty('--azhou-wallpaper-wash','linear-gradient(transparent,transparent)')");
+      await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      const legacyPixels=await capture(before.x+35,before.y+35);
+      await writeFile(join(options.out,'crop-legacy-'+scenario.width+'.png'),Buffer.from(legacyPixels,'base64'));
+      assert.equal(await capture(before.x+35,before.y+35),legacyPixels,'repeat capture is self-consistent');
+      const cropGeometry=await cdp.evaluate(`(()=>{const m=document.querySelector('[data-app-shell-main-surface]');const pick=n=>{const s=getComputedStyle(n),r=n.getBoundingClientRect();return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},size:s.backgroundSize,position:s.backgroundPosition,attachment:s.backgroundAttachment,zoom:s.zoom};};return {body:pick(document.body),main:pick(m),viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio}};})()`);
+      const cropDifference=await cdp.evaluate(`(async()=>{const read=async src=>{const img=new Image();img.src='data:image/png;base64,'+src;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const ctx=c.getContext('2d');ctx.drawImage(img,0,0);return ctx.getImageData(0,0,c.width,c.height).data;};const a=await read(${JSON.stringify(themePixels)}),b=await read(${JSON.stringify(legacyPixels)});let max=0,total=0,count=0;for(let i=0;i<a.length;i++)if(i%4!==3){const d=Math.abs(a[i]-b[i]);max=Math.max(max,d);total+=d;count++;}return {max,mean:total/count};})()`);
+      assert.equal(cropDifference.max,0,'viewport crop pixel delta '+JSON.stringify({cropDifference,cropGeometry,themeGeometry}));
+      await cdp.evaluate('document.documentElement.style.setProperty("--azhou-wallpaper-wash",'+JSON.stringify(legacyWash)+')');
+      assert.equal((await cdp.evaluate('window.__themeApply(30)')).applied,true);
+      await cdp.evaluate('window.__heldThemeOwner=window.__azhouWallpaper');
+      await cdp.call('Emulation.setDeviceMetricsOverride',{width:scenario.width-40,height:scenario.height-30,deviceScaleFactor:scenario.dpr,mobile:false});
+      await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().themeApplied===true'),5000,'same owner settles resized SVG mask');
+      const automaticResize=await cdp.evaluate(`(()=>{const r=document.querySelector('[data-app-shell-main-surface]').getBoundingClientRect();return {applied:window.__azhouWallpaper?.status().applied,sameOwner:window.__heldThemeOwner===window.__azhouWallpaper,rect:{x:r.x,y:r.y,width:r.width,height:r.height},mask:window.__themeMaskBounds()};})()`);
+      assert.equal(automaticResize.applied,true);assert.equal(automaticResize.sameOwner,true);assert.deepEqual(automaticResize.mask,automaticResize.rect);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseWheel',x:automaticResize.rect.x+5,y:150,deltaX:0,deltaY:120});
+      await until(()=>cdp.evaluate('document.querySelector(".thread-scroll-container").scrollTop>0'),3000,'wheel moves actual thread scroller');
+      const threadScroll=await cdp.evaluate('document.querySelector(".thread-scroll-container").scrollTop');
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseWheel',x:24,y:150,deltaX:0,deltaY:120});
+      try{await until(()=>cdp.evaluate('scrollY>0'),3000,'actual wheel scroll must move document');}catch(e){throw new Error(e.message+' '+JSON.stringify(await cdp.evaluate(`({scrollY,html:{height:document.documentElement.clientHeight,scrollHeight:document.documentElement.scrollHeight,overflow:getComputedStyle(document.documentElement).overflow},body:{height:document.body.clientHeight,scrollHeight:document.body.scrollHeight,overflow:getComputedStyle(document.body).overflow},scroller:document.scrollingElement?.tagName,hit:document.elementFromPoint(${automaticResize.rect.x+5},150)?.outerHTML.slice(0,200)})`)));}
+      await cdp.evaluate('new Promise(r=>setTimeout(r,100))');
+      await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().themeApplied===true'),5000,'same owner settles wheel geometry');
+      const scrolling=await cdp.evaluate(`(()=>{const r=document.querySelector('[data-app-shell-main-surface]').getBoundingClientRect();return {scrollY,sameOwner:window.__heldThemeOwner===window.__azhouWallpaper,mask:window.__themeMaskBounds(),rect:{x:r.x,y:r.y,width:r.width,height:r.height}};})()`);
+      assert.ok(scrolling.scrollY>0);assert.equal(scrolling.sameOwner,true);assert.deepEqual(scrolling.mask,scrolling.rect);
+      await cdp.evaluate('scrollTo(0,0)');await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      assert.equal((await cdp.evaluate('window.__themeApply(30)')).applied,true);
+      const replacement=await cdp.evaluate(`(async()=>{const old=document.querySelector('[data-app-shell-main-surface]');const next=old.cloneNode(true);
+        for(const node of [next,...next.querySelectorAll('*')])for(const name of ['data-azhou-wallpaper-plane','data-azhou-wallpaper-pseudo','data-azhou-wallpaper-decoration','data-azhou-theme-readability'])node.removeAttribute(name);
+        const prior=window.__azhouWallpaper;old.replaceWith(next);await new Promise(r=>setTimeout(r,0));const invalidated=!window.__azhouWallpaper;
+        const result=await window.__themeApply(30);prior.dispose();return {invalidated,applied:result.applied,detachedMarker:old.getAttribute('data-azhou-wallpaper-plane'),newMarker:!!next.getAttribute('data-azhou-wallpaper-plane')};})()`);
+      assert.deepEqual(replacement,{invalidated:true,applied:true,detachedMarker:null,newMarker:true});
+      await cdp.evaluate('window.__azhouWallpaper.dispose()');
+      assert.equal(await cdp.evaluate("document.querySelectorAll('[data-azhou-theme-layer]').length"),0);
+      results.push({scenario,threadScroll,clipFault,structuralFaults,sceneDisplacements,registrationNegative,outsideDeltas,interTheme,sameTDeltas,sameTExact,automaticResize,scrolling,legacyWithinEmpiricalBudget,outsideTExact,themePixelsOutsideUnchanged:true,pixelsInsideChanged:true,geometryUnchanged:true,viewportCropEqual:true,legacy,replacement});
+    }
+    await cdp.call('Emulation.clearDeviceMetricsOverride');
+    await writeFile(join(options.out,'holdout-matrix.json'),JSON.stringify(results,null,2));
+    // V1/V2 pixel outcomes remain diagnostics; V3 acceptance is a separate
+    // registered train/frozen-envelope/holdout gate, never this collection check.
+    if(themeProtocol) assert.ok(results.every(r=>r.legacyWithinEmpiricalBudget),'legacy empirical budget failed');
+    return {results,protocol:themeProtocol,measurementDisposition:themeProtocol?'raw-collection-only; independent V3 analysis required':'functional-structural-only; calibrated V3 measurement NOT RUN',scope:'synthetic Chrome pixels; not native host or final Azhou asset visual approval'};
+  });
+
+
+  await check('theme ancestor clipping revokes paint without a main rectangle change',async()=>{
+    const scenario={color:'#123b57'};
+    await cdp.call('Emulation.setDeviceMetricsOverride',{width:1100,height:800,deviceScaleFactor:1,mobile:false});
+    await navigate('/fixture.html?legacy-only=1');
+      await cdp.evaluate(`(async()=>{
+        const {createCodexPageAdapter}=await import('/extension/codex-page-adapter.mjs');
+        const {createObservedRenderer}=await import('/workspace-renderer.mjs');
+        let host; host=new Proxy(window,{get(target,key){
+          if(['window','top','self','globalThis'].includes(key))return host;
+          if(key==='location')return new URL('app://-/index.html');
+          const value=Reflect.get(target,key,target);
+          return typeof value==='function'&&['getComputedStyle','addEventListener','removeEventListener','setTimeout','clearTimeout','atob','createImageBitmap'].includes(key)?value.bind(target):value;
+        }});
+        const main=document.querySelector('[data-app-shell-main-surface]');
+        document.documentElement.style.zoom=1;
+        const clip=main.parentElement.insertBefore(document.createElement('div'),main);clip.id='p07-clip';clip.style.cssText='position:absolute;left:240px;top:64px;width:400px;height:300px;overflow:visible';clip.appendChild(main);main.style.cssText='position:absolute;left:0;top:0;width:800px;height:600px;flex:none';
+        window.__themeClip=clip;
+        const scrollFixture=main.appendChild(document.createElement('div'));scrollFixture.style.height='1800px';scrollFixture.setAttribute('data-p07-scroll-fixture','');
+        // Transparent synthetic chrome makes an accidental global wash observable.
+        for(const node of document.querySelectorAll('.sidebar,.topbar'))node.style.background='transparent';
+        const canvas=document.createElement('canvas');canvas.width=1200;canvas.height=800;
+        const ctx=canvas.getContext('2d');for(let y=0;y<800;y+=17)for(let x=0;x<1200;x+=19){ctx.fillStyle=((x/19+Math.floor(y/17))%2)?'#ff6030':'#2060ff';ctx.fillRect(x,y,19,17);}
+        const css=await(await fetch('/wallpaper.css')).text();const adapter=createCodexPageAdapter(host);const render=createObservedRenderer(host);
+        const image=canvas.toDataURL('image/png');const bytes=Uint8Array.from(atob(image.split(',')[1]),c=>c.charCodeAt(0));
+        const imageSHA256=[...new Uint8Array(await crypto.subtle.digest('SHA-256',bytes))].map(n=>n.toString(16).padStart(2,'0')).join('');
+        window.__themeApply=async value=>render({version:'0.9.0',css,image,imageSHA256,strength:37,surface:${JSON.stringify(scenario.color)},pageAdapter:adapter,workspaceObservation:adapter.observeWorkspace(host),
+          ...(value===null?{}:{themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value}}}})});
+        window.__themeAdapter=adapter;window.__themeHost=host;
+        window.__themeGeometry=()=>{const r=main.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,scroll:main.scrollTop};};
+        window.__themeStructure=${observedThemeStructure.toString()};
+        window.__themeEvidence=()=>{const observation=adapter.observeWorkspace(host);return {now:performance.now(),documentToken:observation.documentToken,workspaceEpoch:observation.workspaceEpoch,geometry:window.__themeGeometry(),wash:document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash'),status:window.__azhouWallpaper?.status()};};
+        window.__themeMaskBounds=()=>{const wash=document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash');if(!wash.startsWith('url('))return null;const svg=decodeURIComponent(JSON.parse(wash.slice(4,-1)).split(',')[1]);const d=new DOMParser().parseFromString(svg,'image/svg+xml'),r=d.documentElement.lastElementChild;return Object.fromEntries(['x','y','width','height'].map(k=>[k,Number(r.getAttribute(k))]));};
+      })()`);
+
+    const settle=()=>cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+    const capture=async()=>(await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true,clip:{x:700,y:400,width:24,height:24,scale:1}})).data;
+    await cdp.evaluate("window.__themeClip.style.overflow='hidden'");await settle();
+    const nativeClip=await capture();
+    await cdp.evaluate("window.__themeClip.style.overflow='visible'");await settle();
+    const applied=await cdp.evaluate('window.__themeApply(30)');assert.equal(applied.themeApplied,true);
+    const before=await cdp.evaluate('window.__themeGeometry()');
+    await cdp.evaluate("window.__oldThemeOwner=window.__azhouWallpaper;window.__themeClip.style.overflow='hidden'");await settle();
+    const clipped=await cdp.evaluate('({geometry:window.__themeGeometry(),owner:!!window.__azhouWallpaper,admission:window.__themeAdapter.readThemeGeometry(window.__themeAdapter.observeWorkspace(window.__themeHost),window.__themeHost).kind,markers:document.querySelectorAll(\"[data-azhou-wallpaper-plane]\").length})');
+    assert.deepEqual(clipped.geometry,before);assert.equal(clipped.owner,false);assert.equal(clipped.admission,'unsupported');assert.equal(clipped.markers,0);
+    const candidateClip=await capture();
+    const max=await cdp.evaluate(`(async()=>{const read=async data=>{const i=new Image();i.src='data:image/png;base64,'+data;await i.decode();const c=document.createElement('canvas');c.width=i.width;c.height=i.height;const x=c.getContext('2d');x.drawImage(i,0,0);return x.getImageData(0,0,c.width,c.height).data;};const a=await read(${JSON.stringify(nativeClip)}),b=await read(${JSON.stringify(candidateClip)});let max=0;for(let i=0;i<a.length;i++)if(i%4!==3)max=Math.max(max,Math.abs(a[i]-b[i]));return max;})()`);
+    assert.equal(max,0,'clipped-out native region must not retain theme wash');
+    await cdp.evaluate("window.__themeClip.style.overflow='visible'");await settle();
+    const restored=await cdp.evaluate('(async()=>{const result=await window.__themeApply(30);const owner=window.__azhouWallpaper;window.__oldThemeOwner.dispose();return {applied:result.themeApplied,sameOwner:window.__azhouWallpaper===owner};})()');
+    assert.deepEqual(restored,{applied:true,sameOwner:true});
+    await cdp.evaluate('window.__azhouWallpaper.dispose()');
+    const initial=await cdp.evaluate(`(async()=>{
+      const {installStartup}=await import('/extension/renderer.mjs');
+      const {createWallpaperApplicator}=await import('/wallpaper/apply.js');
+      const {createObservedRenderer}=await import('/workspace-renderer.mjs');
+      const host=window.__themeHost,adapter=window.__themeAdapter,css=await(await fetch('/wallpaper.css')).text();
+      let emit;const payload=(_w,_d,_l,_p,_idb,_i,_path,_url,_raf,_caf,_st,_ct,_module,send,spec)=>{emit=(action,fields={})=>send({type:'azhou-startup',action,runId:spec.runId,...fields});return {};};
+      const apply=createWallpaperApplicator(createObservedRenderer(host),{version:'0.9.0',css,pageAdapter:adapter},host);
+      window.__themeApplyCalls=0;payload.applyWallpaper=(...args)=>{window.__themeApplyCalls++;return apply(...args);};
+      const installed=installStartup(payload,host,adapter);if(!installed.installed)throw Error(installed.reason);
+      const result=await emit('background',{image:${JSON.stringify(pixelImage)},strength:37,themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value:30}}}});
+      emit('ready');emit('complete',{skipped:false});return {result,state:window.__azhouStartup.status()};
+    })()`);
+    assert.equal(initial.result.themeApplied,true);assert.equal(initial.state.phase,'complete');
+    await cdp.evaluate("window.__themeClip.style.overflow='hidden'");
+    const failed=await until(()=>cdp.evaluate(`(()=>{const state=window.__azhouStartup.status();const e=document.querySelector('[data-agent-skin-entry="appearance"]'),s=e?.shadowRoot,b=s?.querySelector('[data-agent-skin-wallpaper-retry]'),group=s?.querySelector('[data-agent-skin-wallpaper-recovery]');return state.wallpaper.failureCode==='apply-failed'&&b&&!b.disabled&&group?.style.display!=='none'?{state,calls:window.__themeApplyCalls,label:b.getAttribute('aria-label')}:false;})()`),5000,'bounded theme recovery and visible retry');
+    assert.equal(failed.calls,2,'one initial apply and one automatic recovery attempt');assert.ok(failed.label);
+    await cdp.evaluate("window.__themeClip.style.overflow='visible'");await settle();
+    assert.equal(await cdp.evaluate('window.__themeApplyCalls'),2,'support restoration alone does not start polling');
+    const point=await cdp.evaluate(`(()=>{const e=document.querySelector('[data-agent-skin-entry="appearance"]'),b=e.shadowRoot.querySelector('[data-agent-skin-wallpaper-retry]'),r=b.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2,hit:e.shadowRoot.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===b};})()`);
+    assert.equal(point.hit,true);for(const type of ['mousePressed','mouseReleased'])await cdp.call('Input.dispatchMouseEvent',{type,x:point.x,y:point.y,button:'left',clickCount:1});
+    const retried=await until(()=>cdp.evaluate('window.__azhouStartup.status().wallpaper.themeApplied ? {state:window.__azhouStartup.status(),calls:window.__themeApplyCalls} : false'),5000,'actual retry click restores supported theme');
+    assert.equal(retried.calls,3);await cdp.evaluate('window.__azhouStartup.dispose()');
+    await cdp.call('Emulation.clearDeviceMetricsOverride');
+    return {clipped,max,restored,failed,retried,actualRetryClick:true,scope:'synthetic actual owner bounded recovery and explicit user retry; not installed host'};
+  });
+
+  await check('theme initial decode is cancelled through the actual startup owner', async()=>{
+    await navigate('/fixture.html?legacy-only=1');
+    const result=await cdp.evaluate(`(async()=>{
+      const {installStartup}=await import('/extension/renderer.mjs');
+      const {createCodexPageAdapter}=await import('/extension/codex-page-adapter.mjs');
+      const {createWallpaperApplicator}=await import('/wallpaper/apply.js');
+      const {createObservedRenderer}=await import('/workspace-renderer.mjs');
+      const masks=[],timers=new Set();const NativeImage=window.Image;
+      const ImageProbe=function(){const img=new NativeImage(),decode=img.decode.bind(img);img.decode=()=>img.src.startsWith('data:image/svg+xml,')?new Promise(resolve=>masks.push({img,resolve})):decode();return img;};
+      let host;host=new Proxy(window,{get(target,key){
+        if(['window','top','self','globalThis'].includes(key))return host;
+        if(key==='location')return new URL('app://-/index.html');
+        if(key==='Image')return ImageProbe;
+        if(key==='setTimeout')return (fn,ms)=>{const id=window.setTimeout(fn,ms);if(ms===4000)timers.add(id);return id;};
+        if(key==='clearTimeout')return id=>{timers.delete(id);window.clearTimeout(id);};
+        const value=Reflect.get(target,key,target);return typeof value==='function'&&['getComputedStyle','addEventListener','removeEventListener','atob','createImageBitmap','matchMedia'].includes(key)?value.bind(target):value;
+      }});
+      const adapter=createCodexPageAdapter(host),css=await(await fetch('/wallpaper.css')).text();
+      let emit;const payload=(_w,_d,_l,_p,_idb,_i,_path,_url,_raf,_caf,_st,_ct,_module,send,spec)=>{emit=(fields)=>send({type:'azhou-startup',action:'background',runId:spec.runId,...fields});return {};};
+      payload.applyWallpaper=createWallpaperApplicator(createObservedRenderer(host),{version:'0.9.0',css,pageAdapter:adapter},host);
+      const installed=installStartup(payload,host,adapter);if(!installed.installed)throw Error(installed.reason);
+      const pending=emit({image:${JSON.stringify(pixelImage)},strength:37,themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value:30}}}});
+      for(let i=0;i<100&&!masks.length;i++)await new Promise(r=>window.setTimeout(r,10));
+      if(masks.length!==1)throw Error('initial mask not reached '+JSON.stringify({result:await pending,status:window.__azhouStartup.status(),geometry:adapter.readThemeGeometry(adapter.observeWorkspace(host),host)}));
+      const disabled=await emit({image:${JSON.stringify(pixelImage)},strength:0});
+      const immediate={src:masks[0].img.getAttribute('src'),timers:timers.size};await pending;
+      masks[0].resolve();await new Promise(r=>window.setTimeout(r,0));
+      const state=window.__azhouStartup.status();window.__azhouStartup.dispose();
+      return {disabled,immediate,state,wallpaper:!!window.__azhouWallpaper};
+    })()`);
+    assert.equal(result.disabled.reason,'disabled');assert.equal(result.immediate.src,'');assert.equal(result.immediate.timers,0);
+    assert.equal(result.state.wallpaper.reason,'disabled');assert.equal(result.wallpaper,false);
+    await cdp.evaluate('document.querySelector("textarea").focus()');await cdp.call('Input.insertText',{text:'P07 cancelled input'});
+    assert.equal(await cdp.evaluate('document.querySelector("textarea").value'),'P07 cancelled input');
+    return {...result,actualNativeInput:true,scope:'synthetic generated payload Chrome owner chain'};
+  });
+
+  await check('theme-specific CSP denial cleans owned layers and preserves native input', async()=>{
+    await navigate('/csp-theme-data.html?legacy-only=1');
+    const result=await cdp.evaluate(`(async()=>{
+      const {createCodexPageAdapter}=await import('/extension/codex-page-adapter.mjs');
+      const {createObservedRenderer}=await import('/workspace-renderer.mjs');
+      let host;host=new Proxy(window,{get(target,key){if(['window','top','self','globalThis'].includes(key))return host;if(key==='location')return new URL('app://-/index.html');const value=Reflect.get(target,key,target);return typeof value==='function'&&['getComputedStyle','addEventListener','removeEventListener','setTimeout','clearTimeout','atob','createImageBitmap'].includes(key)?value.bind(target):value;}});
+      const adapter=createCodexPageAdapter(host),render=createObservedRenderer(host),css=await(await fetch('/wallpaper.css')).text();
+      let code;try{await render({version:'0.9.0',css,image:${JSON.stringify(pixelImage)},imageSHA256:${JSON.stringify(imageSHA256)},strength:37,surface:'#202024',pageAdapter:adapter,workspaceObservation:adapter.observeWorkspace(host),themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':{mode:'override',value:30}}}});}catch(e){code=e.code||e.message;}
+      return {code,layers:document.querySelectorAll('[data-azhou-theme-layer]').length,marker:document.querySelectorAll('[data-azhou-theme-readability]').length};})()`);
+    assert.match(result.code,/theme-mask-decode-failed/);assert.equal(result.layers,0);assert.equal(result.marker,0);
+    await cdp.evaluate('document.querySelector("textarea").focus()');
+    await cdp.call('Input.insertText',{text:'P07 CSP native input'});
+    assert.equal(await cdp.evaluate('document.querySelector("textarea").value'),'P07 CSP native input');
+    return {...result,actualNativeInput:true,scope:'isolated synthetic Chrome, not native app'};
+  });
+
+  await check('Codex workspace leases reject batched navigation and retain scoped wallpaper ownership', async () => {
+    await navigate('/fixture.html?legacy-only=1');
+    const result = await cdp.evaluate(`(async () => {
+      const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
+      const {createWallpaperApplicator} = await import('/wallpaper/apply.js');
+      const {createObservedRenderer} = await import('/workspace-renderer.mjs');
+      const {bootstrapStartup} = await import('/extension/bootstrap.mjs');
+      const observers = new Set();
+      let computedReads = 0;
+      class TrackedObserver extends MutationObserver {
+        constructor(callback) { super(callback); observers.add(this); }
+        disconnect() { super.disconnect(); observers.delete(this); }
+      }
+      class TrackedResizeObserver extends ResizeObserver {
+        constructor(callback) { super(callback); observers.add(this); }
+        disconnect() { super.disconnect(); observers.delete(this); }
+      }
+      let host;
+      let observedURL = new URL('app://-/index.html');
+      host = new Proxy(window, { get(target, key) {
+        if (['window','top','self','globalThis'].includes(key)) return host;
+        if (key === 'location') return observedURL;
+        if (key === 'MutationObserver') return TrackedObserver;
+        if (key === 'ResizeObserver') return TrackedResizeObserver;
+        if (key === 'getComputedStyle') return (...args) => { computedReads++; return window.getComputedStyle(...args); };
+        const value = Reflect.get(target, key, target);
+        return ['addEventListener','removeEventListener','setTimeout','clearTimeout','atob','createImageBitmap'].includes(key)
+          && typeof value === 'function' ? value.bind(target) : value;
+      } });
+      const adapter = createCodexPageAdapter(host);
+      const main = document.querySelector('[data-app-shell-main-surface]');
+      const cached = main.cloneNode(false);
+      cached.hidden = true;
+      main.before(cached);
+      let observed = adapter.observeWorkspace(host);
+      const selectsVisible = observed.kind === 'observed' && observed.activeMain === main;
+      cached.hidden = false;
+      const ambiguous = adapter.observeWorkspace(host).kind === 'ambiguous';
+      cached.hidden = true;
+      observed = adapter.observeWorkspace(host);
+      let invalidated = 0;
+      let lease = adapter.watchWorkspace(observed, () => invalidated++, host);
+      const prior = main.getAttribute('data-app-shell-main-surface');
+      main.removeAttribute('data-app-shell-main-surface');
+      main.setAttribute('data-app-shell-main-surface', prior);
+      const markerABA = !lease.current() && invalidated === 1;
+      observed = adapter.observeWorkspace(host);
+      lease = adapter.watchWorkspace(observed, () => invalidated++, host);
+      document.documentElement.style.setProperty('--azhou-wallpaper-wash', 'transparent');
+      const ownStyleSurvives = lease.current();
+      const oldDisplay = document.documentElement.style.display;
+      document.documentElement.style.display = 'none';
+      document.documentElement.style.display = oldDisplay;
+      const rootStyleABA = !lease.current();
+      document.documentElement.style.removeProperty('--azhou-wallpaper-wash');
+      observed = adapter.observeWorkspace(host);
+      lease = adapter.watchWorkspace(observed, () => invalidated++, host);
+      const sibling = main.nextSibling;
+      const parent = main.parentElement;
+      main.remove(); parent.insertBefore(main, sibling);
+      const nodeABA = !lease.current();
+      observed = adapter.observeWorkspace(host);
+      lease = adapter.watchWorkspace(observed, () => invalidated++, host);
+      const readsBefore = computedReads;
+      const message = main.appendChild(document.createElement('span')); message.remove();
+      await Promise.resolve();
+      const irrelevantMutationReads = computedReads - readsBefore;
+      lease.dispose();
+      cached.remove();
+      const workspace = main.appendChild(document.createElement('div'));
+      workspace.className = 'workspace';
+      const thread = workspace.appendChild(document.createElement('main'));
+      thread.className = 'thread-pane';
+      thread.style.cssText = 'width:100px;height:100px';
+      thread.hidden = true;
+      observed = adapter.observeWorkspace(host);
+      let revealed = false;
+      lease = adapter.watchWorkspace(observed, () => { revealed = true; }, host);
+      thread.hidden = false;
+      await Promise.resolve();
+      const revealedPlaneInvalidates = revealed;
+      lease.dispose();
+      const sheet=document.styleSheets[0];
+      const index=sheet.insertRule('.fixture-paint-zero {width:0!important;height:0!important}',sheet.cssRules.length);
+      const rule=sheet.cssRules[index];
+      thread.classList.add('fixture-paint-zero');
+      observed=adapter.observeWorkspace(host);
+      let geometryInvalidated=false;
+      lease=adapter.watchWorkspace(observed,()=>{geometryInvalidated=true;},host);
+      rule.style.setProperty('width','100px','important');rule.style.setProperty('height','100px','important');
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const geometryPlaneInvalidates=geometryInvalidated;
+      lease.dispose(); workspace.remove();
+      observed = adapter.observeWorkspace(host);
+      let navigated = false;
+      lease = adapter.watchWorkspace(observed, () => { navigated = true; }, host);
+      observedURL = new URL('app://-/index.html#next');
+      window.dispatchEvent(new Event('hashchange'));
+      const hashNavigationInvalidates = navigated;
+      lease.dispose();
+      const css = await (await fetch('/wallpaper.css')).text();
+      const render = createObservedRenderer(host);
+      const animation = () => {};
+      bootstrapStartup({installStartup:()=>{}, installAnimation:animation, createLocalization:()=>{}, createImageSettings:()=>{},
+        createWallpaperApplicator, installRenderer:render, version:'0.9.0', css, assets:{}, host, pageAdapter:adapter});
+      const applied = await animation.applyWallpaper({image:${JSON.stringify(pixelImage)},strength:37,surface:'#202024'});
+      const controller = window.__azhouWallpaper;
+      const installed = {applied:applied.applied, fullCoverage:applied.fullCoverage,
+        markers:document.querySelectorAll('[data-azhou-wallpaper-plane]').length};
+      controller.dispose();
+      return {geometryPlaneInvalidates,revealedPlaneInvalidates,hashNavigationInvalidates,selectsVisible,ambiguous,markerABA,ownStyleSurvives,rootStyleABA,nodeABA,irrelevantMutationReads,installed,
+        remainingObservers:observers.size, remainingMarkers:document.querySelectorAll('[data-azhou-wallpaper-plane],[data-azhou-wallpaper-pseudo],[data-azhou-wallpaper-decoration]').length};
+    })()`);
+    assert.equal(result.geometryPlaneInvalidates, true);
+    assert.equal(result.revealedPlaneInvalidates, true);
+    assert.equal(result.hashNavigationInvalidates, true);
+    assert.equal(result.selectsVisible, true);
+    assert.equal(result.ambiguous, true);
+    assert.equal(result.markerABA, true);
+    assert.equal(result.ownStyleSurvives, true);
+    assert.equal(result.rootStyleABA, true);
+    assert.equal(result.nodeABA, true);
+    assert.equal(result.irrelevantMutationReads, 0);
+    assert.equal(result.installed.applied, true);
+    assert.equal(result.installed.fullCoverage, false);
+    assert.ok(result.installed.markers >= 3);
+    assert.equal(result.remainingObservers, 0);
+    assert.equal(result.remainingMarkers, 0);
+    return result;
+  });
+
+  await check('generated early Skip preserves pending wallpaper across appearance change', async () => {
+    const results=[];
+    for (const changeTheme of [false,true]) {
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-decode=1');
+      await awaitGeneratedReady('generated ready before wallpaper decode release');
+      await until(()=>cdp.evaluate('window.__decodePending===true'),10000,'pending real wallpaper decode');
+      const before=await cdp.evaluate('({controller:__startupAPI.status(),gates:__decodeGateCount,owner:!!window.__azhouWallpaper})');
+      const point=await cdp.evaluate(`(()=>{const f=document.querySelector('iframe[aria-label]'),b=f.contentDocument.querySelector('[data-agent-skin-skip]'),r=b.getBoundingClientRect(),fr=f.getBoundingClientRect();return {x:fr.x+r.x+r.width/2,y:fr.y+r.y+r.height/2};})()`);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+      await until(()=>cdp.evaluate("__startupAPI.status().completion?.cause==='skip'&&!document.querySelector('iframe[aria-label]')"),5000,'actual Skip releases overlay');
+      if(changeTheme)await cdp.evaluate("document.documentElement.dataset.theme='light'");
+      const skipped=await cdp.evaluate('({controller:__startupAPI.status(),owner:!!window.__azhouWallpaper,theme:document.documentElement.dataset.theme})');
+      await cdp.evaluate('window.__releaseDecode()');
+      let failure=null;
+      try {await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied===true&&__startupAPI.status().wallpaper.applied===true'),5000,'pending wallpaper remains valid after Skip');} catch(error){failure=String(error);}
+      const after=await cdp.evaluate('({controller:__startupAPI.status(),owner:window.__azhouWallpaper?.status()??null,pending:__decodePending,blobs:__fixtureBlobCount})');
+      results.push({changeTheme,before,skipped,after,failure});
+    }
+    await writeFile(join(options.out,'early-skip-observations.json'),JSON.stringify(results,null,2));
+    assert.ok(results.every(r=>!r.failure),'Skip closes startup but must preserve current same-run wallpaper: '+JSON.stringify(results));
+    return {results,scope:'generated payload with real gated decode and CDP Skip; synthetic host'};
+  });
+  await check('generated decode admission cannot outlive cancellation or workspace replacement', async () => {
+    const results=[];
+    for(const mode of ['already-applied','natural','settings-cancel','unmount','dispose','skip-workspace-replaced']) {
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&hold-decode=1');
+      await awaitGeneratedReady('ready with pending scene for '+mode);
+      await until(()=>cdp.evaluate('window.__decodePending===true'),10000,'real pending scene');
+      const before=await cdp.evaluate('({state:__startupAPI.status(),pending:__decodePending})');
+      const click=async selector=>{
+        const point=await cdp.evaluate(`(()=>{const f=document.querySelector('iframe[aria-label]'),d=f.contentDocument,b=${selector},r=b.getBoundingClientRect(),fr=f.getBoundingClientRect();b.scrollIntoView({block:'center'});return {x:fr.x+r.x+r.width/2,y:fr.y+r.y+r.height/2};})()`);
+        await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+        await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+      };
+      if(['already-applied','natural'].includes(mode)) {
+        await cdp.evaluate('__releaseDecode()');await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied'),5000,'applied before completion');
+        if(mode==='already-applied')await click("d.querySelector('[data-agent-skin-skip]')");
+        await until(()=>cdp.evaluate("__startupAPI.status().phase==='complete'"),20000,'completion');
+      } else if(mode==='settings-cancel') {
+        assert.equal(await cdp.evaluate('__startupAPI.openSettings()'),true);
+        await until(()=>cdp.evaluate("!!document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-settings]')"),5000,'settings');
+        await click("[...d.querySelectorAll('button')].find(b=>/^(取消|Cancel)$/.test(b.textContent.trim()))");
+      } else if(mode==='unmount')await cdp.evaluate("document.querySelector('iframe[aria-label]').remove()");
+      else if(mode==='dispose')await cdp.evaluate('__startupAPI.dispose()');
+      else {await click("d.querySelector('[data-agent-skin-skip]')");await cdp.evaluate("(()=>{const n=document.querySelector('[data-app-shell-main-surface]');n.replaceWith(n.cloneNode(true));})()");}
+      if(!['already-applied','natural'].includes(mode)) {
+        await cdp.evaluate('__releaseDecode()');
+        await until(()=>cdp.evaluate('!window.__decodePending&&window.__fixtureBlobCount===0'),5000,'released rejected decode');
+      }
+      const after=await cdp.evaluate('({state:__startupAPI.status(),wallpaper:window.__azhouWallpaper?.status()??null,blobs:__fixtureBlobCount,overlay:!!document.querySelector("iframe[aria-label]")})');
+      assert.equal(after.overlay,false,mode+' must release overlay');
+      assert.equal(after.wallpaper?.applied===true,['already-applied','natural'].includes(mode),mode);
+      results.push({mode,before,after});
+    }
+    await writeFile(join(options.out,'decode-admission-boundaries.json'),JSON.stringify(results,null,2));
+    return {results};
+  });
+  await check('generated selected theme mask decode preserves only its admitted workspace after Skip', async () => {
+    const results=[];
+    try {
+    for(const replaceWorkspace of [false,true]) {
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+      await awaitGeneratedReady('theme setup');
+      await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied'),10000,'setup background');
+      await cdp.evaluate("document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()");
+      await until(()=>cdp.evaluate("__startupAPI.status().phase==='complete'"),5000,'setup skip');
+      assert.equal(await cdp.evaluate('__startupAPI.openSettings()'),true);
+      await until(()=>cdp.evaluate("!!document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-theme-choice]')"),5000,'theme controls');
+      await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;for(const [sel,val,event] of [['[data-agent-skin-theme-choice]','azhou-q-v3','change'],['[data-agent-skin-theme-alpha-mode]','override','change'],['[data-agent-skin-theme-transparency]','50','input']]){const e=d.querySelector(sel);e.value=val;e.dispatchEvent(new d.defaultView.Event(event,{bubbles:true}));}[...d.querySelectorAll('button')].find(b=>/^(保存|Save)$/.test(b.textContent.trim())).click();})()`);
+      await until(()=>cdp.evaluate("!document.querySelector('iframe[aria-label]')&&window.__azhouWallpaper?.status().themeApplied===true"),10000,'saved selected theme');
+      await navigate('/fixture.html?generated-payload=1&hold-mask-decode=1');
+      await awaitGeneratedReady('selected theme ready before mask decode finishes');
+      await until(()=>cdp.evaluate('window.__decodePending===true'),10000,'actual mask gate');
+      const before=await cdp.evaluate('({state:__startupAPI.status(),sources:__decodeGateSources,owner:!!window.__azhouWallpaper})');
+      assert.equal(before.sources.length,1);assert.ok(before.sources[0].startsWith('data:image/svg+xml,'));
+      assert.ok(decodeURIComponent(before.sources[0]).includes('fill-opacity="0.5"'),'gate holds the selected T50 mask, not scene or host color');
+      const point=await cdp.evaluate(`(()=>{const f=document.querySelector('iframe[aria-label]'),b=f.contentDocument.querySelector('[data-agent-skin-skip]'),r=b.getBoundingClientRect(),fr=f.getBoundingClientRect();return {x:fr.x+r.x+r.width/2,y:fr.y+r.y+r.height/2};})()`);
+      await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...point});
+      await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...point});
+      await until(()=>cdp.evaluate("__startupAPI.status().completion?.cause==='skip'&&!document.querySelector('iframe[aria-label]')"),5000,'Skip before mask release');
+      if(replaceWorkspace)await cdp.evaluate("(()=>{const n=document.querySelector('[data-app-shell-main-surface]');n.replaceWith(n.cloneNode(true));})()");
+      await cdp.evaluate('__releaseDecode()');let failure=null;
+      try{await until(()=>cdp.evaluate(replaceWorkspace ? '!window.__azhouWallpaper&&__fixtureBlobCount===0' : 'window.__azhouWallpaper?.status().themeApplied===true'),5000,'admitted mask outcome');}catch(error){failure=String(error);}
+      const after=await cdp.evaluate('({state:__startupAPI.status(),owner:window.__azhouWallpaper?.status()??null,pending:__decodePending,blobs:__fixtureBlobCount})');
+      results.push({replaceWorkspace,before,after,failure});
+    }
+    await writeFile(join(options.out,'mask-admission-observations.json'),JSON.stringify(results,null,2));
+    assert.ok(results.every(row=>!row.failure),'mask admission boundary failed: '+JSON.stringify(results));return {results};
+    } finally {
+      await navigateFreshRecoveryFixture('/fixture.html?animation=1&no-initial-wallpaper=1');
+      await awaitGeneratedReady('fresh defaults after selected-theme regression');
+      const fresh = await cdp.evaluate('({state:__startupAPI.status(),owner:!!window.__azhouWallpaper})');
+      await cdp.evaluate('__startupAPI.dispose()');
+      await writeFile(join(options.out,'mask-regression-cleanup.json'),JSON.stringify(fresh,null,2));
+      assert.equal(fresh.state.wallpaper.reason,'disabled','the regression removes its saved theme and restores fresh defaults');
+      assert.equal(fresh.owner,false);
+    }
+  });
+
+  await check('generated theme fields remain labeled and keyboard operable in narrow layouts', async () => {
+    const cells=[];
+    try {
+      for(const locale of ['zh-CN','en']) for(const theme of ['light','dark']) {
+        await cdp.call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+        await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&no-initial-wallpaper=1');
+        await cdp.evaluate(`document.documentElement.lang=${JSON.stringify(locale)};document.documentElement.dataset.theme=${JSON.stringify(theme)}`);
+        await awaitGeneratedReady('theme UI fixture');
+        assert.equal(await cdp.evaluate('__startupAPI.openSettings()'),true);
+        await until(()=>cdp.evaluate(`document.querySelector('iframe[aria-label]')?.contentDocument.documentElement.lang===${JSON.stringify(locale)}&&!!document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('[data-agent-skin-theme-choice]')`),5000,'localized theme controls');
+        const before=await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;d.querySelector('[data-agent-skin-settings-tab=workspace]').click();const controls=['choice','alpha-mode','transparency'].map(k=>d.querySelector('[data-agent-skin-theme-'+k+']'));return controls.map(e=>({id:e.id,label:e.labels?.[0]?.textContent.trim()||'',disabled:e.disabled}));})()`);
+        assert.deepEqual(before.map(x=>x.label),locale==='en'?['Theme','Reading mask settings','Reading mask transparency']:['主题','阅读遮罩设置','阅读遮罩透明度']);
+        assert.equal(before[2].disabled,true);
+        await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;for(const [key,value,event] of [['choice','azhou-q-v3','change'],['alpha-mode','override','change'],['transparency','50','input']]){const e=d.querySelector('[data-agent-skin-theme-'+key+']');e.value=value;e.dispatchEvent(new d.defaultView.Event(event,{bubbles:true}));}const e=d.querySelector('[data-agent-skin-theme-transparency]');e.scrollIntoView({block:'center'});e.focus();})()`);
+        await cdp.call('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowRight',code:'ArrowRight',windowsVirtualKeyCode:39});
+        await cdp.call('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowRight',code:'ArrowRight',windowsVirtualKeyCode:39});
+        const after=await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,dialog=d.querySelector('dialog'),e=d.querySelector('[data-agent-skin-theme-transparency]'),r=e.getBoundingClientRect(),hit=d.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return {value:e.value,readout:d.querySelector('[data-agent-skin-theme-transparency-value]').textContent,aria:e.getAttribute('aria-valuetext'),focus:d.activeElement===e,hit:hit===e,width:r.width,viewport:d.defaultView.innerWidth,overflow:dialog.scrollWidth>dialog.clientWidth+1,strength:d.querySelector('#agent-skin-settings-wallpaper-strength').value,description:e.getAttribute('aria-describedby').split(' ').every(id=>!!d.getElementById(id)),label:d.querySelector('label[for="'+e.id+'"]').getBoundingClientRect().width};})()`);
+        assert.equal(after.value,'51');assert.equal(after.readout,'51%');assert.equal(after.aria,'51%');
+        assert.ok(after.focus&&after.hit&&after.description&&!after.overflow&&after.width>200&&after.label>0,JSON.stringify(after));
+        await dispatchTab(false);
+        assert.equal(await cdp.evaluate("document.activeElement===document.querySelector('iframe[aria-label]')"),true);
+        await screenshot('theme-fields-'+locale+'-'+theme+'-390.png',{width:390,height:844});
+        const restorePoint=await cdp.evaluate(`(()=>{const f=document.querySelector('iframe[aria-label]'),d=f.contentDocument,b=[...d.querySelectorAll('button')].find(e=>/^(恢复全部默认|Restore all defaults)$/.test(e.textContent.trim()));b.scrollIntoView({block:'center'});const r=b.getBoundingClientRect(),fr=f.getBoundingClientRect();return {x:fr.x+r.x+r.width/2,y:fr.y+r.y+r.height/2};})()`);
+        await cdp.call('Input.dispatchMouseEvent',{type:'mousePressed',button:'left',clickCount:1,...restorePoint});
+        await cdp.call('Input.dispatchMouseEvent',{type:'mouseReleased',button:'left',clickCount:1,...restorePoint});
+        const restored=await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument,c=d.querySelector('[data-agent-skin-theme-choice]'),m=d.querySelector('[data-agent-skin-theme-alpha-mode]'),a=d.querySelector('[data-agent-skin-theme-transparency]');c.focus();return {choice:c.value,modeDisabled:m.disabled,alphaDisabled:a.disabled,reason:d.querySelector('[data-agent-skin-theme-transparency-reason]').textContent};})()`);
+        assert.equal(restored.choice,'');assert.equal(restored.modeDisabled,true);assert.equal(restored.alphaDisabled,true);
+        await dispatchTab(false);
+        assert.equal(await cdp.evaluate(`(()=>{const d=document.querySelector('iframe[aria-label]').contentDocument;return d.activeElement.matches('[data-agent-skin-theme-alpha-mode],[data-agent-skin-theme-transparency]');})()`),false);
+        cells.push({locale,theme,before,after,restored});
+        await cdp.evaluate('__startupAPI.dispose()');
+      }
+      return {cells};
+    } finally {
+      await navigateFreshRecoveryFixture('/fixture.html?animation=1&no-initial-wallpaper=1');
+      await cdp.evaluate('__startupAPI.dispose()');
+      await cdp.call('Emulation.clearDeviceMetricsOverride');
+    }
+  });
+
   report.finishedAt = new Date().toISOString();
   report.selectedChecks = options.only;
   const selection = validateCheckSelection(options.only, availableChecks);
@@ -6522,8 +7668,15 @@ try {
     && report.checks.some(item => item.passed)
     && report.checks.every(item => item.passed || item.skipped)
     && selection.valid;
-  await mkdir(options.out, { recursive: true });
+  if(measurementOutput)await assertOutputOwner(measurementOutput);
+  else await mkdir(options.out, { recursive: true });
+  if(measurementRoot){
+    report.measurementInputs={before:measurementBefore,collectionStartedAt:measurementStartedAt};
+    try{report.measurementInputs.after=await checkpointMeasurement();assert.deepEqual(report.measurementInputs.after.execution,measurementBefore.execution,'execution drift');}
+    catch(error){report.measurementInputs.drift=String(error);report.passed=false;}
+  }
   await writeFile(join(options.out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  if(measurementRoot)await sealCollection(options.out);
   console.log(JSON.stringify({ passed: report.passed, report: join(options.out, 'report.json'),
     checks: report.checks.map(({ name, passed, skipped, error }) => ({ name, passed, skipped, error })),
     missingChecks: report.missingChecks, fatalError: report.fatalError }));

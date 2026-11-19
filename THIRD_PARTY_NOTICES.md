@@ -124,6 +124,21 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the output-shaping instruction body only; the upstream ships no runtime, scripts, or assets to vendor.
 - Local changes: neutral frontmatter (the upstream host-specific `disable-model-invocation` key is not copied), Azhou brand protocol and stable receipt, setup/provenance records, and five appended presentation constraints (conclusion source/limit proximity, decision continuity, evidence integrity, optional Review Contract, relative-path-only output).
 
+## Codex Dream Skin SafeCSS AST derivative
+
+- Source: Codex-Dream-Skin commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`, `runtime/safe-css-validator.mjs`.
+- Copyright: 2026 Codex Dream Skin Studio contributors.
+- License: [MIT notice](packages/agent-skin/vendor/dream-safe-css.LICENSE).
+- Derivative: the pristine source plus one fixed AST-export suffix, reproduced by `tools/derive-dream-safe-css-ast.py`. Source/patch/output hashes and the narrow local mapping boundary are recorded in [Agent Skin provenance](packages/agent-skin/UPSTREAM.md#safe-css-ast-derivative). No upstream compiled selectors or theme media are imported by this adapter.
+
+## Codex Dream Skin official-theme contract
+
+- Source: [Codex-Dream-Skin](https://github.com/TeFuirnever/Codex-Dream-Skin), commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`.
+- Copyright: 2026 Codex Dream Skin Studio contributors.
+- License: [MIT notice](packages/agent-skin/vendor/dream-theme-validator.LICENSE).
+- Boundary: only the pure `validateOfficialTheme` contract and its constants/helpers from `runtime/theme-package-validator.mjs`. The derivative does not contain source staging, filesystem access, client-version assumptions, CSS compilation or host selector mappings.
+- Rebuild and exact source/derivative hashes: [Agent Skin provenance](packages/agent-skin/UPSTREAM.md#official-theme-json-contract). This code license does not authorize redistribution of third-party theme media.
+
 ## Gh Axi
 
 `skills/super-gh-axi/` imports the generated `gh-axi` Agent Skill from [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi) at immutable commit [`911a0868600b125aafe5e7f77197a0eb5a5b493c`](https://github.com/kunchenguid/gh-axi/commit/911a0868600b125aafe5e7f77197a0eb5a5b493c) (official release `gh-axi-v0.1.51`). The unmodified upstream baseline is hash-locked for reproducibility.
@@ -149,3 +164,7 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 ## Contributor rule
 
 New vendored or adapted material requires a source URL, immutable version or commit, license identifier, retained notice and a reproducible update path. Public visibility without a license is not permission to copy, modify or redistribute.
+
+## DSH adapter test fixtures
+
+`packages/agent-skin/tools/fixtures/dsh/` retains unmodified DeepSeek Harness source files from official `dsh-v0.2.2-rc.1` (`66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`) and `dsh-v0.2.2-rc.3` (`38a6a5c965aa99ab525161efb7cc5cf1fe62fced`) tags, solely for synthetic adapter regression tests. Copyright (c) 2026 DeepSeek; MIT licenses accompany both snapshots. See the fixture README and manifests for boundaries, immutable source paths, digests and update procedure. These snapshots do not establish installed package provenance or live release support.

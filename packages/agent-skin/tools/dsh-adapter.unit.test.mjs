@@ -11,7 +11,7 @@ function host(overrides = {}) {
     matchMedia: () => ({ matches: false }) };
   h.top = h;return Object.assign(h, overrides);
 }
-test('structural identify accepts the boot graph and caches one token per href', () => {
+test('structural identify accepts the boot graph and caches one token per stable binding', () => {
   const h = host();const a = createDSHPageAdapter(h);
   const first = a.identify(h).documentToken;
   assert.equal(a.identify(h).kind, 'matched');assert.strictEqual(a.identify(h).documentToken, first);
@@ -281,4 +281,142 @@ test('wallpaper group is frozen, atomic, and keyed to the dsh marker', () => {
   assert(a.wallpaper.css.includes('background-color:transparent!important'));
   assert.equal(a.wallpaper.scope,
     'decoded image, viewport cover, unique validated DSH main surface; deeper layers separate');
+});
+
+test('DSH theme surface lease binds exact root/main and rejects removal/reinsert ABA', () => {
+  const h=host();let records=[];let observer;
+  const main={isConnected:true,closest:()=>null};
+  const root={isConnected:true,contains:n=>n===main};
+  h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[main];
+  h.MutationObserver=class {constructor(cb){this.cb=cb;observer=this;} observe(){} disconnect(){} takeRecords(){const r=records;records=[];return r;}};
+  const a=createDSHPageAdapter(h);assert.equal(a.themeSelectionContract,'dsh-owned-main-paint/v2');
+  const lease=a.captureThemeSurface(h);lease.watch(()=>{});assert.equal(lease.node,main);assert.equal(lease.current(),true);
+  records=[{type:'childList',removedNodes:[main]}];
+  assert.equal(lease.current(),false,'reattachment cannot revive old admission');lease.dispose();
+  assert.equal(a.captureThemeSurface({...h,document:{...h.document,querySelectorAll:()=>[main,main]}}),null);
+});
+
+for(const change of ['route','boot','root','main','html','hidden','ancestor-aba'])test(`DSH paint lease rejects ${change}`,()=>{
+  const h=host();let records=[];
+  const main={isConnected:true,closest:()=>null,getClientRects:()=>[{}]};
+  const root={isConnected:true,contains:n=>n===main};
+  h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[main];
+  h.MutationObserver=class {observe(){} disconnect(){} takeRecords(){const out=records;records=[];return out;}};
+  const lease=createDSHPageAdapter(h).captureThemeSurface();lease.watch(()=>{});
+  assert.equal(lease.current(),true);
+  if(change==='route')h.location.href+='other';
+  if(change==='boot')h.__DSH_BOOT__={};
+  if(change==='root')h.document.getElementById=()=>({});
+  if(change==='main')h.document.querySelectorAll=()=>[];
+  if(change==='html')h.document.documentElement={};
+  if(change==='hidden')main.getClientRects=()=>[];
+  if(change==='ancestor-aba')records=[{type:'childList',removedNodes:[{contains:n=>n===main}]}];
+  assert.equal(lease.current(),false);lease.dispose();assert.equal(lease.current(),false);
+});
+
+for(const routeEvent of ['hashchange','popstate'])test(`DSH ${routeEvent} notifies once without a DOM mutation and releases listeners`,()=>{
+  const h=host(),listeners=new Map();let notifications=0;
+  const main={isConnected:true,closest:()=>null},root={isConnected:true,contains:n=>n===main};
+  h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[main];
+  h.addEventListener=(name,fn)=>listeners.set(name,fn);
+  h.removeEventListener=(name,fn)=>{if(listeners.get(name)===fn)listeners.delete(name);};
+  h.MutationObserver=class{constructor(fn){this.callback=fn;}observe(){}disconnect(){}takeRecords(){return [];}};
+  const lease=createDSHPageAdapter(h).captureThemeSurface();lease.watch(()=>notifications++);
+  const queued=listeners.get(routeEvent);queued();
+  assert.equal(lease.current(),false);assert.equal(notifications,1,'route invalidation must notify synchronously');
+  queued();assert.equal(notifications,1,'duplicate events cannot repeatedly release the owner');
+  lease.dispose();assert.equal(listeners.size,0);queued();assert.equal(notifications,1,'queued event after disposal is inert');
+});
+
+for(const validPanel of [true,false])test(`DSH display:contents anchor nominates only its known direct paint panel (${validPanel})`,()=>{
+  const h=host();const anchor={isConnected:true,closest:()=>null,getClientRects:()=>[]};
+  const panel={isConnected:true,closest:()=>null,classList:[validPanel?'fixture_mainPanel':'unrelated'],children:[anchor],getClientRects:()=>[{}]};
+  anchor.parentElement=panel;
+  const root={isConnected:true,contains:n=>n===anchor||n===panel};
+  h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[anchor];
+  h.getComputedStyle=n=>({display:n===anchor?'contents':'flex'});
+  h.MutationObserver=class{observe(){}disconnect(){}takeRecords(){return [];}};
+  const lease=createDSHPageAdapter(h).captureThemeSurface();
+  if(!validPanel){assert.equal(lease,null);return;}
+  assert.equal(lease.node,panel,'boxless semantic slot is not a paint plane');assert.equal(lease.anchor,anchor);
+  lease.watch(()=>{});assert.equal(lease.current(),true);
+  panel.children.push({});assert.equal(lease.current(),false,'unknown panel siblings expand the paint scope');
+  lease.dispose();
+});
+
+for(const state of ['hidden','aria-hidden','inert','visibility-hidden','visibility-collapse'])test(`DSH contents anchor rejects initial ${state}`,()=>{
+  const h=host();const anchor={isConnected:true,closest:selector=>['hidden','aria-hidden','inert'].includes(state)&&selector.includes('['+state)?anchor:null,getClientRects:()=>[]};
+  const panel={isConnected:true,closest:()=>null,classList:['fixture_mainPanel'],children:[anchor],getClientRects:()=>[{}]};anchor.parentElement=panel;
+  const root={isConnected:true,contains:n=>n===anchor||n===panel};h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[anchor];
+  h.getComputedStyle=n=>({display:n===anchor?'contents':'flex',visibility:n===anchor&&state.startsWith('visibility-')?state.slice(11):'visible'});
+  h.MutationObserver=class{observe(){}disconnect(){}takeRecords(){return [];}};
+  const lease=createDSHPageAdapter(h).captureThemeSurface();assert.equal(lease?.current()??false,false);lease?.dispose();
+});
+
+for(const change of ['multiple-children','boxless-panel','reparent','sibling-aba'])test(`DSH contents plane rejects ${change}`,()=>{
+ const h=host();let records=[];
+ const anchor={isConnected:true,closest:()=>null,getClientRects:()=>[]};
+ const panel={isConnected:true,closest:()=>null,classList:['fixture_mainPanel'],children:[anchor],getClientRects:()=>[{}]};anchor.parentElement=panel;
+ const root={isConnected:true,contains:n=>n===anchor||n===panel};h.document.getElementById=()=>root;h.document.querySelectorAll=()=>[anchor];
+ h.getComputedStyle=n=>({display:n===anchor?'contents':'flex',visibility:'visible'});
+ h.MutationObserver=class{observe(){}disconnect(){}takeRecords(){const r=records;records=[];return r;}};
+ const lease=createDSHPageAdapter(h).captureThemeSurface();lease.watch(()=>{});assert.equal(lease.current(),true);
+ if(change==='multiple-children')panel.children.push({});
+ if(change==='boxless-panel')panel.getClientRects=()=>[];
+ if(change==='reparent')anchor.parentElement={};
+ if(change==='sibling-aba')records=[{type:'childList',target:panel,addedNodes:[{nodeType:1}],removedNodes:[]}];
+ assert.equal(lease.current(),false);lease.dispose();
+});
+
+test("same URL boot replacement revokes the previous document identity", () => {
+ const h=host(), a=createDSHPageAdapter(h), first=a.identify().documentToken;
+ h.__DSH_BOOT__={web:true};
+ assert.notStrictEqual(a.identify().documentToken,first);
+ });
+
+for (const change of ['document', 'loader', 'load-function', 'unmatched', 'throwing']) test(`DSH identity rejects observed ${change} generation reuse`, () => {
+  const h=host(), a=createDSHPageAdapter(h), first=a.identify().documentToken;
+  if(change==='document') h.document={...h.document};
+  if(change==='loader') h.__ModuleLoader__={load(){}};
+  if(change==='load-function') h.__ModuleLoader__.load=()=>{};
+  if(change==='unmatched') {const boot=h.__DSH_BOOT__;delete h.__DSH_BOOT__;assert.equal(a.identify().kind,'unmatched');h.__DSH_BOOT__=boot;}
+  if(change==='throwing') {const location=h.location;Object.defineProperty(h,'location',{configurable:true,get(){throw Error('gone');}});assert.equal(a.identify().kind,'unmatched');Object.defineProperty(h,'location',{configurable:true,value:location});}
+  const next=a.identify().documentToken;
+  assert.notStrictEqual(next,first);assert.strictEqual(a.identify().documentToken,next);
+});
+
+for (const version of ['0.2.2-rc.1', '0.2.2-rc.3']) test(`source-pinned ${version} main-slot fixture admits the documented paint plane`, async () => {
+  const {readFile}=await import('node:fs/promises');
+  const f=JSON.parse(await readFile(new URL(`./fixtures/dsh/${version}/manifest.json`,import.meta.url),'utf8'));
+  assert.equal(f.source.releaseVersion,version);
+  assert.equal(f.source.commit,version.endsWith('rc.1') ? '66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db' : '38a6a5c965aa99ab525161efb7cc5cf1fe62fced');
+  assert.deepEqual(f.shape,{panelClass:'mainPanel',panelDisplay:'flex',slot:'main',anchorDisplay:'contents'});
+  const {createHash}=await import('node:crypto');
+  const source={};
+  for(const file of f.source.files){
+    const bytes=await readFile(new URL(`./fixtures/dsh/${version}/${file.local}`,import.meta.url));
+    assert.equal(createHash('sha256').update(bytes).digest('hex'),file.sha256);
+    source[file.local]=bytes.toString();
+  }
+  assert.match(source['AppFrame.tsx'], /className=\{css\.mainPanel\}[\s\S]*?renderSlot\('main'/);
+  assert.match(source['AppFrame.module.css'], /\.mainPanel\s*\{\s*display: flex;/);
+  assert.match(source['scoped-slots.tsx'], /const ANCHOR_STYLE = \{ display: 'contents' \}/);
+  assert.match(source['scoped-slots.tsx'], /<Anchor data-slot=\{slotKey\} style=\{ANCHOR_STYLE\}>/);
+  assert.equal(f.installedPackageSourceAttested,false);
+  assert.equal(f.evidence,'source-derived-synthetic');
+  assert.equal(f.liveAccepted,false);
+  const h=host();
+  const anchor={isConnected:true,closest:()=>null};
+  const panel={isConnected:true,closest:()=>null,classList:['synthetic_'+f.shape.panelClass],children:[anchor],getClientRects:()=>[{}]};
+  anchor.parentElement=panel;
+  const root={isConnected:true,contains:n=>n===anchor||n===panel};
+  h.document.getElementById=()=>root;
+  h.document.querySelectorAll=s=>s===`[data-slot="${f.shape.slot}"]`?[anchor]:[];
+  h.getComputedStyle=n=>({display:n===anchor?f.shape.anchorDisplay:f.shape.panelDisplay,visibility:'visible'});
+  h.MutationObserver=class{observe(){}disconnect(){}takeRecords(){return [];}};
+  const a=createDSHPageAdapter(h),lease=a.captureThemeSurface();
+  assert.equal(lease.node,panel);assert.equal(lease.current(),true);
+  panel.classList=['future_unknown'];
+  assert.equal(lease.current(),false,'upstream class drift cannot expand admission');
+  lease.dispose();
 });

@@ -92,6 +92,11 @@ class VerifierApiTests(unittest.TestCase):
         manifest_path = bundle / "Contents/Resources/startup/manifest.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest.pop("startupEntrypoints", None)
+        # Historical build 25/30 fixtures predate Dream preview outputs.
+        for relative in ("web/dream-theme-style.js", "web/vendor/dream-safe-css.LICENSE",
+                         "web/vendor/dream-theme-validator.LICENSE"):
+            manifest["outputs"].pop(relative)
+            (bundle / "Contents/Resources" / relative).unlink()
         manifest["outputs"].pop("startup/prepare.js", None)
         (bundle / "Contents/Resources/startup/prepare.js").unlink()
         manifest["outputs"].pop("web/assets/defaults/cold-cover.png", None)

@@ -23,27 +23,13 @@ html[data-azhou-wallpaper="active"] {
     & body { background-position: center, 88% center !important; }
   }
 
-  & #root:has([data-app-shell-frame]),
-  & #root :is([data-app-shell-frame], [data-app-shell-main-surface], [data-app-shell-page-surface]),
-  & #root [data-app-shell-main-surface] :is([class^="_WorkspaceContent_"], [class*=" _WorkspaceContent_"])::before {
+  & [data-azhou-wallpaper-plane=__AZHOU_WALLPAPER_INSTANCE__],
+  & [data-azhou-wallpaper-pseudo=__AZHOU_WALLPAPER_INSTANCE__]::before {
     background-color: transparent !important;
     background-image: none !important;
   }
 
-  /* Only the host's decorative layers are cleared; interactive surfaces stay intact. */
-  & #root [data-app-shell-main-surface] :where(
-    [data-thread-scroll-footer],
-    [data-thread-scroll-footer] > :is([class^="_background_"], [class*=" _background_"]),
-    [data-thread-scroll-footer] > [aria-hidden="true"].pointer-events-none:is([class^="background-"], [class*=" background-"]),
-    .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
-      :is([class^="_background_"], [class*=" _background_"]):is([class^="_fade_"], [class*=" _fade_"]),
-    .thread-scroll-container .pointer-events-none.sticky.bottom-0 >
-      [aria-hidden="true"].pointer-events-none:is([class^="background-"], [class*=" background-"]):is([class^="fade-"], [class*=" fade-"]),
-    :is([class^="_MainContentTopFade_"], [class*=" _MainContentTopFade_"])
-  ):where(:not(
-    [data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select,
-    :is([data-composer-layout], pre, code, [role="menu"], [role="dialog"], [contenteditable="true"], textarea, input, button, select) *
-  )) {
+  & [data-azhou-wallpaper-decoration=__AZHOU_WALLPAPER_INSTANCE__] {
     &, &::before, &::after {
       background-color: transparent !important;
       background-image: none !important;

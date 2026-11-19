@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Uses an isolated headless Chrome and test-generated image pixels only.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,8 +19,8 @@ for (let index = 2; index < process.argv.length; index++) {
     console.log('node tools/test-image-settings-browser.mjs [--chrome /path/to/Chrome]');
     process.exit(0);
   }
-  if (key !== '--chrome' || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
-  options.chrome = process.argv[++index];
+  if (!['--chrome','--out'].includes(key) || !process.argv[index + 1]) throw new Error('Unknown or missing argument: ' + key);
+  options[key.slice(2)] = process.argv[++index];
 }
 options.chrome = resolve(options.chrome);
 
@@ -95,7 +95,7 @@ class CDP {
   close() { this.socket.close(); }
 }
 
-function browserChecks(maxInputBytes) {
+function browserChecks(maxInputBytes,dreamCapsuleText) {
   return (async () => {
     const frame = document.createElement('iframe');
     frame.width = '800';
@@ -133,9 +133,11 @@ function browserChecks(maxInputBytes) {
     appearanceAvatarCanvas.getContext('2d').fillRect(0, 0, 8, 8);
     const appearanceAvatar = appearanceAvatarCanvas.toDataURL('image/png');
     const created = [];
+    const exportedPresetBlobs = [];
     const revoked = [];
     const urlApi = {
       createObjectURL(blob) {
+        if (blob.type === 'application/json') exportedPresetBlobs.push(blob);
         const url = child.URL.createObjectURL(blob);
         created.push(url);
         return url;
@@ -150,6 +152,7 @@ function browserChecks(maxInputBytes) {
       Image: child.Image,
       URL: urlApi,
       indexedDB: child.indexedDB,
+      crypto: child.crypto, TextEncoder: child.TextEncoder, TextDecoder:child.TextDecoder, Blob:child.Blob,
       localization,
       appearanceAvatar,
       getAppearance: () => currentAppearance,
@@ -328,6 +331,24 @@ function browserChecks(maxInputBytes) {
       throw new Error('Keyboard focus on Appearance controls needs a clearly visible outline: '
         + JSON.stringify({ visible: keyboardTarget.matches(':focus-visible'), style: focusStyle.outlineStyle, width: focusStyle.outlineWidth }));
     }
+    const disclosures = [...settingsDialog.querySelectorAll('[data-agent-skin-disclosure]')];
+    if (disclosures.length !== 3 || disclosures.some(el => el.open)) throw new Error('Optional Appearance content must start collapsed');
+    for (const locale of ['zh-CN', 'en']) {
+      localization.setLocale(locale);
+      if (/CLI|profile|main/.test(settingsDialog.innerText)) throw new Error('Technical theme details leaked into default view');
+      for (const detail of disclosures) {
+        const summary = detail.querySelector('summary');
+        summary.focus();
+        if (childDocument.activeElement !== summary) throw new Error('Disclosure trigger is not focusable');
+        window.appearanceDisclosure = detail;
+        await new Promise(resolve => { window.finishDisclosureTest = resolve; window.disclosureTestReady = true; });
+        if (!detail.open || childDocument.activeElement !== summary) throw new Error('Keyboard disclosure loses focus or does not open: '+JSON.stringify({name:detail.dataset.agentSkinDisclosure,locale,open:detail.open,active:childDocument.activeElement?.outerHTML}));
+        await new Promise(resolve => { window.finishDisclosureTest = resolve; window.disclosureTestReady = true; });
+        if (detail.open || childDocument.activeElement !== summary) throw new Error('Keyboard disclosure does not close or loses focus');
+      }
+    }
+    localization.setLocale('zh-CN');
+    if (applyCalls !== 0 || savedCallbackCount !== 0) throw new Error('Opening help saved or applied settings');
     const selectImage = file => {
       const transfer = new child.DataTransfer();
       transfer.items.add(file);
@@ -386,7 +407,7 @@ function browserChecks(maxInputBytes) {
     const workspacePreviewSurface = workspacePreview?.querySelector(':scope > div');
     const workspacePreviewWash = settingsDialog.querySelector('[data-agent-skin-workspace-preview-wash]');
     const strengthInput = settingsDialog.querySelector('input[type="range"]');
-    const textInputs = [...settingsDialog.querySelectorAll('input[type="text"]')];
+    const textInputs = [...settingsDialog.querySelectorAll('input[type="text"]:not([data-agent-skin-preset-name])')];
     const titleInput = textInputs[0];
     const captionInput = textInputs[1];
     const subtitleInput = settingsDialog.querySelector('textarea');
@@ -426,6 +447,17 @@ function browserChecks(maxInputBytes) {
     for (const [width, height] of [[1512, 889], [800, 820], [640, 480], [390, 320]]) {
       workspacePreviewGeometry.push(await measurePreviewAt(width, height));
     }
+    for (const locale of ['zh-CN', 'en']) for (const width of [390, 640, 800]) {
+      localization.setLocale(locale);
+      await measurePreviewAt(width, 480);
+      for (const open of [false, true]) {
+        for (const detail of disclosures) detail.open = open;
+        await new Promise(resolve => child.requestAnimationFrame(resolve));
+        if (settingsDialog.scrollWidth > settingsDialog.clientWidth + 1) throw new Error('Appearance disclosure horizontal overflow: ' + locale + '/' + width + '/' + open);
+      }
+    }
+    for (const detail of disclosures) detail.open = false;
+    localization.setLocale('zh-CN');
     const zoomEquivalentGeometry = workspacePreviewGeometry.at(-1);
     const appearancePreviewMatrix = [];
     for (const [theme, colors] of [
@@ -589,7 +621,7 @@ function browserChecks(maxInputBytes) {
       onSaved() { savedCallbackCount++; },
     });
     const applyDialog = childDocument.querySelector('dialog[data-agent-skin-settings]');
-    const applyTitle = applyDialog.querySelector('input[type="text"]');
+    const applyTitle = applyDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
     applyTitle.value = 'Apply draft';
     applyTitle.dispatchEvent(new child.Event('input', { bubbles: true }));
     const applyStrength = applyDialog.querySelector('input[type="range"]');
@@ -642,10 +674,10 @@ function browserChecks(maxInputBytes) {
     if (!api.openSettings() || !secondAPI.openSettings()) {
       throw new Error('both settings pages must open for the conflict regression');
     }
-    const pageATitle = settingsDialog.querySelector('input[type="text"]');
+    const pageATitle = settingsDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
     const pageAConflictSave = settingsDialog.querySelector('footer button:last-child');
     const pageBDialog = secondDocument.querySelector('dialog[data-agent-skin-settings]');
-    const pageBTitle = pageBDialog.querySelector('input[type="text"]');
+    const pageBTitle = pageBDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
     const pageBSave = pageBDialog.querySelector('footer button:last-child');
     const pageBStatus = pageBDialog.querySelector('[data-agent-skin-settings-status]');
     pageATitle.value = 'Page A wins';
@@ -682,11 +714,202 @@ function browserChecks(maxInputBytes) {
       throw new Error('reopening settings reads the value committed by the other page');
     }
     const reopenedDialog = secondDocument.querySelector('dialog[data-agent-skin-settings]');
-    const reopenedTitle = reopenedDialog.querySelector('input[type="text"]');
+    const reopenedTitle = reopenedDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
     if (reopenedTitle.value !== 'Page A wins') throw new Error('reopened input does not show the external winner');
     reopenedAPI.cancelSettings();
     reopenedAPI.dispose();
     secondPage.remove();
+    const presetArtworkB = canvasFor(1536, 1024, context => {
+      context.fillStyle = '#9b204a'; context.fillRect(0, 0, 1536, 1024);
+    }).toDataURL('image/png');
+    await api.save(winningCommit.settings, {activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:0}}, {
+      schemaVersion:1,revision:0,entries:[
+        {id:'browser-a',name:'<img onerror=window.presetXss=true>',recipeId:'azhou-q-v3',appearance:{artwork:art.dataURL,contours:art.contours,wallpaperStrength:42},surfaceTransparency:{mode:'override',value:0}},
+        {id:'browser-b',name:'B',recipeId:'azhou-q-v3',appearance:{artwork:presetArtworkB,contours:art.contours,wallpaperStrength:42},surfaceTransparency:{mode:'override',value:100}},
+      ],
+    });
+    const presetBefore = await api.load(defaults);
+    if (!api.openSettings()) throw new Error('local preset panel opens');
+    const presetList = settingsDialog.querySelector('[data-agent-skin-preset-list]');
+    if (presetList.options[0].textContent !== '<img onerror=window.presetXss=true>' || child.presetXss) throw new Error('preset names must remain text');
+    const loadPreset = Array.from(settingsDialog.querySelectorAll('button')).find(button=>button.textContent==='Load into draft');
+    for (const [id,image,alpha] of [['browser-a',art.dataURL,'0'],['browser-b',presetArtworkB,'100']]) {
+      presetList.value=id;loadPreset.click();
+      if (settingsDialog.querySelector('[data-agent-skin-workspace-preview-image]').src!==image
+        || settingsDialog.querySelector('[data-agent-skin-theme-transparency]').value!==alpha) throw new Error('preset A/B draft preview mismatch');
+    }
+    api.cancelSettings();
+    const presetAfterCancel=await api.load(defaults);
+    if (JSON.stringify(presetAfterCancel.settings)!==JSON.stringify(presetBefore.settings)) throw new Error('preset load cancellation wrote images');
+    api.openSettings();presetList.value='browser-b';loadPreset.click();
+    settingsDialog.querySelector('footer button:last-child').click();
+    await waitFor(()=>!api.isSettingsOpen(),'local preset commit');
+    const presetAfterSave=await api.load(defaults);
+    if (presetAfterSave.settings.artwork!==presetArtworkB || presetAfterSave.themeState.preferencesByTheme['azhou-q-v3'].value!==100
+      || presetAfterSave.settings.introTitle!==presetBefore.settings.introTitle || presetAfterSave.settings.avatar!==presetBefore.settings.avatar) throw new Error('preset save changed startup fields or lost transparency');
+    api.openSettings();
+    if (settingsDialog.querySelector('[data-agent-skin-theme-transparency]').value!=='100') throw new Error('preset alpha did not survive reopen');
+    api.cancelSettings();
+    const rawCatalog = async (operation, values) => {
+      const db = await new Promise((resolve,reject)=>{const r=child.indexedDB.open('azhou-codex-startup',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+      try { return await new Promise((resolve,reject)=>{
+        const t=db.transaction('settings',operation==='read'?'readonly':'readwrite'), store=t.objectStore('settings'), result={};
+        for(const key of ['images','themeState','appearancePresets','dreamThemes']) {
+          if(operation==='read') {const q=store.get(key);q.onsuccess=()=>{result[key]=q.result;};}
+          else if(Object.hasOwn(values,key)) store.put(values[key],key);
+        }
+        t.oncomplete=()=>resolve(result);t.onabort=()=>reject(t.error||new Error('raw transaction aborted'));t.onerror=()=>{};
+      }); } finally { db.close(); }
+    };
+    api.openSettings();
+    settingsDialog.querySelector('[data-agent-skin-settings-tab="workspace"]').click();
+    const presetFileInput=settingsDialog.querySelector('[data-agent-skin-preset-import]');
+    const presetExport=settingsDialog.querySelector('[data-agent-skin-preset-export]');
+    if(presetFileInput.labels.length!==1 || presetFileInput.labels[0].textContent!=='Import Azhou preset file') throw new Error('preset import label association');
+    const presetDisclosure=settingsDialog.querySelector('[data-agent-skin-disclosure=presets]');
+    if(!presetDisclosure.open)presetDisclosure.querySelector('summary').click();
+    presetFileInput.focus();if(childDocument.activeElement!==presetFileInput)throw new Error('preset import is not keyboard focusable');
+    presetExport.focus();if(childDocument.activeElement!==presetExport)throw new Error('preset export is not keyboard focusable');
+    presetList.value='browser-a';
+    const urlsBeforeExport=created.length,revokedBeforeExport=revoked.length;
+    presetExport.click();
+    if(exportedPresetBlobs.length!==1 || created.length!==urlsBeforeExport+1 || revoked.length!==revokedBeforeExport+1
+      || childDocument.querySelector('a[download="azhou-preset.json"]'))throw new Error('preset export resource cleanup');
+    const exportedFile=exportedPresetBlobs[0];
+    const exportedContent=JSON.parse(await exportedFile.text());
+    if(exportedContent.schema!=='azhou-appearance-preset.v1' || exportedContent.name!=='<img onerror=window.presetXss=true>'
+      || Object.keys(exportedContent).sort().join(',')!=='appearance,name,recipeId,schema,surfaceTransparency')throw new Error('preset export scope');
+    api.cancelSettings();
+    const exchangeCurrent=await api.load(defaults);
+    await api.save(exchangeCurrent.settings,{activeThemeId:'azhou-q-v3',surfaceTransparency:{mode:'override',value:100}}, {schemaVersion:1,revision:0,entries:[]});
+    await api.load(defaults);
+    const exchangeBaseline=await rawCatalog('read');let exchangeApplied=0,exchangeNotified=0;
+    api.openSettings({onApply(){exchangeApplied++;return {applied:true};},onSaved(){exchangeNotified++;}});
+    const importFile=async(blob)=>{
+      const transfer=new child.DataTransfer();transfer.items.add(new child.File([blob],'azhou-preset.json',{type:'application/json'}));
+      presetFileInput.files=transfer.files;presetFileInput.dispatchEvent(new child.Event('change',{bubbles:true}));
+      await waitFor(()=>!api.isBusy(),'Azhou preset file import');
+    };
+    await importFile(exportedFile);
+    if(presetList.options.length!==1 || presetList.options[0].textContent!==exportedContent.name || child.presetXss
+      || presetFileInput.value!=='')throw new Error('preset file draft staging');
+    if(JSON.stringify(await rawCatalog('read'))!==JSON.stringify(exchangeBaseline))throw new Error('preset file import wrote before Save');
+    if(settingsDialog.querySelector('[data-agent-skin-workspace-preview-image]').src!==exchangeBaseline.images.artwork
+      || settingsDialog.querySelector('[data-agent-skin-theme-transparency]').value!=='100')throw new Error('preset file import changed active draft');
+    settingsDialog.querySelector('footer button:last-child').click();
+    await waitFor(()=>!api.isSettingsOpen(),'catalog-only file save');
+    const exchangeSaved=await rawCatalog('read');
+    if(JSON.stringify(exchangeSaved.images)!==JSON.stringify(exchangeBaseline.images)
+      || JSON.stringify(exchangeSaved.themeState)!==JSON.stringify(exchangeBaseline.themeState)
+      || exchangeApplied!==0 || exchangeNotified!==1 || exchangeSaved.appearancePresets.entries.length!==1
+      || exchangeSaved.appearancePresets.entries[0].id==='browser-a')throw new Error('preset file save changed active records or omitted catalog');
+    await api.load(defaults);api.openSettings();
+    if(presetList.options.length!==1)throw new Error('preset file did not survive reopen');
+    await importFile(exportedFile);api.cancelSettings();await api.load(defaults);api.openSettings();
+    if(presetList.options.length!==1)throw new Error('cancelled preset import persisted');
+    await importFile(new child.Blob([JSON.stringify({...exportedContent,css:'body{}'})]));
+    if(presetList.options.length!==1)throw new Error('unknown preset fields accepted');
+    api.cancelSettings();
+    const presetFileExchange={exported:true,strictScope:true,resourceCleanup:true,keyboardFocusable:true,imported:true,
+      catalogOnlySave:true,activeRecordsUnchanged:true,onApplyCalls:exchangeApplied,onSavedCalls:exchangeNotified,reopened:true,cancelled:true,unknownFieldsRejected:true};
+    const savedP2Records=await rawCatalog('read');
+    const p2BrowserResults=[];
+    try {
+      for(const kind of ['bigint','cycle']) {
+        const damaged={corrupt:1n}; if(kind==='cycle') damaged.self=damaged;
+        await rawCatalog('write',{appearancePresets:damaged});
+        const loadedP2=await api.load(defaults);
+        if(loadedP2.reason || loadedP2.settings.artwork!==savedP2Records.images.artwork) throw new Error('bad catalog contaminated valid appearance');
+        if(!api.openSettings()) throw new Error('P2 panel failed to open');
+        if(!settingsDialog.querySelector('[data-agent-skin-preset-list]').disabled) throw new Error('bad catalog presets not disabled');
+        const field=settingsDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
+        field.value='P2 '+kind;field.dispatchEvent(new child.Event('input',{bubbles:true}));
+        settingsDialog.querySelector('footer button:last-child').click();
+        await waitFor(()=>!api.isSettingsOpen(),'P2 '+kind+' appearance save');
+        const after=await rawCatalog('read');
+        if(after.images.introTitle!=='P2 '+kind || after.appearancePresets.corrupt!==1n
+          || (kind==='cycle' && after.appearancePresets.self!==after.appearancePresets)) throw new Error('P2 save lost appearance or damaged catalog');
+        const prior=await api.load(defaults);
+        const winner={corrupt:2n};if(kind==='cycle')winner.self=winner;
+        await rawCatalog('write',{appearancePresets:winner});
+        const failure=await api.save({...prior.settings,introTitle:'Stale P2'}).then(()=>'',error=>error.reason);
+        if(failure!=='settings-conflict') throw new Error('P2 concurrent change was not rejected');
+        const concurrent=await rawCatalog('read');
+        if(concurrent.appearancePresets.corrupt!==2n || concurrent.images.introTitle!=='P2 '+kind) throw new Error('P2 stale writer replaced winner');
+        p2BrowserResults.push({kind,disabled:true,appearanceSaved:true,catalogPreserved:true,concurrentBlocked:true});
+      }
+      await rawCatalog('write',savedP2Records);
+      const unusedArtwork=canvasFor(1536,1024,ctx=>{ctx.fillStyle='#12ad48';ctx.fillRect(0,0,1536,1024);}).toDataURL('image/png');
+      const inactive=structuredClone(savedP2Records.appearancePresets);
+      for(const entry of inactive.entries)entry.appearance.artwork=unusedArtwork;
+      await rawCatalog('write',{appearancePresets:inactive});
+      let inactiveDecodes=0;
+      function ObservedImage(){
+        const image=new child.Image();const property=Object.getOwnPropertyDescriptor(child.HTMLImageElement.prototype,'src');
+        Object.defineProperty(image,'src',{configurable:true,get(){return property.get.call(this);},set(value){if(value===unusedArtwork){inactiveDecodes++;throw new Error('inactive catalog decode attempted');}property.set.call(this,value);}});
+        return image;
+      }
+      const snapshotApi=createImageSettings({document:childDocument,Image:ObservedImage,URL:child.URL,indexedDB:child.indexedDB,
+        crypto:child.crypto,TextEncoder:child.TextEncoder,localization,setTimeout:child.setTimeout.bind(child),clearTimeout:child.clearTimeout.bind(child),performance:child.performance});
+      const snapshot=await snapshotApi.loadSnapshot(defaults);snapshotApi.dispose();
+      if(snapshot.status!=='valid'||snapshot.settings.artwork!==savedP2Records.images.artwork||inactiveDecodes!==0)throw new Error('inactive catalog interfered with active snapshot');
+      p2BrowserResults.push({kind:'snapshot',status:snapshot.status,inactiveDecodes,activeArtworkPreserved:true});
+    } finally {
+      if(api.isSettingsOpen())api.cancelSettings();
+      await rawCatalog('write',savedP2Records);await api.load(defaults);
+    }
+
+    const dreamBefore=await rawCatalog('read');
+    const dreamPaintBefore=child.getComputedStyle(childDocument.body).backgroundImage;
+    let dreamApplied=0;api.openSettings({onApply(){dreamApplied++;return {applied:true};}});
+    const dreamInput=settingsDialog.querySelector('[data-agent-skin-dream-import]');
+    const dreamList=settingsDialog.querySelector('[data-agent-skin-dream-list]');
+    const draftText=settingsDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
+    draftText.value='Unsaved during source import';draftText.dispatchEvent(new child.Event('input',{bubbles:true}));
+    const draftBeforeImport=draftText.value;
+    const importDreamFile=async()=>{
+      const transfer=new child.DataTransfer();transfer.items.add(new child.File([dreamCapsuleText],'dream-source.json',{type:'application/json'}));
+      dreamInput.files=transfer.files;dreamInput.dispatchEvent(new child.Event('change',{bubbles:true}));
+      await waitFor(()=>!api.isBusy(),'Dream source file UI import');
+    };
+    await importDreamFile();
+    const dreamStored=await rawCatalog('read');
+    if(dreamList.options.length!==1||dreamList.options[0].textContent!=='<img onerror=window.dreamXss=true>'||window.dreamXss||child.dreamXss)throw new Error('Dream UI name rendering');
+    for(const key of ['images','themeState','appearancePresets'])if(JSON.stringify(dreamBefore[key])!==JSON.stringify(dreamStored[key]))throw new Error('Dream import changed '+key);
+    const dreamUnchanged={source:dreamStored.dreamThemes.entries[0].capsule===dreamCapsuleText,notApplied:dreamApplied===0,
+      draft:draftText.value===draftBeforeImport,paint:child.getComputedStyle(childDocument.body).backgroundImage===dreamPaintBefore};
+    if(Object.values(dreamUnchanged).some(value=>!value))throw new Error('Dream source/draft/paint changed '+JSON.stringify(dreamUnchanged));
+    await importDreamFile();if((await rawCatalog('read')).dreamThemes.entries.length!==1)throw new Error('Dream duplicate source');
+    api.cancelSettings();await api.load(defaults);api.openSettings();
+    await waitFor(()=>!api.isBusy(),'Dream directory reopen');
+    if(dreamList.options.length!==1||dreamList.options[0].textContent!=='<img onerror=window.dreamXss=true>')throw new Error('Dream directory did not reopen');
+    if(!settingsDialog.querySelector('[data-agent-skin-dream-apply]').disabled)throw new Error('unimplemented Dream apply enabled');
+    api.cancelSettings();
+    const dreamFileExchange={cliSource:true,fileInput:true,originalCapsuleRetained:true,reopened:true,duplicateIdempotent:true,
+      activeRecordsUnchanged:true,draftPreserved:true,nameAsText:true,applyCalls:dreamApplied};
+
+    const disposalAPI=createImageSettings({document:childDocument,Image:child.Image,URL:urlApi,indexedDB:child.indexedDB,
+      crypto:child.crypto,TextEncoder:child.TextEncoder,TextDecoder:child.TextDecoder,Blob:child.Blob,AbortController:child.AbortController,
+      localization,appearanceAvatar,getAppearance:()=>currentAppearance,setTimeout:child.setTimeout.bind(child),
+      clearTimeout:child.clearTimeout.bind(child),performance:child.performance});
+    await disposalAPI.load(defaults);
+    const disposeBefore=await rawCatalog('read');let disposeChecks=0,disposeRollback=0,postcommitDisposed=false,disposeReason='';
+    try {
+      await disposalAPI.applyDreamTheme(dreamStored.dreamThemes.entries[0].capsuleSha256,{expectedToken:await disposalAPI.themeApplyToken(),activate:async()=>({applied:true,transaction:{
+        current(){if(++disposeChecks===2){postcommitDisposed=true;disposalAPI.dispose();return false;}return true;},
+        finalize(){throw new Error('disposed source finalized');},rollback(){disposeRollback++;return true;},
+      }})});
+    }catch(error){disposeReason=error?.reason;}
+    const disposeAfter=await rawCatalog('read');
+    if(disposeReason!=='operation-cancelled'||!postcommitDisposed||disposeRollback!==1||disposalAPI.isBusy())throw new Error('postcommit disposal settlement');
+    if(JSON.stringify(disposeBefore.images)!==JSON.stringify(disposeAfter.images)
+      ||JSON.stringify(disposeBefore.appearancePresets)!==JSON.stringify(disposeAfter.appearancePresets)
+      ||JSON.stringify(disposeBefore.dreamThemes)!==JSON.stringify(disposeAfter.dreamThemes)
+      ||disposeBefore.themeState.activeThemeId!==disposeAfter.themeState.activeThemeId
+      ||JSON.stringify(disposeBefore.themeState.preferencesByTheme)!==JSON.stringify(disposeAfter.themeState.preferencesByTheme)
+      ||disposeAfter.themeState.revision!==disposeBefore.themeState.revision+2)throw new Error('postcommit disposal left a committed candidate');
+    const dreamDisposeCompensation={realIDB:true,postcommitDisposed:true,activeRestored:true,catalogsPreserved:true,rollbackCalls:disposeRollback};
+
     const versionchange = await new Promise((resolve, reject) => {
       const request = child.indexedDB.open('azhou-codex-startup', 2);
       let blocked = false;
@@ -707,6 +930,8 @@ function browserChecks(maxInputBytes) {
     frame.height = '889';
     localization.setLocale('zh-CN');
     if (!api.openSettings()) throw new Error('could not reopen settings for the layout screenshot');
+    await waitFor(()=>!api.isBusy(),'final directory validation before measuring resources');
+    await waitFor(()=>created.length===revoked.length,'all final validation URLs released before measuring resources');
     settingsDialog.querySelector('[data-agent-skin-settings-tab="workspace"]')?.click();
     await new Promise(resolve => child.requestAnimationFrame(() => child.requestAnimationFrame(resolve)));
     const screenshotGeometry = {
@@ -795,6 +1020,10 @@ function browserChecks(maxInputBytes) {
       idleCancelResult: api.cancelImport(),
       appearance,
       storage: {
+        p2BrowserResults,
+        presetFileExchange,
+        dreamFileExchange,
+        dreamDisposeCompensation,
         initialReason: initiallyLoaded.reason,
         initialBaseline: initiallyLoaded.baseline,
         initialTitle: initialCommit.introTitle,
@@ -837,7 +1066,9 @@ async function cleanup() {
 }
 
 try {
+  if (options.out) {options.out=resolve(options.out);await mkdir(options.out);}
   assert.equal(typeof WebSocket, 'function', 'Node 22 or newer is required for the built-in WebSocket');
+  const dreamStyle = await readFile(join(PACKAGE_ROOT,'dream-theme-style.js'));
   const imageSettings = await readFile(join(PACKAGE_ROOT, 'image-settings.js'));
   const imageMetadataReader = await readFile(join(PACKAGE_ROOT, 'image-metadata-reader.js'));
   const localizationSource = await readFile(join(PACKAGE_ROOT, 'localization.js'));
@@ -854,13 +1085,15 @@ try {
     'the direct page loads the classic metadata reader before the deferred settings script');
   const html = '<!doctype html><html><head><meta charset="utf-8"><title>image settings fixture</title></head><body>'
     + '<script src="/localization.js" defer></script><script src="/image-metadata-reader.js" defer></script>'
-    + '<script src="/image-settings.js" defer></script><script src="/image-metadata-order-probe.js" defer></script>'
+    + '<script src="/dream-theme-style.js" defer></script><script src="/image-settings.js" defer></script><script src="/image-metadata-order-probe.js" defer></script>'
     + '</body></html>';
   const orderProbe = "window.imageSettingsReady = typeof createImageSettings === 'function' "
     + "&& typeof createLocalization === 'function'; window.imageMetadataReady = "
     + "typeof window.AGENT_SKIN_READ_RAW_DIMENSIONS === 'function';";
   server = createServer((request, response) => {
-    if (request.url === '/image-settings.js') {
+    if (request.url === '/dream-theme-style.js') {
+      response.writeHead(200, {'content-type':'text/javascript; charset=utf-8','cache-control':'no-store'});response.end(dreamStyle);
+    } else if (request.url === '/image-settings.js') {
       response.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8', 'cache-control': 'no-store' });
       response.end(imageSettings);
     } else if (request.url === '/image-metadata-reader.js') {
@@ -891,6 +1124,8 @@ try {
   });
   const origin = 'http://127.0.0.1:' + server.address().port;
   profile = await mkdtemp(join(tmpdir(), 'agent-skin-image-settings-chrome-'));
+  const downloadPath = join(profile, 'downloads');
+  await mkdir(downloadPath);
   chrome = spawn(options.chrome, [
     '--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check',
     '--disable-background-networking', '--disable-extensions', '--window-size=1536,920', '--remote-debugging-port=0',
@@ -909,13 +1144,29 @@ try {
     return targets.find(item => item.type === 'page' && item.webSocketDebuggerUrl);
   }, 10_000, 'isolated Chrome page');
   cdp = await CDP.open(target.webSocketDebuggerUrl);
+  await cdp.call('Browser.setDownloadBehavior', {behavior:'allow',downloadPath});
   await cdp.call('Runtime.enable');
   await cdp.call('Page.enable');
   await cdp.call('Page.navigate', { url: origin + '/' });
   await until(() => cdp.evaluate('window.imageSettingsReady === true'), 10_000, 'image settings source load');
   await until(() => cdp.evaluate('window.imageMetadataReady === true'), 10_000,
     'classic metadata reader before deferred image settings script');
-  const expression = '(' + browserChecks.toString() + ')(' + MAX_INPUT_BYTES + ')';
+  const dreamCapsuleText=execFileSync(process.env.AZHOU_TEST_PYTHON || 'python3',['-B','-c',`
+import sys,io,json,zipfile,subprocess
+from pathlib import Path
+from PIL import Image
+root=Path(sys.argv[1]).resolve();tool=Path(sys.argv[2])/'tools/theme-library.py'
+image=io.BytesIO();Image.new('RGB',(2,3),(23,41,79)).save(image,format='PNG')
+source=root/'dream-source.zip'
+with zipfile.ZipFile(source,'w') as z:
+ z.writestr('theme.json',json.dumps({'schemaVersion':1,'id':'dream.browser','name':'<img onerror=window.dreamXss=true>','image':'background.png'}))
+ z.writestr('theme.css','[data-ds-part="main"]{background-color:rgba(12,34,56,.4);}')
+ z.writestr('background.png',image.getvalue())
+base=[sys.executable,'-B',str(tool),'--library',str(root/'dream-library')]
+receipt=json.loads(subprocess.check_output([*base,'import',str(source)]))
+sys.stdout.buffer.write(subprocess.check_output([*base,'export-capsule',receipt['archiveSha256']]))
+`,profile,PACKAGE_ROOT],{encoding:'utf8',timeout:20000});
+  const expression = '(' + browserChecks.toString() + ')(' + MAX_INPUT_BYTES + ',' + JSON.stringify(dreamCapsuleText) + ')';
   let checkFailure;
   const checks = cdp.evaluate(expression).then(value => ({ value }), error => {
     checkFailure = error;
@@ -927,6 +1178,14 @@ try {
   await cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await cdp.evaluate('window.finishSettingsFocusTest()');
+  for (let index = 0; index < 12; index++) {
+    await until(async () => checkFailure || await cdp.evaluate('window.disclosureTestReady === true'), 10_000, 'disclosure keyboard setup');
+    if (checkFailure) throw checkFailure;
+    await cdp.evaluate('window.disclosureTestReady = false');
+    await cdp.call('Input.dispatchKeyEvent', {type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13,text:'\r'});
+    await cdp.call('Input.dispatchKeyEvent', {type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+    await cdp.evaluate('window.finishDisclosureTest()');
+  }
   const outcome = await checks;
   if (outcome.error) throw outcome.error;
   const result = outcome.value;
@@ -935,7 +1194,17 @@ try {
   const settingsFrameId = frameTree.frameTree.childFrames?.[0]?.frame?.id;
   assert.ok(settingsFrameId, 'the real settings iframe is available for AX inspection');
   const settingsAXTree = await cdp.call('Accessibility.getFullAXTree', { frameId: settingsFrameId });
-  const strengthAXNode = settingsAXTree.nodes.find(node => node.role?.value === 'slider');
+  const strengthRemote = await cdp.call('Runtime.evaluate', {
+    expression: 'document.querySelector("iframe").contentDocument.getElementById("agent-skin-settings-wallpaper-strength")',
+    returnByValue: false,
+  });
+  assert.ok(strengthRemote.result.objectId, 'the wallpaper strength control exists');
+  const strengthDOM = await cdp.call('DOM.describeNode', { objectId: strengthRemote.result.objectId });
+  await cdp.call('Runtime.releaseObject', { objectId: strengthRemote.result.objectId });
+  const strengthAXNodes = settingsAXTree.nodes.filter(node =>
+    node.backendDOMNodeId === strengthDOM.node.backendNodeId && node.role?.value === 'slider');
+  assert.equal(strengthAXNodes.length, 1, 'exactly one AX slider belongs to the wallpaper strength control');
+  const strengthAXNode = strengthAXNodes[0];
   assert.deepEqual({
     dom: result.previewWorkflow.settingsUi.strengthLabelAssociation,
     accessibleName: strengthAXNode?.name?.value || '',
@@ -943,6 +1212,24 @@ try {
     dom: { controlIsSlider: true, sliderLabelCount: 1 },
     accessibleName: '背景强度（0–75）',
   }, 'the real slider label association and Chromium AX tree expose its visible name');
+
+  const downloadedPreset = await until(async()=>{
+    try {return JSON.parse(await readFile(join(downloadPath,'azhou-preset.json'),'utf8'));}catch{return null;}
+  },5000,'actual Azhou preset download');
+  assert.equal(downloadedPreset.schema,'azhou-appearance-preset.v1');
+  assert.equal(downloadedPreset.name,'<img onerror=window.presetXss=true>');
+  assert.deepEqual(Object.keys(downloadedPreset).sort(),['appearance','name','recipeId','schema','surfaceTransparency']);
+  result.storage.presetFileExchange.downloadedFileVerified=true;
+  assert.deepEqual(result.storage.dreamFileExchange,{cliSource:true,fileInput:true,originalCapsuleRetained:true,reopened:true,duplicateIdempotent:true,activeRecordsUnchanged:true,draftPreserved:true,nameAsText:true,applyCalls:0});
+  assert.deepEqual(result.storage.dreamDisposeCompensation,{realIDB:true,postcommitDisposed:true,activeRestored:true,catalogsPreserved:true,rollbackCalls:1});
+  assert.equal(result.storage.presetFileExchange.activeRecordsUnchanged,true);
+  assert.equal(result.storage.presetFileExchange.onApplyCalls,0);
+  assert.equal(result.storage.presetFileExchange.onSavedCalls,1);
+  assert.deepEqual(result.storage.p2BrowserResults, [
+    { kind: 'bigint', disabled: true, appearanceSaved: true, catalogPreserved: true, concurrentBlocked: true },
+    { kind: 'cycle', disabled: true, appearanceSaved: true, catalogPreserved: true, concurrentBlocked: true },
+    { kind: 'snapshot', status: 'valid', inactiveDecodes: 0, activeArtworkPreserved: true },
+  ], 'real IndexedDB catalogs cannot corrupt saved appearance or block active snapshots');
 
   assert.deepEqual(result.formats.map(item => item.type), ['image/png', 'image/jpeg', 'image/webp']);
   assert.deepEqual(result.directPagePreflight,
@@ -1084,13 +1371,26 @@ try {
     'the settings connection closes on versionchange so the newer open can proceed');
   assert.equal(result.storage.versionchange.oldVersion, 1);
   assert.equal(result.storage.versionchange.version, 2);
-  const screenshotPath = join(PACKAGE_ROOT, '.build', 'startup-generated-browser-evidence',
+  const screenshotPath = options.out ? join(options.out,'appearance-settings-preview-compact.png') : join(PACKAGE_ROOT, '.build', 'startup-generated-browser-evidence',
     'appearance-settings-preview-compact.png');
   await mkdir(dirname(screenshotPath), { recursive: true });
   const screenshot = await cdp.call('Page.captureScreenshot', {
     format: 'png', fromSurface: true, captureBeyondViewport: true,
   });
   await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
+  if (options.out) {
+    const dreamGeometry = await cdp.evaluate(`(async()=>{
+      const frame=document.querySelector('iframe'),doc=frame.contentDocument;
+      const section=doc.querySelector('[data-agent-skin-dream-section]');section.scrollIntoView({block:'center'});
+      await new Promise(resolve=>frame.contentWindow.requestAnimationFrame(()=>frame.contentWindow.requestAnimationFrame(resolve)));
+      const rect=section.getBoundingClientRect(),button=doc.querySelector('[data-agent-skin-dream-import-button]');
+      button.focus();return {top:rect.top,bottom:rect.bottom,buttonText:button.textContent,buttonFocused:doc.activeElement===button,inputHidden:doc.querySelector('[data-agent-skin-dream-import]').hidden};
+    })()`);
+    assert.equal(dreamGeometry.buttonFocused,true);assert.equal(dreamGeometry.inputHidden,true);
+    const image=await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true});
+    await writeFile(join(options.out,'dream-directory.png'),Buffer.from(image.data,'base64'));
+    result.dreamDirectoryGeometry=dreamGeometry;
+  }
   const previewCommand = await readFile(join(PACKAGE_ROOT, '预览动画.command'), 'utf8');
   assert.ok(previewCommand.includes('cd "$(dirname "$0")"')
     && previewCommand.includes('open "$PWD/index.html"'),
@@ -1129,6 +1429,7 @@ try {
     protocol: 'file:', readerAvailable: true,
     outcome: { reason: 'asset-invalid', causeCode: 'image-too-large' }, objectURLs: 0,
   }, 'the actual file preview must reject an oversized PNG before creating an object URL');
+  if (options.out) await writeFile(join(options.out,'result.json'),JSON.stringify(result,null,2)+'\n',{flag:'wx'});
   console.log(JSON.stringify({
     status: 'PASS',
     scope: 'same-origin HTTP and file:// classic image parser loading, actual local preview preflight, synthetic image import recovery, host-locale settings and theme tokens, real IndexedDB save/reload, two-page conflict and versionchange close',
@@ -1138,6 +1439,7 @@ try {
     workspacePreviewGeometry: result.previewWorkflow.workspacePreviewGeometry,
     screenshotGeometry: result.previewWorkflow.screenshotGeometry,
     settingsScreenshot: screenshotPath,
+    presetFileExchange: result.storage.presetFileExchange,
     storage: result.storage,
   }, null, 2));
 } catch (error) {

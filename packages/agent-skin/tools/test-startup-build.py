@@ -57,12 +57,21 @@ BUILD_FILES = (
     "tools/build-preflight.py",
     "tools/build-wallpaper.py",
     "tools/test-startup-browser.mjs",
+    "tools/theme-measurement-evidence.mjs",
+    "tools/test-startup-payload-browser.py",
     "tools/test-startup-browser-cdp.mjs",
     "tools/test-startup-browser-process.mjs",
     "tools/test-synthetic-legacy-wallpaper.mjs",
     "tools/test-animation-preview-final-text-browser.mjs",
     "tools/startup-browser-selection.mjs",
     "tools/test-startup-native.py",
+    "tools/test-native-warning-contract.py",
+    "tools/theme-library.py",
+    "tools/theme-package-preflight.py",
+    "tools/reference-official-theme.mjs",
+    "tools/reference-safe-css.mjs",
+    "tools/image-settings.test.mjs",
+    "tools/animation.unit.test.mjs",
     "tools/build-startup.py",
     "tools/build-dsh-plugin.py",
     "tools/build-startup-assets.swift",
@@ -189,6 +198,9 @@ def decode_png(path: Path):
     return width, height, sample
 
 
+BUILD_FILES = (*BUILD_FILES, 'dream-theme-style.js', 'dream-theme-style.mjs', 'vendor/dream-safe-css-validator.mjs', 'vendor/dream-safe-css-ast.mjs', 'vendor/dream-safe-css.LICENSE', 'vendor/dream-theme-validator.mjs', 'vendor/dream-theme-validator.LICENSE')
+
+
 def clone_source_tree(destination: Path, *, private: bool = True) -> None:
     for relative in BUILD_FILES:
         source = PACKAGE / relative
@@ -251,7 +263,7 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    for name in (*IMAGE_METADATA_SOURCE_INPUTS, "extension/codex-page-adapter.mjs"):
+    for name in (*IMAGE_METADATA_SOURCE_INPUTS, *artifacts.DREAM_THEME_INPUTS, "extension/codex-page-adapter.mjs"):
         marker["inputs"].pop(name)
         manifest["sourceInputs"].pop(name)
     for name in omit_marker_inputs:
@@ -268,7 +280,7 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
 
     marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
     manifest["inputSHA256"] = marker["inputSHA256"]
-    for relative in IMAGE_METADATA_OUTPUTS:
+    for relative in (*IMAGE_METADATA_OUTPUTS, *artifacts.DREAM_PREVIEW_OUTPUTS):
         manifest["outputs"].pop(relative)
         (resources / relative).unlink()
     for relative in manifest["outputs"]:
@@ -807,8 +819,9 @@ class ImageMetadataAssemblyTests(unittest.TestCase):
         css = (PACKAGE / "wallpaper/wallpaper.css").read_text(encoding="utf-8")
         payload = builder._build_script(PACKAGE, {}, css, artifacts)
         self.assertIn(adapted, payload)
-        self.assertEqual(payload.count("function readRawDimensions("), 1)
-        self.assertNotIn("MAX_IMAGE_PIXELS", payload)
+        self.assertEqual(payload.count("function readRawDimensions("), 2)
+        self.assertEqual(payload.count("function createDreamThemeStyle("), 1)
+        self.assertIn("const MAX_IMAGE_PIXELS = 50_000_000", payload)
 
         start = "  return bootstrapStartup({"
         end = "    host: globalThis,\n    pageAdapter,\n  });\n\n})()"
@@ -1052,6 +1065,35 @@ class StartupBuildTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         with self.assertRaisesRegex(RuntimeError, "fixture|preview|生产"):
             self.verifier.verify_startup(clone, self.info, self.marker)
+
+    def test_svg_namespace_does_not_exempt_network_resources(self):
+        self.verifier.verify_startup(self.bundle, self.info, self.marker)
+        snippets = [
+            'new Image().src="http://www.w3.org/2000/svg";',
+            'fetch("http://www.w3.org/2000/svg");',
+            'const svg=\'<svg xmlns="http://www.w3.org/2000/svg"><use href="http://www.w3.org/2000/svg"/></svg>\';',
+            'const css=\'@import "http://www.w3.org/2000/svg";\';',
+            'const css=\'background:url("http://www.w3.org/2000/svg")\';',
+            'import "http://www.w3.org/2000/svg";',
+            'const svg=\'<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/a.png"/></svg>\';',
+            'const svg=\'<svg xmlns="http://www.w3.org/2000/svg/changed">\';',
+            'const svg=\'<svg xmlns="https://example.com/svg">\';',
+            'fetch("data:image/svg+xml,test");',
+            'new XMLHttpRequest("data:image/svg+xml,test");',
+        ]
+        for index, (relative, snippet) in enumerate((path, snippet) for path in ("startup/install.js", "startup/prepare.js") for snippet in snippets):
+            with self.subTest(relative=relative, snippet=snippet):
+                clone = Path(self.temporary.name) / f"svg-network-{index}"
+                shutil.copytree(self.bundle, clone)
+                resources = clone / "Contents/Resources"
+                script = resources / relative
+                script.write_text(script.read_text(encoding="utf-8") + "\n" + snippet, encoding="utf-8")
+                manifest_path = resources / "startup/manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                manifest["outputs"][relative] = hashlib.sha256(script.read_bytes()).hexdigest()
+                manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "外部资源"):
+                    self.verifier.verify_startup(clone, self.info, self.marker)
 
     def test_private_startup_cover_is_bound_without_changing_wallpaper(self):
         with tempfile.TemporaryDirectory(prefix="agent-skin-cover-test-") as temporary:

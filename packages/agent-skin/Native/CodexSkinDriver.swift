@@ -23,16 +23,26 @@ typealias CodexConnectorFactory = @MainActor (
 /// page. Native cannot observe the commit point directly (spec §7.3), so the
 /// transport wrapper below records the send; a lost reply after a send is an
 /// installation-unknown outcome and never a fully-clean cleanup.
-@MainActor
-final class CodexInstallObservation {
-    private(set) var installSentCount = 0
-
-    func reset() { installSentCount = 0 }
-    func markInstallSent() { installSentCount += 1 }
+// All mutable state is protected by lock, including reads and reset. This recorder
+// crosses the nonisolated transport boundary; it has no UI or actor-owned state.
+final class CodexInstallObservation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    var installSentCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return count
+    }
+    func reset() {
+        lock.lock(); defer { lock.unlock() }
+        count = 0
+    }
+    func markInstallSent() {
+        lock.lock(); defer { lock.unlock() }
+        count += 1
+    }
 }
 
 /// Transport wrapper that records the install send and delegates everything else.
-@MainActor
 final class InstallObservingStartupTransport: StartupTransport {
     /// StartupConnector.installExpression (Wallpaper.swift installExpression) is the
     /// only evaluation that resolves the embedded payload through Promise.resolve and

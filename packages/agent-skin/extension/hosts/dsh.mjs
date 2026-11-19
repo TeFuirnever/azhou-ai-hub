@@ -3,7 +3,7 @@
 export function createDSHPageAdapter(environment = globalThis, configuration = {}, dependencies = {}) {
   const namespace = Object.freeze({ databaseName: 'azhou-dsh-startup', databaseVersion: 1,
     storeName: 'settings', settingsKey: 'images' });
-  let lastDocumentURL, documentToken;
+  let lastBinding, documentToken;
   function matched(host) {
     if (host !== host.top) return false;
     if (typeof host.__ModuleLoader__?.load !== 'function') return false;
@@ -14,14 +14,24 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
     return !!boot && Object.hasOwn(boot, 'value') && !!boot.value && !!host.document?.body;
   }
   function identify(host) {
+    const unmatched = () => {
+      lastBinding = undefined;
+      documentToken = undefined;
+      return { kind: 'unmatched', reason: 'page-unsupported' };
+    };
     try {
-      if (!matched(host)) return { kind: 'unmatched', reason: 'page-unsupported' };
-      if (lastDocumentURL !== host.location.href) {
+      if (!matched(host)) return unmatched();
+      const binding = [host, host.document, host.location.href,
+        Object.getOwnPropertyDescriptor(host, '__DSH_BOOT__').value,
+        host.__ModuleLoader__, host.__ModuleLoader__.load];
+      // Identity loss is terminal for the old token, even when the same URL
+      // and boot object later return. Never reuse a prior snapshot authority.
+      if (!lastBinding || binding.some((value, index) => value !== lastBinding[index])) {
         documentToken = Object.freeze({});
-        lastDocumentURL = host.location.href;
+        lastBinding = binding;
       }
       return { kind: 'matched', documentToken };
-    } catch { return { kind: 'unmatched', reason: 'page-unsupported' }; }
+    } catch { return unmatched(); }
   }
   function appearance(host) {
     const root = host.document.documentElement;
@@ -158,7 +168,59 @@ export function createDSHPageAdapter(environment = globalThis, configuration = {
     return Array.from(nodes).filter(node => !!node.isConnected
       && !node.closest('[role="dialog"],dialog,iframe,webview'));
   }
+  // Explicit, host-owned paint capability. It never interprets imported selectors.
+  function captureThemeSurface(host = environment) {
+    const doc=host.document, html=doc?.documentElement, root=doc?.getElementById?.('root'), nodes=mainSurfaces(host);
+    if (!matched(host) || !root?.isConnected || nodes.length!==1 || !root.contains(nodes[0])
+      || typeof host.MutationObserver!=='function') return null;
+    const anchor=nodes[0];
+    // DSH's semantic main slot may be display:contents. Never give a boxless
+    // slot a background or manufacture a layout box. Only its observed,
+    // exclusive direct mainPanel parent is an admitted alternative plane.
+    const display=()=>host.getComputedStyle(anchor).display;
+    const contents=display()==='contents';
+    const node=contents?anchor.parentElement:anchor;
+    const panelCurrent=()=>!contents || anchor.parentElement===node
+      && [...(node?.classList??[])].some(name=>name.endsWith('_mainPanel'))
+      && node.children?.length===1 && node.children[0]===anchor;
+    if(node===root || !node?.isConnected || !root.contains(node) || !panelCurrent()
+      || node.closest('[role="dialog"],dialog,iframe,webview'))return null;
+    const url=host.location.href, boot=Object.getOwnPropertyDescriptor(host,'__DSH_BOOT__').value;
+    let invalid=false, disposed=false, observer=null, notify=()=>{};
+    const onRoute=()=>{invalid=true;notify();};
+    const inspect=records=>{for(const record of records){
+      if(contents&&record.type==='childList'&&record.target===node
+        &&[...(record.addedNodes??[]),...(record.removedNodes??[])].some(n=>n.nodeType===1))invalid=true;
+      if(record.type==='childList' && [...record.removedNodes].some(n=>n===root||n===node||n===anchor||n.contains?.(root)||n.contains?.(node)||n.contains?.(anchor))) invalid=true;
+      if(record.type==='attributes' && (record.target===node||record.target===anchor||record.target===root||record.target?.contains?.(node))
+        && ['data-slot','hidden','aria-hidden','inert','role'].includes(record.attributeName)) invalid=true;
+    }};
+    const current=()=>{
+      if(observer)inspect(observer.takeRecords());
+      const mains=mainSurfaces(host);
+      return !invalid&&!disposed&&host.document===doc&&host.location.href===url&&matched(host)
+        &&Object.getOwnPropertyDescriptor(host,'__DSH_BOOT__')?.value===boot
+        &&doc.documentElement===html&&doc.getElementById('root')===root&&root.isConnected&&node.isConnected&&root.contains(node)
+        &&mains.length===1&&mains[0]===anchor&&anchor.isConnected
+        &&(display()==='contents')===contents&&panelCurrent()
+        &&[anchor,node].every(surface=>!surface.closest('[hidden],[aria-hidden="true"],[inert]')
+          &&!['hidden','collapse'].includes(host.getComputedStyle(surface).visibility))
+        &&(!node.getClientRects || node.getClientRects().length>0);
+    };
+    return Object.freeze({node,anchor,current,
+      watch(invalidated){if(observer||disposed||typeof invalidated!=='function')return false;
+        let notified=false;
+        notify=()=>{if(!disposed&&!notified){notified=true;invalidated();}};
+        host.addEventListener?.('hashchange',onRoute);host.addEventListener?.('popstate',onRoute);
+        observer=new host.MutationObserver(records=>{inspect(records);if(!current())notify();});
+        observer.observe(doc.documentElement,{childList:true,subtree:true,attributes:true,
+          attributeFilter:['data-slot','hidden','aria-hidden','inert','role','class','style']});return true;},
+      dispose(){disposed=true;observer?.disconnect();observer=null;
+        host.removeEventListener?.('hashchange',onRoute);host.removeEventListener?.('popstate',onRoute);}});
+  }
   return Object.freeze({
+    themeSelectionContract:'dsh-owned-main-paint/v2',
+    captureThemeSurface,
     controllerOwner: 'azhou-dsh-startup',
     controllerWallpaper: Object.freeze({ owner: 'azhou.dsh-startup-animation', requiresControllerMetadata: false }),
     identify(host = environment) { return identify(host); },

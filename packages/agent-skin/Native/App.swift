@@ -1197,10 +1197,10 @@ protocol NativePlayerPresentation: AnyObject {
     func setNormalLevel()
     func makeVisible()
     func orderOut()
-    func evaluateJavaScript(_ source: String, completion: ((Any?, Error?) -> Void)?)
+    func evaluateJavaScript(_ source: String, completion: (@MainActor @Sendable (Any?, Error?) -> Void)?)
     func fadeOut(duration: TimeInterval, completion: @escaping () -> Void)
     func schedule(after delay: TimeInterval, _ action: @escaping () -> Void) -> any NativeScheduledAction
-    func takeSnapshot(_ completion: @escaping (NSImage?, Error?) -> Void)
+    func takeSnapshot(_ completion: @escaping @MainActor @Sendable (NSImage?, Error?) -> Void)
     func stopLoading()
     func removeMessageHandler(named name: String)
     func showError(title: String, message: String, closeTitle: String)
@@ -1499,15 +1499,16 @@ enum NativeStartupSnapshotTransfer {
     private static func encodedPayload(_ snapshot: StartupSettingsSnapshot) throws -> Data {
         let values = snapshot.values
         let settings: [String: Any] = [
-            "schemaVersion": 1, "avatar": values.avatar, "artwork": values.artwork,
+            "schemaVersion": values.themeState?.importedImage == nil ? 1 : 2, "avatar": values.avatar, "artwork": values.artwork,
             "contours": values.contours.map { path in path.map { [$0.x, $0.y] } },
             "introTitle": values.introTitle, "introCaption": values.introCaption,
             "artworkSubtitle": values.artworkSubtitle, "wallpaperStrength": values.wallpaperStrength,
         ]
-        let object: [String: Any] = ["status": snapshot.status, "settings": settings,
+        var object: [String: Any] = ["status": snapshot.status, "settings": settings,
                                      "explicitText": values.explicitText,
                                      "appearance": ["locale": snapshot.appearance.locale,
                                                     "theme": snapshot.appearance.theme]]
+        if let theme = values.themeState { object["themeState"] = theme.object }
         guard JSONSerialization.isValidJSONObject(object) else { throw failure("snapshot-transfer-invalid") }
         do { return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes]) }
         catch { throw failure("snapshot-transfer-invalid") }
@@ -1669,7 +1670,7 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
     func setNormalLevel() { panel?.level = .normal }
     func makeVisible() { if let panel { revealPanel(panel) } }
     func orderOut() { panel?.orderOut(nil) }
-    func evaluateJavaScript(_ source: String, completion: ((Any?, Error?) -> Void)?) {
+    func evaluateJavaScript(_ source: String, completion: (@MainActor @Sendable (Any?, Error?) -> Void)?) {
         guard let webView else { completion?(nil, CocoaError(.fileNoSuchFile)); return }
         webView.evaluateJavaScript(source, completionHandler: completion)
     }
@@ -1684,7 +1685,7 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
     func schedule(after delay: TimeInterval, _ action: @escaping () -> Void) -> any NativeScheduledAction {
         NativeTimerAction(Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { _ in action() })
     }
-    func takeSnapshot(_ completion: @escaping (NSImage?, Error?) -> Void) {
+    func takeSnapshot(_ completion: @escaping @MainActor @Sendable (NSImage?, Error?) -> Void) {
         guard let webView else { completion(nil, CocoaError(.fileNoSuchFile)); return }
         webView.takeSnapshot(with: nil, completionHandler: completion)
     }
@@ -2085,13 +2086,13 @@ final class PlayerStage {
     func normalizeWindowLevel() { presentation?.setNormalLevel() }
     func makeVisible() { presentation?.makeVisible() }
     func orderOut() { presentation?.orderOut() }
-    func evaluate(_ source: String, completion: ((Any?, Error?) -> Void)?) {
+    func evaluate(_ source: String, completion: (@MainActor @Sendable (Any?, Error?) -> Void)?) {
         presentation?.evaluateJavaScript(source, completion: completion)
     }
     func fadeOut(duration: TimeInterval, completion: @escaping () -> Void) {
         presentation?.fadeOut(duration: duration, completion: completion)
     }
-    func takeSnapshot(_ completion: @escaping (NSImage?, Error?) -> Void) {
+    func takeSnapshot(_ completion: @escaping @MainActor @Sendable (NSImage?, Error?) -> Void) {
         presentation?.takeSnapshot(completion)
     }
     func geometryRecord() -> [String: Any] { presentation?.geometry ?? [:] }

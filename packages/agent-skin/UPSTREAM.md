@@ -28,3 +28,38 @@ MIT 只覆盖代码。阿舟图像是维护者自有 IP，自 2026-11-13 起放�
 ## Hub 运行评估
 
 Hub adapter 按已核验的 App 版本选择日志评估方式：0.7.1 继续走旧事件评估；0.8.0 及更高版本要求被消费事件符合 `azhou-startup.event.v1`。已知诊断事件可以没有 schema，但不会被当作启动成功证据。合成事件测试验证适配器判定，不证明原生启动器实际产生日志、不构成上游许可，也不扩大素材使用权。
+
+## Safe CSS reference validator
+
+The read-only theme ZIP preflight vendors the following MIT files from `Codex-Dream-Skin` commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`. Copyright (c) 2026 Codex Dream Skin Studio contributors. The complete notice is retained as `vendor/dream-safe-css.LICENSE`.
+
+| Upstream file | Local file | SHA-256 |
+|---|---|---|
+| `runtime/safe-css-validator.mjs` | `vendor/dream-safe-css-validator.mjs` | `98a626655a4167ba0bbbff5eab96e78de7a5a74371e4a4ff6d8ac15211e5b24e` |
+| `runtime/safe-css-policy.json` | `vendor/dream-safe-css-policy.json` | `c784dd3a16d71395fca0b2695047395dc6f951f44df962284976faeb0b3ea551` |
+| `LICENSE` | `vendor/dream-safe-css.LICENSE` | `18f8478d0f9efd45307e5f17790194593b116658145c758ced3166398eb05b21` |
+
+All three files are byte-identical copies. The JSON is a contract snapshot, not runtime configuration. `tools/reference-safe-css.mjs` is the local anti-corruption boundary. It uses only `validateSafeCss`, never the compiler or reference-host selector mappings. `tools/reference-safe-css.mjs` remains a developer inspection boundary. The source-bound AST/classic adapter below now adds its pristine validator and retained notice to build/runtime inputs; the upstream compiler is never invoked by host application.
+
+To update, inspect a new immutable upstream revision and its license first. Copy the three complete source files without rewriting them, update this table and the focused suite's hash locks, compare the policy export deeply, and run the same corpus against the vendored and original validator. Preserve RED/GREEN evidence and perform independent review on the exact frozen diff. Any future Hub mapping is a separate reviewed implementation, not an upstream compiler call.
+
+
+## Official theme JSON contract
+
+The isolated Dream source library derives `vendor/dream-theme-validator.mjs` from the same MIT `Codex-Dream-Skin` commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`. The source is `runtime/theme-package-validator.mjs`, SHA-256 `8f249d726367c383d8c5894890e2b6d1c3b56a7282d7441a80cfb6470955b5f8`. Copyright (c) 2026 Codex Dream Skin Studio contributors. The complete unchanged root notice is `vendor/dream-theme-validator.LICENSE`, SHA-256 `18f8478d0f9efd45307e5f17790194593b116658145c758ced3166398eb05b21`.
+
+The local extraction retains the exact source spans listed by `tools/extract-dream-theme-validator.py`. Only the official-theme constants and pure helpers are selected. Local additions are the attribution header and `export { validateOfficialTheme };`. There is no filesystem staging, version/platform comparison, signature handling, CSS compiler or reference-host selector mapping. The derived module SHA-256 is `63363d5830cd76c57483ce7bdad28b66bce5dfae596134a6c46350c3169ad3ff`.
+
+Rebuild from a separately inspected checkout at that exact commit with `python3 -B tools/extract-dream-theme-validator.py --source /path/to/reference/runtime/theme-package-validator.mjs --license /path/to/reference/LICENSE --output /path/to/rebuilt.mjs`, then compare the complete output with the vendored derivative. The generator refuses either source or notice hash drift. Review any source update as a new contract and rerun the official-theme corpus, extraction check, ZIP and source-library suites. Do not replace it with the reference package entry point, whose filesystem and CSS-compiler authority is outside this boundary.
+
+## Safe CSS AST derivative
+
+`vendor/dream-safe-css-ast.mjs` derives from the exact pristine Safe CSS source above, under the adjacent `dream-safe-css.LICENSE`. The only patch is the UTF-8 suffix `\nexport { parseSafeCss as parseSafeCssAst };\n`. It exposes the existing bounded parser without changing validation or invoking the compiler.
+
+- Source SHA-256: `98a626655a4167ba0bbbff5eab96e78de7a5a74371e4a4ff6d8ac15211e5b24e`
+- Patch SHA-256: `3b649164964b5bfadad94468c1f08f3e384502006ad4ff0ca2d1ee9928cd3fad`
+- Output SHA-256: `ed0657f061e7f500233b8723683b3e28b236721b8f6fe13af24f8ac796d8cc37`
+
+Rebuild with `python3 -B tools/derive-dream-safe-css-ast.py`; `--check` verifies exact output and the retained MIT notice without writing. `dream-theme-style.mjs` consumes AST records and never compiles upstream selectors. The local, intentionally partial profile rejects unmapped source rules and manifest fields. Run `python3 -B tools/test-production-dream-style.py` to compare the pristine and derived validators on the same corpus and test the mapping boundary. These source-stage tests do not prove host application or full Dream engine compatibility.
+
+The generated `dream-theme-style.js` is built by `tools/build-startup.py --update-dream-theme-style` from the pinned AST derivative, official-theme validator, image metadata module and local domain adapter. It encloses those sources in a classic factory, removes only explicit ESM linkage, and exposes the bounded domain methods, not the upstream compiler. `index.html` and generated startup payloads consume this same factory. The existing PNG metadata adapter remains separate for legacy input handling. Both copies retain their own lexical scope; the source-stage/Native tests compare actual output behavior rather than asserting there is only one metadata helper string.

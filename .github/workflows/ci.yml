@@ -132,7 +132,8 @@ jobs:
     needs: changes
     if: needs.changes.outputs.docs_only != 'true'
     runs-on: macos-latest
-    timeout-minutes: 20
+    # The expanded synthetic viewport matrix runs in this job.
+    timeout-minutes: 40
     permissions:
       contents: read
     steps:
@@ -145,6 +146,9 @@ jobs:
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
+      - name: Install Dream image validation dependency
+        run: |
+          python -m pip install --only-binary=:all: Pillow==12.3.0
       - name: Run Agent Skin startup and two-host lifecycle checks
         working-directory: packages/agent-skin
         env:
@@ -154,6 +158,10 @@ jobs:
           node --test tools/startup.test.mjs
           node --test tools/image-settings.test.mjs
           node --test tools/localization.test.mjs
+          node --test tools/dream-theme-validator.test.mjs
+          python -B tools/test-production-dream-style.py
+          python -B tools/test-production-theme-package-preflight.py
+          python -B tools/test-production-theme-library.py
           python -B tools/test-startup-build.py
           python -B tools/test-startup-browser-selection-cli.py
           node tools/test-image-settings-browser.mjs
@@ -195,7 +203,7 @@ jobs:
           node-version: "24.15.0"
       - name: Install unit coverage dependency
         run: |
-          python -m pip install --only-binary=:all: coverage==7.16.2
+          python -m pip install --only-binary=:all: coverage==7.16.2 Pillow==12.3.0
       - name: Prepare isolated Bash unit tooling
         working-directory: packages/agent-skin
         run: python -B tools/test-setup-unit-tools.py --github-env "$GITHUB_ENV" --github-path "$GITHUB_PATH"

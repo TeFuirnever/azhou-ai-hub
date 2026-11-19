@@ -16,13 +16,36 @@
 
 适配依赖包括ModuleLoader.load、own DSH boot标记、唯一main slot、主题属性、dsw颜色token、pageBar、composerSeat与page类名模式。settings.section、slots及ctx.effect清理也是契约，不只测试壁纸出现。
 
+## 准备前只读静态前检
+
+`tools/dsh-isolation-preflight.py`检查显式 JSON 计划，不创建目录、不写入或复制任何载荷，也不启动、安装或更新 DSH。计划包含 `schema_version: 1`、`preparation_root`、`candidate {root, summary_sha256}`、四个 `paths` 角色（`dsh_home`、`electron_user_data`、`profile`、`plugin`，每个字段为 `path` 与 `expected_state: absent|empty_directory`）、`protected_roots`，以及 `host {target, evidence_record}`。host 两条记录的 `bundle_id`、`version`、`build` 必须一致；evidence record 的 `source` 必须非空，但它由调用者提供，工具不认证来源，也不据此证明当前安装或加载身份。
+
+全部计划路径须为绝对路径。DSH_HOME 和 Electron userData 位于 preparation root 下；profile 与 plugin 位于 DSH_HOME 下，二者互不重叠，Electron userData 与它们分离。计划目标及 candidate 不得等于、包含或位于任何 protected production root；candidate 也不得与 preparation root 或目标数据路径重叠。planned targets 按 owned preparation root 的相对路径检查；遇到符号链接节点即阻断并剪枝，不跟随它扫描后代。逃逸路径、非空历史条目或状态声明不符也会阻断。容器目录可包含计划明确声明的空子目录；除此之外的任何条目均按历史数据阻断。只检查声明目录树的名字和文件类型，不读取 profile、userData 或 protected root 中的文件内容。已存在的候选载荷独立计算摘要，不作为历史数据目录处理；若 candidate 树无法完整枚举，摘要不可用并阻断，不接受部分摘要。
+
+`summary_sha256` 是本工具专用的 candidate tree 摘要，不是 build、签名或安装回执摘要。算法为 SHA-256，初始字节是 `azhou-dsh-candidate-tree-v1\0`；遍历 candidate 下全部常规文件，按相对 POSIX 路径的 UTF-8 字节升序。每个文件写入 `file\0`、8 字节大端路径长度、路径字节、8 字节大端文件大小和文件字节。空树、符号链接及特殊文件拒绝。该摘要不包括目录、权限、时间戳或绝对根路径。
+
+结果仅为 `blocked` 或 `static_preflight_passed`，附带原因码和重算出的摘要。`runtime_isolation_verified` 与 `write_authorized` 始终为 `false`。前检是调用时的只读路径/内容快照，不消除 TOCTOU，不证明宿主进程、安装、签名、插件实际加载或运行时数据隔离。DSH rc.1 到 rc.3 的真实升级和运行验证仍未完成。运行方式为 `python3 -B tools/dsh-isolation-preflight.py plan.json`，夹具测试为 `python3 -B tools/test-production-dsh-isolation-preflight.py`。
+
+## Desktop 运行隔离仍须证明
+
+以下入口依据 rc.1 源码 `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159`，属于源码机制证据，不是正式应用运行隔离结果；rc.3 须重新核对。
+
+- `packages/util/home-paths/src/index.ts:125–136`：DSH_HOME 优先采用显式配置，其次环境变量，默认用户目录下的 `.dsh`；空值会回退默认，不能用空环境变量隔离。
+- 同文件 `:140–152`：DSH_AGENTS_HOME 是独立配置根，默认用户目录下的 `.agents`，不能假设随 DSH_HOME 一起迁移。
+- `apps/desktop/src/paths.ts:16–20`：Desktop profile 固定为 `$DSH_HOME/profiles/desktop`。`apps/cli/src/args.ts:168` 的 `--profile` 属于 CLI，不能据此声称 Desktop 支持任意命名 profile。
+- `apps/desktop/src/settings.ts:11`、`apps/desktop/src/main.ts:83`：模块加载早期读取 Electron `app.getPath('userData')`，其数据根独立于 DSH_HOME。`apps/desktop/scripts/development-app.ts:63–76`、`apps/desktop/scripts/dev.ts:88` 仅证明开发启动器传递 `--user-data-dir`；正式签名包是否实际采用指定目录仍须验证。
+- `apps/desktop/src/main.ts:93–95`：默认调用 `app.setAppLogsPath()`，macOS 日志可能写到隔离根之外，运行前须界定日志写入范围。
+- `apps/desktop/src/single-instance.ts:20–29`：单实例锁可能使新启动退出并聚焦既有实例。独立启动必须证明没有转发、退出或接管既有实例，不能只检查命令行参数。
+
+现有四路径静态前检不覆盖 agents 和日志范围，也不认证 Electron userData 参数、单实例隔离或实际加载身份；`static_preflight_passed` 不是完整隔离。阶段 A 的独立插件构建及产物校验不启动 DSH、不填充 profile，`runtime_isolation_verified` 仍为 `false`。后续运行证据须绑定新进程及应用身份、实际生效的数据根、profile/plugin 实体、候选载荷、日志和端口，并确认既有实例未受影响。UI 聚合浏览器门禁的 BLOCKED 状态独立保留，不由此构建或静态前检解除。
+
 ## 执行步骤
 
 1. 记录实际运行bundle、profile、插件实体、来源、签名、version、build与摘要，分别报告installed和loaded。
 2. 保留rc.1应用及插件恢复依据，确认全部共用profile和安装owner。不得关闭用户活跃会话来取得测试结果。
 3. 冻结rc.1能力报告与现有缺陷。核对早期hook、CSP、设置入口、生命周期及真实工作区。基线缺陷不算升级回归。
 4. 复核官方feed与目标。下载后校验SHA-512、签名、arm64架构和实际build。下载成功不等于可运行或兼容。
-5. 选择官方支持的独立测试安装或profile方式。没有安全隔离方法则保持blocked，不覆盖共享实体。实际安装、启动及数据操作另走授权和本地安装SOP。
+5. 按上节 Desktop 运行隔离门槛，选择官方支持的独立测试安装或profile方式。没有安全隔离方法则保持blocked，不覆盖共享实体。实际安装、启动及数据操作另走授权和本地安装SOP。
 6. 同一冻结Agent Skin候选分别探测rc.1与rc.3。证据绑定version、build、adapter revision、schema和page generation。旧ready失效。必要修正只在Hub宿主适配器，不修改DSH官方源码，不让核心猜选择器。
 7. 两版分别执行 [防腐层故障矩阵](HOST-BOUNDARY.md)、冷启、设置、整窗外观、路由、跳过及原生输入发送。静态fixture不能代替真实版本验收。
 8. 演练缺hook、CSP拒绝、未知schema及另一主题冲突。只停受影响皮肤能力，解除自有遮挡，保留原生操作和用户数据。

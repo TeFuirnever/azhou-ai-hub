@@ -51,3 +51,55 @@ Build 12 修复工作区外壳晚于启动动画出现时壁纸失效的问题�
 本功能候选使用合成图片、隔离 Chrome、原生假宿主及 Hub 适配器测试验证。生成载荷测试实际执行构建出的完整启动脚本，覆盖保存、草稿预览及严格样式 CSP 下的设置入口。候选界面截图用于检查中英、深浅色和窄屏排版，不代表私有素材审定或官方宿主视觉验收。
 
 官方宿主的语言、主题、bot 和实际呈现仍须单独验收；此前官方 App 的 Computer Use 拒绝不通过其他自动化规避。安装、签名与唯一入口验收仍属于安装生命周期中的独立步骤，历史测试不能代替当前安装的核验。
+
+
+## Codex 活动工作区合同
+
+Codex 页面适配器的 `codex-active-workspace/v1` 能力按当前 Document、页面代际和唯一可见主工作区观察绘制平面。生产 bootstrap 将该观察贯穿图片准备、解码、首次写入与持续检查；缺失、歧义或失效不会退回旧私有选择器猜测。独立 legacy/preview 入口仍有兼容目录，DSH 继续使用自己的完整 wallpaper ports；这不是全仓宿主边界迁移完成的声明。
+
+背景样式只标记本实例已观察的平面，未知消息区域或辅助面板保持 `unknown`，不能由空匹配或 `applied` 推导全页面覆盖。失效先释放本实例资源，再由现有页面控制器在当前请求仍有效时有界重新观察。已知同 Document 导航可恢复已批准背景，不重播动画、不更新旧设置快照的身份。禁用、取消、新设置、卸载及不同 Document 使旧恢复失效；超时保留失败状态，不无限循环。Native 准备结果与之后的当前壁纸状态分别保留，背景曾成功提交不等于原生动画 ready 或宿主可操作。
+
+能力字段属于已加载的控制器，而非磁盘上的源码。只有已知标签与三个 own-data 观察／当前性／监听函数完整时才暴露该字段；字段不是 ready 证明。声明了契约却缺成员、使用继承／getter 成员或未知标签时，生产链拒绝该壁纸能力，不丢弃 adapter 后转入 legacy。同版本旧控制器不会因重复注入自动获得此合同；验证新能力需要重新加载对应页面并核对控制器及生成载荷身份。不得因此主动重启用户会话。单元、合成 DOM 和生成载荷浏览器检查不等于官方宿主验收；Dot、侧栏、其他页面、真实输入与升级回退仍须绑定实际安装版本分别验证。
+
+
+工作区重新观察期间对外仍是 `applied: false`，但不会把正常的有界恢复立即作为失败通知插入导航；只有恢复已结束且失败、结构不支持或超时才显示错误。当前仍会对已观察祖先的宿主 class/style 变化保守地撤销并重新解码背景，例如侧栏网格宽度变化。此策略的可见闪烁、首帧连续性与代价尚须同版真实宿主视觉和独占性能验收；功能测试通过不表示这些指标已通过。
+
+## P07 theme foundation candidate
+
+This engineering subset adds one bundled Azhou theme and per-theme readability preferences. It does not deliver the full theme library, imported themes, or full Dream Skin parity. The Codex adapter grants only the named `workspaceReadability` capability. Menus, composer, dialogs, sidebars and other UI surfaces remain outside this capability. Unknown capabilities reject theme application without expanding selectors or changing native controls. A successful settings transaction is not proof of successful appearance application. DSH theme surfaces are not yet admitted.
+
+Legacy wallpaper strength keeps its 0–75 semantics. The theme readability treatment replaces, rather than stacks with, the legacy wash. It does not lower text opacity. Real-host visual continuity, keyboard/IME interaction, reduced-motion flows and performance remain unverified until separately exercised against the exact loaded candidate.
+
+The candidate keeps the scene image in its existing single body background plane. A color-only SVG replaces the wash inside the adapter-authorized workspace rectangle; it contains no artwork, text, or external resources and creates no foreground layer. Geometry is versioned and bound to the document/workspace epoch. The existing workspace observer and lease deliver resize and captured-scroll geometry; a second controller or observer is not introduced. Unknown geometry, transforms, masks, or adapter contracts refuse the theme rather than guessing.
+
+Mask decoding shares the existing 4000 ms anti-hang ceiling with scene decoding. This is not a performance or recovery SLO: on a geometry or appearance change, the owner restores the legacy treatment synchronously before awaiting a fresh mask. `themePending`, `themeApplied`, `themeFailure`, and `fallbackApplied` distinguish a pending/degraded theme from a persisted settings record. A late decode cannot overwrite a newer generation or a foreign wash. Native-host rendering, responsiveness, and the full theme surface library still require separate acceptance.
+
+### Geometry and pending decode boundary
+
+The current Codex adapter admits only finite, axis-aligned workspace geometry. Ordinary ancestor overflow clips must demonstrably contain the entire workspace rectangle; partial clips, reserved scrollbar ambiguity, rounded ancestor clips, extended overflow clip margins, transforms and complex clipping are not supported for theme treatment. Same-size ancestor style changes invalidate the existing lease. This restores native presentation, not a claim that the previous wallpaper survives; a later supported workspace may be admitted by the existing recovery flow. Legacy wallpaper admission is unchanged.
+
+Every pending startup wallpaper application has an abort signal owned by the existing PageController generation. Disable, replacement and disposal cancel initial scene/mask decoding and release its timers and image references; the four-second deadline is only an anti-hang ceiling, not a recovery or performance target. Settled owners retain their existing disposal and handover lifecycle. Synthetic Chrome proves the cancellation path and native input, not installed Codex or DSH visual acceptance.
+
+After a workspace lease is revoked, the existing startup owner attempts bounded recovery once the startup/overlay gate permits it. If clipping remains unsupported, this attempt ends with the existing apply-failed notice and Retry action. Restoring supported geometry alone does not start indefinite polling: the user can choose Retry to apply the saved theme. Saved settings are not erased by this failure. The current notice is the generic background-application failure, not a claim that saving failed.
+
+### Theme draft round trips and defaults
+
+Within an open settings panel, Existing appearance and the Azhou theme retain their own artwork/contour drafts; switching between them does not overwrite an unsaved custom image or transparency edit. Cancel discards both draft states. Disabling a theme normally preserves its remembered transparency, while Restore all defaults explicitly resets that preference to Follow theme when saved. Restoring defaults and then cancelling does not change saved images or preferences. Both records still share the same conflict-checked save transaction.
+
+### Skip 与已准入的背景解码
+
+Skip 立即退出启动层，不等待背景解码。仅在 Skip 之前已由版本化适配器取得固定工作区 observation 与有效 lease、并进入图片解码的同一请求，可以继续收尾。此权限绑定原请求、代际、文档 token 和工作区 epoch；不会在 Skip 后获取新工作区。仍在等待外壳、未报告准入的旧适配器、取消设置、页面隐藏、节点替换、卸载及新请求继续使旧工作失效。动画 ready 不是背景准入。
+
+该边界由生成载荷的受控 decode、真实 Skip 点击及取消/替换负例检查；不代表真实宿主视觉衔接已经验收。
+
+## P07 theme-control usability slice
+
+The theme and reading-mask mode use visible, associated labels and full-width native selects within the existing settings field grid. The transparency slider spans its row; its adjacent readout and accessible value show the actual override percentage, or **Follow theme** when author-defined mask values apply. Increasing transparency clears the reading mask, not the text or icons. Existing appearance and Follow theme explain why the slider is unavailable. These labels and explanations follow the current host language, without persisting a language preference.
+
+Background strength remains a separate 0–75 setting. For the Azhou theme, nonzero strength does not replace the reading-mask preference; zero still disables the background. The UI change does not change image/theme records, draft round trips, atomic save/conflict rules, cancel behavior, or the separate embedded-settings work.
+
+Verification for this slice covers visible label association, override 0/50/100, Follow theme, disabled explanations, language changes, actual keyboard range input and Tab, narrow-window hit testing and overflow, and independent strength-zero behavior. Generated-browser fixtures are engineering evidence, not real-host acceptance. Branded artwork previews, host visual approval and performance acceptance remain separate gates; synthetic screenshots do not satisfy them.
+
+### Current verification status: BLOCKED
+
+The UI candidate passed focused layout, keyboard, Restore All and localization checks, independent review, repository validation and coverage. Its latest full generated-browser run did not pass: a transient settings-open assertion and later natural-playback, decode and CDP timeouts were observed. A bounded follow-up reproduced neither the later timeouts nor a cause; focused passes do not replace the failed aggregate gate. The settings-open check now requires a strictly newer loading-or-ready settings run and retains the subsequent open-dialog, persisted-value and resource checks. This recovery checkpoint is not a release-ready or merge-ready claim. Full aggregate validation, real-host acceptance and branded visual review remain open.

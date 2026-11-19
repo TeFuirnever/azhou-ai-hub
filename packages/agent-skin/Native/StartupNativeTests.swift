@@ -181,7 +181,7 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
     func setNormalLevel() { normalLevelCount += 1 }
     func makeVisible() { visibleCount += 1 }
     func orderOut() { orderedOutCount += 1 }
-    func evaluateJavaScript(_ source: String, completion: ((Any?, Error?) -> Void)?) {
+    func evaluateJavaScript(_ source: String, completion: (@MainActor @Sendable (Any?, Error?) -> Void)?) {
         evaluations.append(source)
         let result = evaluationHook?(source) ?? evaluationResult
         completion?(result.0, result.1)
@@ -195,7 +195,7 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
         schedules.append(scheduled)
         return scheduled
     }
-    func takeSnapshot(_ completion: @escaping (NSImage?, Error?) -> Void) {
+    func takeSnapshot(_ completion: @escaping @MainActor @Sendable (NSImage?, Error?) -> Void) {
         completion(snapshotResult.0, snapshotResult.1)
     }
     func stopLoading() { stopCount += 1 }
@@ -460,6 +460,31 @@ struct StartupNativeTests {
             guard condition() else { fatalError("FAILED: \(label)") }
             checks += 1
         }
+        // A transport may record sends off the main actor. All reads/writes must
+        // remain synchronized; reset is an explicit new-attempt operation only.
+        let concurrentObservation = CodexInstallObservation()
+        DispatchQueue.concurrentPerform(iterations: 4096) { _ in
+            concurrentObservation.markInstallSent()
+            _ = concurrentObservation.installSentCount
+        }
+        expect(concurrentObservation.installSentCount == 4096, "concurrent install sends are not lost")
+        concurrentObservation.reset()
+        expect(concurrentObservation.installSentCount == 0, "new attempt resets install observation")
+        let missingWebView = AppKitNativePlayerPresentation()
+        var missingEvaluationReplies = 0
+        missingWebView.evaluateJavaScript("1") { value, error in
+            MainActor.assertIsolated()
+            expect(value == nil && error != nil, "missing webview evaluation reports error")
+            missingEvaluationReplies += 1
+        }
+        var missingSnapshotReplies = 0
+        missingWebView.takeSnapshot { image, error in
+            MainActor.assertIsolated()
+            expect(image == nil && error != nil, "missing webview snapshot reports error")
+            missingSnapshotReplies += 1
+        }
+        expect(missingEvaluationReplies == 1 && missingSnapshotReplies == 1,
+               "missing webview callbacks remain synchronous and exactly once")
         let startupBridgeInput = NativeStartupBridgeInput(runNonce: "native-run-01", locale: "zh-CN", theme: "light")
         let startupBridgeSource = startupBridgeInput.documentStartSource() ?? ""
         expect(startupBridgeSource.contains("Object.defineProperty(window, '__agentSkinNativeStartup'")
@@ -1497,6 +1522,88 @@ private func startupSettingsSnapshotChecks() async throws -> Int {
             expect(failure.reason == "snapshot-invalid", "invalid snapshot appearance fails closed")
             expect(malformed.operationLog.contains("page-a:dispose"), "appearance failure attempts bound cleanup")
         }
+    }
+
+    let importedPNG = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAADCAIAAAA2iEnWAAAAFElEQVR4nGMUt4xmYGBgYgADKAUADMEAsTl1AMYAAAAASUVORK5CYII=")!
+    let importedHash = SHA256.hash(data: importedPNG).map { String(format: "%02x", $0) }.joined()
+    let importedSelection: [String: Any] = ["kind": "imported", "profile": "codex-main-literal-paint/v1",
+        "capsuleSha256": String(repeating: "a", count: 64), "archiveSha256": String(repeating: "b", count: 64),
+        "image": ["name": "background.png", "mime": "image/png", "bytes": importedPNG.count,
+                  "sha256": importedHash, "width": 2, "height": 3],
+        "paint": ["rgba": [17.0, 34.0, 51.0, 0.25], "backgroundImage": "none", "sourceDeclarationCount": 2]]
+    let importedTheme: [String: Any] = ["schemaVersion": 2, "revision": 2,
+        "imagesBinding": String(repeating: "a", count: 64), "selection": importedSelection]
+    let theme: [String: Any] = ["schemaVersion": 1, "revision": 1, "activeThemeId": "azhou-q-v3",
+        "preferencesByTheme": ["azhou-q-v3": ["mode": "override", "value": 65]],
+        "imagesBinding": String(repeating: "a", count: 64)]
+    for (name, mutate, valid): (String, (inout [String: Any]) -> Void, Bool) in [
+        ("valid", { _ in }, true),
+        ("tagged bundled", { $0 = ["schemaVersion": 2, "revision": 1,
+            "imagesBinding": String(repeating: "a", count: 64),
+            "selection": ["kind": "bundled", "id": "azhou-q-v3", "surfaceTransparency": ["mode": "override", "value": 65]]] }, true),
+        ("imported png", { $0 = importedTheme }, true),
+        ("imported unknown profile", { $0 = importedTheme; var selection = importedSelection; selection["profile"] = "other"; $0["selection"] = selection }, false),
+        ("imported extra CSS", { $0 = importedTheme; var selection = importedSelection; selection["css"] = "body{}"; $0["selection"] = selection }, false),
+        ("imported boolean rgba", { $0 = importedTheme; var selection = importedSelection;
+            selection["paint"] = ["rgba": [0, 0, 0, true] as [Any], "backgroundImage": "none", "sourceDeclarationCount": 1]; $0["selection"] = selection }, false),
+        ("imported bad image hash", { $0 = importedTheme; var selection = importedSelection;
+            var image = importedSelection["image"] as! [String: Any]; image["sha256"] = String(repeating: "0", count: 64); selection["image"] = image; $0["selection"] = selection }, false),
+        ("boolean revision", { $0["revision"] = true }, false),
+        ("unknown schema", { $0["schemaVersion"] = 99 }, false),
+        ("extra key", { $0["extra"] = "untrusted" }, false),
+        ("inactive", { $0["activeThemeId"] = NSNull() }, false),
+        ("invalid alpha", { $0["preferencesByTheme"] = ["azhou-q-v3": ["mode": "override", "value": 101]] }, false),
+        ("invalid binding", { $0["imagesBinding"] = "bad" }, false),
+    ] {
+        var value = theme
+        mutate(&value)
+        var object = try JSONSerialization.jsonObject(with: StartupSnapshotWorld.makePayload()) as! [String: Any]
+        object["themeState"] = value
+        if name.hasPrefix("imported") {
+            var settings = object["settings"] as! [String: Any]; settings["schemaVersion"] = 2
+            settings["artwork"] = "data:image/png;base64," + importedPNG.base64EncodedString(); object["settings"] = settings
+        }
+        if name == "valid", let path = ProcessInfo.processInfo.environment["AZHOU_THEME_BRIDGE_INPUT"] {
+            object = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as! [String: Any]
+        }
+        let world = StartupSnapshotWorld(payload: try JSONSerialization.data(withJSONObject: object))
+        let transport = try opened(world)
+        defer { transport.close() }
+        do {
+            let received = try await StartupSettingsSnapshotReceiver.receive(
+                transport: transport, page: page, request: request, deadline: 50, now: { world.time() })
+            expect(valid, "malformed theme must reject: \(name)")
+            if name == "valid", let path = ProcessInfo.processInfo.environment["AZHOU_THEME_BRIDGE_OUTPUT"] {
+                var expressions: [String] = []
+                try await NativeStartupSnapshotTransfer.send(snapshot: received, runNonce: request.runNonce,
+                    deadline: 110, now: { 100 }, evaluate: { expression, _ in expressions.append(expression); return true })
+                try JSONSerialization.data(withJSONObject: expressions).write(to: URL(fileURLWithPath: path))
+            }
+            if received.values.themeState?.importedImage != nil {
+                expect(received.values.themeState?.transparency == nil, "imported alpha comes from the finite plan, not P07 override")
+                let selection = received.values.themeState?.object["selection"] as? [String: Any]
+                expect(selection?["profile"] as? String == "codex-main-literal-paint/v1", "imported profile survives typed receiver")
+                expect(received.values.artwork == (object["settings"] as? [String: Any])?["artwork"] as? String, "original image retained once without conversion")
+            } else { expect(received.values.themeState?.transparency == 65, "theme alpha survives receiver") }
+            expect(received.values.themeState?.imagesBinding == (object["themeState"] as? [String: Any])?["imagesBinding"] as? String, "theme binding survives receiver without becoming authorization")
+        } catch let failure as StartupFailure {
+            expect(!valid && failure.reason == "snapshot-invalid", "theme validation rejects only malformed values: \(name)")
+        }
+    }
+
+    if ProcessInfo.processInfo.environment["AZHOU_THEME_BRIDGE_KIND"] == "png-large",
+       let path = ProcessInfo.processInfo.environment["AZHOU_THEME_BRIDGE_INPUT"] {
+        var object = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: path))) as! [String: Any]
+        var settings = object["settings"] as! [String: Any]
+        expect((settings["artwork"] as! String).utf8.count > 12 * 1024 * 1024, "large original PNG actually exceeds the legacy URL cap")
+        settings["schemaVersion"] = 1; object["settings"] = settings; object.removeValue(forKey: "themeState")
+        let world = StartupSnapshotWorld(payload: try JSONSerialization.data(withJSONObject: object))
+        let transport = try opened(world)
+        defer { transport.close() }
+        do {
+            _ = try await StartupSettingsSnapshotReceiver.receive(transport: transport, page: page, request: request, deadline: 50, now: { world.time() })
+            fatalError("FAILED: imported byte allowance must not widen legacy artwork")
+        } catch let failure as StartupFailure { expect(failure.reason == "snapshot-invalid", "legacy large PNG remains blocked") }
     }
 
     let digestMismatch = StartupSnapshotWorld()
@@ -6014,7 +6121,9 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             let host = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
             host.isReleasedWhenClosed = false
             defer { presentation.discardColdPlayer(); host.orderOut(nil); host.close() }
-            host.orderFront(nil)
+            let activeBeforeHostOrder = NSApp.isActive
+            expect(!activeBeforeHostOrder, "synthetic host ordering is exercised while the probe is inactive")
+            host.orderFrontRegardless()
             let windowNumber = cover.windowNumber
             guard let content = cover.contentView, content.subviews.count == 1,
                   let coverView = content.subviews.first else {
@@ -6059,9 +6168,15 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     "webViewID": String(describing: ObjectIdentifier(webView)),
                     "webViewCount": mounted.count, "webViewMounted": mounted.first === webView,
                     "webViewHidden": webView.isHidden, "coverPresent": coverPresent,
+                    "coverLevel": cover.level.rawValue, "hostLevel": host.level.rawValue,
+                    "applicationActiveBeforeHostOrder": activeBeforeHostOrder,
+                    "applicationActive": NSApp.isActive,
                     "coverIsKey": cover.isKeyWindow,
                     "canJoinAllSpaces": cover.collectionBehavior.contains(.canJoinAllSpaces),
                     "moveToActiveSpace": cover.collectionBehavior.contains(.moveToActiveSpace)])
+                expect(cover.level == (normalControl ? .normal : .floating) && host.level == .normal,
+                    "real window levels distinguish the normal control and production floating cover")
+                expect(!NSApp.isActive, "host ordering and reveal do not activate the probe")
                 expect(normalControl ? hostIndex < coverIndex : coverIndex < hostIndex,
                     "real AppKit ordering distinguishes the normal-level negative control from the cold fix before and after reveal")
                 expect(cover.windowNumber == windowNumber && foregroundPID == beforePID && !cover.isKeyWindow,

@@ -742,26 +742,306 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       },
     };
   }
+  let workspaceObservation = null;
+  let workspaceEpoch = 0;
+  const protectedWorkspace = '[role="dialog"],dialog,iframe,webview';
+  const protectedPaint = '[data-composer-layout],pre,code,[role="menu"],[role="dialog"],'
+    + '[contenteditable="true"],textarea,input,button,select';
+  const generatedLayer = prefix => ':is([class^="' + prefix + '"],[class*=" ' + prefix + '"])';
+  const workspaceSelectors = {
+    workspace: ':is([class^="_WorkspaceContent_"],[class*=" _WorkspaceContent_"])',
+    messaging: '.workspace > main.thread-pane',
+    footer: '[data-thread-scroll-footer]',
+    sticky: '.thread-scroll-container .pointer-events-none.sticky.bottom-0',
+    top: ':is([class^="_MainContentTopFade_"],[class*=" _MainContentTopFade_"])',
+  };
+  workspaceSelectors.plate = workspaceSelectors.footer + ' > ' + generatedLayer('_background_')
+    + ',' + workspaceSelectors.footer + ' > [aria-hidden="true"].pointer-events-none' + generatedLayer('background-');
+  workspaceSelectors.fade = workspaceSelectors.sticky + ' > ' + generatedLayer('_background_') + generatedLayer('_fade_')
+    + ',' + workspaceSelectors.sticky + ' > [aria-hidden="true"].pointer-events-none'
+    + generatedLayer('background-') + generatedLayer('fade-');
+  workspaceSelectors.scroll = '.thread-scroll-container :is('
+    + generatedLayer('_background_') + ',' + generatedLayer('_fade_') + ','
+    + generatedLayer('background-') + ',' + generatedLayer('fade-') + ')';
+
+  function workspaceVisible(node, host) {
+    if (!node?.isConnected || node.closest(protectedWorkspace)) return false;
+    for (let ancestor = node; ancestor; ancestor = ancestor.parentElement) {
+      const style = host.getComputedStyle(ancestor);
+      if (ancestor.hidden || style.display === 'none' || ['hidden', 'collapse'].includes(style.visibility)
+        || Number(style.opacity) === 0) return false;
+    }
+    return [...node.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
+  }
+
+  function observeWorkspace(host = hostEnvironment) {
+    const unavailable = (kind, details = {}) => {
+      workspaceObservation = null;
+      return Object.freeze({ kind, ...details });
+    };
+    try {
+      const identity = identify(host);
+      if (identity.kind !== 'matched') return unavailable('unsupported', { reason: 'page-unsupported' });
+      const shell = host.document?.getElementById('root');
+      if (!shell?.isConnected || !host.document.body) return unavailable('pending', { reason: 'shell-missing', layoutTargets: Object.freeze([host.document.documentElement].filter(Boolean)) });
+      const layoutMains = [...shell.querySelectorAll('[data-app-shell-main-surface]')]
+        .filter(node => node.isConnected && !node.closest(protectedWorkspace));
+      const candidates = layoutMains.filter(node => workspaceVisible(node, host));
+      if (candidates.length > 1) return unavailable('ambiguous', { candidateCount: candidates.length });
+      if (!candidates.length) return unavailable('pending', { reason: 'main-missing', layoutTargets: Object.freeze([shell, ...layoutMains]) });
+      const activeMain = candidates[0];
+      const frame = activeMain.closest('[data-app-shell-frame]');
+      if (!frame || !shell.contains(frame)) return unavailable('unsupported', { reason: 'frame-missing' });
+      const layoutAncestors = [];
+      for (let node = activeMain; node && node !== shell; node = node.parentElement) layoutAncestors.push(node);
+      layoutAncestors.push(shell);
+      const layoutTargets = [...new Set([shell, ...layoutMains, ...layoutAncestors,
+        ...activeMain.querySelectorAll(['[data-app-shell-page-surface]', ...Object.values(workspaceSelectors)].join(','))])]
+        .filter(node => node.isConnected && !node.closest(protectedPaint));
+      const visible = selector => [...activeMain.querySelectorAll(selector)]
+        .filter(node => workspaceVisible(node, host) && !node.closest(protectedPaint));
+      const surfaces = [...new Set([shell, ...layoutAncestors.filter(node => node.matches(
+        '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]')),
+      ...visible('[data-app-shell-page-surface]'), ...visible(workspaceSelectors.messaging)])];
+      const groups = {
+        surface: surfaces,
+        workspace: visible(workspaceSelectors.workspace),
+        footer: visible(workspaceSelectors.footer + ',' + workspaceSelectors.plate),
+        fade: visible(workspaceSelectors.fade),
+        top: visible(workspaceSelectors.top),
+      };
+      const knownPaintPlanes = Object.entries(groups).flatMap(([kind, nodes]) => nodes.map(node => Object.freeze({ kind, node })));
+      const unknownCandidates = [];
+      const addCandidate = (node, category, requirePositioning = true) => {
+        if (workspaceVisible(node, host) && !node.closest(protectedPaint) && !node.querySelector(protectedPaint)) {
+          unknownCandidates.push(Object.freeze({ node, category, requirePositioning }));
+        }
+      };
+      for (const node of visible(workspaceSelectors.sticky)) {
+        addCandidate(node, 'unmatched-sticky-decoration', false);
+        for (const child of node.children) addCandidate(child, 'unmatched-sticky-decoration', false);
+      }
+      for (const node of visible(workspaceSelectors.footer)) {
+        for (const child of node.children) addCandidate(child, 'unmatched-footer-decoration');
+      }
+      for (const node of visible(workspaceSelectors.scroll)) addCandidate(node, 'unmatched-scroll-decoration');
+      const sameNodes = (previous, current) => previous.length === current.length
+        && previous.every((value, index) => value === current[index]);
+      const samePlanes = (previous, current) => previous.length === current.length
+        && previous.every((value, index) => value.node === current[index].node && value.kind === current[index].kind);
+      const sameUnknown = workspaceObservation?.unknownCandidates.length === unknownCandidates.length
+        && workspaceObservation.unknownCandidates.every((value, index) => value.node === unknownCandidates[index].node
+          && value.category === unknownCandidates[index].category && value.requirePositioning === unknownCandidates[index].requirePositioning);
+      if (workspaceObservation?.documentToken === identity.documentToken && workspaceObservation.shell === shell
+        && workspaceObservation.activeMain === activeMain && sameNodes(workspaceObservation.layoutAncestors, layoutAncestors)
+        && samePlanes(workspaceObservation.knownPaintPlanes, knownPaintPlanes)
+        && sameNodes(workspaceObservation.layoutTargets, layoutTargets) && sameUnknown) return workspaceObservation;
+      workspaceObservation = Object.freeze({ kind: 'observed', documentToken: identity.documentToken,
+        workspaceEpoch: ++workspaceEpoch, shell, activeMain,
+        mainPaint: Object.freeze({ contract: 'codex-owned-main-paint/v1', node: activeMain }),
+        themeSurfaces: Object.freeze({ contract: 'codex-theme-surfaces/v1',
+          workspaceReadability: activeMain, fullCoverage: false }),
+        layoutTargets: Object.freeze(layoutTargets), layoutAncestors: Object.freeze(layoutAncestors), knownPaintPlanes: Object.freeze(knownPaintPlanes),
+        unknownCandidates: Object.freeze(unknownCandidates),
+        coverage: Object.freeze({ shell: 'observed', messaging: visible(workspaceSelectors.messaging).length ? 'observed' : 'unknown',
+          auxiliary: 'unknown' }) });
+      return workspaceObservation;
+    } catch {
+      return unavailable('unsupported', { reason: 'observation-unavailable' });
+    }
+  }
+
+  function readThemeGeometry(observation, host = hostEnvironment) {
+    const unsupported = () => Object.freeze({ kind: 'unsupported', reason: 'theme-geometry-unsupported' });
+    try {
+      if (observation?.kind !== 'observed' || observeWorkspace(host) !== observation
+        || observation.themeSurfaces?.workspaceReadability !== observation.activeMain) return unsupported();
+      const width = host.innerWidth, height = host.innerHeight;
+      if (![width, height].every(value => Number.isFinite(value) && value > 0 && value <= 32768)) return unsupported();
+      const nodes = new Set([host.document.documentElement, host.document.body]);
+      for (let node = observation.activeMain; node; node = node.parentElement) nodes.add(node);
+      for (const node of nodes) {
+        const style = host.getComputedStyle(node);
+        if (!style || ['transform', 'filter', 'backdropFilter', 'perspective', 'clipPath', 'maskImage']
+          .some(key => style[key] && style[key] !== 'none')
+          || style.contain && style.contain !== 'none'
+          || style.clip && style.clip !== 'auto'
+          || /transform|filter|perspective|contain/.test(style.willChange ?? '')) return unsupported();
+      }
+      const style = host.getComputedStyle(observation.activeMain);
+      if (style.borderRadius && !/^0(?:px|%|em|rem)?(?:\s+0(?:px|%|em|rem)?)*$/.test(style.borderRadius)) return unsupported();
+      const bounds = observation.activeMain.getBoundingClientRect();
+      const rect = Object.fromEntries(['x', 'y', 'width', 'height'].map(key => [key, bounds[key]]));
+      if (!Object.values(rect).every(value => Number.isFinite(value) && Math.abs(value) <= 10000000)
+        || rect.width <= 0 || rect.height <= 0 || rect.x >= width || rect.y >= height
+        || rect.x + rect.width <= 0 || rect.y + rect.height <= 0) return unsupported();
+      // Theme paint is a viewport background, not a descendant of these clips.
+      // Admit only clips proven to contain the whole main rectangle.
+      for (const node of nodes) {
+        const clipping = host.getComputedStyle(node);
+        if (clipping.overflowClipMargin && !/^(?:content-box\s+)?0px$/.test(clipping.overflowClipMargin)) return unsupported();
+        if (node === observation.activeMain) continue;
+        const axes = ['X', 'Y'].map(axis => clipping['overflow' + axis] || clipping.overflow || 'visible');
+        if (axes.some(value => !['visible','hidden','clip','auto','scroll'].includes(value))) return unsupported();
+        if (!axes.some(value => value !== 'visible')) continue;
+        if (clipping.borderRadius && !/^0(?:px|%|em|rem)?(?:\s+0(?:px|%|em|rem)?)*$/.test(clipping.borderRadius)) return unsupported();
+        if (['Top','Right','Bottom','Left'].some(side => Number.parseFloat(clipping['border' + side + 'Width'] || '0') !== 0)) return unsupported();
+        const box = node.getBoundingClientRect();
+        if (!['x','y','width','height'].every(key => Number.isFinite(box[key]))) return unsupported();
+        // Reserved scrollbars and CSS zoom need a separate proven mapping.
+        if (![node.offsetWidth,node.clientWidth,node.offsetHeight,node.clientHeight].every(Number.isFinite)
+          || node.offsetWidth !== node.clientWidth || node.offsetHeight !== node.clientHeight) return unsupported();
+        if (axes[0] !== 'visible' && (rect.x < box.x || rect.x + rect.width > box.x + box.width)) return unsupported();
+        if (axes[1] !== 'visible' && (rect.y < box.y || rect.y + rect.height > box.y + box.height)) return unsupported();
+      }
+      return Object.freeze({ kind: 'observed', contract: 'codex-theme-geometry/v1',
+        documentToken: observation.documentToken, workspaceEpoch: observation.workspaceEpoch,
+        rect: Object.freeze(rect), viewport: Object.freeze({ width, height }) });
+    } catch { return unsupported(); }
+  }
+
+  function watchWorkspace(observation, invalidate, host = hostEnvironment, options = {}) {
+    if (typeof invalidate !== 'function' || observation?.kind !== 'observed'
+      || observeWorkspace(host) !== observation) throw new Error('workspace-unavailable');
+    let retired = false;
+    const observers = [];
+    const listeners = [];
+    let mutation;
+    let geometryKey = null;
+    const geometryChanged = typeof options.onThemeGeometry === 'function' ? options.onThemeGeometry : null;
+    const release = () => {
+      if (retired) return;
+      retired = true;
+      for (const observer of observers) { try { observer.disconnect(); } catch {} }
+      for (const [target, event, callback, capture] of listeners) { try { target.removeEventListener(event, callback, capture); } catch {} }
+    };
+    const activityNodes = new Set(observation.knownPaintPlanes.map(plane => plane.node));
+    for (let node = observation.activeMain; node; node = node.parentElement) activityNodes.add(node);
+    const structuralSelector = '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]';
+    const paintSelector = [structuralSelector, ...Object.values(workspaceSelectors)].join(',');
+    const ownRootProperties = new Set(['--azhou-wallpaper-image', '--azhou-wallpaper-wash', '--azhou-wallpaper-surface']);
+    const rootStyleChanged = record => {
+      const before = record.oldValue ?? '';
+      const after = record.target.getAttribute('style') ?? '';
+      if (before === after) return false;
+      const normalized = text => {
+        const style = host.document.createElement('span').style;
+        style.cssText = text;
+        return Array.from(style).filter(name => !ownRootProperties.has(name)).sort()
+          .map(name => [name, style.getPropertyValue(name), style.getPropertyPriority(name)]);
+      };
+      try { return JSON.stringify(normalized(before)) !== JSON.stringify(normalized(after)); }
+      catch { return true; }
+    };
+    const endObservation = () => {
+      if (workspaceObservation === observation) workspaceObservation = null;
+      release();
+      invalidate();
+    };
+    const processRecords = records => {
+      if (retired || !records?.length) return;
+      let refresh = false;
+      for (const record of records) {
+        if (record.type === 'childList') {
+          if ([...record.removedNodes].some(removed => [...activityNodes].some(node => removed === node || removed.contains?.(node)))) {
+            endObservation();
+            return;
+          }
+          refresh ||= [...record.addedNodes ?? []].some(node => node.matches?.(paintSelector) || node.querySelector?.(paintSelector));
+          continue;
+        }
+        if (record.type !== 'attributes') continue;
+        const inside = activityNodes.has(record.target) || observation.shell.contains(record.target);
+        if (!inside) continue;
+        if (['class', 'style', 'hidden'].includes(record.attributeName) && !activityNodes.has(record.target)
+          && (record.target.matches?.(paintSelector) || record.target.querySelector?.(paintSelector))) refresh = true;
+        if (record.attributeName?.startsWith('data-app-shell-')
+          || (activityNodes.has(record.target) || record.target.matches?.(structuralSelector))
+            && ['class', 'style', 'hidden'].includes(record.attributeName)
+            && !(record.target === host.document.documentElement && record.attributeName === 'style' && !rootStyleChanged(record))) {
+          endObservation();
+          return;
+        }
+      }
+      if (refresh && observeWorkspace(host) !== observation) endObservation();
+    };
+    const current = () => {
+      if (retired) return false;
+      processRecords(mutation?.takeRecords() ?? []);
+      if (!retired && observeWorkspace(host) !== observation) endObservation();
+      if (!retired && geometryChanged) {
+        const geometry = readThemeGeometry(observation, host);
+        if (geometry.kind !== 'observed') endObservation();
+        else {
+          const key = JSON.stringify([geometry.rect, geometry.viewport]);
+          if (key !== geometryKey) {
+            geometryKey = key;
+            try { geometryChanged(geometry); } catch { endObservation(); }
+          }
+        }
+      }
+      return !retired;
+    };
+    try {
+      mutation = new host.MutationObserver(records => {
+        processRecords(records);
+        if (!retired && geometryChanged && records.some(record => record.type === 'attributes'
+          && (record.target === observation.activeMain || record.target.contains?.(observation.activeMain)))) current();
+      });
+      observers.push(mutation);
+      mutation.observe(host.document.documentElement, { subtree: true, childList: true, attributes: true, attributeOldValue: true,
+        attributeFilter: ['class', 'style', 'hidden', 'data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface'] });
+      if (typeof host.ResizeObserver === 'function') {
+        const resize = new host.ResizeObserver(current);
+        observers.push(resize);
+        for (const node of new Set([...activityNodes, ...observation.layoutTargets])) resize.observe(node);
+      }
+      for (const [target, event] of [[host, 'resize'], [host, 'popstate'], [host, 'hashchange'], [host.document, 'visibilitychange']]) {
+        if (typeof target.addEventListener !== 'function') continue;
+        target.addEventListener(event, current);
+        listeners.push([target, event, current]);
+      }
+      if (geometryChanged) {
+        for (const [target, event, capture] of [[host.document, 'scroll', true],
+          [host.visualViewport, 'resize', false], [host.visualViewport, 'scroll', false]]) {
+          if (typeof target?.addEventListener !== 'function') continue;
+          target.addEventListener(event, current, capture);
+          listeners.push([target, event, current, capture]);
+        }
+      }
+      current();
+      return Object.freeze({ current, dispose: release });
+    } catch (error) { release(); throw error; }
+  }
+
+  function identify(host = hostEnvironment) {
+    let href;
+    let document;
+    try {
+      href = host?.location?.href;
+      document = host?.document;
+    } catch {
+      pageIdentity = null;
+      return { kind: 'unmatched', reason: 'page-unsupported' };
+    }
+    if (!host || !isMainPage(href)) {
+      pageIdentity = null;
+      return { kind: 'unmatched', reason: 'page-unsupported' };
+    }
+    if (!pageIdentity || pageIdentity.host !== host || pageIdentity.document !== document || pageIdentity.href !== href) {
+      pageIdentity = { host, document, href, documentToken: `codex-page:${++pageGeneration}` };
+    }
+    return { kind: 'matched', documentToken: pageIdentity.documentToken };
+  }
   return Object.freeze({
-    identify(host = hostEnvironment) {
-      let href;
-      let document;
-      try {
-        href = host?.location?.href;
-        document = host?.document;
-      } catch {
-        pageIdentity = null;
-        return { kind: 'unmatched', reason: 'page-unsupported' };
-      }
-      if (!host || !isMainPage(href)) {
-        pageIdentity = null;
-        return { kind: 'unmatched', reason: 'page-unsupported' };
-      }
-      if (!pageIdentity || pageIdentity.host !== host || pageIdentity.document !== document
-          || pageIdentity.href !== href) {
-        pageIdentity = { host, document, href, documentToken: `codex-page:${++pageGeneration}` };
-      }
-      return { kind: 'matched', documentToken: pageIdentity.documentToken };
+    workspaceContract: 'codex-active-workspace/v1',
+    themeGeometryContract: 'codex-theme-geometry/v1',
+    identify,
+    observeWorkspace,
+    readThemeGeometry,
+    watchWorkspace,
+    isWorkspaceCurrent(observation, host = hostEnvironment) {
+      return observation?.kind === 'observed' && observeWorkspace(host) === observation;
     },
     observeAppearance(host = hostEnvironment) {
       return hostAppearance(host);
