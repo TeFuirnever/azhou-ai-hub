@@ -819,9 +819,9 @@ class ImageMetadataAssemblyTests(unittest.TestCase):
         css = (PACKAGE / "wallpaper/wallpaper.css").read_text(encoding="utf-8")
         payload = builder._build_script(PACKAGE, {}, css, artifacts)
         self.assertIn(adapted, payload)
-        self.assertEqual(payload.count("function readRawDimensions("), 2)
+        self.assertEqual(payload.count("function readRawDimensions("), 1)
         self.assertEqual(payload.count("function createDreamThemeStyle("), 1)
-        self.assertIn("const MAX_IMAGE_PIXELS = 50_000_000", payload)
+        self.assertNotIn("function verifyThemeSnapshotArtwork(", payload)
 
         start = "  return bootstrapStartup({"
         end = "    host: globalThis,\n    pageAdapter,\n  });\n\n})()"
