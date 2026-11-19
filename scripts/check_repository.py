@@ -73,6 +73,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-info/SKILL.md",
     "skills/super-azhou-setup/SKILL.md",
     "skills/super-azhou-verify/SKILL.md",
+    "skills/super-docx/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
     "skills/super-gh-axi/SKILL.md",
@@ -522,6 +523,12 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "先验依赖，再动这份 PDF。",
         "startup": "🦊 阿舟 · Pdf 启动（mode=<extract|assemble|create|forms|secure>, scope=<pdf-task>）",
         "brand_path": "skills/super-pdf/references/brand-layer.md",
+    },
+    "skills/super-docx/SKILL.md": {
+        "display_name": "Docx",
+        "motto": "先验依赖，再动这份 Word 文档。",
+        "startup": "🦊 阿舟 · Docx 启动（mode=<create|edit|read|markup>, scope=<word-task>）",
+        "brand_path": "skills/super-docx/references/brand-layer.md",
     },
 }
 
@@ -1497,6 +1504,13 @@ COMMAND_SURFACE_EXCLUDED_DIRECTORIES = (
     "docs/demos/",
 )
 PYTHON3_TOKEN = re.compile(r"\bpython3\b")
+# Adopted packages embed frozen upstream guide bodies inside SKILL.md under a
+# fidelity contract (digest-pinned vendored bytes, super-pdf precedent). Those
+# bytes are upstream documentation, not Hub command surface, exactly like the
+# references/upstream/ path exemption below. The marker pair delimits them;
+# an unbalanced or nested marker fails closed rather than skipping blindly.
+FROZEN_UPSTREAM_BEGIN = "<!-- frozen-upstream:begin -->"
+FROZEN_UPSTREAM_END = "<!-- frozen-upstream:end -->"
 
 
 def check_command_surface(files: list[Path], root: Path) -> list[str]:
@@ -1516,9 +1530,25 @@ def check_command_surface(files: list[Path], root: Path) -> list[str]:
         except (OSError, UnicodeError) as exc:
             errors.append(f"cannot read command surface {relative}: {exc}")
             continue
+        inside_frozen = False
         for line_number, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped == FROZEN_UPSTREAM_BEGIN:
+                if inside_frozen:
+                    errors.append(f"frozen-upstream markers nested in {relative}:{line_number}")
+                inside_frozen = True
+                continue
+            if stripped == FROZEN_UPSTREAM_END:
+                if not inside_frozen:
+                    errors.append(f"frozen-upstream end marker without begin in {relative}:{line_number}")
+                inside_frozen = False
+                continue
+            if inside_frozen:
+                continue
             if PYTHON3_TOKEN.search(line):
                 errors.append(f"POSIX-only interpreter 'python3' in {relative}:{line_number}; use 'python'")
+        if inside_frozen:
+            errors.append(f"frozen-upstream begin marker without end in {relative}")
     return errors
 
 

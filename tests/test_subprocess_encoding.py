@@ -24,6 +24,17 @@ ROOT = Path(__file__).parents[1]
 # appended at walk time because each skill is an independent package.
 SCAN_ROOTS = ("tests", "benchmarks", "scripts")
 
+# Byte-pinned vendored script trees of adopted packages. Their bytes are
+# upstream's, digest-pinned by the adoption integrity tests and excluded from
+# this guard per its own scope statement ("vendored/upstream 面不在本测试范
+# 围内"); the walker already skips ``upstream`` directory segments for the
+# same reason. Upstream defects found here are recorded in the adopting
+# package's provenance ledger, not patched in place (e.g. super-docx's
+# accept_changes.py text-mode subprocess without pinned encoding).
+VENDORED_SCRIPT_ROOTS = (
+    "skills/super-docx/scripts/",
+)
+
 # The four subprocess entry points whose text mode requires an explicit codec.
 TEXT_MODE_CALLS = {"run", "check_output", "Popen", "check_call"}
 
@@ -40,6 +51,9 @@ class SubprocessEncodingTest(unittest.TestCase):
             if not base.is_dir():
                 continue
             for path in sorted(base.rglob("*.py")):
+                relative = path.relative_to(ROOT).as_posix()
+                if relative.startswith(VENDORED_SCRIPT_ROOTS):
+                    continue  # byte-pinned vendored tree of an adopted package
                 directories = path.relative_to(ROOT).parts[:-1]
                 if any(segment.startswith(".") for segment in directories):
                     continue  # dot-prefixed directory segment (e.g. .venv, .mimocode)

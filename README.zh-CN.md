@@ -41,6 +41,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 npx skills add TeFuirnever/azhou-ai-hub --skill super-pdf
+npx skills add TeFuirnever/azhou-ai-hub --skill super-docx
 ~~~
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
@@ -71,6 +72,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-pdf
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | 为 ADHD 读者塑形输出：下一步动作先行、多步工作编号分步、每回合重述状态、压制岔题；直到读者说出停止短语才解除。 | 在冻结上游 commit <code>1ecea199</code>（MIT）上 adapted 引入：指令正文逐字保留，上游双 SHA-256 钉入 provenance；完整性测试钉住 provenance、许可副本与五条 Azhou 呈现约束。尚无行为 benchmark。 |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | 经 agent 人体工学的封装 CLI 操作 GitHub：issues、PR、堆叠 PR、讨论、CI 运行与触发、release、仓库、label、gist、Projects (v2)、Actions secrets/variables、搜索与原始 API；仓库规则点名了自己的工具时以仓库规则为准。 | 在锁定的上游正式发布 <code>gh-axi-v0.1.51</code>（commit <code>911a0868</code>，[kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi)）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
 | [Pdf](skills/super-pdf/SKILL.md) | 处理 PDF 文件：读取或提取文本、表格与图像，合并、拆分、旋转页面、加水印、创建新 PDF、填写表单、加密解密与扫描件 OCR——点名或要求产出 .pdf 文件即触发。 | 在钉住的 commit <code>e4bb5d960d</code>（Apache-2.0，许可副本逐字节保留并记录占位版权行异常）上自 [anthropics/skills](https://github.com/anthropics/skills) faithful 引入：指南正文逐字嵌入，FORMS.md/REFERENCE.md 与八个 vendored 脚本逐字节一致；fail-closed 依赖 setup。完整性测试钉住 vendored 摘要。尚无行为 benchmark。 |
+| [Docx](skills/super-docx/SKILL.md) | 创建、读取与编辑 Word 文档（.docx/.dotx）：docx-js 建文档、unpack-编辑-rezip 改文档、pandoc 读内容、批注、修订追踪与 soffice 渲染核验——点名 Word 文档或要 Word 文件交付物即触发；Word 转 PDF 属此技能。 | 在钉住的 commit <code>e4bb5d960d</code>（Apache-2.0，许可副本逐字节保留并记录占位版权行异常）上自 [anthropics/skills](https://github.com/anthropics/skills) faithful 引入：指南正文逐字嵌入，四个脚本、五个批注模板与 50 文件 office/ 子树逐字节一致；fail-closed 依赖 setup，与 super-pdf 双向 carve。完整性测试钉住 vendored 摘要。尚无行为 benchmark。 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try.zh-CN-dark.jpg">

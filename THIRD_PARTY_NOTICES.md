@@ -142,6 +142,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the SKILL.md guide body (embedded verbatim below the entry's wrapper), `FORMS.md`, `REFERENCE.md` and the eight `scripts/*.py`; no other upstream bytes
 - Local changes: neutral frontmatter (the host-specific `license:` key is not copied; the upstream name `pdf` stays a compatibility trigger), a fail-closed dependency setup covering the upstream's undeclared runtime surface (including Pillow), Azhou brand protocol and stable receipt, and provenance records
 
+## Docx
+
+`skills/super-docx/` imports the `docx` Agent Skill from [anthropics/skills](https://github.com/anthropics/skills) at immutable commit [`e4bb5d960d87126ff3b3a8af1a104b7db67560ba`](https://github.com/anthropics/skills/commit/e4bb5d960d87126ff3b3a8af1a104b7db67560ba) (the second of the four document-format adoptions ruled in the [2026-11-18 import review](docs/research/2026-11-18-anthropics-skills-import-review.md)). The guide body, the four top-level scripts, the five comment templates and the 50-file `scripts/office/` shared subtree are vendored byte-identical and hash-locked for reproducibility.
+
+- Source: Anthropic PBC, from anthropics/skills @ e4bb5d960d…, Apache-2.0 (R1 attribution ruling: the upstream repository-level license field is empty while README L20 at the pinned commit declares the document skills "also open source (Apache 2.0)" and the package carries its own LICENSE.txt)
+- License: [Apache-2.0](LICENSES/Docx-Apache-2.0.txt), retained byte-identical including the upstream appendix placeholder line `Copyright [yyyy] [name of copyright owner]` (recorded anomaly, preserved rather than filled in per the ruling)
+- Imported boundary: the SKILL.md guide body (embedded verbatim below the entry's wrapper), `scripts/__init__.py`, `accept_changes.py`, `comment.py`, `merge_runs.py`, the five `scripts/templates/*.xml` comment templates, and the 50-file `scripts/office/` subtree shared verbatim by the upstream docx/pptx/xlsx packages; no other upstream bytes
+- Local changes: neutral frontmatter (the host-specific `license:` key is not copied; the upstream name `docx` stays a compatibility trigger), a fail-closed dependency setup covering the upstream's declared and undeclared runtime surface (the declared npm `docx`/pandoc/LibreOffice/pdftoppm line plus the undeclared defusedxml, lxml, `zip` and Node), a bidirectional capability carve with `super-pdf` on the Word-to-PDF conversion face, Azhou brand protocol and stable receipt, and provenance records
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.

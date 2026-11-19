@@ -5,6 +5,7 @@ skills/excalidraw-diagram/references/vendor/** linguist-vendored -whitespace
 skills/super-pdf/FORMS.md -whitespace
 skills/super-pdf/REFERENCE.md -whitespace
 skills/super-pdf/scripts/** -whitespace
+skills/super-docx/scripts/** -whitespace
 skills/excalidraw-diagram/references/fonts/** linguist-vendored
 skills/excalidraw-diagram/references/libraries/** linguist-vendored
 skills/excalidraw-diagram/references/uv.lock linguist-generated

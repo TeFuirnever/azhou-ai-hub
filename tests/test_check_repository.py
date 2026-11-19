@@ -847,6 +847,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-i-have-adhd" / "SKILL.md",
                 root / "skills" / "super-gh-axi" / "SKILL.md",
                 root / "skills" / "super-pdf" / "SKILL.md",
+                root / "skills" / "super-docx" / "SKILL.md",
                 root / "skills" / "super-session-insights" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
@@ -932,6 +933,30 @@ class RepositoryPolicyTest(unittest.TestCase):
             errors = check_command_surface([target], root)
             self.assertEqual(1, len(errors))
             self.assertIn("POSIX-only interpreter 'python3' in docs/installation.md:2", errors[0])
+
+    def test_command_surface_frozen_upstream_markers_are_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            skill = root / "skills" / "super-probe" / "SKILL.md"
+            skill.parent.mkdir(parents=True)
+            recipe = '```bash\npython3 -c "import zipfile" doc.docx\n```\n'
+            begin = "<!-- frozen-upstream:begin -->"
+            end = "<!-- frozen-upstream:end -->"
+            # Inside the marker pair: frozen upstream bytes, not Hub command surface.
+            skill.write_text(f"# Probe\n\n{begin}\n{recipe}{end}\n", encoding="utf-8")
+            self.assertEqual([], check_command_surface([skill], root))
+            # The same line outside the markers is Hub guidance and fails.
+            skill.write_text(f"# Probe\n\n{recipe}{begin}\nupstream\n{end}\n", encoding="utf-8")
+            errors = check_command_surface([skill], root)
+            self.assertEqual(1, len(errors))
+            self.assertIn("POSIX-only interpreter 'python3' in skills/super-probe/SKILL.md:4", errors[0])
+            # Unbalanced markers fail closed instead of skipping the rest of the file.
+            skill.write_text(f"# Probe\n\n{begin}\n{recipe}", encoding="utf-8")
+            errors = check_command_surface([skill], root)
+            self.assertIn("frozen-upstream begin marker without end in skills/super-probe/SKILL.md", errors)
+            skill.write_text(f"# Probe\n\n{end}\n", encoding="utf-8")
+            errors = check_command_surface([skill], root)
+            self.assertIn("frozen-upstream end marker without begin in skills/super-probe/SKILL.md:3", errors)
 
     def test_command_surface_skips_historical_surfaces(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

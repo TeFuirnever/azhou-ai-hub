@@ -1,6 +1,6 @@
 ---
 name: super-pdf
-description: "Azhou skill. Adopted from the upstream pdf skill (the upstream name still triggers this skill). Use whenever the user wants to do anything with PDF files: reading or extracting text and tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting or decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill."
+description: "Azhou skill. Adopted from the upstream pdf skill (the upstream name still triggers this skill). Use whenever the user wants to do anything with PDF files: reading or extracting text and tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting or decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill. Producing a PDF from a Word document belongs to super-docx."
 invocation: model-invoked discipline
 ---
 
