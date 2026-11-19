@@ -40,7 +40,6 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
-npx skills add TeFuirnever/azhou-ai-hub --skill super-pdf
 ~~~
 
 Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
@@ -70,7 +69,6 @@ Choose one installation method per skill. Package-manager installs resolve the m
 | [Imagegen](skills/super-imagegen/SKILL.md) | Execute prepared local image-generation requests through the machine's installed private <code>azhou-imagegen</code> runtime: route the request, run the doctor gate, honor the runtime lock, and hand back outputs with an immutable receipt; refuses when the runtime is missing. | Contract-only package over a proprietary local runtime, with baseline hashes pinned in provenance and zero private bytes in the repository; fail-closed setup. No behavior benchmark yet. |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | Shape output for a reader with ADHD: next action first, bounded numbered steps, state restated every turn, tangents suppressed; stays on until the reader's stop phrase. | Adapted from the frozen upstream commit <code>1ecea199</code> (MIT) with the instruction body retained verbatim and both upstream SHA-256 digests pinned; integrity tests pin the provenance, license copy and the five Azhou presentation constraints. No behavior benchmark yet. |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | Run GitHub operations through an agent-ergonomic wrapped CLI: issues, PRs, stacked PRs, discussions, CI runs and dispatch, releases, repos, labels, gists, Projects (v2), Actions secrets/variables, search and raw API, with project rules winning where a repository names its own recipe. | Adopted at the locked upstream release <code>gh-axi-v0.1.51</code> (commit <code>911a0868</code>) from [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi): provenance pins the upstream skill SHA-256, npm integrity and tarball digest; the CLI is invoked through the locked <code>npx</code> baseline and is not vendored. Integrity tests pin the provenance and license copy. No behavior benchmark yet. |
-| [Pdf](skills/super-pdf/SKILL.md) | Process PDF files: read or extract text, tables and images, merge, split, rotate pages, add watermarks, create new PDFs, fill forms, encrypt/decrypt, and OCR scanned PDFs — triggered whenever a .pdf file is named or produced. | Adopted from [anthropics/skills](https://github.com/anthropics/skills) at the pinned commit <code>e4bb5d960d</code> (Apache-2.0; license copy retained byte-identical with the placeholder-line anomaly recorded): guide body verbatim, FORMS.md/REFERENCE.md and eight vendored scripts byte-identical, fail-closed dependency setup. Integrity tests pin the vendored digests. No behavior benchmark yet. |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try-dark.jpg">

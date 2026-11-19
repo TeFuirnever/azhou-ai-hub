@@ -29,6 +29,21 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
     def test_repository_scans_clean_after_the_cut(self) -> None:
         self.assertEqual([], run_checks(ROOT))
 
+    def test_retired_pdf_skill_cannot_return_but_generic_pdf_work_stays(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            package = write(root, "skills/super-pdf/scripts/new.py", "")
+            guide = write(root, "docs/runbook.md", "Install super-pdf.\nSuper Pdf is available.\nRender and inspect the PDF.\n")
+            history = write(root, "CHANGELOG.md", "Retired super-pdf.\n")
+            self.assertEqual(
+                [
+                    "retired surface resurrected: skills/super-pdf/scripts/new.py",
+                    "retired-surface reference: docs/runbook.md:1: super-pdf",
+                    "retired-surface reference: docs/runbook.md:2: super-pdf",
+                ],
+                check_retired_surface_references([package, guide, history], root),
+            )
+
     def test_azhou_pet_tooling_cannot_return_to_live_paths(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
