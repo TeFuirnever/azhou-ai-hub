@@ -127,15 +127,11 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 ![ASD-STE100 effect preview](assets/skills/super-asd-ste100-effect.png)
 
-The source candidate also provides a [narrow Dream literal-main profile](packages/agent-skin/docs/design/azhou-immersive-experience/dream-main-literal-paint.md). A CLI-exported source capsule can be imported into a separate local directory, explicitly applied, reopened at startup, and restored to the saved Azhou appearance. Unsupported source declarations or manifest rendering fields block application. This is not general Dream compatibility or installed-host acceptance.
-
 ## Archify
 
 > 🗺️ One map tells the whole system — hand it to the reader to explore.
 
 ![Archify effect preview](assets/skills/super-archify-effect.png)
-
-The candidate [workspace theme slice](packages/agent-skin/docs/theme-appearance.md) supports one approved Azhou theme and workspace readability transparency, with saving and application reported separately. Full theme-library behavior, DSH theme support, and real-host visual acceptance remain unverified. Skip leaves an already-admitted background decode to finish only in its original workspace; waiting for a new shell is still cancelled. Theme settings use visible labels, native keyboard controls and explicit mask values or Follow theme.
 
 ## Lavish
 
@@ -220,6 +216,10 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 | Entry | Complete project package | Current boundary |
 |---|---|---|
 | `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | Codex desktop identity with an assembled DeepSeek Harness plugin package; current source candidate `0.9.0/build 43`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). Code is MIT; bundled Azhou artwork is CC BY-NC-ND 4.0. |
+
+The source candidate also provides a [narrow Dream literal-main profile](packages/agent-skin/docs/design/azhou-immersive-experience/dream-main-literal-paint.md). A CLI-exported source capsule can be imported into a separate local directory, explicitly applied, reopened at startup, and restored to the saved Azhou appearance. Unsupported source declarations or manifest rendering fields block application. This is not general Dream compatibility or installed-host acceptance.
+
+The candidate [workspace theme slice](packages/agent-skin/docs/theme-appearance.md) supports one approved Azhou theme and workspace readability transparency, with saving and application reported separately. Full theme-library behavior, DSH theme support, and real-host visual acceptance remain unverified. Skip leaves an already-admitted background decode to finish only in its original workspace; waiting for a new shell is still cancelled. Theme settings use visible labels, native keyboard controls and explicit mask values or Follow theme.
 
 On a Codex cold start, the launcher shows its own floating image cover without taking focus, then fades into the 12-second animation in the same native window. A local private cover can override the bundled default. It hands off after playback and workspace readiness. Switching to another app or Space releases the cover. A warm launch activates the existing Codex process without replay. DSH uses its own document gate. In the source, its embedded appearance settings stay open after saving and let Tab return to the host settings page. macOS CI verifies window ordering, player reveal and cleanup with a negative control. On the maintainer Mac, the PR #476 candidate was installed for acceptance; the user reported a successful cold start, page navigation and input. The loaded payload hash was not independently checked. The user later reported that the local build 43 cover and requested startup checks matched expectations. On the maintainer Mac, DSH build 43 was installed with a verified rollback; the desktop settings reported build 43 and the startup animation and wallpaper were observed. The installed builds and pending visual acceptance are tracked in the [support matrix](docs/support-matrix.md#optional-integrations) and [startup tests](packages/agent-skin/docs/testing.md).
 

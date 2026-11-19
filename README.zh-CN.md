@@ -127,15 +127,11 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-pdf
 
 ![ASD-STE100 效果图](assets/skills/super-asd-ste100-effect.png)
 
-源码候选还提供[有限 Dream 主区字面颜色 profile](packages/agent-skin/docs/design/azhou-immersive-experience/dream-main-literal-paint.md)。CLI 导出的源胶囊可导入独立本机目录，经显式应用、启动重读，并恢复先前保存的阿舟外观。未映射的样式声明或清单渲染字段会阻止应用。这不代表全面 Dream 兼容或已安装宿主验收。
-
 ## Archify
 
 > 🗺️ 一张图讲清一个系统，交给读者去探索。
 
 ![Archify 效果图](assets/skills/super-archify-effect.png)
-
-候选[工作区主题切片](packages/agent-skin/docs/theme-appearance.md)提供一套批准的阿舟主题与工作区阅读底色透明度，保存与应用分别反馈。完整主题库、DSH 主题支持及真实宿主视觉验收仍未完成。 Skip 仅允许已准入的背景解码在原工作区收尾，仍在等待新外壳的请求继续取消。 主题设置提供可见标签、原生键盘控件，并明确显示遮罩数值或跟随主题。
 
 ## Lavish
 
@@ -220,6 +216,10 @@ python scripts/azhou_hub.py verify
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
 | `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码候选为 `0.9.0/build 43`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码采用 MIT，随附的阿舟素材采用 CC BY-NC-ND 4.0。 |
+
+源码候选还提供[有限 Dream 主区字面颜色 profile](packages/agent-skin/docs/design/azhou-immersive-experience/dream-main-literal-paint.md)。CLI 导出的源胶囊可导入独立本机目录，经显式应用、启动重读，并恢复先前保存的阿舟外观。未映射的样式声明或清单渲染字段会阻止应用。这不代表全面 Dream 兼容或已安装宿主验收。
+
+候选[工作区主题切片](packages/agent-skin/docs/theme-appearance.md)提供一套批准的阿舟主题与工作区阅读底色透明度，保存与应用分别反馈。完整主题库、DSH 主题支持及真实宿主视觉验收仍未完成。 Skip 仅允许已准入的背景解码在原工作区收尾，仍在等待新外壳的请求继续取消。 主题设置提供可见标签、原生键盘控件，并明确显示遮罩数值或跟随主题。
 
 Codex 冷启动时，启动器以浮动层显示静态封面而不抢焦点，再在同一原生窗口渐变进入 12 秒动画。默认封面可由本地私有素材覆盖。播放结束且工作区就绪后交接。切换到其他应用或 Space 时释放遮罩。热启动只激活现有 Codex 进程，不重播。DSH 使用独立的页面启动门。源码中的 DSH 内嵌外观设置在保存后保持打开，Tab 可返回宿主设置页。macOS CI 用负对照验证窗口排序、播放器显露和清理。维护者的 Mac 已安装 PR #476 候选以便验收；用户反馈冷启动、页面切换和输入正常，运行时载荷摘要尚未独立核验。用户随后反馈，本地 build 43 的封面及所请求的启动检查符合预期。维护者的 Mac 已安装 DSH build 43 并验证回退；桌面设置显示 build 43，启动动画和壁纸均已观察。已安装版本及待完成的视觉验收见[支持矩阵](docs/support-matrix.md#optional-integrations)与[启动测试](packages/agent-skin/docs/testing.md)。
 
