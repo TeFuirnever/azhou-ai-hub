@@ -68,10 +68,9 @@ superseded fork-port directories (`plugins/`, `tests/`, `tla/` and
 `lean/`) have been removed; this `tools/` directory holds the quilt
 builder, not the old sync-based port.
 
-The quilt currently has 23 patches: 17 upstream-defect patches and six
+The quilt currently has 22 patches: 17 upstream-defect patches and five
 Hub-specific adjustments (distribution identity, test type-narrowing,
-command/agent namespace guides, Claude model-sheet alignment and Hub-kept
-playbook rows, Orchestrate routing, enumeration and guide restore, and conservative
+command/agent namespace guides, Claude model-sheet alignment, and conservative
 worktree-audit classification). The 17
 `Forwarded: no` upstream-defect patches still need upstream review/forwarding
 or replacement when upstream adopts a fix. The current pinned import is

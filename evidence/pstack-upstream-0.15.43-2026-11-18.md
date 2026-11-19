@@ -84,24 +84,17 @@ separate task.
   unmodified generator requires the adapter to carry a row for every slug
   family the assembled skills mention — without it the build fails with
   `Claude Code adapter has no row for gpt-, used by poteto-mode, setup-pstack`.
-- `0022-hub-claude-sheet-hook-path` (extended post-review on 2026-11-18):
-  restores the `orchestrate` README table row and the twenty-three playbook
-  counts in the README and `docs/guide/02-poteto-mode.md` that upstream's
-  playbook deletion trimmed. The Hub `hub-skills` overlay keeps a
-  portable-host `orchestrate` playbook, so the generated trees ship
-  twenty-three playbooks and the generated docs must count them.
+- `0022-hub-claude-sheet-hook-path` (extended post-review on 2026-11-18 to
+  restore the `orchestrate` README table row and the twenty-three playbook
+  counts; **that extension was removed on 2026-11-19 by the sunset ruling
+  below** — the patch now carries only the config-root sheet alignment and
+  the `gpt-*` adapter row, and the generated docs count upstream's
+  twenty-two playbooks).
 - `0024-hub-orchestrate-routing-restore` (added post-review on 2026-11-19,
-  addressing the resolved codex P2 thread on this PR): upstream's condensed
-  routing paragraph dropped `Orchestrate` together with the playbook and cut
-  its title from the condensed playbook list, so the retained playbook had no
-  normal entry route — project-scale requests all routed to `figure-it-out` —
-  and the list counted twenty-two titles against the twenty-three shipped
-  playbooks. The patch restores the standing project-scale-program routing
-  sentence and the `Orchestrate` enumeration entry in the pristine poteto-mode
-  `SKILL.md`, and the Orchestrate guide sentences the same deletion dropped in
-  `docs/guide/07-overnight.md`, `docs/guide/02-poteto-mode.md` and
-  `skills/poteto-help/SKILL.md`, before the generator mirrors them into all
-  five trees.
+  addressing the resolved codex P2 thread on this PR; **removed from the
+  queue on 2026-11-19 by the sunset ruling below** — the routing sentence,
+  enumeration entry and guide sentences it restored, and the `hub-skills`
+  overlay playbook they served, are all gone).
 - `0021-hub-distribution-version-0.15.37` and
   `0024-hub-distribution-version-0.15.38`: **removed from the queue** (patch
   files deleted, `series` lines dropped). A patch is a loan; these stamped
@@ -116,6 +109,29 @@ separate task.
   `0.15.43` ≥ the last Hub stamp, the Hub distribution takes `0.15.43`
   directly — same convention as `fcf2606b` keeping `commit` at the pin while
   `version` tracks the distribution line.
+
+## Orchestrate sunset (user ruling, 2026-11-19)
+
+- The maintainer ruled on 2026-11-19 that `orchestrate` follows upstream's
+  sunset: cursor/plugins 0.15.43 removed the playbook and every reference
+  (routing, README row and counts, guide sentences, poteto-help), and the
+  Hub does not keep it as an independent extension. This reverses the
+  post-review restorations recorded above and deletes the `hub-skills`
+  portable-host overlay copy (`hub-skills/poteto-mode/playbooks/orchestrate.md`,
+  added in #372 when upstream still shipped the playbook; no recorded
+  keep-without-upstream decision ever existed — archaeology on 2026-11-19
+  checked PR #372, `evidence/pstack-origin-main-selective-reconciliation-2026-11-05.md`
+  and `docs/research/2026-11-11-pstack-upstream-gap.md`).
+- Concretely: `0024-hub-orchestrate-routing-restore` left the queue; the
+  orchestrate hunks left `0022`; the overlay playbook file was deleted; the
+  tool-mapping references dropped `orchestrate` from their fan-out
+  enumerations (`codex-tools.md`, `muse-tools.md`, `copilot-tools.md` in
+  `hub-skills`, mirrored into the five trees); generated docs count
+  upstream's twenty-two playbooks again; the distribution test asserts no
+  orchestrate playbook ships anywhere. The 2026-11-05
+  `pstack-origin-main-selective-reconciliation` release-review gate for
+  long-running multi-agent orchestration stays open as a separate question
+  and is not satisfied by this sunset.
 
 ## #1236 model-routing adaptation (hub-adapters / hub-runtime)
 

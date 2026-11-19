@@ -35,7 +35,7 @@ poteto-mode's Subagents section sets Claude-specific defaults (`subagent_type: "
 - `subagent_spawn` children already run alongside your turn, so `run_in_background: true` has no separate flag. Issue the dispatch and continue; the result arrives when the child finishes.
 - `readonly: true` (reviewers and `how`'s explainer) has no flag. Say in the objective that the child must not change files, and review its diff anyway.
 - A role value's `@<level>`, or the `default effort` line, passes as the dispatch's effort field: `effort` on a Workflow child. `subagent_spawn` has no effort field and keeps the session's effort, so name the level it needs in the objective when the job turns on it. `session` sets nothing.
-- `isolation: "worktree"` maps to `worktree_isolation` on `subagent_spawn`, or `isolation` on a Workflow child. Muse runs every subagent on this machine, so the **swarm** skill's workers and the fan-out playbooks (`orchestrate`, `autopilot-full`, `autopilot-stack`) isolate writers with worktrees, as on Claude Code.
+- `isolation: "worktree"` maps to `worktree_isolation` on `subagent_spawn`, or `isolation` on a Workflow child. Muse runs every subagent on this machine, so the **swarm** skill's workers and the fan-out playbooks (`autopilot-full`, `autopilot-stack`) isolate writers with worktrees, as on Claude Code.
 - A completion notice on Muse means the child finished; the Claude Code caveat about a `completed` agent that keeps running does not apply. Stop an agent you abandon with `subagent_cancel` and confirm it stopped before replacing it.
 - Keep the rest of the policy unchanged. Pass file pointers not inlined context, give each worker its own worktree or branch when they write, review every subagent's diff yourself.
 

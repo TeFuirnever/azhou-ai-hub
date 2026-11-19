@@ -1,5 +1,4 @@
-Description: bind Claude model sheet instructions to the SessionStart hook config root;
- restore the Hub-kept playbook rows and counts
+Description: bind Claude model sheet instructions to the SessionStart hook config root
 Author: Azhou AI Hub
 Forwarded: not-needed
 
@@ -7,13 +6,6 @@ Claude Code can auto-load rules files, but the generated session-start.sh
 reads pstack-models.md from CLAUDE_CONFIG_DIR (or the user .claude root).
 The pinned upstream adapter instructs setup to write a different path.
 Correct only the downstream quilt copy, retaining immutable upstream bytes.
-
-Upstream removed the `orchestrate` playbook and its README table row before
-the 0.15.43 pin and trimmed the playbook counts to twenty-two. The Hub
-overlay keeps a portable-host `orchestrate` playbook, so the generated trees
-still ship twenty-three playbooks. Restore the row and the counts in the
-README and the poteto-mode guide, the same downstream-only way this patch
-restores the `gpt-*` row below.
 
 --- a/pstack/README.md
 +++ b/pstack/README.md
@@ -24,34 +16,6 @@ restores the `gpt-*` row below.
 +claude code prefixes plugin commands and agents, so `/poteto-mode` is `/pstack-azhouzhou:poteto-mode`. the [claude code adapter](./docs/harness/claude-code.md) maps every other cursor name. in claude code, `/pstack-azhouzhou:setup-pstack` writes your model choices to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md`, and a step that needs a cursor-only feature, such as bugbot or automations, is skipped with a one-line note.
  
  claude code installs a generated copy of pstack, including this readme and the guide, from [`harness/pstack/`](https://github.com/cursor/plugins/tree/main/harness/pstack) at the repository root. after you change pstack, run `node scripts/generate-pstack-harness-trees.mjs` from the repository root and commit the result. ci fails while the generated copy is out of date.
-@@ -51,5 +51,5 @@
- ### just use [`/poteto-mode`](./skills/poteto-mode/SKILL.md)
-
--this skill is the main shortcut. i use it whenever i need the agent to do rigorous engineering work. it comes with twenty-two playbooks:
-+this skill is the main shortcut. i use it whenever i need the agent to do rigorous engineering work. it comes with twenty-three playbooks:
-
- ```
-@@ -65,3 +65,3 @@
- <details>
--<summary>the twenty-two playbooks</summary>
-+<summary>the twenty-three playbooks</summary>
-
-@@ -82,5 +82,6 @@
- | [babysit](./skills/poteto-mode/playbooks/babysit.md) | drive a pr or a stack to merge-ready: conflicts, review threads, ci. |
- | [shipping](./skills/poteto-mode/playbooks/shipping.md) | independently verify a green stack, then land the contiguous verified run bottom-up through github by default or origin when available. |
- | [autonomous run](./skills/poteto-mode/playbooks/autonomous-run.md) | drive a long task to completion without stopping. |
-+| [orchestrate](./skills/poteto-mode/playbooks/orchestrate.md) | a standing project handed to one coordinator chat: multi-day, many stacked prs, fleets of subagents. |
- | [autopilot-full](./skills/poteto-mode/playbooks/autopilot-full.md) | run independent prs to merged with one owner per pr. a swarm verifies each code-ready head, and every later change to the patch gets a fresh check. |
- | [autopilot-stack](./skills/poteto-mode/playbooks/autopilot-stack.md) | autopilot-full without the merge. build and verify prs for the operator to review and land, stacking a pr only on a pr it builds on. |
---- a/pstack/docs/guide/02-poteto-mode.md
-+++ b/pstack/docs/guide/02-poteto-mode.md
-@@ -1,5 +1,5 @@
- # Route work through `/poteto-mode`
-
--`/poteto-mode` is the front door. You give it a goal, it matches one of twenty-two playbooks, copies that playbook's steps into the todo list, and calls the other skills as the steps need them. In this page you learn what a good prompt looks like, and how little of one you actually need.
-+`/poteto-mode` is the front door. You give it a goal, it matches one of twenty-three playbooks, copies that playbook's steps into the todo list, and calls the other skills as the steps need them. In this page you learn what a good prompt looks like, and how little of one you actually need.
-
- ![A dispatcher pulls a switch lever to route robots on rail handcars toward lit gates, under a /poteto-mode departure board listing BUG FIX, FEATURE, and INVESTIGATION.](./images/router.jpg)
 --- a/pstack/docs/harness/claude-code.md
 +++ b/pstack/docs/harness/claude-code.md
 @@ -36,14 +36,14 @@
