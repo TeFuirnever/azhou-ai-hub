@@ -28,7 +28,7 @@ Doctor stays read-only. Removing residual installs and rewriting hook paths are 
 
 ## Known rename map
 
-Canonical renames recorded in `CHANGELOG.md` (#178-#183):
+Canonical renames recorded in `CHANGELOG.md` (#178-#183, the #326 brand-prefix pass and #496):
 
 | Renamed away | Canonical now |
 | --- | --- |
@@ -37,7 +37,20 @@ Canonical renames recorded in `CHANGELOG.md` (#178-#183):
 | repo-pedant | super-repo-pedant |
 | lavish | super-lavish |
 | llm-wiki | super-llm-wiki |
+| arch-doc | super-arch-doc |
+| archify | super-archify |
+| asd-ste100 | super-asd-ste100 |
+| ask-azhou | super-ask-azhou |
+| autoresearch | super-autoresearch |
+| azhou-doctor | super-azhou-doctor |
+| azhou-info | super-azhou-info |
+| azhou-setup | super-azhou-setup |
+| azhou-verify | super-azhou-verify |
+| eli5 | super-eli5 |
+| excalidraw-diagram | super-excalidraw-diagram |
+| gh-axi | super-gh-axi |
+| session-insights | super-session-insights |
 
-`super-ci-test-reliability`, `super-prose-standard` and `super-llm-wiki` are maintainer retirements recorded in `CHANGELOG.md`: no canonical replacement exists, so the reinstall clause of migration step 3 does not apply to them — confirm and remove the residue, and record the removal.
+`super-ci-test-reliability`, `super-prose-standard`, `super-llm-wiki` and `super-autoresearch` (the latter retired with #333) are maintainer retirements recorded in `CHANGELOG.md`: no canonical replacement exists, so the reinstall clause of migration step 3 does not apply to them — confirm and remove the residue, and record the removal. For these retired targets a stale hook entry is removed outright once confirmed unused rather than rewritten per step 2: no canonical replacement exists to install, and rewriting to the retired name only leaves a dead reference that keeps the check failing.
 
 A future canonical rename lands its host-side migration guidance in the same commit as the rename; this page is the runbook step those commits update.

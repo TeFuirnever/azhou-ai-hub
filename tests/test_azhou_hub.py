@@ -963,7 +963,7 @@ class AzhouHubCliTest(unittest.TestCase):
         doc = (ROOT / "skills" / "super-azhou-doctor" / "references" / "host-migration.md").read_text(encoding="utf-8")
         table_rows = {
             match.group(1).strip(): match.group(2).strip()
-            for match in re.finditer(r"^\| ([a-z-]+) \| (super-[a-z-]+) \|$", doc, re.MULTILINE)
+            for match in re.finditer(r"^\| ([a-z0-9-]+) \| (super-[a-z0-9-]+) \|$", doc, re.MULTILINE)
         }
         self.assertEqual(azhou_hub.KNOWN_RENAMES, table_rows)
 
