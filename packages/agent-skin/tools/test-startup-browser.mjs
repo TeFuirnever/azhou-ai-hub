@@ -2765,7 +2765,7 @@ try {
     assert.equal(childAPI.state.runId, initial.runId);
     const unsavedDraft = await cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
-      const title=doc.querySelector('input[type="text"]');
+      const title=doc.querySelector('input[maxlength="16"]');
       title.value='Discard draft';title.dispatchEvent(new Event('input',{bubbles:true}));
       const strength=doc.querySelector('input[type="range"]');
       strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -2809,7 +2809,7 @@ try {
       'the settings-intent frame does not apply a fallback or draft wallpaper');
     const defaultPanel = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      return {title:doc.querySelector('input[type="text"]').value,
+      return {title:doc.querySelector('input[maxlength="16"]').value,
         strength:doc.querySelector('input[type="range"]').value,
         wallpaper:window.__startupAPI.status().wallpaper};
     })()`);
@@ -2818,7 +2818,7 @@ try {
     assert.deepEqual(defaultPanel.wallpaper, { applied: false, reason: 'disabled', imageDecoded: false });
     const previewLaunch = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const title=doc.querySelector('input[type="text"]');
+      const title=doc.querySelector('input[maxlength="16"]');
       title.value='Local draft';title.dispatchEvent(new Event('input',{bubbles:true}));
       const strength=doc.querySelector('input[type="range"]');
       strength.value='42';strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -2838,7 +2838,7 @@ try {
       const close=overlay.querySelector('button[data-agent-skin-settings-preview-close]');
       return {
         open:overlay.hidden!==true,settingsOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open===true,
-        title:doc.querySelector('input[type="text"]')?.value,
+        title:doc.querySelector('input[maxlength="16"]')?.value,
         previewStage:!!preview.contentDocument.querySelector('[data-agent-skin-stage]'),
         hasCloseButton:!!close,modal:overlay.getAttribute('role')==='dialog'&&overlay.getAttribute('aria-modal')==='true',
         runCount:window.__startupAnimationRuns.length,state:window.__startupAPI.status()};
@@ -2918,7 +2918,7 @@ try {
     const previewClosed = await until(() => cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
       const overlay=doc?.querySelector('[data-agent-skin-settings-preview]');
-      const title=doc?.querySelector('input[type="text"]');
+      const title=doc?.querySelector('input[maxlength="16"]');
       const active=doc?.activeElement;
       return (!overlay||!overlay.isConnected||overlay.hidden===true)
         &&doc.querySelector('dialog[data-agent-skin-settings]')?.open===true
@@ -2980,7 +2980,7 @@ try {
       if(overlay?.isConnected&&overlay.hidden!==true)return false;
       const launch=doc?.querySelector('[data-agent-skin-preview-animation]');
       return {settingsOpen:doc?.querySelector('dialog[data-agent-skin-settings]')?.open===true,
-        title:doc?.querySelector('input[type="text"]')?.value,
+        title:doc?.querySelector('input[maxlength="16"]')?.value,
         focused:doc?.activeElement===launch,runCount:window.__startupAnimationRuns.length,
         state:window.__startupAPI.status()};
     })()`), 18000, 'the full-duration animation preview ends naturally');
@@ -3042,7 +3042,7 @@ try {
       return {state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
         frameCount:document.querySelectorAll('iframe[aria-label]').length,
         dialogOpen:doc?.querySelector('dialog')?.open,
-        draftTitle:doc?.querySelector('input[type="text"]')?.value||''};
+        draftTitle:doc?.querySelector('input[maxlength="16"]')?.value||''};
     })()`);
     assert.equal(conflictState.state.phase, 'settings', 'conflicted settings remain in their settings run');
     assert.equal(conflictState.state.runId, settingsRun.runId, 'conflicted settings do not start a new run');
@@ -3077,14 +3077,14 @@ try {
     assert.ok(retrySettings.runId > settingsRun.runId);
     const retryValues = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      return {title:doc.querySelector('input[type="text"]').value,
+      return {title:doc.querySelector('input[maxlength="16"]').value,
         strength:doc.querySelector('input[type="range"]').value};
     })()`);
     assert.deepEqual(retryValues, { title: 'External', strength: '42' },
       'reopening discards the stale draft and reads the value committed by the other page');
     await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const title=doc.querySelector('input[type="text"]');
+      const title=doc.querySelector('input[maxlength="16"]');
       title.value='Saved title';title.dispatchEvent(new Event('input',{bubbles:true}));
       doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
     })()`);
@@ -3097,7 +3097,7 @@ try {
         state:window.__startupAPI.status(),runCount:window.__startupAnimationRuns.length,
         frameCount:document.querySelectorAll('iframe[aria-label]').length,
         dialogOpen:doc.querySelector('dialog[data-agent-skin-settings]')?.open,
-        title:doc.querySelector('input[type="text"]')?.value,
+        title:doc.querySelector('input[maxlength="16"]')?.value,
         retry:doc.querySelector('footer button:last-child')?.textContent,
         applications:window.__fixtureWallpaperApplications||0,status:status.textContent,
         startupNoticeDisplay:getComputedStyle(startupNotice).display,entryDisplay:getComputedStyle(entry).display}:false;
@@ -3180,7 +3180,7 @@ try {
         const state=window.__startupAPI.status();
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
         return {state:{phase:state.phase,runId:state.runId},
-          title:doc.querySelector('input[type="text"]').value,
+          title:doc.querySelector('input[maxlength="16"]').value,
           subtitle:doc.querySelector('textarea').value,
           strength:doc.querySelector('input[type="range"]').value};
       })()`);
@@ -3407,7 +3407,7 @@ try {
     })()`), 5000, 'actual settings dialog opens in the current play run');
     const draftBefore = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[title="阿舟启动动画"]').contentDocument;
-      const title=doc.querySelector('[data-agent-skin-settings] input[type="text"]');
+      const title=doc.querySelector('[data-agent-skin-settings] input[maxlength="16"]');
       const strength=doc.querySelector('[data-agent-skin-settings] input[type="range"]');
       title.value='Draft survives';title.dispatchEvent(new Event('input',{bubbles:true}));
       strength.value='33';strength.dispatchEvent(new Event('input',{bubbles:true}));
@@ -3432,7 +3432,7 @@ try {
     const updated = await until(() => cdp.evaluate(`(()=>{
       const frame=document.querySelector('iframe[title="Azhou startup animation"]'),doc=frame?.contentDocument;
       const entry=document.querySelector('[data-agent-skin-entry="appearance"]'),button=entry?.shadowRoot?.querySelector('button');
-      const dialog=doc?.querySelector('[data-agent-skin-settings]'),title=dialog?.querySelector('input[type="text"]');
+      const dialog=doc?.querySelector('[data-agent-skin-settings]'),title=dialog?.querySelector('input[maxlength="16"]');
       const titleLabelText=title?.labels?.[0]?.textContent.trim()||'';
       if(!frame||frame.title!=='Azhou startup animation'||doc.documentElement.lang!=='en'
         ||doc.documentElement.dataset.theme!=='light'||dialog?.querySelector('h2')?.textContent!=='Azhou · Theme & Appearance'
@@ -3486,11 +3486,12 @@ try {
       const value=key=>doc.querySelector('[data-agent-skin-setting-value="'+key+'"]').textContent;
       return {theme:value('theme'),locale:value('locale'),
         sections:[...doc.querySelectorAll('[data-agent-skin-settings-section]')].map(el=>el.dataset.agentSkinSettingsSection),
-        preferenceControls:doc.querySelectorAll('select:not([data-agent-skin-theme-choice]):not([data-agent-skin-theme-alpha-mode]),input[name="theme"],input[name="locale"],input[name="reducedMotion"]').length,
-        workspaceThemeControls:doc.querySelectorAll('select[data-agent-skin-theme-choice],select[data-agent-skin-theme-alpha-mode]').length};
+        preferenceControls:doc.querySelectorAll('select:not([data-agent-skin-theme-choice]):not([data-agent-skin-theme-alpha-mode]):not([data-agent-skin-preset-list]):not([data-agent-skin-dream-list]),input[name="theme"],input[name="locale"],input[name="reducedMotion"]').length,
+        workspaceThemeControls:doc.querySelectorAll('select[data-agent-skin-theme-choice],select[data-agent-skin-theme-alpha-mode]').length,
+        directoryControls:doc.querySelectorAll('select[data-agent-skin-preset-list],select[data-agent-skin-dream-list]').length};
     })()`);
     assert.deepEqual(inheritedSettings, { theme: 'Light', locale: 'en',
-      sections: ['workspace', 'startup', 'about'], preferenceControls: 0, workspaceThemeControls: 2 });
+      sections: ['workspace', 'startup', 'about'], preferenceControls: 0, workspaceThemeControls: 2, directoryControls: 2 });
     await cdp.call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await until(() => cdp.evaluate(`document.querySelector('iframe[title="Azhou startup animation"]').contentDocument
       .querySelector('[data-agent-skin-setting-value="reducedMotion"]').textContent==='On'`), 5000, 'system motion readout')
@@ -3624,7 +3625,7 @@ try {
     })()`), 5000, 'settings dialog opens before the committed reload setup');
     await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const textFields=[...doc.querySelectorAll('input[type="text"]')];
+      const textFields=[doc.querySelector('input[maxlength="16"]'),doc.querySelector('input[maxlength="48"]')];
       for(const [control,value] of [[textFields[0],${JSON.stringify(fields.introTitle)}],
         [textFields[1],${JSON.stringify(fields.introCaption)}],
         [doc.querySelector('textarea'),${JSON.stringify(fields.artworkSubtitle)}]]){
@@ -3662,7 +3663,7 @@ try {
     'the refreshed top-level page opens its actual settings dialog for a field readback');
     const reloadedFields = await cdp.evaluate(`(()=>{
       const doc=document.querySelector('iframe[aria-label]').contentDocument;
-      const textFields=[...doc.querySelectorAll('input[type="text"]')];
+      const textFields=[doc.querySelector('input[maxlength="16"]'),doc.querySelector('input[maxlength="48"]')];
       return {introTitle:textFields[0].value,
         introCaption:textFields[1].value,
         artworkSubtitle:doc.querySelector('textarea').value,
@@ -3706,7 +3707,7 @@ try {
         const state=window.__startupAPI.status();
         const frame=document.querySelector('iframe[aria-label]');
         const dialog=frame?.contentDocument.querySelector('dialog');
-        const title=frame?.contentDocument.querySelector('input[type="text"]')?.value;
+        const title=frame?.contentDocument.querySelector('input[maxlength="16"]')?.value;
         return state.phase==='settings'&&state.runId===${expectedRunId}&&dialog?.open?{state,title}:false;
       })()`), 10000, 'settings panel opens before save ' + round);
       if (expectedTitle === null) expectedTitle = panel.title;
@@ -3714,7 +3715,7 @@ try {
       const nextTitle = 'Saved run ' + String(round).padStart(2, '0');
       const draft = await cdp.evaluate(`(()=>{
         const doc=document.querySelector('iframe[aria-label]').contentDocument;
-        const title=doc.querySelector('input[type="text"]');
+        const title=doc.querySelector('input[maxlength="16"]');
         title.value=${JSON.stringify(nextTitle)};title.dispatchEvent(new Event('input',{bubbles:true}));
         return {value:title.value,buttonLabel:doc.querySelector('[data-agent-skin-settings] footer button:last-child')?.textContent.trim()};
       })()`);
@@ -5413,7 +5414,7 @@ try {
                   overflow:dialog.scrollWidth>dialog.clientWidth+1||d.documentElement.scrollWidth>frame.contentWindow.innerWidth+1
                     ||panel?.scrollWidth>panel?.clientWidth+1};});
               const startup=dialog.querySelector('[data-agent-skin-settings-tab=startup]');startup.click();
-              const fields=[...dialog.querySelectorAll('[maxlength]')].map(e=>{const limit=e.maxLength;
+              const fields=[...dialog.querySelector('[data-agent-skin-settings-section=startup]').querySelectorAll('[maxlength]')].map(e=>{const limit=e.maxLength;
                 e.value=${JSON.stringify(locale==='en'?'A':'舟')}.repeat(limit);e.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));
                 const result={limit,length:e.value.length,name:e.labels?.[0]?.textContent.trim()||'',visible:hit(e).visible,
                   horizontalOverflow:dialog.scrollWidth>dialog.clientWidth+1||d.documentElement.scrollWidth>frame.contentWindow.innerWidth+1};
@@ -5425,6 +5426,11 @@ try {
               const detailsOpened=details.open;
               const version=dialog.querySelector('[data-agent-skin-setting-value=version]')?.textContent.trim();
               dialog.querySelector('[data-agent-skin-settings-tab=workspace]').click();
+              const presetDetails=dialog.querySelector('[data-agent-skin-disclosure=presets]'),preset=dialog.querySelector('[data-agent-skin-preset-name]');
+              presetDetails.open=true;preset.value=${JSON.stringify(locale==='en'?'A':'舟')}.repeat(preset.maxLength);
+              preset.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));
+              const presetField={limit:preset.maxLength,length:preset.value.length,name:preset.labels?.[0]?.textContent.trim()||'',...hit(preset)};
+              preset.value='';preset.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));presetDetails.open=false;
               const range=dialog.querySelector('input[type=range]'),preview=dialog.querySelector('[data-agent-skin-workspace-preview]');
               const choose=dialog.querySelector('[data-agent-skin-image-action=artwork]');
               const strength=[0,42,75].map(value=>{range.value=String(value);range.dispatchEvent(new d.defaultView.Event('input',{bubbles:true}));
@@ -5451,7 +5457,7 @@ try {
                 dialog:{left:r.left,right:r.right,scroll:dialog.scrollWidth,client:dialog.clientWidth,root:d.documentElement.scrollWidth},
                 version:dialog.querySelector('[data-agent-skin-running-version]')?.textContent.trim(),titleSize:parseFloat(css(title).fontSize),
                 titleWeight:parseInt(css(title).fontWeight,10),tabs:tabs.map(t=>t.textContent.trim()),sections,
-                activeOverflow:active.scrollWidth>active.clientWidth+1,fields,previewAction:{name:previewAction.textContent.trim(),...previewActionHit},
+                activeOverflow:active.scrollWidth>active.clientWidth+1,fields,presetField,previewAction:{name:previewAction.textContent.trim(),...previewActionHit},
                 summary:{name:summary.textContent.trim(),...summaryHit,opened:detailsOpened,version},
                 workspace:{preview:hit(preview),previewName:preview.getAttribute('aria-label'),rangeName:range.labels?.[0]?.textContent.trim(),choose:{name:choose.textContent.trim(),...hit(choose)}},
                 strength,footer,contrast};
@@ -5465,6 +5471,8 @@ try {
             assert.ok(cell.dialog.left>=-1&&cell.dialog.right<=viewport.width+1&&cell.dialog.scroll<=cell.dialog.client+1
               &&cell.dialog.root<=viewport.width+1&&!cell.activeOverflow, 'settings panel fits the CSS viewport');
             assert.deepEqual(cell.fields.map(f=>[f.limit,f.length,f.empty]), [[16,16,true],[48,48,true],[60,60,true]]);
+            assert.deepEqual([cell.presetField.limit,cell.presetField.length],[40,40]);
+            assert.ok(cell.presetField.name&&cell.presetField.visible&&cell.presetField.hit,'preset name is labeled and reachable');
             assert.ok(cell.fields.every(f=>f.name&&f.visible&&!f.horizontalOverflow),
               'bounded text fields have visible names and do not overflow horizontally: '+JSON.stringify({locale,theme,width:viewport.width,fields:cell.fields}));
             if (!cell.previewAction.hit) {
@@ -6083,7 +6091,7 @@ try {
       assert.equal(themePage.source, '默认设置');
       const draft = await cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]'),doc=frame.contentDocument;
-        const title=doc.querySelector('input[type="text"]');
+        const title=doc.querySelector('input[maxlength="16"]');
         title.value='生成载荷保存验证';title.dispatchEvent(new Event('input',{bubbles:true}));
         const button=doc.querySelector('[data-agent-skin-settings] footer button:last-child');
         if(!button)throw new Error('generated payload settings save control is missing');
@@ -6120,7 +6128,7 @@ try {
       assert.equal(await cdp.evaluate('window.__fixtureHost.__azhouStartup.openSettings()'), true);
       const persisted = await until(() => cdp.evaluate(`(()=>{
         const frame=document.querySelector('iframe[aria-label]');
-        const title=frame?.contentDocument.querySelector('input[type="text"]');
+        const title=frame?.contentDocument.querySelector('input[maxlength="16"]');
         const state=window.__startupAPI.status();
         return state.phase==='settings'&&title?{title:title.value,runId:state.runId}:false;
       })()`), 10000, 'saved generated payload settings are loaded into a newly opened settings run');
@@ -6351,9 +6359,11 @@ try {
           const textFields=[...dialog.querySelectorAll('input[type="text"],textarea')];
           const values=['阿舟的 Agent 实验室','Azhou / Intelligent Agents & Creative Workflows',
             '和阿舟一起，把真实工作里的复杂想法变成可以检查、可以复用、可以交付的结果。'];
-          textFields.forEach((field,index)=>{
-            const limit=field.maxLength>0?field.maxLength:values[index%values.length].length;
-            field.value=values[index%values.length].slice(0,limit);
+          textFields.forEach(field=>{
+            const value=field.matches('[data-agent-skin-preset-name]')?'本机外观预设名称':
+              field.maxLength===16?values[0]:field.maxLength===48?values[1]:values[2];
+            const limit=field.maxLength>0?field.maxLength:value.length;
+            field.value=value.slice(0,limit);
             field.dispatchEvent(new win.Event('input',{bubbles:true}));
           });
           const strength=dialog.querySelector('input[type="range"]');
