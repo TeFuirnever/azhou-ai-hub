@@ -39,7 +39,7 @@ class AgentSkinCiDependenciesTest(unittest.TestCase):
         def result(docs_only, **checks):
             return subprocess.run(
                 ['sh', '-e', '-c', command], env={**env, 'DOCS_ONLY': docs_only, **checks},
-                capture_output=True, text=True,
+                capture_output=True,
             ).returncode
 
         self.assertEqual(result('false'), 0)
