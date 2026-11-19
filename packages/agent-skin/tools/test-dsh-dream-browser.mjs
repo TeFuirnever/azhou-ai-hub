@@ -64,7 +64,13 @@ try{
   await close();
  }
  await ev(`document.documentElement.lang='en'`);await delay(100);await open();
- await ev(`(()=>{const d=${panel},w=d.defaultView,input=d.querySelector('[data-agent-skin-dream-import]'),t=new w.DataTransfer();t.items.add(new w.File([${JSON.stringify(capsule)}],'dsh.json',{type:'application/json'}));input.files=t.files;input.dispatchEvent(new w.Event('change',{bubbles:true}))})()`);
+ const globalObject=await cdp.call('Runtime.evaluate',{expression:'globalThis'});
+ const imported=await cdp.call('Runtime.callFunctionOn',{objectId:globalObject.result.objectId,
+  functionDeclaration:`function(capsule){const d=document.querySelector('[data-fixture-settings] iframe[aria-label]').contentDocument,
+   w=d.defaultView,input=d.querySelector('[data-agent-skin-dream-import]'),t=new w.DataTransfer();
+   t.items.add(new w.File([capsule],'dsh.json',{type:'application/json'}));input.files=t.files;input.dispatchEvent(new w.Event('change',{bubbles:true}));}`,
+  arguments:[{value:capsule}],returnByValue:true});
+ assert.equal(imported.exceptionDetails,undefined);
  await until(()=>ev(`(()=>{const d=${panel};return d.querySelector('[data-agent-skin-dream-list]').options.length===1&&!d.querySelector('[data-agent-skin-dream-apply]').disabled})()`),'imported');
  assert.equal(await ev('window.__azhouWallpaper.status().mainPaintApplied===true'),false);report.checks.push({importStoredWithoutApplying:true});
  await ev(`(${panel}).querySelector('[data-agent-skin-dream-apply]').click()`);
