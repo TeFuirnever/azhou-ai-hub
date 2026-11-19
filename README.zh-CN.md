@@ -40,6 +40,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
+npx skills add TeFuirnever/azhou-ai-hub --skill super-pdf
 ~~~
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
@@ -69,6 +70,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 | [Imagegen](skills/super-imagegen/SKILL.md) | 经本机已装的私有 <code>azhou-imagegen</code> 运行时执行准备好的本地生图请求：分流请求、跑 doctor 门禁、遵守运行锁，交付带不可变回执的输出；运行时缺失即拒绝。 | 仅契约层包装私有本地运行时：provenance 钉有基线哈希，仓库零私有字节；fail-closed setup。尚无行为 benchmark。 |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | 为 ADHD 读者塑形输出：下一步动作先行、多步工作编号分步、每回合重述状态、压制岔题；直到读者说出停止短语才解除。 | 在冻结上游 commit <code>1ecea199</code>（MIT）上 adapted 引入：指令正文逐字保留，上游双 SHA-256 钉入 provenance；完整性测试钉住 provenance、许可副本与五条 Azhou 呈现约束。尚无行为 benchmark。 |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | 经 agent 人体工学的封装 CLI 操作 GitHub：issues、PR、堆叠 PR、讨论、CI 运行与触发、release、仓库、label、gist、Projects (v2)、Actions secrets/variables、搜索与原始 API；仓库规则点名了自己的工具时以仓库规则为准。 | 在锁定的上游正式发布 <code>gh-axi-v0.1.51</code>（commit <code>911a0868</code>，[kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi)）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
+| [Pdf](skills/super-pdf/SKILL.md) | 处理 PDF 文件：读取或提取文本、表格与图像，合并、拆分、旋转页面、加水印、创建新 PDF、填写表单、加密解密与扫描件 OCR——点名或要求产出 .pdf 文件即触发。 | 在钉住的 commit <code>e4bb5d960d</code>（Apache-2.0，许可副本逐字节保留并记录占位版权行异常）上自 [anthropics/skills](https://github.com/anthropics/skills) faithful 引入：指南正文逐字嵌入，FORMS.md/REFERENCE.md 与八个 vendored 脚本逐字节一致；fail-closed 依赖 setup。完整性测试钉住 vendored 摘要。尚无行为 benchmark。 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try.zh-CN-dark.jpg">
