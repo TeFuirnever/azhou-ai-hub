@@ -958,7 +958,6 @@ RESIDUE_MIGRATION_SOURCE_PATHS = {
     ".gitignore",
     "scripts/azhou_hub.py",
     "scripts/check_repository.py",
-    "scripts/migrate_canonical_super_prefix.py",
     "docs/skill-standard.md",
     "skills/super-repo-pedant/scripts/migrate_state.py",
 }
