@@ -4179,6 +4179,62 @@ test('startup imported plan is rebuilt from current source before each live appl
   assert.equal(result.applied,true);assert.equal(reads,1);assert.equal(applies,1);f.host.__azhouStartup.dispose();
 });
 
+for (const digest of [null, 'a'.repeat(64)]) for (const closeFirst of [false,true]) test(`explicit theme ${digest ? 'apply' : 'restore'} recovers after workspace replacement ${closeFirst ? 'after' : 'before'} settings close`, async () => {
+  const f=controlledHost(), specs=[], calls=[];
+  const snapshot={settings:{artwork:'data:image/png;base64,AA==',wallpaperStrength:42},
+    themeState:{schemaVersion:1,activeThemeId:'azhou-q-v3',preferencesByTheme:{}}};
+  const payload=function(...args){specs.push({send:args[13],spec:args[14]});};
+  const select=async options=>{const candidate=await options.activate(snapshot,{signal:options.signal});candidate.transaction.finalize();return {applied:true};};
+  payload.createImageSettings=()=>({async load(){return {reason:''};},applyDreamTheme:(_digest,options)=>select(options),restoreAzhouTheme:select,dispose(){}});
+  payload.applyWallpaper=async (_request,current,_signal,options)=>{
+    const wallpaper={owner:'azhou.codex-startup-animation',version:'0.9.0',status:()=>({applied:true,imageDecoded:true}),dispose(){}};
+    calls.push({wallpaper,options});if(current())f.host.__azhouWallpaper=wallpaper;
+    return {applied:true,transaction:{current:()=>true,finalize:()=>true,rollback:()=>true}};
+  };
+  installStartup(payload,f.host,pageAdapter);const api=f.host.__azhouStartup,{send,spec}=specs.at(-1);
+  try {
+    send({type:'azhou-startup',runId:spec.runId,action:'ready'});send({type:'azhou-startup',runId:spec.runId,action:'settings-open'});
+    assert.equal((await send({type:'azhou-startup',runId:spec.runId,action:'theme-apply',capsuleSha256:digest,expectedToken:'b'.repeat(64)})).applied,true);
+    if(closeFirst)send({type:'azhou-startup',runId:spec.runId,action:'settings-close'});
+    delete f.host.__azhouWallpaper;calls[0].options.onWorkspaceInvalidated({api:calls[0].wallpaper});
+    if(!closeFirst){assert.equal(calls.length,1);send({type:'azhou-startup',runId:spec.runId,action:'settings-close'});}
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(calls.length,2,'workspace change starts one recovery');
+    assert.equal(api.status().wallpaper.applied,true);
+    calls[0].options.onWorkspaceInvalidated({api:calls[0].wallpaper});
+    assert.equal(calls.length,2,'retired owner cannot trigger another recovery');
+  } finally {api.dispose();}
+});
+
+for (const stage of ['success','shell-timeout','source-timeout']) test(`imported wallpaper retry ${stage}`,async()=>{
+  const f=controlledHost(), specs=[];let initial,attempts=0,reads=0,finish;
+  const image='data:image/png;base64,AA==';
+  const themeState={schemaVersion:2,revision:1,imagesBinding:'a'.repeat(64),selection:{kind:'imported',profile:'codex-main-literal-paint/v1',
+    capsuleSha256:'b'.repeat(64),archiveSha256:'c'.repeat(64),image:{name:'background.png',mime:'image/png',bytes:1,sha256:'e'.repeat(64),width:1,height:1},
+    paint:{rgba:[1,2,3,1],backgroundImage:'none',sourceDeclarationCount:1}}};
+  const snapshot={status:'valid',settings:{artwork:image,wallpaperStrength:42},themeState};
+  const payload=function(...args){const send=args[13],spec=args[14];specs.push({send,spec});
+    initial=send({type:'azhou-startup',action:'background',runId:spec.runId,image,strength:42,themeState});send({type:'azhou-startup',action:'ready',runId:spec.runId});};
+  payload.createDreamThemeStyle=()=>({validateThemeSnapshot});
+  payload.createImageSettings=()=>({async loadSnapshot(){if(++reads===2&&stage==='source-timeout')return new Promise((_resolve,reject)=>{finish=()=>reject(new Error('late source failure'));});return snapshot;},dispose(){}});
+  payload.applyWallpaper=async (_request,current)=>{
+    if(++attempts===1)return {applied:false,reason:'wallpaper-unsupported',failureCode:'apply-failed'};
+    if(stage==='shell-timeout')await new Promise(resolve=>{finish=resolve;});
+    if(current())f.host.__azhouWallpaper={owner:'azhou.codex-startup-animation',version:'0.9.0',status:()=>({applied:true,imageDecoded:true}),dispose(){}};
+    return {applied:true};
+  };
+  installStartup(payload,f.host,pageAdapter);const api=f.host.__azhouStartup;
+  try {
+    await initial;const {send,spec}=specs.at(-1);send({type:'azhou-startup',runId:spec.runId,action:'complete',skipped:false});
+    const retry=api.retryWallpaper();await new Promise(resolve=>setImmediate(resolve));
+    if(stage!=='success'){assert.equal(attempts,stage==='shell-timeout'?2:1);f.timers.at(-1).callback();}
+    const result=await retry;
+    assert.equal(result.retried,true);assert.equal(result.reason,stage==='success'?undefined:'timeout');
+    if(stage!=='success'){finish();await new Promise(resolve=>setImmediate(resolve));assert.equal(api.status().wallpaper.applied,false);assert.equal(api.status().wallpaper.failureCode,'retry-timeout');}
+    else assert.equal(result.wallpaper.applied,true);
+  } finally {api.dispose();}
+});
+
 test('newer imported source admission wins even when the older source read completes first',async()=>{
   const f=controlledHost();const specs=[],reads=[],paints=[];
   const image='data:image/png;base64,AA==';

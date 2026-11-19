@@ -1612,6 +1612,7 @@ class PageController {
     const requireCurrent = () => {if(!current())throw Object.assign(new Error('operation-cancelled'),{reason:'operation-cancelled'});};
     operation.settlement=Promise.resolve().then(async()=>{
       let settingsAPI, appliedSnapshot;
+      let committed=false;
       try {
         if(previous?.settlement)await previous.settlement;
         requireCurrent();
@@ -1627,7 +1628,10 @@ class PageController {
             themeState:snapshot.settings.wallpaperStrength===0 || selection?.kind==='imported'?null:snapshot.themeState ?? null,
             ...(selection?.kind==='imported'?{mainPaint:{profile:selection.profile,...selection.paint}}:{})};
           const candidate=await this.wallpaperApply(request,current,signal,{transactional:true,
-            onWorkspaceInvalidated:()=>operation.abort.abort()});
+            onWorkspaceInvalidated:notice=>{
+              if(committed)this.#handleWorkspaceInvalidated(notice,runId,operation.generation);
+              else operation.abort.abort();
+            }});
           if(!current()){try{candidate?.transaction?.rollback();}catch{}requireCurrent();}
           return candidate;
         }};
@@ -1648,6 +1652,7 @@ class PageController {
         this.wallpaperDisabled=false;
         this.state.wallpaper=this.#wallpaperStatus(wallpaper.api);
         this.startupWallpaperFailure=null;this.#updateStartupWallpaperNotice();
+        committed=true;
         return result;
       } catch(error) {
         const wallpaper=wallpaperRecord(this.host,this.wallpaperOwner);
@@ -1657,12 +1662,20 @@ class PageController {
         }
         return {applied:false,reason:['settings-conflict','settings-quota','settings-blocked','operation-cancelled','operation-timeout'].includes(error?.reason)
           ? error.reason:'apply-unavailable'};
-      } finally {try{settingsAPI?.dispose();}catch{}}
+      } finally {
+        try{settingsAPI?.dispose();}catch{}
+        if(this.wallpaperApplication===operation){
+          this.wallpaperApplication=null;
+          if(operation.workspaceChanged && operation.generation===this.wallpaperGeneration
+            && !this.state.wallpaper.applied && !this.wallpaperDisabled)this.#queueWorkspaceRecovery();
+        }
+      }
     });
     return operation.settlement;
   }
 
   async #applyWallpaper(message, runId, frame, retry = false, embed = null, dshPreparation = null, workspaceRecovery = null) {
+    let reservedGeneration=null;
     if (message.themeState != null && message.themeState.schemaVersion !== 1) {
       let settingsAPI;
       let admissionGeneration=this.wallpaperGeneration;
@@ -1676,6 +1689,7 @@ class PageController {
         if(theme.selection.kind==='imported') {
           this.wallpaperApplication?.abort?.abort();
           admissionGeneration=++this.wallpaperGeneration;
+          reservedGeneration=admissionGeneration;
           settingsAPI=this.#snapshotSettingsAPI(this.pageAdapter.observeAppearance(this.host));
           const snapshot=await settingsAPI.loadSnapshot(this.assets);
           if(!runCurrent())return {applied:false,reason:'operation-cancelled',imageDecoded:false};
@@ -1687,7 +1701,10 @@ class PageController {
           message={...message,themeState:{schemaVersion:1,revision:theme.revision,imagesBinding:theme.imagesBinding,
             activeThemeId:'azhou-q-v3',preferencesByTheme:{'azhou-q-v3':theme.selection.surfaceTransparency}}};
         }
-      } catch {return this.#setWallpaperFailure('apply-unavailable');}
+      } catch {
+        if(!runCurrent())return {applied:false,reason:'operation-cancelled',imageDecoded:false};
+        return this.#setWallpaperFailure('apply-unavailable');
+      }
       finally {try{settingsAPI?.dispose();}catch{}}
     }
     if (this.workspaceRecovery && workspaceRecovery !== this.workspaceRecovery) this.#cancelWorkspaceRecovery();
@@ -1695,7 +1712,9 @@ class PageController {
       this.#cancelDSHWallpaperPreparation();
     }
     this.wallpaperApplication?.abort?.abort();
-    const generation = ++this.wallpaperGeneration;
+    if(reservedGeneration!==null && reservedGeneration!==this.wallpaperGeneration)
+      return {applied:false,reason:'operation-cancelled',imageDecoded:false};
+    const generation = reservedGeneration ?? ++this.wallpaperGeneration;
     if (typeof message.image !== 'string' || message.image.length > 16 * 1024 * 1024
       || !BACKGROUND_DATA_URL.test(message.image) || !Number.isInteger(message.strength)
       || message.strength < 0 || message.strength > 75) {
