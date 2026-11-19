@@ -4206,6 +4206,25 @@ for (const digest of [null, 'a'.repeat(64)]) for (const closeFirst of [false,tru
   } finally {api.dispose();}
 });
 
+test('theme workspace invalidation during an uncommitted transaction rolls back',async()=>{
+  const f=controlledHost(),specs=[];let rolledBack=false,finalized=false;
+  const payload=function(...args){specs.push({send:args[13],spec:args[14]});};
+  payload.createImageSettings=()=>({async load(){return {reason:''};},async restoreAzhouTheme(options){
+    const candidate=await options.activate({settings:{artwork:'data:image/png;base64,AA==',wallpaperStrength:42},themeState:null},{signal:options.signal});
+    candidate.transaction.finalize();return {applied:true};
+  },dispose(){}});
+  payload.applyWallpaper=async (_request,_current,_signal,options)=>{
+    options.onWorkspaceInvalidated({api:{}});
+    return {applied:true,transaction:{finalize(){finalized=true;},rollback(){rolledBack=true;}}};
+  };
+  installStartup(payload,f.host,pageAdapter);const api=f.host.__azhouStartup,{send,spec}=specs.at(-1);
+  try {
+    send({type:'azhou-startup',runId:spec.runId,action:'ready'});send({type:'azhou-startup',runId:spec.runId,action:'settings-open'});
+    const result=await send({type:'azhou-startup',runId:spec.runId,action:'theme-apply',capsuleSha256:null,expectedToken:'a'.repeat(64)});
+    assert.equal(result.applied,false);assert.equal(result.reason,'operation-cancelled');assert.equal(rolledBack,true);assert.equal(finalized,false);
+  } finally {api.dispose();}
+});
+
 for (const stage of ['success','shell-timeout','source-timeout']) test(`imported wallpaper retry ${stage}`,async()=>{
   const f=controlledHost(), specs=[];let initial,attempts=0,reads=0,finish;
   const image='data:image/png;base64,AA==';
