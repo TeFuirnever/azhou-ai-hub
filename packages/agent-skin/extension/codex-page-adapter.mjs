@@ -935,6 +935,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     const activityNodes = new Set(observation.knownPaintPlanes.map(plane => plane.node));
     for (let node = observation.activeMain; node; node = node.parentElement) activityNodes.add(node);
     const structuralSelector = '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]';
+    const dotGuardAttributes = ['role', 'contenteditable', 'data-composer-layout'];
+    const dotGuardSelector = [dotDestination, dotMessagingShell, workspaceSelectors.messaging].join(',');
     const paintSelector = [structuralSelector, dotDestination, dotMessagingShell, ...Object.values(workspaceSelectors)].join(',');
     const ownRootProperties = new Set(['--azhou-wallpaper-image', '--azhou-wallpaper-wash', '--azhou-wallpaper-surface']);
     const rootStyleChanged = record => {
@@ -970,6 +972,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         if (record.type !== 'attributes') continue;
         const inside = activityNodes.has(record.target) || observation.shell.contains(record.target);
         if (!inside) continue;
+        if (dotGuardAttributes.includes(record.attributeName)
+          && (record.target.matches?.(dotGuardSelector) || record.target.querySelector?.(dotGuardSelector))) refresh = true;
         if (record.attributeName === 'data-sidebar-destination'
           || record.attributeName === 'aria-current' && record.target.matches?.(dotDestination)
           || record.attributeName === 'data-floating'
@@ -1012,7 +1016,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       observers.push(mutation);
       mutation.observe(host.document.documentElement, { subtree: true, childList: true, attributes: true, attributeOldValue: true,
         attributeFilter: ['class', 'style', 'hidden', 'data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface',
-          'data-sidebar-destination', 'aria-current', 'data-floating'] });
+          'data-sidebar-destination', 'aria-current', 'data-floating', ...dotGuardAttributes] });
       if (typeof host.ResizeObserver === 'function') {
         const resize = new host.ResizeObserver(current);
         observers.push(resize);

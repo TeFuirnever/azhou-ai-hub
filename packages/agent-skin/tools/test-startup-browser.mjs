@@ -7548,10 +7548,10 @@ print(json.dumps(capsules))
     })()`);
     const settled = (marked, previous='null') => cdp.evaluate(`(() => {
       const current = window.__dotRecovery;
-      return window.__startupAPI.status().runId === current.runId
-        && window.__startupAPI.status().wallpaper.applied === true
-        && current.dot.hasAttribute('data-azhou-wallpaper-plane') === ${marked}
-        && (!(${previous}) || !(${previous}).hasAttribute('data-azhou-wallpaper-plane'));
+      return current.dot.hasAttribute('data-azhou-wallpaper-plane') === ${marked}
+        && (!(${previous}) || !(${previous}).hasAttribute('data-azhou-wallpaper-plane'))
+        && window.__startupAPI.status().runId === current.runId
+        && window.__startupAPI.status().wallpaper.applied === true;
     })()`);
     const action = script => cdp.evaluate(`(() => { const f=window.__dotRecovery; ${script} })()`);
     await action("f.nav.setAttribute('aria-current','page'); f.main.append(f.dot)");
@@ -7562,6 +7562,10 @@ print(json.dumps(capsules))
     await until(()=>settled(false),10000,'duplicate Dot shell is not painted');
     await action("f.extra.classList.remove('messaging-embedded')");
     await until(()=>settled(true),10000,'removing the duplicate class recovers without a second apply');
+    await action("f.dot.setAttribute('role','dialog')");
+    await until(()=>settled(false),10000,'dynamic protected role restores native paint');
+    await action("f.dot.removeAttribute('role')");
+    await until(()=>settled(true),10000,'removing the protected role recovers paint');
     await action("f.nav.removeAttribute('aria-current')");
     await until(()=>settled(false),10000,'leaving Dot restores native paint');
     await cdp.evaluate('window.__startupAPI.dispose()');
