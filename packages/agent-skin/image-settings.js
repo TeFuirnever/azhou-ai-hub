@@ -2254,6 +2254,12 @@ function createImageSettings(environment) {
         if (result?.applied !== true) throw makeError(result?.reason || 'settings-unavailable');
         await load(defaultRecord);
         if (!panelOpen || atStart!==panelGeneration) return;
+        if (capsuleSha256===null) {
+          draftThemePreference={...(currentThemeState?.preferencesByTheme?.[APPROVED_THEME_ID] || {mode:'follow'})};
+          draftTheme=currentThemeState?.activeThemeId ? {activeThemeId:currentThemeState.activeThemeId,
+            surfaceTransparency:{...draftThemePreference}} : null;
+          draftAppearances[draftTheme?'theme':'existing']=appearanceDraft(draft);
+        }
         updatePanelFields();setPanelStatus(capsuleSha256===null?'settings.dream.restored':'settings.dream.applied');
       } catch(error) {
         if (error?.reason !== 'operation-cancelled' && panelOpen && atStart===panelGeneration) {

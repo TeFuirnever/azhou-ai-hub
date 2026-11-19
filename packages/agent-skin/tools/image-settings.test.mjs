@@ -2928,6 +2928,36 @@ async function storedDreamSelectionFixture() {
     selection:{kind:'imported',capsuleSha256:imported.capsuleSha256},preferencesByTheme:{'azhou-q-v3':{mode:'follow'}},previousThemeId:null,commitId:'c'.repeat(32)};
   f.fixture.api.dispose();return {...f,imported};
 }
+for(const previousThemeId of ['azhou-q-v3',null])test('restoring '+(previousThemeId||'original')+' appearance updates the draft without losing startup or preset edits',async()=>{
+  const stored=await storedDreamSelectionFixture(),storage=stored.storage;
+  storage.state.themeRecord.previousThemeId=previousThemeId;
+  storage.state.themeRecord.preferencesByTheme['azhou-q-v3']={mode:'override',value:42};
+  const f=dreamSettingsFixture(storage);await f.fixture.api.load(f.defaults);let host;
+  f.fixture.api.openSettings({onThemeApply:async({capsuleSha256,expectedToken})=>{
+    assert.equal(capsuleSha256,null);
+    host=dreamSettingsFixture(storage);await host.fixture.api.load(host.defaults);
+    return host.fixture.api.restoreAzhouTheme({expectedToken,activate:async()=>({applied:true,transaction:{current:()=>true,finalize:()=>true,rollback:()=>true}})});
+  }});
+  try {
+    const deadline=Date.now()+5000;
+    while(f.fixture.api.isBusy()&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,2));
+    assert.equal(f.fixture.api.isBusy(),false,'initial directory load completed');
+    const title=f.fixture.elements.find(element=>element.maxLength===16);
+    title.value='Unsaved title';title.listeners.get('input')[0]();
+    await importPreset(f,jsonPresetFile());
+    assert.equal(f.control('data-agent-skin-preset-list').children.length,1);
+    await f.control('data-agent-skin-dream-restore').listeners.get('click')[0]();
+    assert.equal(storage.state.themeRecord.activeThemeId,previousThemeId,'restore persisted the intended theme');
+    assert.equal(f.control('data-agent-skin-theme-choice').value,previousThemeId||'');
+    assert.equal(f.control('data-agent-skin-theme-alpha-mode').value,previousThemeId?'override':'follow');
+    assert.equal(f.control('data-agent-skin-theme-transparency').value,previousThemeId?'42':'30');
+    assert.equal(title.value,'Unsaved title');assert.equal(f.control('data-agent-skin-preset-list').children.length,1);
+    await f.click('保存');
+    assert.equal(storage.state.themeRecord.activeThemeId,previousThemeId);
+    assert.deepEqual(storage.state.themeRecord.preferencesByTheme['azhou-q-v3'],{mode:'override',value:42});
+    assert.equal(storage.state.record.introTitle,'Unsaved title');assert.equal(storage.state.libraryRecord.entries.length,1);
+  } finally {f.fixture.api.dispose();host?.fixture.api.dispose();}
+});
 test('host snapshot remaps stored Dream source and projects original image once without rewriting legacy state',async()=>{
   const f=await storedDreamSelectionFixture();
   f.storage.state.dreamRecord.entries.push({capsuleSha256:'d'.repeat(64),capsule:'inactive broken source is not decoded'});
