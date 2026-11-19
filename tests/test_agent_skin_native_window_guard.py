@@ -329,9 +329,11 @@ class BrowserEvidenceTests(unittest.TestCase):
                     (out / "report.json").write_text(json.dumps(report))
                     payload.validate_browser_report(out, ["required"])
 
-    def test_full_run_requires_both_payload_cases_and_no_skipped_rows(self):
+    def test_full_run_requires_each_pinned_payload_case_and_no_skipped_rows(self):
         names = ["compiled native helper status and apply guard execute against the live fixture API objects",
-                 "generated Escape keeps Appearance hidden until host UI is ready"]
+                 "generated Escape keeps Appearance hidden until host UI is ready",
+                 "pinned gated wallpaper continuity",
+                 "generated Dot wallpaper follows route and shell changes automatically"]
         valid = {"passed": True, "missingChecks": [], "selectedChecks": [],
             "checks": [{"name": name, "passed": True} for name in names],
             "cleanup": {"ownChromeStopped": True, "temporaryProfileRemoved": True,
@@ -340,8 +342,10 @@ class BrowserEvidenceTests(unittest.TestCase):
             out = Path(temporary)
             (out / "report.json").write_text(json.dumps(valid))
             payload.validate_browser_report(out, [])
-            for checks in (valid["checks"][:1], valid["checks"] + [{"name": "unrun", "skipped": True}]):
-                with self.assertRaises(ValueError):
+            omitted = [valid["checks"][:i] + valid["checks"][i + 1:] for i in range(len(names))]
+            skipped = valid["checks"] + [{"name": "unrun", "skipped": True}]
+            for checks in (*omitted, skipped):
+                with self.subTest(names=[row["name"] for row in checks]), self.assertRaises(ValueError):
                     (out / "report.json").write_text(json.dumps({**valid, "checks": checks}))
                     payload.validate_browser_report(out, [])
 
