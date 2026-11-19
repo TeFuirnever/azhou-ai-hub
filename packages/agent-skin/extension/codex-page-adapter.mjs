@@ -977,7 +977,9 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         if (record.attributeName === 'data-sidebar-destination'
           || record.attributeName === 'aria-current' && record.target.matches?.(dotDestination)
           || record.attributeName === 'data-floating'
-          || record.attributeName === 'class' && record.target.parentElement === observation.activeMain) refresh = true;
+          || record.attributeName === 'class' && (record.target.parentElement === observation.activeMain
+            || record.target.parentElement?.parentElement === observation.activeMain
+              && record.target.parentElement.matches(dotMessagingShell))) refresh = true;
         if (['class', 'style', 'hidden'].includes(record.attributeName) && !activityNodes.has(record.target)
           && (record.target.matches?.(paintSelector) || record.target.querySelector?.(paintSelector))) refresh = true;
         if (record.attributeName?.startsWith('data-app-shell-')

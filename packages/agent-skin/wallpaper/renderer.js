@@ -300,11 +300,18 @@ export async function installRenderer(offered) {
   // ── Lease: one Blob URL with a single owner ─────────────────────────────
   // A Blob URL also sidesteps the token-size cap browsers impose on custom
   // properties, so the host has to permit blob: images for a scene to land.
-  let sceneBytes;
-  try { sceneBytes = Uint8Array.from(atob(encodedScene[2]), character => character.charCodeAt(0)); }
-  catch { throw deny('invalid-local-image'); }
-  const sceneURL = URL.createObjectURL(new Blob([sceneBytes], { type: 'image/' + encodedScene[1] }));
-  let scene, sheetCommitted = false, urlRelinquished = false;
+  let scene, sceneURL, sheetCommitted = false, urlRelinquished = false, handingOff = false;
+  const claimDecodedScene = slotValue(offered, 'claimDecodedScene');
+  if (workspaceBound && !transactional && !brief.themeState && !brief.mainPaint && typeof claimDecodedScene === 'function') {
+    const retained = claimDecodedScene(brief.image, brief.imageSHA256, workspaceObservation);
+    if (retained) ({ image: scene, url: sceneURL } = retained);
+  }
+  if (!sceneURL) {
+    let sceneBytes;
+    try { sceneBytes = Uint8Array.from(atob(encodedScene[2]), character => character.charCodeAt(0)); }
+    catch { throw deny('invalid-local-image'); }
+    sceneURL = URL.createObjectURL(new Blob([sceneBytes], { type: 'image/' + encodedScene[1] }));
+  }
   let invalidateWorkspace = () => {};
   let themeGeometry = null, geometrySubscribed = false;
   let geometryChanged = geometry => { themeGeometry = geometry; };
@@ -334,8 +341,7 @@ export async function installRenderer(offered) {
     urlRelinquished = true;
     cancelMasks();
     dshSurface?.dispose();
-    URL.revokeObjectURL(sceneURL);
-    if (scene) scene.src = '';
+    if (!handingOff) { URL.revokeObjectURL(sceneURL); if (scene) scene.src = ''; }
   };
 
   // ── Decode: native promise first, pixel evidence second, deadline third ─
@@ -416,10 +422,13 @@ export async function installRenderer(offered) {
         current: () => workspaceLease === admittedLease && workspaceCurrent() }));
     }
     // ── Decode the leased scene ───────────────────────────────────────────
-    scene = new Image();
+    const needsDecode = !scene;
+    if (needsDecode) scene = new Image();
     try {
-      scene.src = sceneURL;
-      await decodeWithCrossCheck(scene);
+      if (needsDecode) {
+        scene.src = sceneURL;
+        await decodeWithCrossCheck(scene);
+      }
       if (!scene.naturalWidth || !scene.naturalHeight) throw deny('scene-without-extent');
     } catch (failure) {
       relinquishURL();
@@ -968,10 +977,32 @@ export async function installRenderer(offered) {
 
     invalidateWorkspace = () => {
       if (retired || suspended || !sheetCommitted || slotValue(globalThis, CONTROLLER_SLOT) !== controller) return;
-      dispose();
-      if (typeof onWorkspaceInvalidated === 'function') attemptCleanup(() => onWorkspaceInvalidated({
-        api: controller, documentToken: workspaceObservation?.documentToken, workspaceEpoch: workspaceObservation?.workspaceEpoch,
-      }));
+      const carry = workspaceBound && activationPhase === 'finalized' && !brief.themeState && !brief.mainPaint
+        && typeof onWorkspaceInvalidated === 'function' && scene.complete && scene.naturalWidth > 0
+        && scene.naturalHeight > 0 && scene.src === sceneURL;
+      let available = false, claimed = false;
+      const notice = { api: controller, documentToken: workspaceObservation?.documentToken,
+        workspaceEpoch: workspaceObservation?.workspaceEpoch };
+      const continuation = carry ? Object.freeze({ image: brief.image, sha: brief.imageSHA256,
+        documentToken: notice.documentToken, workspaceEpoch: notice.workspaceEpoch,
+        claim(image, sha, observation) {
+          if (!available || claimed || image !== brief.image || sha !== brief.imageSHA256
+            || observation?.documentToken !== notice.documentToken || observation.workspaceEpoch <= notice.workspaceEpoch
+            || document.documentElement !== html || !scene.complete || scene.src !== sceneURL) return null;
+          claimed = true;
+          return { image: scene, url: sceneURL };
+        },
+      }) : undefined;
+      handingOff = carry;
+      try {
+        dispose();
+        available = carry;
+        if (typeof onWorkspaceInvalidated === 'function')
+          attemptCleanup(() => onWorkspaceInvalidated(notice, continuation));
+      } finally {
+        available = false;
+        if (carry && !claimed) { URL.revokeObjectURL(sceneURL); scene.src = ''; }
+      }
     };
 
     // ── Transaction: one synchronous handover ─────────────────────────────
