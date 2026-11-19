@@ -8,7 +8,7 @@ a component can be re-imported by replacing that directory alone.
 
 | Directory | Source | At commit |
 | --- | --- | --- |
-| `pstack/` | [cursor/plugins `pstack`](https://github.com/cursor/plugins/tree/main/pstack) | `c742dd61706fbacc1b95f1a20b7b988cf096ce6c` |
+| `pstack/` | [cursor/plugins `pstack`](https://github.com/cursor/plugins/tree/main/pstack) | `93b916d4a1e806507e22f4716b352fa91f2b227e` |
 | `components/cursor-team-kit/skills/` | [cursor/plugins `cursor-team-kit`](https://github.com/cursor/plugins/tree/main/cursor-team-kit) | same |
 | `components/thermos/skills/` | [cursor/plugins `thermos`](https://github.com/cursor/plugins/tree/main/thermos) | same |
 | `hub-skills/` | this Hub | n/a |
@@ -68,13 +68,17 @@ superseded fork-port directories (`plugins/`, `tests/`, `tla/` and
 `lean/`) have been removed; this `tools/` directory holds the quilt
 builder, not the old sync-based port.
 
-The quilt currently has 24 patches: 17 upstream-defect patches and seven
+The quilt currently has 23 patches: 17 upstream-defect patches and six
 Hub-specific adjustments (distribution identity, test type-narrowing,
-command/agent namespace guides, the 0.15.37 version stamp, the 0.15.38
-bundled-skills ZCode stamp, Claude model-sheet alignment, and conservative
-worktree-audit classification). The 17 `Forwarded: no` upstream-defect patches
-still need upstream review/forwarding or replacement when upstream adopts a
-fix. The current pinned import is `c742dd61706fbacc1b95f1a20b7b988cf096ce6c`;
+command/agent namespace guides, Claude model-sheet alignment and Hub-kept
+playbook rows, Orchestrate routing, enumeration and guide restore, and conservative
+worktree-audit classification). The 17
+`Forwarded: no` upstream-defect patches still need upstream review/forwarding
+or replacement when upstream adopts a fix. The current pinned import is
+`93b916d4a1e806507e22f4716b352fa91f2b227e`
+(upstream plugin `0.15.43`; the 0.15.37 and 0.15.38 version-stamp patches
+left the queue with the 2026-11-18 re-pin because the pristine tree now
+carries a version the installed 0.15.38 cache key already differs from);
 upstream revisions must be compared and re-validated, not pulled silently.
 
 The Hub-owned worktree-cleanup playbook overrides the pinned upstream

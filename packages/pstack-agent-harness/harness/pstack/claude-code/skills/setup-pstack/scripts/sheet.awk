@@ -10,27 +10,17 @@ function sheet_roles(roles, panel,    n) {
   split("", roles)
   split("", panel)
   n = 0
-  # Stamped from plugins/pstack/models.json; edit there and rerun tools/generate.mjs.
   roles[++n] = "feature, refactoring"
   roles[++n] = "bug-fix"
   roles[++n] = "perf-issue"
   roles[++n] = "hillclimb"
   roles[++n] = "judgment and prose"
-  roles[++n] = "strongest judgment"
-  roles[++n] = "how explorer"
-  roles[++n] = "how explainer"
-  roles[++n] = "why investigators"
-  roles[++n] = "why synthesizer"
-  roles[++n] = "reflect tooling"
-  roles[++n] = "reflect judgment, divergent, synthesizer"
   roles[++n] = "arena runners"
   roles[++n] = "arena cross-judge pool"
   roles[++n] = "swarm workers"
-  roles[++n] = "architect runners"
   roles[++n] = "interrogate reviewers"
   panel["arena runners"] = 1
   panel["arena cross-judge pool"] = 1
-  panel["architect runners"] = 1
   panel["interrogate reviewers"] = 1
   SHEET_EFFORT["low"] = 1
   SHEET_EFFORT["medium"] = 1
