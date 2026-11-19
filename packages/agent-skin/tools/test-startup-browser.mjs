@@ -7376,6 +7376,198 @@ print(json.dumps(capsules))
     return {...result,actualNativeInput:true,scope:'isolated synthetic Chrome, not native app'};
   });
 
+  await check('Codex workspace apply cannot attest late auxiliary Dot paint', async () => {
+    await navigate('/fixture.html?legacy-only=1');
+    const clip = await cdp.evaluate(`(async () => {
+      const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
+      const {createWallpaperApplicator} = await import('/wallpaper/apply.js');
+      const {createObservedRenderer} = await import('/workspace-renderer.mjs');
+      let host;
+      host = new Proxy(window, { get(target, key) {
+        if (['window','top','self','globalThis'].includes(key)) return host;
+        if (key === 'location') return new URL('app://-/index.html');
+        const value = Reflect.get(target,key,target);
+        return typeof value === 'function' && ['getComputedStyle','addEventListener','removeEventListener','setTimeout','clearTimeout','atob','createImageBitmap'].includes(key) ? value.bind(target) : value;
+      } });
+      const adapter = createCodexPageAdapter(host);
+      const css = await (await fetch('/wallpaper.css')).text();
+      const apply = createWallpaperApplicator(createObservedRenderer(host), {version:'0.9.0',css,pageAdapter:adapter}, host);
+      const main = document.querySelector('[data-app-shell-main-surface]');
+      const route = document.createElement('section');
+      route.style.cssText = 'position:fixed;top:160px;left:480px;width:100px;height:90px;z-index:2';
+      const input = document.createElement('textarea');
+      input.style.cssText = 'position:absolute;right:0;bottom:0;width:36px;height:24px;background:rgb(26,36,46)';
+      route.append(input);
+      window.__auxiliaryFixture = {main,route,input,owner:null};
+      const result = await apply({image:${JSON.stringify(pixelImage)},strength:37});
+      if (!result.applied || result.coverage?.auxiliary !== 'unknown' || result.fullCoverage !== false) {
+        throw Error('initial coverage: ' + JSON.stringify(result));
+      }
+      window.__auxiliaryFixture.owner = window.__azhouWallpaper;
+      return {x:484,y:164,width:12,height:12,scale:1};
+    })()`);
+    const settle = () => cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+    const capture = async () => (await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true,clip})).data;
+    await settle();
+    const workspacePixels = await capture();
+    await cdp.evaluate(`(() => {
+      const {main,route} = window.__auxiliaryFixture;
+      route.style.background = 'rgb(11,23,37)';
+      main.append(route);
+    })()`);
+    await settle();
+    const auxiliaryPixels = await capture();
+    assert.notEqual(auxiliaryPixels, workspacePixels, 'the late opaque route really hides the workspace wallpaper in this clip');
+    const result = await cdp.evaluate(`(async () => {
+      const {main,route,input,owner} = window.__auxiliaryFixture;
+      const i = new Image();
+      i.src = 'data:image/png;base64,' + ${JSON.stringify(auxiliaryPixels)};
+      await i.decode();
+      const c = document.createElement('canvas'); c.width=i.width; c.height=i.height;
+      const ctx=c.getContext('2d'); ctx.drawImage(i,0,0);
+      const status=owner.status();
+      const evidence={pixel:[...ctx.getImageData(0,0,1,1).data],sameOwner:window.__azhouWallpaper===owner,
+        sameMain:main===document.querySelector('[data-app-shell-main-surface]'),applied:status.applied,
+        auxiliary:status.coverage.auxiliary,fullCoverage:status.fullCoverage,
+        routeMark:route.getAttribute('data-azhou-wallpaper-plane'),inputBackground:getComputedStyle(input).backgroundColor};
+      route.remove();
+      return evidence;
+    })()`);
+    assert.deepEqual(result, {pixel:[11,23,37,255],sameOwner:true,sameMain:true,applied:true,
+      auxiliary:'unknown',fullCoverage:false,routeMark:null,inputBackground:'rgb(26, 36, 46)'});
+    await settle();
+    assert.equal(await capture(),workspacePixels,'leaving the auxiliary route reveals the same workspace');
+  });
+
+  await check('Codex attested Dot wallpaper preserves controls and fails closed', async () => {
+    await navigate('/fixture.html?legacy-only=1');
+    const clip = await cdp.evaluate(`(async () => {
+      const {createCodexPageAdapter} = await import('/extension/codex-page-adapter.mjs');
+      const {createWallpaperApplicator} = await import('/wallpaper/apply.js');
+      const {createObservedRenderer} = await import('/workspace-renderer.mjs');
+      let host;
+      host = new Proxy(window, { get(target, key) {
+        if (['window','top','self','globalThis'].includes(key)) return host;
+        if (key === 'location') return new URL('app://-/index.html');
+        const value = Reflect.get(target,key,target);
+        return typeof value === 'function' && ['getComputedStyle','addEventListener','removeEventListener','setTimeout','clearTimeout','atob','createImageBitmap'].includes(key) ? value.bind(target) : value;
+      } });
+      const adapter = createCodexPageAdapter(host);
+      const css = await (await fetch('/wallpaper.css')).text();
+      const apply = createWallpaperApplicator(createObservedRenderer(host), {version:'0.9.0',css,pageAdapter:adapter}, host);
+      const main = document.querySelector('[data-app-shell-main-surface]');
+      const route = document.createElement('section');
+      route.style.cssText = 'position:fixed;top:160px;left:480px;width:100px;height:90px;z-index:2';
+      const input = document.createElement('textarea');
+      input.style.cssText = 'position:absolute;right:0;bottom:0;width:36px;height:24px;background:rgb(26,36,46)';
+      route.append(input);
+      const nav = document.createElement('button');
+      nav.dataset.sidebarDestination = 'builtin:orbit';
+      nav.style.cssText='position:fixed;left:0;top:0;width:20px;height:20px';
+      document.querySelector('#root').append(nav);
+      route.className = 'messaging-root messaging-embedded';
+      route.innerHTML = '<div class="workspace"><main class="thread-pane"></main></div>';
+      const thread = route.querySelector('.thread-pane');
+      thread.style.cssText = 'height:90px;width:100px';
+      thread.append(input);
+      window.__auxiliaryFixture = {main,route,input,nav,apply,owner:null};
+      const result = await apply({image:${JSON.stringify(pixelImage)},strength:37});
+      if (!result.applied || result.coverage?.auxiliary !== 'unknown' || result.fullCoverage !== false) {
+        throw Error('initial coverage: ' + JSON.stringify(result));
+      }
+      window.__auxiliaryFixture.owner = window.__azhouWallpaper;
+      return {x:484,y:164,width:12,height:12,scale:1};
+    })()`);
+    const settle = () => cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+    const capture = async () => (await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true,clip})).data;
+    await settle();
+    const workspacePixels = await capture();
+    const set = script => cdp.evaluate(script);
+    const stage = async (action, marked, clear) => {
+      const evidence = await set(`(async () => {
+        const {main,route,input,nav,apply} = window.__auxiliaryFixture;
+        ${action}
+        await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+        const result=await apply({image:${JSON.stringify(pixelImage)},strength:37});
+        const rect = input.getBoundingClientRect();
+        input.focus();
+        const operable = document.activeElement === input
+          && document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2) === input;
+        return {applied:result.applied,marked:route.hasAttribute('data-azhou-wallpaper-plane'),
+          input:getComputedStyle(input).backgroundColor,operable};
+      })()`);
+      assert.deepEqual(evidence,{applied:true,marked,input:'rgb(26, 36, 46)',operable:true});
+      await settle();
+      const pixels=await capture();
+      if(clear) assert.equal(pixels,workspacePixels,'Dot shows the same wallpaper pixels');
+      else assert.notEqual(pixels,workspacePixels,'unadmitted Dot shape keeps native paint');
+    };
+    await stage("route.style.background='rgb(11,23,37)'; main.append(route)",false,false);
+    await stage("nav.setAttribute('aria-current','page')",true,true);
+    await stage("route.setAttribute('data-floating','')",false,false);
+    await stage("route.removeAttribute('data-floating')",true,true);
+    await stage("const extra=route.cloneNode(true);for(const n of [extra,...extra.querySelectorAll('[data-azhou-wallpaper-plane]')]) n.removeAttribute('data-azhou-wallpaper-plane');extra.id='duplicate-dot';extra.style.pointerEvents='none';main.append(extra)",false,false);
+    await stage("const extra=document.getElementById('duplicate-dot');extra.classList.remove('messaging-embedded');extra.style.background='none'",true,true);
+    await stage("document.getElementById('duplicate-dot').remove()",true,true);
+    const retired=await set(`(async()=>{
+      const {nav,route}=window.__auxiliaryFixture;
+      nav.removeAttribute('aria-current');
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      return !route.hasAttribute('data-azhou-wallpaper-plane');
+    })()`);
+    assert.equal(retired,true,'leaving Dot retires the owned marker');
+    await stage("nav.setAttribute('aria-current','page')",true,true);
+    const restored=await set(`(()=>{
+      window.__azhouWallpaper.dispose();
+      const {route}=window.__auxiliaryFixture;
+      return [route.hasAttribute('data-azhou-wallpaper-plane'), getComputedStyle(route).backgroundColor];
+    })()`);
+    assert.deepEqual(restored,[false,'rgb(11, 23, 37)']);
+  });
+
+  await check('generated Dot wallpaper follows route and shell changes automatically', async () => {
+    await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+    await awaitGeneratedReady('generated Dot recovery fixture installed');
+    await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied===true'),10000,'initial generated wallpaper');
+    await cdp.evaluate("document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()");
+    await until(()=>cdp.evaluate("window.__startupAPI.status().phase==='complete'"),10000,'startup phase complete');
+    await cdp.evaluate(`(() => {
+      const main = document.querySelector('[data-app-shell-main-surface]');
+      const nav = document.createElement('button');
+      nav.dataset.sidebarDestination = 'builtin:orbit';
+      nav.style.cssText = 'position:fixed;left:0;top:0;width:20px;height:20px';
+      document.querySelector('#root').append(nav);
+      const make = () => {
+        const dot = document.createElement('section');
+        dot.className = 'messaging-root messaging-embedded';
+        dot.style.cssText = 'position:fixed;top:160px;left:480px;width:100px;height:90px;background:rgb(11,23,37)';
+        dot.innerHTML = '<div class="workspace"><main class="thread-pane" style="height:90px"></main></div>';
+        return dot;
+      };
+      window.__dotRecovery = { main, nav, make, runId:window.__startupAPI.status().runId, dot:make() };
+    })()`);
+    const settled = (marked, previous='null') => cdp.evaluate(`(() => {
+      const current = window.__dotRecovery;
+      return window.__startupAPI.status().runId === current.runId
+        && window.__startupAPI.status().wallpaper.applied === true
+        && current.dot.hasAttribute('data-azhou-wallpaper-plane') === ${marked}
+        && (!(${previous}) || !(${previous}).hasAttribute('data-azhou-wallpaper-plane'));
+    })()`);
+    const action = script => cdp.evaluate(`(() => { const f=window.__dotRecovery; ${script} })()`);
+    await action("f.nav.setAttribute('aria-current','page'); f.main.append(f.dot)");
+    await until(()=>settled(true),10000,'late Dot shell receives paint without a second apply');
+    await action("f.previous=f.dot; f.dot=f.make(); f.previous.replaceWith(f.dot)");
+    await until(()=>settled(true,'current.previous'),10000,'replacement Dot shell acquires lease');
+    await action("f.extra=f.make(); f.main.append(f.extra)");
+    await until(()=>settled(false),10000,'duplicate Dot shell is not painted');
+    await action("f.extra.classList.remove('messaging-embedded')");
+    await until(()=>settled(true),10000,'removing the duplicate class recovers without a second apply');
+    await action("f.nav.removeAttribute('aria-current')");
+    await until(()=>settled(false),10000,'leaving Dot restores native paint');
+    await cdp.evaluate('window.__startupAPI.dispose()');
+    assert.equal(await cdp.evaluate("document.querySelectorAll('[data-azhou-wallpaper-plane]').length"),0);
+  });
+
   await check('Codex workspace leases reject batched navigation and retain scoped wallpaper ownership', async () => {
     await navigate('/fixture.html?legacy-only=1');
     const result = await cdp.evaluate(`(async () => {
