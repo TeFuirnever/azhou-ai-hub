@@ -6589,7 +6589,7 @@ try {
     });
   }
 
-  await check('DSH owned main paint applies and restores through a reversible renderer transaction', async()=>{
+  await check('DSH ordinary wallpaper preserves reversible surface ownership', async()=>{
     await navigate('/fixture.html?legacy-only=1');
     const result=await cdp.evaluate(`(async()=>{
       window.__azhouWallpaper?.dispose();
@@ -6603,15 +6603,28 @@ try {
       const apply=createWallpaperApplicator(installRenderer,{version:'0.9.0',css,pageAdapter:adapter},window);
       const base={image:${JSON.stringify(pixelImage)},strength:42};
       const first=await apply(base,()=>true);if(!first.applied)throw Error(JSON.stringify(first));
-      const prior=window.__azhouWallpaper;
-      const candidate=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+      const root=document.documentElement,node=document.querySelector('.fixture_mainPanel');
+      const owner=()=>window.__azhouWallpaper;
+      const sheet=()=>document.getElementById('azhou-wallpaper-style');
+      const wash=()=>root.style.getPropertyValue('--azhou-wallpaper-wash');
+      const prior=owner(),priorSheet=sheet(),priorWash=wash();
+      const retired=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+      const noRetiredMutation=retired.applied===false&&retired.failureCode==='main-paint-unsupported'
+        &&owner()===prior&&sheet()===priorSheet&&wash()===priorWash&&!node.hasAttribute('data-azhou-dream-main');
+      const changed={...base,strength:67};
+      const transaction=()=>apply(changed,()=>true,null,{transactional:true});
+      const candidate=await transaction();
       if(!candidate.applied)throw Error(JSON.stringify(candidate));
-      const node=document.querySelector('.fixture_mainPanel'),color=getComputedStyle(node).backgroundColor;
-      const rollback=candidate.transaction.rollback(),same=window.__azhouWallpaper===prior;
-      const next=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+      const distinguishable=owner()!==prior&&sheet()!==priorSheet&&wash()!==priorWash;
+      const changedWash=wash();
+      const rollback=candidate.transaction.rollback();
+      const same=owner()===prior&&sheet()===priorSheet&&wash()===priorWash;
+      const next=await transaction();
+      const destination=owner();
       const finalized=next.transaction.finalize();
+      const handedOver=destination!==prior&&owner()===destination&&wash()===changedWash;
       const restore=await apply(base,()=>true,null,{transactional:true});
-      const restored=restore.transaction.finalize();
+      const restored=restore.transaction.finalize()&&wash()===priorWash;
       const transparent=getComputedStyle(node).backgroundColor;
       const zero=await apply({...base,strength:0},()=>true,null,{transactional:true});
       node.remove();document.getElementById('root').appendChild(node);
@@ -6624,14 +6637,14 @@ try {
       const disabledFinalized=disabled.transaction.finalize(),disabledRepeated=disabled.transaction.finalize();
       const routeCleanup=[];
       for(const eventName of ['hashchange','popstate']){
-        const applied=await apply({...base,mainPaint:{profile:'codex-main-literal-paint/v1',rgba:[10,20,30,.4],backgroundImage:'none',sourceDeclarationCount:1}},()=>true,null,{transactional:true});
+        const applied=await transaction();
         if(!applied.transaction.finalize())throw Error('route setup failed');
         window.dispatchEvent(new Event(eventName));
         routeCleanup.push(!window.__azhouWallpaper&&!document.getElementById('azhou-wallpaper-style')&&!node.hasAttribute('data-azhou-dream-main'));
       }
-      return {color,rollback,same,finalized,restored,transparent,zeroStale,zeroFinalized,absentStale,absentFinalized,disabledFinalized,disabledRepeated,routeCleanup,marker:node.getAttribute('data-azhou-dream-main')};
+      return {noRetiredMutation,distinguishable,rollback,same,finalized,handedOver,restored,transparent,zeroStale,zeroFinalized,absentStale,absentFinalized,disabledFinalized,disabledRepeated,routeCleanup,marker:node.getAttribute('data-azhou-dream-main')};
     })()`);
-    assert.deepEqual(result,{color:'rgba(10, 20, 30, 0.4)',rollback:true,same:true,finalized:true,restored:true,transparent:'rgba(0, 0, 0, 0)',zeroStale:false,zeroFinalized:false,absentStale:false,absentFinalized:false,disabledFinalized:true,disabledRepeated:true,routeCleanup:[true,true],marker:null});
+    assert.deepEqual(result,{noRetiredMutation:true,distinguishable:true,rollback:true,same:true,finalized:true,handedOver:true,restored:true,transparent:'rgba(0, 0, 0, 0)',zeroStale:false,zeroFinalized:false,absentStale:false,absentFinalized:false,disabledFinalized:true,disabledRepeated:true,routeCleanup:[true,true],marker:null});
     return result;
   });
 

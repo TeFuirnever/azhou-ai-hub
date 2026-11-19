@@ -138,10 +138,12 @@ export async function installRenderer(offered) {
   // ── Gate 3: the brief ───────────────────────────────────────────────────
   // The brief is copied once, so caller mutations during the asynchronous
   // decode can no longer influence what gets installed or reported.
+  // Reject the retired literal payload without reading it or acquiring a surface.
+  if (offered != null && 'mainPaint' in Object(offered)) throw deny('main-paint-unsupported');
   const brief = {
     version: offered?.version, css: offered?.css, image: offered?.image,
     imageSHA256: offered?.imageSHA256, strength: offered?.strength, surface: offered?.surface,
-    themeState: offered?.themeState, mainPaint: offered?.mainPaint,
+    themeState: offered?.themeState,
   };
   const rejectedColorShapes = [
     /[;{}]/,                                                         // style delimiters
@@ -171,27 +173,10 @@ export async function installRenderer(offered) {
   const dshCapture=slotValue(hostAdapter,'captureThemeSurface');
   const dshBound=hostBound && slotValue(hostAdapter,'themeSelectionContract')==='dsh-owned-main-paint/v2'
     && typeof dshCapture==='function';
-  const dshSurface=dshBound && (transactional || brief.mainPaint!=null)
+  const dshSurface=dshBound && transactional
     ? Reflect.apply(dshCapture,hostAdapter,[globalThis]):null;
   const dshCurrent=()=>!!dshSurface && slotValue(hostAdapter,'captureThemeSurface')===dshCapture
     && dshSurface.current()===true;
-  const paintNode=workspaceBound?workspaceObservation.mainPaint?.node:dshSurface?.node;
-  let mainPaint = null;
-  if (brief.mainPaint != null) {
-    const value = brief.mainPaint;
-    const exact = (object, keys) => !!object && typeof object === 'object' && !Array.isArray(object)
-      && Object.keys(object).length === keys.length && keys.every(key => Object.hasOwn(object, key));
-    if (!(workspaceBound && workspaceObservation.mainPaint?.contract === 'codex-owned-main-paint/v1'
-      && workspaceObservation.mainPaint.node === workspaceObservation.activeMain || dshBound && dshCurrent()) || brief.themeState != null
-      || !exact(value, ['profile','rgba','backgroundImage','sourceDeclarationCount'])
-      || value.profile !== 'codex-main-literal-paint/v1' || value.backgroundImage !== 'none'
-      || !Array.isArray(value.rgba) || value.rgba.length !== 4
-      || !value.rgba.every((channel, index) => Number.isFinite(channel) && channel >= 0 && channel <= (index === 3 ? 1 : 255))
-      || !Number.isInteger(value.sourceDeclarationCount) || value.sourceDeclarationCount < 1 || value.sourceDeclarationCount > 128) {
-      throw deny('main-paint-unsupported');
-    }
-    mainPaint = Object.freeze({ rgba: Object.freeze([...value.rgba]), sourceDeclarationCount: value.sourceDeclarationCount });
-  }
   let surfaceTint = typeof brief.surface === 'string' ? brief.surface.trim() : null;
   const encodedScene = typeof brief.image === 'string'
     && /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(brief.image);
@@ -266,7 +251,7 @@ export async function installRenderer(offered) {
     throw deny('style-id-conflict');
   }
 
-  if (transactional && brief.strength === 0 && !mainPaint) {
+  if (transactional && brief.strength === 0) {
     if (brief.themeState != null) throw deny('theme-surface-unsupported');
     if (signal && (typeof signal.addEventListener!=='function' || typeof signal.removeEventListener!=='function' || signal.aborted)
       || typeof isCurrent==='function' && !isCurrent()) throw deny('operation-cancelled');
@@ -302,7 +287,7 @@ export async function installRenderer(offered) {
   // properties, so the host has to permit blob: images for a scene to land.
   let scene, sceneURL, sheetCommitted = false, urlRelinquished = false, handingOff = false;
   const claimDecodedScene = slotValue(offered, 'claimDecodedScene');
-  if (workspaceBound && !transactional && !brief.themeState && !brief.mainPaint && typeof claimDecodedScene === 'function') {
+  if (workspaceBound && !transactional && !brief.themeState && typeof claimDecodedScene === 'function') {
     const retained = claimDecodedScene(brief.image, brief.imageSHA256, workspaceObservation);
     if (retained) ({ image: scene, url: sceneURL } = retained);
   }
@@ -488,7 +473,6 @@ export async function installRenderer(offered) {
       const shown = Math.min(100, Math.round(mix * tintRatio));
       return 'color-mix(in srgb, var(--azhou-base) ' + (100 - shown) + '%, transparent) ' + at;
     }).join(',') + ')';
-    if (mainPaint) tintGradient = 'linear-gradient(transparent,transparent)';
     const legacyGradient = tintGradient;
     const planeNodes = kind => workspaceObservation.knownPaintPlanes.filter(plane => plane.kind === kind).map(plane => plane.node);
     const markerNames = { surface: 'data-azhou-wallpaper-plane', workspace: 'data-azhou-wallpaper-pseudo',
@@ -510,16 +494,6 @@ export async function installRenderer(offered) {
         if (!markerTargets.has(node)) markerTargets.set(node, new Set());
         markerTargets.get(node).add(attribute);
       }
-    }
-    if (mainPaint) {
-      const node = paintNode;
-      const attribute = 'data-azhou-dream-main';
-      const marked = node.getAttribute(attribute);
-      if (marked !== null && (marked !== slotValue(incumbent, MARKER_KEY)
-        || !slotValue(incumbent, BASELINE_KEY)?.codexMarkers?.get(node)?.has(attribute))) throw deny('namespace-conflict');
-      if(dshBound && node===dshSurface.node && dshCurrent())markerTargets.set(node,new Set());
-      if (!markerTargets.has(node)) throw deny('main-paint-unsupported');
-      markerTargets.get(node).add(attribute);
     }
     let themeApplied = themeAlpha === null, themePending = false, themeFailure = '';
     const geometryKey = geometry => JSON.stringify([geometry.rect, geometry.viewport]);
@@ -585,10 +559,8 @@ export async function installRenderer(offered) {
     const candidate = document.createElement('style');
     candidate.id = SHEET_ID;
     candidate.setAttribute(SHEET_OWNER_ATTRIBUTE, controllerOwner);
-    const paintRule = mainPaint ? '\nhtml[data-azhou-wallpaper="active"] #root [data-azhou-dream-main][data-azhou-dream-main=' + JSON.stringify(sceneURL) + ']{background-color:rgba('
-      + mainPaint.rgba.join(',') + ')!important;background-image:none!important;}' : '';
     const candidateText = brief.css.replaceAll('__AZHOU_WALLPAPER_INSTANCE__', JSON.stringify(sceneURL))
-      + (hostBound ? binding.css : '') + paintRule;
+      + (hostBound ? binding.css : '');
     candidate.textContent = candidateText;
 
     // ── Controller state and verification probe ───────────────────────────
@@ -674,18 +646,7 @@ export async function installRenderer(offered) {
       const surfaces = liveSurfaces().filter(node => node.isConnected);
       const bodyLayer = getComputedStyle(document.body);
       const themeMatched = themeAlpha === null || themeApplied;
-      let mainPaintApplied = false;
-      if (mainPaint) {
-        const node = paintNode;
-        const computed = getComputedStyle(node);
-        const color = /^rgba?\(\s*([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:\s*[,/]\s*([\d.]+))?\s*\)$/.exec(computed.backgroundColor);
-        const rgba = color ? [+color[1],+color[2],+color[3],color[4] === undefined ? 1 : +color[4]] : null;
-        mainPaintApplied = node.getAttribute('data-azhou-dream-main') === sceneURL
-          && computed.backgroundImage === 'none' && !!rgba && rgba.every((channel, index) =>
-            Math.abs(channel - (index === 3 ? mainPaint.rgba[index] : Math.round(mainPaint.rgba[index]))) < .001);
-      }
-      const clearSurfaces = mainPaint ? surfaces.filter(node => node !== paintNode) : surfaces;
-      const transparentSurfaces = clearSurfaces.filter(node => {
+      const transparentSurfaces = surfaces.filter(node => {
         const computed = getComputedStyle(node);
         return isTransparent(computed.backgroundColor) && computed.backgroundImage === 'none';
       }).length;
@@ -723,14 +684,13 @@ export async function installRenderer(offered) {
       const styleCount = document.querySelectorAll('#' + SHEET_ID).length;
       const applied = pageAdmitted() && imageDecoded && candidate.isConnected && styleCount === 1
         && html.getAttribute(ACTIVATION) === 'active'
-        && (!mainPaint || mainPaintApplied) && surfaces.length > 0 && transparentSurfaces === clearSurfaces.length && themeMatched
+        && surfaces.length > 0 && transparentSurfaces === surfaces.length && themeMatched
         && rootClear && workspaceBackgroundClear && footerBackgroundClear && backgroundMatched
         && washMatched
         && footerFadeClear && topFadeClear && decorationEffectsClear && unknownLayers.length === 0
         && coverMatched && fixedViewport;
       return {
         version: BUILD, applied, imageDecoded, matchedSurfaces: surfaces.length,
-        ...(mainPaint ? { mainPaintApplied, profile: 'codex-main-literal-paint/v1', sourceDeclarationCount: mainPaint.sourceDeclarationCount } : {}),
         backgroundMatched, washMatched, coverMatched, fixedViewport, transparentSurfaces, rootClear, themeMatched,
         ...(themeAlpha !== null ? { themeApplied, themePending, themeFailure, fallbackApplied: !themeApplied && backgroundMatched && washMatched } : {}),
         workspaceBackgroundClear,
@@ -865,7 +825,7 @@ export async function installRenderer(offered) {
     };
     geometryChanged = geometry => { themeGeometry = geometry; refreshTheme(geometry); };
     function updateSurface(value) {
-      if (mainPaint || retired || suspended || (workspaceBound && !workspaceCurrent()) || slotValue(globalThis, CONTROLLER_SLOT) !== controller
+      if (retired || suspended || (workspaceBound && !workspaceCurrent()) || slotValue(globalThis, CONTROLLER_SLOT) !== controller
           || document.documentElement !== html || !shell.isConnected
           || document.getElementById('root') !== shell || !colorPlausible(value)) return false;
       const valueNow = html.style.getPropertyValue(SURFACE_PROPERTY);
@@ -977,7 +937,7 @@ export async function installRenderer(offered) {
 
     invalidateWorkspace = () => {
       if (retired || suspended || !sheetCommitted || slotValue(globalThis, CONTROLLER_SLOT) !== controller) return;
-      const carry = workspaceBound && activationPhase === 'finalized' && !brief.themeState && !brief.mainPaint
+      const carry = workspaceBound && activationPhase === 'finalized' && !brief.themeState
         && typeof onWorkspaceInvalidated === 'function' && scene.complete && scene.naturalWidth > 0
         && scene.naturalHeight > 0 && scene.src === sceneURL;
       let available = false, claimed = false;
