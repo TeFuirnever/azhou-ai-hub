@@ -166,28 +166,24 @@ class PstackDistributionContractTest(unittest.TestCase):
     def test_hub_portable_orchestration_overlays_preserve_recovery_and_gates(self) -> None:
         overlay = PACKAGE / "hub-skills/poteto-mode/playbooks"
         pristine = PACKAGE / "pstack/skills/poteto-mode/playbooks"
-        # Upstream removed its orchestrate playbook before the 0.15.43 pin, so
-        # the Hub overlay ships alone; autopilot-full still has a pristine
-        # counterpart the overlay must differ from.
+        # Upstream sunset its orchestrate playbook before the 0.15.43 pin and
+        # the Hub followed on 2026-11-19: no orchestrate playbook ships
+        # anywhere. autopilot-full keeps a pristine counterpart the overlay
+        # must differ from.
         self.assertFalse((pristine / "orchestrate.md").exists())
-        self.assertTrue((overlay / "orchestrate.md").is_file())
+        self.assertFalse((overlay / "orchestrate.md").exists())
         self.assertTrue((pristine / "autopilot-full.md").is_file())
         self.assertNotEqual((overlay / "autopilot-full.md").read_bytes(),
                             (pristine / "autopilot-full.md").read_bytes())
-        for name in ("orchestrate.md", "autopilot-full.md"):
-            source = (overlay / name).read_bytes()
-            for host in ("claude-code", "codex", "zcode", "skills-root"):
-                with self.subTest(host=host, playbook=name):
-                    generated = HARNESS / host / "skills/poteto-mode/playbooks" / name
-                    self.assertEqual(generated.read_bytes(), source)
-            content = source.decode("utf-8")
-            self.assertIn("independent", content)
-            self.assertIn("head SHA", content)
-            self.assertIn("restart", content.lower())
-        plan = (overlay / "orchestrate.md").read_text(encoding="utf-8")
-        for term in ("no real Task", "local worktree", "standing orders",
-                     "bounded stuck threshold", "at most", "No invented scheduler"):
-            self.assertIn(term, plan)
+        source = (overlay / "autopilot-full.md").read_bytes()
+        for host in ("claude-code", "codex", "zcode", "skills-root"):
+            with self.subTest(host=host, playbook="autopilot-full.md"):
+                generated = HARNESS / host / "skills/poteto-mode/playbooks" / "autopilot-full.md"
+                self.assertEqual(generated.read_bytes(), source)
+        content = source.decode("utf-8")
+        self.assertIn("independent", content)
+        self.assertIn("head SHA", content)
+        self.assertIn("restart", content.lower())
         auto = (overlay / "autopilot-full.md").read_text(encoding="utf-8")
         self.assertIn("No auto-loop unless installed", auto)
         self.assertIn("stop at merge-ready", auto)
@@ -242,8 +238,8 @@ class PstackDistributionContractTest(unittest.TestCase):
         self.assertNotIn("0024-hub-distribution-version-0.15.38.patch", series)
         self.assertIn("0022-hub-claude-sheet-hook-path.patch", series)
         self.assertIn("0023-hub-worktree-audit-preserve-untracked.patch", series)
-        self.assertIn("0024-hub-orchestrate-routing-restore.patch", series)
-        self.assertEqual(series[-1], "0024-hub-orchestrate-routing-restore.patch")
+        self.assertNotIn("0024-hub-orchestrate-routing-restore.patch", series)
+        self.assertEqual(series[-1], "0023-hub-worktree-audit-preserve-untracked.patch")
 
     def test_codex_adapter_model_and_agent_paths_match_native_hook(self) -> None:
         source = (PACKAGE / "hub-adapters/codex.md").read_text(encoding="utf-8")
