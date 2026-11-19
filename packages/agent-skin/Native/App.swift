@@ -1499,7 +1499,7 @@ enum NativeStartupSnapshotTransfer {
     private static func encodedPayload(_ snapshot: StartupSettingsSnapshot) throws -> Data {
         let values = snapshot.values
         let settings: [String: Any] = [
-            "schemaVersion": values.themeState?.importedImage == nil ? 1 : 2, "avatar": values.avatar, "artwork": values.artwork,
+            "schemaVersion": 1, "avatar": values.avatar, "artwork": values.artwork,
             "contours": values.contours.map { path in path.map { [$0.x, $0.y] } },
             "introTitle": values.introTitle, "introCaption": values.introCaption,
             "artworkSubtitle": values.artworkSubtitle, "wallpaperStrength": values.wallpaperStrength,

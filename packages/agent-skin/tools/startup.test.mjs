@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createHash, webcrypto } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
-import { validateThemeSnapshot, verifyThemeSnapshotArtwork } from '../dream-theme-style.mjs';
+import { validateThemeSnapshot } from '../dream-theme-style.mjs';
 import { installStartup } from '../extension/renderer.mjs';
 import { createCodexPageAdapter } from '../extension/codex-page-adapter.mjs';
 import { createDSHPageAdapter } from '../extension/hosts/dsh.mjs';
@@ -3064,7 +3064,7 @@ function snapshotFixture(snapshotSource, { playbackOwner = 'page', observeAppear
     assets: { value: assets },
     ...(wallpaperApply ? { applyWallpaper: { value: (value, current, signal, options) => wallpaperApply(value, current, controlled.host, signal, options) } } : {}),
     createLocalization: { value: () => ({ t: key => key, subscribe: () => () => {} }) },
-    createDreamThemeStyle: { value: () => ({validateThemeSnapshot,verifyThemeSnapshotArtwork}) },
+    createDreamThemeStyle: { value: () => ({validateThemeSnapshot}) },
     createImageSettings: { value: input => {
       factoryInputs.push(input);
       return {

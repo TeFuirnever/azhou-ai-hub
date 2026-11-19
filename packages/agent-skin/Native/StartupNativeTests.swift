@@ -1541,7 +1541,7 @@ private func startupSettingsSnapshotChecks() async throws -> Int {
         ("tagged bundled", { $0 = ["schemaVersion": 2, "revision": 1,
             "imagesBinding": String(repeating: "a", count: 64),
             "selection": ["kind": "bundled", "id": "azhou-q-v3", "surfaceTransparency": ["mode": "override", "value": 65]]] }, true),
-        ("imported png", { $0 = importedTheme }, true),
+        ("imported png", { $0 = importedTheme }, false),
         ("imported unknown profile", { $0 = importedTheme; var selection = importedSelection; selection["profile"] = "other"; $0["selection"] = selection }, false),
         ("imported extra CSS", { $0 = importedTheme; var selection = importedSelection; selection["css"] = "body{}"; $0["selection"] = selection }, false),
         ("imported boolean rgba", { $0 = importedTheme; var selection = importedSelection;
@@ -1579,12 +1579,7 @@ private func startupSettingsSnapshotChecks() async throws -> Int {
                     deadline: 110, now: { 100 }, evaluate: { expression, _ in expressions.append(expression); return true })
                 try JSONSerialization.data(withJSONObject: expressions).write(to: URL(fileURLWithPath: path))
             }
-            if received.values.themeState?.importedImage != nil {
-                expect(received.values.themeState?.transparency == nil, "imported alpha comes from the finite plan, not P07 override")
-                let selection = received.values.themeState?.object["selection"] as? [String: Any]
-                expect(selection?["profile"] as? String == "codex-main-literal-paint/v1", "imported profile survives typed receiver")
-                expect(received.values.artwork == (object["settings"] as? [String: Any])?["artwork"] as? String, "original image retained once without conversion")
-            } else { expect(received.values.themeState?.transparency == 65, "theme alpha survives receiver") }
+            expect(received.values.themeState?.transparency == 65, "theme alpha survives receiver")
             expect(received.values.themeState?.imagesBinding == (object["themeState"] as? [String: Any])?["imagesBinding"] as? String, "theme binding survives receiver without becoming authorization")
         } catch let failure as StartupFailure {
             expect(!valid && failure.reason == "snapshot-invalid", "theme validation rejects only malformed values: \(name)")
