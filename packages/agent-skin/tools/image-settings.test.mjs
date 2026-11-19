@@ -760,11 +760,20 @@ test('loadSnapshot reports an unknown stored image schema as read-only failure',
 
   assert.equal(snapshot.status, 'failure');
   assert.equal(snapshot.reason, 'settings-blocked');
+  assert.equal(snapshot.readOnly, true);
   assert.equal(Object.hasOwn(snapshot, 'settings'), false);
   assert.deepEqual(storage.state.record, invalid);
   assert.equal(storage.state.puts, 0);
   assert.equal(storage.state.deletes, 0);
   assert.equal(storage.state.clears, 0);
+});
+
+test('loadSnapshot identifies a temporarily blocked database without declaring unknown data', async () => {
+  const storage=makeIndexedDB(undefined,{openBlocked:true});
+  const fixture=makeFixture({indexedDB:storage.indexedDB});
+  const snapshot=await fixture.api.loadSnapshot({avatar:'data:image/png;base64,AAAA',artwork:'data:image/png;base64,BBBB',contours:[],wallpaperStrength:42});
+  assert.equal(snapshot.status,'failure');assert.equal(snapshot.reason,'settings-blocked');assert.notEqual(snapshot.readOnly,true);
+  assert.equal(storage.state.puts,0);fixture.api.dispose();
 });
 
 test('loadSnapshot reports a storage read failure separately from a missing record', async () => {

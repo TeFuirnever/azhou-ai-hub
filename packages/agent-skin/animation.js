@@ -1666,7 +1666,7 @@ function installAnimation(
         const usesSnapshot = typeof imageSettings.loadSnapshot === 'function';
         const loadedSettings = usesSnapshot ? await imageSettings.loadSnapshot(defaultAssets,true) : await imageSettings.load(defaultAssets);
         if (disposed || currentGeneration !== generation) return;
-        if (loadedSettings?.status === 'failure' && (loadedSettings.readOnly || loadedSettings.reason === 'settings-blocked')) {
+        if (loadedSettings?.status === 'failure' && loadedSettings.readOnly) {
           throw Object.assign(new Error('settings-blocked'),{settingsBlocked:true});
         }
         settingsLoadReason = typeof loadedSettings?.reason === 'string' ? loadedSettings.reason : '';

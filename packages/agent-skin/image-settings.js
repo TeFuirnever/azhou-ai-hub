@@ -737,7 +737,7 @@ function createImageSettings(environment) {
         reason: typeof error?.reason === 'string' ? error.reason : 'settings-unavailable',
       });
     }
-    if (currentThemeReadOnly || currentImagesReadOnly) return Object.freeze({status:'failure',reason:'settings-blocked'});
+    if (currentThemeReadOnly || currentImagesReadOnly) return Object.freeze({status:'failure',reason:'settings-blocked',readOnly:true});
     const reason = typeof loaded?.reason === 'string' ? loaded.reason : 'settings-unavailable';
     if (reason) return Object.freeze({ status: 'failure', reason });
     if (currentThemeState?.selection?.kind === 'imported') return loadImportedSnapshot(loaded,explicitDefaults);

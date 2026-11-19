@@ -1477,6 +1477,26 @@ test('an unavailable saved-settings store falls back to defaults and shows only 
   fixture.handle.dispose();
 });
 
+test('a temporarily blocked settings database shows the safe fallback', async () => {
+  const fixture=createFixture();
+  fixture.settingsInstance.loadSnapshot=async()=>({status:'failure',reason:'settings-blocked'});
+  try {
+    await waitReady(fixture);
+    assert.equal(fixture.root.querySelector('[data-agent-skin-settings-result]')?.textContent,
+      'Saved settings are temporarily unavailable. Defaults are in use; saved settings are unchanged.');
+    assert.equal(fixture.messages.some(message=>message.action==='assetError'),false);
+  } finally {fixture.handle.dispose();}
+});
+
+test('an unknown read-only settings snapshot does not start with fallback data', async () => {
+  const fixture=createFixture();
+  fixture.settingsInstance.loadSnapshot=async()=>({status:'failure',reason:'settings-blocked',readOnly:true});
+  try {
+    await waitForMessage(fixture,'assetError');
+    assert.equal(fixture.messages.some(message=>message.action==='ready'),false);
+  } finally {fixture.handle.dispose();}
+});
+
 test('a bitmap conversion failure releases decoded images and any earlier bitmap', async () => {
   const fixture = createFixture({ settings: false, bitmapMode: 'second-reject' });
   await waitForMessage(fixture, 'assetError');
