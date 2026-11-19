@@ -479,6 +479,8 @@ except m.Blocked as error:
 raise SystemExit(code)
 """
         lock = self.library / self.tool.LOCK_NAME
+        replacement = self.root / 'replacement-lock'
+        replacement.write_bytes(self.tool.LOCK_CONTENT)
         with self.tool.descriptor(os.open(lock, self.tool.FILE_FLAGS)) as fd:
             self.tool.fcntl.flock(fd, self.tool.fcntl.LOCK_EX)
             worker = subprocess.Popen([sys.executable, '-B', '-c', program, str(TOOL), str(self.library), str(ready)],
@@ -488,8 +490,8 @@ raise SystemExit(code)
                 while not ready.exists() and time.monotonic() < end:
                     time.sleep(0.005)
                 self.assertTrue(ready.exists())
-                lock.rename(self.root / 'held-original-lock')
-                lock.write_bytes(self.tool.LOCK_CONTENT)
+                # Keep the lock name present while changing its identity.
+                replacement.replace(lock)
                 stdout, stderr = worker.communicate(timeout=3)
                 self.assertEqual(worker.returncode, 2, stderr)
                 self.assertEqual(json.loads(stdout)['reason'], 'library_lock_changed')
