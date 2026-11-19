@@ -308,7 +308,10 @@ function makeIndexedDB(initialRecord, options = {}) {
             }
             return true;
           };
-          if (options.holdRequests) state.heldRequests.push({ kind, release });
+          if (options.holdRequests) {
+            state.heldRequests.push({ kind, release });
+            options.onHeldRequest?.(state);
+          }
           else queueMicrotask(() => release());
           return request;
         },
@@ -2951,21 +2954,33 @@ for(const key of ['record','themeRecord','libraryRecord','dreamRecord'])test('Dr
 for(const phase of ['pending-gets','pending-put'])for(const end of ['cancel','dispose','timeout'])test('Dream '+phase+' '+end+' cannot commit a late transaction callback',async()=>{
   const options={};const storage=makeIndexedDB(undefined,options);const f=dreamSettingsFixture(storage);await f.fixture.api.load(f.defaults);
   options.holdRequests=true;
-  const importing=f.fixture.api.importDreamCapsule(dreamSourceFile());
+  let markReady,timer;
+  const ready=new Promise(resolve=>{markReady=resolve;});
+  options.onHeldRequest=state=>{if(state.heldRequests.length===4)markReady();};
+  const source=dreamSourceFile(),read=source.arrayBuffer;
+  source.arrayBuffer=async()=>{for(let i=0;i<40;i++)await new Promise(resolve=>setImmediate(resolve));return read();};
+  const importing=f.fixture.api.importDreamCapsule(source);
   const rejected=assert.rejects(importing,{reason:end==='timeout'?'operation-timeout':'operation-cancelled'});
-  for(let i=0;i<30&&storage.state.heldRequests.length<4;i++)await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(storage.state.heldRequests.length,4);
-  if(phase==='pending-put'){
-    assert.deepEqual(storage.state.releaseHeldRequests(),[true,true,true,true]);
-    assert.equal(storage.state.heldRequests.length,1,'Only candidate put remains pending');
+  rejected.catch(()=>{});
+  try {
+    await Promise.race([ready,new Promise((_resolve,reject)=>{timer=setTimeout(()=>reject(new Error('IDB requests were not ready')),5000);})]);
+    clearTimeout(timer);
+    assert.equal(storage.state.heldRequests.length,4);
+    if(phase==='pending-put'){
+      assert.deepEqual(storage.state.releaseHeldRequests(),[true,true,true,true]);
+      assert.equal(storage.state.heldRequests.length,1,'Only candidate put remains pending');
+    }
+    if(end==='cancel')assert.equal(f.fixture.api.cancelDreamImport(),true);
+    else if(end==='dispose')f.fixture.api.dispose();
+    else f.fixture.advance(10_001);
+    await rejected;
+    storage.state.releaseHeldRequests(true);await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(storage.state.dreamRecord,undefined);assert.equal(storage.state.record,undefined);assert.equal(storage.state.themeRecord,undefined);
+    assert.equal(f.fixture.created.length,f.fixture.revoked.length);assert.equal(f.fixture.api.isBusy(),false);
+  } finally {
+    clearTimeout(timer);f.fixture.api.dispose();storage.state.releaseHeldRequests(true);
+    await importing.catch(()=>{});await rejected.catch(()=>{});
   }
-  if(end==='cancel')assert.equal(f.fixture.api.cancelDreamImport(),true);
-  else if(end==='dispose')f.fixture.api.dispose();
-  else f.fixture.advance(10_001);
-  await rejected;
-  storage.state.releaseHeldRequests(true);await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(storage.state.dreamRecord,undefined);assert.equal(storage.state.record,undefined);assert.equal(storage.state.themeRecord,undefined);
-  assert.equal(f.fixture.created.length,f.fixture.revoked.length);assert.equal(f.fixture.api.isBusy(),false);f.fixture.api.dispose();
 });
 test('unknown stored image schema is read-only rather than rewritten from fallback defaults',async()=>{
   const future={schemaVersion:99,assets:{future:'preserve'}};const storage=makeIndexedDB(future);const f=dreamSettingsFixture(storage);
