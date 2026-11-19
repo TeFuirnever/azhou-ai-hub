@@ -8,7 +8,7 @@ host layer (decision record HUB-RET-001). A clean cut is checked, not
 asserted: this gate fails deterministically when a live reference to any
 of the three objects re-enters the public repository surface, so a
 resurrection cannot ride in silently with an unrelated change. The same
-gate covers the Azhou Codex Pet retirement on 2026-11-18.
+gate covers the Azhou Codex Pet and Hub PDF skill retirements.
 
 Exactly two exemption classes exist (ticket #448, spec #442 hard bar):
 
@@ -43,6 +43,7 @@ RETIRED_PACKAGE_ROOTS = (
     "packages/agent-orchestration-kit/",
     "packages/codex-startup-animation/",
     "packages/agent-skin/pet/",
+    "skills/super-pdf/",
 )
 
 # Retired object 3: agent-skin's ZCode host layer, deleted with ticket #444.
@@ -73,6 +74,7 @@ RETIRED_AGENT_SKIN_FILES = (
 # publicly declared surface unrelated to agent-skin's retired host layer,
 # and the frozen identifier strings below are masked before this search.
 RETIRED_REFERENCE_TOKENS = (
+    ("super-pdf", re.compile(r"(?<![\w-])super[- _]pdf(?![\w-])", re.IGNORECASE)),
     ("Codex Pet tooling", re.compile(r"(?<![\w-])(?:manage|import|test|test-import)-codex-pet(?![\w-])")),
     ("Codex Pet theme path", re.compile(r"(?<![\w-])pet/theme\.json(?![\w-])")),
     # agent-orchestration-kit: package name, deleted adapter script stem,

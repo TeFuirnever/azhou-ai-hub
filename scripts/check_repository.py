@@ -79,7 +79,6 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-i-have-adhd/SKILL.md",
     "skills/super-imagegen/SKILL.md",
     "skills/super-lavish/SKILL.md",
-    "skills/super-pdf/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
     "skills/super-session-insights/SKILL.md",
 }
@@ -516,12 +515,6 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "GitHub 操作，真相永远在 CLI 里。",
         "startup": "🦊 阿舟 · Gh Axi 启动（mode=<inspect|operate|raw>, scope=<github-area>）",
         "brand_path": "skills/super-gh-axi/references/brand-layer.md",
-    },
-    "skills/super-pdf/SKILL.md": {
-        "display_name": "Pdf",
-        "motto": "先验依赖，再动这份 PDF。",
-        "startup": "🦊 阿舟 · Pdf 启动（mode=<extract|assemble|create|forms|secure>, scope=<pdf-task>）",
-        "brand_path": "skills/super-pdf/references/brand-layer.md",
     },
 }
 
