@@ -1,6 +1,6 @@
 ---
 name: super-azhou-info
-description: Azhou skill. Renamed from azhou-info (the old name still triggers this skill). Report provable Azhou AI Hub checkout information or revision facts. Use for project info, installable repository inventory, support facts, version, commit, branch, or dirty-state questions; also for 这是什么版本, 现在装了哪些 skill, or "what revision is this checkout on".
+description: Azhou skill. Renamed from azhou-info (the old name still triggers this skill). Report provable Azhou AI Hub checkout information or revision facts. Use for project info, skills installable from this checkout, support facts, version, commit, branch, or dirty-state questions; also for 这是什么版本, 这个仓库有哪些技能可安装, or "what revision is this checkout on".
 invocation: user-invoked orchestrator
 ---
 
@@ -30,7 +30,7 @@ In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<pro
 2. Run one read-only command from that checkout:
    - General project/runtime/support facts and installable repository inventory: `python scripts/azhou_hub.py info --json`
    - Revision, branch, dirty state, or release-version questions: `python scripts/azhou_hub.py version --json`
-3. Report only fields returned by the command. A missing `release_version` is not an installation failure and must not be invented.
+3. Report only fields returned by the command. The `installable_skills` list is checkout inventory (仓库可安装清单), not evidence of installation or loading. For installation at an explicit skill root, point to `doctor --target <skill-root> --json`; for what the active harness has loaded, point to that harness's native discovery. Neither is an Info mode. A missing `release_version` is not an installation failure and must not be invented.
 4. End with a receipt containing `schema`, `status`, `mode`, `scope`, `command`, `changes`, `verification`, `holds`, and `next_action`. `changes` is always empty.
 
 If no valid checkout is available, stop with `status=hold` and request one explicit checkout path. For requirements and a smoke check, read [setup and compatibility](references/setup.md).

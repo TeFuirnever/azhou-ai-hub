@@ -147,6 +147,26 @@ class AzhouHubCliTest(unittest.TestCase):
             payload["installable_skills"],
         )
 
+    def test_info_skill_distinguishes_checkout_inventory_from_install_and_discovery(self) -> None:
+        info_skill = (ROOT / "skills" / "super-azhou-info" / "SKILL.md").read_text(encoding="utf-8")
+        _, frontmatter, workflow = info_skill.split("---", 2)
+        self.assertIn("哪些技能可安装", frontmatter)
+        self.assertNotIn("现在装了哪些 skill", frontmatter)
+        self.assertIn("`doctor --target <skill-root> --json`", workflow)
+        self.assertIn("native discovery", workflow)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            target.mkdir()
+            result, info = self._json_main(["info", "--json"], root=root)
+            self.assertEqual(0, result)
+            self.assertEqual(["sample"], info["installable_skills"])
+            _, doctor = self._json_main(["doctor", "--target", str(target), "--json"], root=root)
+            check = next(item for item in doctor["checks"] if item["name"] == "target:sample")
+            self.assertEqual("warn", check["status"])
+            self.assertEqual("not installed at target", check["details"])
+            self.assertEqual([], list(target.iterdir()))
+
     def test_azhou_skill_packages_install_and_doctor_cleanly(self) -> None:
         for name in AZHOU_SKILL_NAMES:
             with self.subTest(skill=name), tempfile.TemporaryDirectory() as directory:
