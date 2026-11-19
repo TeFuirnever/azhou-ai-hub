@@ -740,10 +740,8 @@ class PageController {
     const createLocalization = dataProperty(this.payload, 'createLocalization');
     const localization = typeof createLocalization === 'function'
       ? createLocalization({ locale: appearance.locale, themeConfig: this.assets?.themeConfig }) : null;
-    const dreamFactory = dataProperty(this.payload,'createDreamThemeStyle');
     const factoryInput = {
       document: this.document,
-      dreamThemeStyle: typeof dreamFactory === 'function' ? dreamFactory() : null,
       crypto: this.host.crypto, TextEncoder: this.host.TextEncoder, TextDecoder: this.host.TextDecoder, Blob: this.host.Blob, AbortController: this.host.AbortController ?? AbortController,
       Image: this.host.Image,
       URL: this.host.URL ?? URL,

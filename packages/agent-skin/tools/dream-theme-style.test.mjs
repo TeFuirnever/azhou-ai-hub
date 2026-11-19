@@ -4,10 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { parseSafeCssAst } from '../vendor/dream-safe-css-ast.mjs';
 import { validateSafeCss } from '../vendor/dream-safe-css-validator.mjs';
-import * as canonicalDream from '../dream-theme-style.mjs';
-import { generatedDream } from './test-dream-generated.mjs';
-for (const api of [canonicalDream, generatedDream]) {
-const { mapDreamTheme, DREAM_PAINT_PROFILE } = api;
+import { mapDreamTheme, DREAM_PAINT_PROFILE } from '../dream-theme-style.mjs';
 
 const main = '[data-ds-part="main"]';
 const theme = {schemaVersion: 1, id: 'dream.demo', name: '<b>Display only</b>', image: 'background.png'};
@@ -56,4 +53,3 @@ assert.equal(createHash('sha256').update(vendor).digest('hex'), '98a626655a4167b
 const generator = spawnSync('python3', ['-B', new URL('./derive-dream-safe-css-ast.py', import.meta.url).pathname, '--check'], {encoding:'utf8'});
 assert.equal(generator.status, 0, generator.stderr);
 console.log('Dream AST derivation and total ordered literal main-paint profile passed');
-}

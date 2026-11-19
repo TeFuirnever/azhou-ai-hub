@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import { validateSafeCss, compileSafeCss, decodeAndValidateSafeCss } from '../vendor/dream-safe-css-validator.mjs';
 import { parseSafeCssAst, compileSafeCss as compileAstCss, decodeAndValidateSafeCss as decodeAstCss } from '../vendor/dream-safe-css-ast.mjs';
-import { generatedDream } from './test-dream-generated.mjs';
+import { mapDreamTheme } from '../dream-theme-style.mjs';
 const manifest = {schemaVersion:1,id:'boundary',name:'Boundary',image:'background.png'};
 const selector = '[data-ds-part="main"]';
 const css = (property,value) => `${selector}{${property}:${value};}`;
-// Positive and negative examples for every supported value grammar. The generated
+// Positive and negative examples for every supported value grammar. The offline
 // limited profile must validate the source, then reject unmapped declarations.
 const values = {
  'color': [['#fff','currentColor','rgb(0,100%,255)','rgba(0,0,0,50%)','var(--ds-theme-color-text)'],['transparent','rgb(0,0)','rgba(0,0,0,2)','rgb(256,0,0)','rgb(101%,0,0)','var(--ds-theme-font-family)']],
@@ -33,17 +33,17 @@ for(const [property,[valid,invalid]] of Object.entries(values)) {
   const ast=parseSafeCssAst(source);assert.equal(ast.rules[0].declarations[0].value,value);
   assert.match(compileSafeCss(source),/!important/);
   assert.equal(compileAstCss(source),compileSafeCss(source));
-  if(property==='background-color') assert.equal(generatedDream.mapDreamTheme(manifest,source).declarationCount,1);
-  else assert.throws(()=>generatedDream.mapDreamTheme(manifest,source),/dream_profile_unmapped_declaration/);
+  if(property==='background-color') assert.equal(mapDreamTheme(manifest,source).declarationCount,1);
+  else assert.throws(()=>mapDreamTheme(manifest,source),/dream_profile_unmapped_declaration/);
  }
  for(const value of invalid) {
   const source=css(property,value);
-  for(const parse of [validateSafeCss,parseSafeCssAst,s=>generatedDream.mapDreamTheme(manifest,s)])
+  for(const parse of [validateSafeCss,parseSafeCssAst,s=>mapDreamTheme(manifest,s)])
    assert.throws(()=>parse(source),e=>e.code==='value/unsupported',source);
  }
 }
 const malformed=[['','limit/bytes'],[' ','stylesheet/empty'],['x','syntax/block'],['{color:#fff}','selector/empty'],[`${selector}{`,'syntax/block'],[`${selector}{}`,'declaration/empty'],[`${selector}{color`,'syntax/declaration'],[`${selector}{color;}`,'syntax/declaration'],[`${selector}{1color:#fff}`,'property/name'],[`${selector}{display:none}`,'property/unsupported'],[`${selector}{color:}`,'value/empty'],[`${selector}{color:rgb(0,0,0}`,'syntax/function'],[`${selector}{color:rgb(0,0,0))}`,'syntax/function'],['\n\n'+selector+'{color:#fff}\n*/','syntax/comment'],['\n'+selector+'{color:\u0000}','syntax/control']];
-for(const [source,code] of malformed) for(const parse of [validateSafeCss,parseSafeCssAst,s=>generatedDream.mapDreamTheme(manifest,s)]) assert.throws(()=>parse(source),e=>e.code===code,source);
+for(const [source,code] of malformed) for(const parse of [validateSafeCss,parseSafeCssAst,s=>mapDreamTheme(manifest,s)]) assert.throws(()=>parse(source),e=>e.code===code,source);
 for(const parse of [validateSafeCss,parseSafeCssAst]) assert.throws(()=>parse(null),TypeError);
 assert.throws(()=>decodeAndValidateSafeCss('bad'),TypeError);
 assert.throws(()=>decodeAndValidateSafeCss(Uint8Array.of(255)),e=>e.code==='syntax/utf8');

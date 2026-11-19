@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createHash, webcrypto } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
-import { validateThemeSnapshot } from '../dream-theme-style.mjs';
+import { validateThemeSnapshot } from '../azhou-theme-snapshot.mjs';
 import { installStartup } from '../extension/renderer.mjs';
 import { createCodexPageAdapter } from '../extension/codex-page-adapter.mjs';
 import { createDSHPageAdapter } from '../extension/hosts/dsh.mjs';

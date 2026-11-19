@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import * as canonicalDream from '../dream-theme-style.mjs';
+import * as canonicalAzhou from '../azhou-theme-snapshot.mjs';
 import { generatedDream } from './test-dream-generated.mjs';
-for (const api of [canonicalDream, generatedDream]) {
+for (const api of [canonicalAzhou, generatedDream]) {
 const { validateThemeSnapshot } = api;
 const hash='a'.repeat(64), audit='b'.repeat(64);
 const bundled={schemaVersion:2,revision:1,imagesBinding:hash,selection:{kind:'bundled',id:'azhou-q-v3',surfaceTransparency:{mode:'override',value:0}}};
