@@ -8,4 +8,4 @@ Wiring-integrity suite for the super-session-insights aggregate/report pipeline,
 - privacy negative controls: the report artifact contains no absolute home path, no seeded secret-shaped string, and — with excerpts off — no transcript text;
 - fail-closed negative controls: Codex fixtures are parsed and detectable zcode stores yield `unsupported` holds with no speculative report sections.
 
-Fixtures prove wiring only; they are never benchmark evidence about model behavior. No behavior benchmark yet.
+Fixtures prove wiring only; they are never benchmark evidence about model behavior. There is no validated behavior benchmark yet. The [reflection evaluation plan](reflection/evaluation-plan.md) and [exploratory development record](reflection/development-results.md) describe separate synthetic model comparisons and their limits.

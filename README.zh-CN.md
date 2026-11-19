@@ -40,6 +40,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
+npx skills add TeFuirnever/azhou-ai-hub --skill super-pdf
 ~~~
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
@@ -69,6 +70,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 | [Imagegen](skills/super-imagegen/SKILL.md) | 经本机已装的私有 <code>azhou-imagegen</code> 运行时执行准备好的本地生图请求：分流请求、跑 doctor 门禁、遵守运行锁，交付带不可变回执的输出；运行时缺失即拒绝。 | 仅契约层包装私有本地运行时：provenance 钉有基线哈希，仓库零私有字节；fail-closed setup。尚无行为 benchmark。 |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | 为 ADHD 读者塑形输出：下一步动作先行、多步工作编号分步、每回合重述状态、压制岔题；直到读者说出停止短语才解除。 | 在冻结上游 commit <code>1ecea199</code>（MIT）上 adapted 引入：指令正文逐字保留，上游双 SHA-256 钉入 provenance；完整性测试钉住 provenance、许可副本与五条 Azhou 呈现约束。尚无行为 benchmark。 |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | 经 agent 人体工学的封装 CLI 操作 GitHub：issues、PR、堆叠 PR、讨论、CI 运行与触发、release、仓库、label、gist、Projects (v2)、Actions secrets/variables、搜索与原始 API；仓库规则点名了自己的工具时以仓库规则为准。 | 在锁定的上游正式发布 <code>gh-axi-v0.1.51</code>（commit <code>911a0868</code>，[kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi)）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
+| [Pdf](skills/super-pdf/SKILL.md) | 处理 PDF 文件：读取或提取文本、表格与图像，合并、拆分、旋转页面、加水印、创建新 PDF、填写表单、加密解密与扫描件 OCR——点名或要求产出 .pdf 文件即触发。 | 在钉住的 commit <code>e4bb5d960d</code>（Apache-2.0，许可副本逐字节保留并记录占位版权行异常）上自 [anthropics/skills](https://github.com/anthropics/skills) faithful 引入：指南正文逐字嵌入，FORMS.md/REFERENCE.md 与八个 vendored 脚本逐字节一致；fail-closed 依赖 setup。完整性测试钉住 vendored 摘要。尚无行为 benchmark。 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try.zh-CN-dark.jpg">
@@ -211,7 +213,7 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.38 **候选版**：Codex／Claude 原生插件、自带 commands 与捆绑 skills 的 zcode 插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的 pstack 共享根服务随 2026-11-14 链接退役终止）。2026-11-14 的 GUI 探针验证了 zcode 命令面，且当日共享根技能链接在位时其引用技能已加载并驱动会话；捆绑构建已于 2026-11-14 装机，经插件自带技能发现验证后共享根链接同日退役，且应用重启后当天即有真实 GUI 会话从载荷加载捆绑技能（[回执](evidence/zcode-plugin-bundled-skills-2026-11-14.md)）。完整捆绑命令→技能工作流运行、完整只读 pstack 任务运行、hook 信任与发布批准仍需独立证据。 |
+| `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**（2026-11-18 自上游 `cursor/plugins` `0.15.43` 重新钉位；各宿主装机仍停留在其回执记录的版本）：Codex／Claude 原生插件、自带 commands 与捆绑 skills 的 zcode 插件，以及 MiMo、DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的 pstack 共享根服务随 2026-11-14 链接退役终止）。2026-11-14 的 GUI 探针验证了 zcode 命令面，且当日共享根技能链接在位时其引用技能已加载并驱动会话；捆绑构建已于 2026-11-14 装机，经插件自带技能发现验证后共享根链接同日退役，且应用重启后当天即有真实 GUI 会话从载荷加载捆绑技能（[回执](evidence/zcode-plugin-bundled-skills-2026-11-14.md)）。完整捆绑命令→技能工作流运行、完整只读 pstack 任务运行、hook 信任与发布批准仍需独立证据。 |
 
 ![Agent Skin 效果图](assets/github/integration-agent-skin-effect.png)
 
@@ -233,7 +235,7 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
-2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。2026-11-18 的更新已把维护者主机的 Claude Code 插件升到 `0.15.38`（[回执](evidence/pstack-azhouzhou-claude-update-2026-11-18.md)），仅新增安装文件身份证据。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；原始上游源码未变，补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
+2026-11-11 的只读宿主清单发现，Codex 与 Claude Code 均已列出 `0.15.37` pstack 插件处于**已安装状态**。2026-11-18 的更新已把维护者主机的 Claude Code 插件升到 `0.15.38`（[回执](evidence/pstack-azhouzhou-claude-update-2026-11-18.md)），仅新增安装文件身份证据。这不等于已证明安装文件字节、真实 pstack 任务执行、SessionStart hook 信任或发布批准。详见[宿主只读验收清单](evidence/pstack-host-readonly-inventory-2026-11-11.md)及[镜像 GAP 审查](docs/research/2026-11-11-pstack-upstream-gap.md)；该次清单时原始上游源码未变（后于 2026-11-18 重新钉位），补丁队列以 [patches/series](packages/pstack-agent-harness/patches/series) 为准。
 
 通过 Hub 移除 pstack 期间，请确保目标 `CODEX_HOME` 没有其他原生插件或 marketplace 变更；计划会提示此要求，但无法验证其他进程。
 

@@ -8,7 +8,7 @@ pstack skills use Cursor names. In Claude Code, read this file once per session,
 | --- | --- |
 | `Task` | `Agent` |
 | `AskQuestion` | `AskUserQuestion`. In `-p` mode it is absent, so ask in plain text. |
-| Open a todolist | Use `TodoWrite` if the session offers it. Otherwise keep the list in your reply and update it at each phase. |
+| Open a todolist, or copy steps into the todolist tool | Use `TodoWrite` if the session offers it. Otherwise keep the list in your reply and update it at each phase. |
 | Run another pstack skill (`/name` or "the **name** skill") | `Read` `<pstack>/skills/<name>/SKILL.md` and follow it. The `Skill` tool refuses most pstack skills. When you tell the user to type it, write `/pstack-azhouzhou:<name>`. |
 | `Grep`, `Glob` | `Bash` with `rg` when the session has no `Grep` or `Glob`. |
 
@@ -18,6 +18,7 @@ pstack skills use Cursor names. In Claude Code, read this file once per session,
 | --- | --- |
 | `subagent_type: generalPurpose` | `subagent_type: "general-purpose"` |
 | `poteto-agent`, `comment-sicko` | `pstack-azhouzhou:poteto-agent`, `pstack-azhouzhou:comment-sicko` |
+| The `model:` line in `poteto-agent`'s file | It holds a Cursor slug. Pass `model` and `effort` on every `Agent` call that spawns `pstack-azhouzhou:poteto-agent`, mapped with the Models table, so that slug never reaches the API. |
 | `readonly: true` | `subagent_type: "Explore"`. It keeps `Bash`, so the brief also says "do not edit files", and you check `git status` afterward. |
 | `readonly: false` | `general-purpose`. It keeps the session's MCP servers. |
 | `environment: "cloud"` | `isolation: "worktree"`. Name the branch or commit the worker checks out. |
@@ -32,7 +33,7 @@ pstack skills use Cursor names. In Claude Code, read this file once per session,
 | Cursor | Claude Code |
 | --- | --- |
 | `claude-<family>-<version>-<effort>[-fast]`, such as `claude-opus-5-5-xhigh` | `model: "opus"` and `effort: "xhigh"`. `model` takes only `opus`, `sonnet`, `haiku`, `fable`. Drop `-fast`. |
-| A `grok-*`, `gpt-*`, or other non-Claude slug | Omit `model` so the agent runs on the session model, and say so. |
+| A `gemini-*`, `gpt-*`, or other non-Claude slug | Omit `model` so the agent runs on the session model, and say so. |
 | `auto` or `inherit-parent` | Omit `model`. |
 | The `pstack-models.mdc` rule, `~/.cursor/rules/pstack-models.mdc` | Use `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md`, the exact configuration-root sheet read by the shipped SessionStart hook. This file is NOT automatically loaded by the rules directory; read it when roles are needed. If a requested model is unavailable, use only a permitted, host-supported fallback and report it; otherwise block. |
 | A role value `<model> <effort>`, such as `opus high` | `model: "opus"` and `effort: "high"`. |
@@ -42,7 +43,7 @@ pstack skills use Cursor names. In Claude Code, read this file once per session,
 Claude Code can load rules-directory markdown, but the pstack SessionStart reader uses the separate config-root sheet. For `setup-pstack` write `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md` (honoring CLAUDE_CONFIG_DIR), not the rules directory; trust and enablement of the hook remain separate user decisions. Follow its other steps with these changes:
 
 - Detect. The detected models are the `model` values that the `Agent` tool schema lists, each with an effort from its `effort` values. Write a real model as `<model> <effort>`, such as `opus xhigh`. The effort is the last token, so the budget step works as written.
-- Defaults. Map each default slug with the rows above: `claude-opus-5-5-xhigh` is `opus xhigh`, and `grok-4.7-xhigh-fast` is `inherit-parent`.
+- Defaults. Map each default slug with the rows above: `claude-opus-5-5-xhigh-fast` is `opus xhigh`, `claude-opus-5-5-high-fast` is `opus high`, `claude-fable-5-2-high` is `fable high`, and `gemini-4-carbon-high` is `inherit-parent`.
 - Write. Write `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md` with no frontmatter, then the comment lines, budget and role rows from step 5. Check the active config root and preserve the existing `session hook` setting unless the user explicitly changes it; stop on duplicate or ambiguous settings. Leave an absent setting absent unless the user chooses one. A `session hook: off` row disables automatic injection; never place role rows in `CLAUDE.md` or `AGENTS.md`.
 
 ## Paths

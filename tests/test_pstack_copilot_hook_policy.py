@@ -30,7 +30,7 @@ class PstackCopilotHookPolicyTest(unittest.TestCase):
         self.assertTrue(parser.is_file(), "the hook cannot parse a missing model sheet")
         self.assertTrue(checker.is_file(), "setup-pstack requires the same validator")
         roles = re.findall(r'roles\[\+\+n\] = "([^"]+)"', parser.read_text())
-        self.assertEqual(len(roles), 17)
+        self.assertEqual(len(roles), 9)
 
         with tempfile.TemporaryDirectory(prefix="pstack-hook-policy-") as work:
             home = Path(work)

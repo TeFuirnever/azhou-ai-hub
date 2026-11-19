@@ -1,0 +1,88 @@
+Description: restore the Hub-kept Orchestrate routing, enumeration, and guide sentences
+Author: Azhou AI Hub
+Forwarded: not-needed
+
+Upstream 0.15.43 condensed the poteto-mode routing paragraph and dropped
+Orchestrate from it along with the playbook itself. The Hub distribution
+still ships hub-skills/poteto-mode/playbooks/orchestrate.md into every
+tree, so the retained playbook keeps its normal entry route: standing
+project-scale programs route to Orchestrate, figure-it-out keeps the
+bespoke-run lane. The condensed playbook list cut Orchestrate's title
+too, while the Hub ships twenty-three playbooks, so the patch restores
+the title in its base order between Autonomous run and Autopilot-full.
+The same deletion dropped the Orchestrate guide sentences from
+docs/guide/07-overnight.md, docs/guide/02-poteto-mode.md and
+skills/poteto-help/SKILL.md, so the patch restores those too, while
+figure-it-out keeps its large-or-cross-cutting lane. Applies to the
+pristine tree before the generator mirrors it into all five harness trees.
+
+--- a/pstack/skills/poteto-mode/SKILL.md
++++ b/pstack/skills/poteto-mode/SKILL.md
+@@ -105,6 +105,6 @@
+ 
+ ## Playbooks
+ 
+-Match the task to a playbook and open its steps at `playbooks/<title>.md`, with the title in kebab case. Copy its steps into the todolist tool first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **figure-it-out** skill.
++Match the task to a playbook and open its steps at `playbooks/<title>.md`, with the title in kebab case. Copy its steps into the todolist tool first. Large, cross-cutting, or unattended work, or a task no playbook fits, routes to the **figure-it-out** skill. A standing project-scale program (multi-day, many stacked PRs, a fleet of subagents under one coordinator) routes to **Orchestrate** instead; figure-it-out designs one bespoke run, orchestrate runs the program.
+ 
+-Investigation, Bug fix, Perf issue, Hillclimb, Runtime forensics, Trace forensics, Feature, Refactoring, Prototype, Visual parity, Authoring a skill, Eval, Babysit, Shipping, Autonomous run, Autopilot-full, Autopilot-stack, Session pickup, Pause safely, Multi-phase plan, Worktree cleanup, Opening a PR.
++Investigation, Bug fix, Perf issue, Hillclimb, Runtime forensics, Trace forensics, Feature, Refactoring, Prototype, Visual parity, Authoring a skill, Eval, Babysit, Shipping, Autonomous run, Orchestrate, Autopilot-full, Autopilot-stack, Session pickup, Pause safely, Multi-phase plan, Worktree cleanup, Opening a PR.
+--- a/pstack/docs/guide/02-poteto-mode.md
++++ b/pstack/docs/guide/02-poteto-mode.md
+@@ -25,7 +25,7 @@
+     J --> K
+ ```
+ 
+-The diagram shows the common routes. There are also playbooks for hillclimbing a metric, diagnosing runtime symptoms and captured traces, prototypes, visual parity, authoring and evaluating skills, autonomous runs, opening a PR, babysitting a PR or stack to merge-ready, shipping a verified stack, running a PR queue or a stack on autopilot, session pickup, pausing safely, multi-phase plans, and worktree cleanup. The [playbook directory](../../skills/poteto-mode/playbooks/) has the full set.
++The diagram shows the common routes. There are also playbooks for hillclimbing a metric, diagnosing runtime symptoms and captured traces, prototypes, visual parity, authoring and evaluating skills, autonomous runs, opening a PR, babysitting a PR or stack to merge-ready, shipping a verified stack, running a PR queue or a stack on autopilot, orchestrating project-scale programs, session pickup, pausing safely, multi-phase plans, and worktree cleanup. The [playbook directory](../../skills/poteto-mode/playbooks/) has the full set.
+ 
+ ## Say the goal, not the ceremony
+ 
+--- a/pstack/docs/guide/07-overnight.md
++++ b/pstack/docs/guide/07-overnight.md
+@@ -71,7 +71,7 @@
+ 
+ ## When the night holds a queue, not a task
+ 
+-The contract above drives one task to one finish condition. Some nights hold more, a queue of independent changes or a whole program. Two playbooks and one skill scale the same trust up.
++The contract above drives one task to one finish condition. Some nights hold more, a queue of independent changes or a whole program. Three playbooks and one skill scale the same trust up.
+ 
+ [Autopilot-full](../../skills/poteto-mode/playbooks/autopilot-full.md) runs a queue of independent PRs to merged. Each PR gets one owner agent that carries it from build through merge, and no owner merges on its own verdict. A swarm of fresh verifiers checks the owner's code-ready head. A later rebase or minor fix gets one fresh verifier, and only new behavior or a large new diff calls the full swarm again. Only a clean verdict on the patch that merges authorizes the merge:
+ 
+@@ -85,15 +85,15 @@
+ /poteto-mode autopilot these five changes, but don't merge. i'll land them in the morning.
+ ```
+ 
+-A whole program, such as a migration across many packages, has no playbook of its own. `/poteto-mode` routes large or cross-cutting work to [`/figure-it-out`](../../skills/figure-it-out/SKILL.md), which designs one rigorous run for it:
++[Orchestrate](../../skills/poteto-mode/playbooks/orchestrate.md) is for a program that outlives any single agent: multi-day, many stacked PRs, fleets of subagents under one standing coordinator chat. The coordinator decides which agent does each piece of work, checks what each one produces, and never writes code itself. Large or cross-cutting work that one run can finish still routes to [`/figure-it-out`](../../skills/figure-it-out/SKILL.md), which designs one rigorous run. If one agent could finish the work in a session, the playbook itself routes you back to the overnight contract above:
+ 
+ ```text
+-/poteto-mode migrate every package to the new store. own it until each one is converted and merged. i'll check in twice a day.
++/poteto-mode orchestrate the store migration. own it until every package is converted and merged. i'll check in twice a day.
+ ```
+ 
+ ## Run many projects in parallel
+ 
+-A [Cursor Project](https://cursor.com/blog/projects) gives one coordinator agent a persistent thread. The coordinator doesn't write code. It directs subagents, which run in the cloud by default, so the work continues when your laptop is closed. Start your prompts to the coordinator with `/poteto-mode`, and the subagents it spawns follow the playbooks. Each agent it starts reads [`worker.md`](../../skills/poteto-mode/worker.md) first, so workers hold to the kickoff's bar, decide reversible calls instead of asking you, and open PRs ready for review.
++A [Cursor Project](https://cursor.com/blog/projects) gives one coordinator agent a persistent thread. The coordinator doesn't write code. It directs subagents, which run in the cloud by default, so the work continues when your laptop is closed. That's the shape the Orchestrate playbook expects. Start your prompts to the coordinator with `/poteto-mode`, and the subagents it spawns follow the playbooks. Each agent it starts reads [`worker.md`](../../skills/poteto-mode/worker.md) first, so workers hold to the kickoff's bar, decide reversible calls instead of asking you, and open PRs ready for review.
+ 
+ A few habits help:
+ 
+--- a/pstack/skills/poteto-help/SKILL.md
++++ b/pstack/skills/poteto-help/SKILL.md
+@@ -108,13 +108,13 @@
+ - `/arena` gives every worker the same brief and merges the best parts. `/swarm` splits work into slices or a race and returns one report.
+ - `/interrogate` reviews the diff. `/blast-radius` looks for breakage outside the diff and proves the one fact that makes the change safe.
+ - `/recall` rebuilds context across recent chats. `/ketchup` covers only this chat since the user's last message. Resuming one specific chat or branch is the Session pickup playbook.
+-- `/figure-it-out` designs one rigorous run. The Autonomous run playbook drives one task to a finish condition.
++- `/figure-it-out` designs one rigorous run. The Orchestrate playbook runs a program that spans days and many PRs. The Autonomous run playbook drives one task to a finish condition.
+ 
+ Not in pstack:
+ 
+ - `/deslop`, `control-cli`, and `control-ui` ship in the `cursor-team-kit` plugin.
+ - `/loop` and `/create-skill` are Cursor built-ins.
+-- pstack has no `/orchestrate` skill. If the slash menu shows `/orchestrate`, another plugin provides it.
++- pstack has no `/orchestrate` skill. Orchestrate is a `/poteto-mode` playbook. If the slash menu shows `/orchestrate`, another plugin provides it.
+ 
+ ## Playbooks and principles
+ 
