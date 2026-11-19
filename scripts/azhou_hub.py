@@ -52,6 +52,7 @@ KNOWN_RENAMES = {
     "archify": "super-archify",
     "asd-ste100": "super-asd-ste100",
     "ask-azhou": "super-ask-azhou",
+    "autoresearch": "super-autoresearch",
     "azhou-doctor": "super-azhou-doctor",
     "azhou-info": "super-azhou-info",
     "azhou-setup": "super-azhou-setup",

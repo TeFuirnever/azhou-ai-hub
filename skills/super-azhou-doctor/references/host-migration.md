@@ -41,6 +41,7 @@ Canonical renames recorded in `CHANGELOG.md` (#178-#183, the #326 brand-prefix p
 | archify | super-archify |
 | asd-ste100 | super-asd-ste100 |
 | ask-azhou | super-ask-azhou |
+| autoresearch | super-autoresearch |
 | azhou-doctor | super-azhou-doctor |
 | azhou-info | super-azhou-info |
 | azhou-setup | super-azhou-setup |
@@ -50,6 +51,6 @@ Canonical renames recorded in `CHANGELOG.md` (#178-#183, the #326 brand-prefix p
 | gh-axi | super-gh-axi |
 | session-insights | super-session-insights |
 
-`super-ci-test-reliability`, `super-prose-standard` and `super-llm-wiki` are maintainer retirements recorded in `CHANGELOG.md`: no canonical replacement exists, so the reinstall clause of migration step 3 does not apply to them — confirm and remove the residue, and record the removal.
+`super-ci-test-reliability`, `super-prose-standard`, `super-llm-wiki` and `super-autoresearch` (the latter retired with #333) are maintainer retirements recorded in `CHANGELOG.md`: no canonical replacement exists, so the reinstall clause of migration step 3 does not apply to them — confirm and remove the residue, and record the removal.
 
 A future canonical rename lands its host-side migration guidance in the same commit as the rename; this page is the runbook step those commits update.
