@@ -748,6 +748,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
   const protectedPaint = '[data-composer-layout],pre,code,[role="menu"],[role="dialog"],'
     + '[contenteditable="true"],textarea,input,button,select';
   const generatedLayer = prefix => ':is([class^="' + prefix + '"],[class*=" ' + prefix + '"])';
+  const dotDestination = '[data-sidebar-destination="builtin:orbit"]';
+  const dotMessagingShell = '.messaging-root.messaging-embedded';
   const workspaceSelectors = {
     workspace: ':is([class^="_WorkspaceContent_"],[class*=" _WorkspaceContent_"])',
     messaging: '.workspace > main.thread-pane',
@@ -800,9 +802,24 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         .filter(node => node.isConnected && !node.closest(protectedPaint));
       const visible = selector => [...activeMain.querySelectorAll(selector)]
         .filter(node => workspaceVisible(node, host) && !node.closest(protectedPaint));
+      // The host uses a memory router: only its current destination marker
+      // attests Dot. Never infer this from initialRoute or localized text.
+      const dotDestinations = [...shell.querySelectorAll(dotDestination)].filter(node =>
+        workspaceVisible(node, host));
+      const embedded = visible(dotMessagingShell);
+      const dotThread = embedded.length === 1
+        ? [...embedded[0].querySelectorAll(':scope > .workspace > main.thread-pane')]
+        : [];
+      const dotPaint = embedded.length === 1 && dotDestinations.length === 1
+        && dotDestinations[0].getAttribute('aria-current') === 'page'
+        && !activeMain.contains(dotDestinations[0])
+        && embedded[0].parentElement === activeMain
+        && !embedded[0].closest('[data-floating]')
+        && dotThread.length === 1 && workspaceVisible(dotThread[0], host) && !dotThread[0].closest(protectedPaint)
+        ? embedded[0] : null;
       const surfaces = [...new Set([shell, ...layoutAncestors.filter(node => node.matches(
         '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]')),
-      ...visible('[data-app-shell-page-surface]'), ...visible(workspaceSelectors.messaging)])];
+      ...visible('[data-app-shell-page-surface]'), ...visible(workspaceSelectors.messaging), ...(dotPaint ? [dotPaint] : [])])];
       const groups = {
         surface: surfaces,
         workspace: visible(workspaceSelectors.workspace),
@@ -918,7 +935,9 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     const activityNodes = new Set(observation.knownPaintPlanes.map(plane => plane.node));
     for (let node = observation.activeMain; node; node = node.parentElement) activityNodes.add(node);
     const structuralSelector = '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]';
-    const paintSelector = [structuralSelector, ...Object.values(workspaceSelectors)].join(',');
+    const dotGuardAttributes = ['role', 'contenteditable', 'data-composer-layout'];
+    const dotGuardSelector = [dotDestination, dotMessagingShell, workspaceSelectors.messaging].join(',');
+    const paintSelector = [structuralSelector, dotDestination, dotMessagingShell, ...Object.values(workspaceSelectors)].join(',');
     const ownRootProperties = new Set(['--azhou-wallpaper-image', '--azhou-wallpaper-wash', '--azhou-wallpaper-surface']);
     const rootStyleChanged = record => {
       const before = record.oldValue ?? '';
@@ -947,12 +966,20 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
             endObservation();
             return;
           }
-          refresh ||= [...record.addedNodes ?? []].some(node => node.matches?.(paintSelector) || node.querySelector?.(paintSelector));
+          refresh ||= [...record.addedNodes ?? [], ...record.removedNodes ?? []].some(node => node.matches?.(paintSelector) || node.querySelector?.(paintSelector));
           continue;
         }
         if (record.type !== 'attributes') continue;
         const inside = activityNodes.has(record.target) || observation.shell.contains(record.target);
         if (!inside) continue;
+        if (dotGuardAttributes.includes(record.attributeName)
+          && (record.target.matches?.(dotGuardSelector) || record.target.querySelector?.(dotGuardSelector))) refresh = true;
+        if (record.attributeName === 'data-sidebar-destination'
+          || record.attributeName === 'aria-current' && record.target.matches?.(dotDestination)
+          || record.attributeName === 'data-floating'
+          || record.attributeName === 'class' && (record.target.parentElement === observation.activeMain
+            || record.target.parentElement?.parentElement === observation.activeMain
+              && record.target.parentElement.matches(dotMessagingShell))) refresh = true;
         if (['class', 'style', 'hidden'].includes(record.attributeName) && !activityNodes.has(record.target)
           && (record.target.matches?.(paintSelector) || record.target.querySelector?.(paintSelector))) refresh = true;
         if (record.attributeName?.startsWith('data-app-shell-')
@@ -990,7 +1017,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       });
       observers.push(mutation);
       mutation.observe(host.document.documentElement, { subtree: true, childList: true, attributes: true, attributeOldValue: true,
-        attributeFilter: ['class', 'style', 'hidden', 'data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface'] });
+        attributeFilter: ['class', 'style', 'hidden', 'data-app-shell-frame', 'data-app-shell-main-surface', 'data-app-shell-page-surface',
+          'data-sidebar-destination', 'aria-current', 'data-floating', ...dotGuardAttributes] });
       if (typeof host.ResizeObserver === 'function') {
         const resize = new host.ResizeObserver(current);
         observers.push(resize);

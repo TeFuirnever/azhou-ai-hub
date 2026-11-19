@@ -1,6 +1,9 @@
 export function createWallpaperApplicator(installRenderer, options, host = globalThis) {
   const { version, css } = options;
   const pageAdapter = options.pageAdapter;
+  // Continuation is available only while the old renderer calls back, never
+  // retained across a wait, another task, or another applicator instance.
+  let decodedHandoff = null;
   const ownData = key => {
     if (!pageAdapter || !['object', 'function'].includes(typeof pageAdapter)) return undefined;
     const descriptor = Object.getOwnPropertyDescriptor(pageAdapter, key);
@@ -172,21 +175,35 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
     const binding = captureAdapter();
     binding.waitForWorkspace = workspaceOptions?.waitForWorkspace === true;
     const onWorkspaceInvalidated = workspaceOptions?.onWorkspaceInvalidated;
+    const handoff = !themeState && !mainPaint && strength !== 0 && binding.waitForWorkspace
+      && decodedHandoff?.image === image ? decodedHandoff : null;
+    const notify = typeof onWorkspaceInvalidated === 'function' ? (notice, continuation) => {
+      const previous = decodedHandoff;
+      decodedHandoff = continuation ?? null;
+      try { onWorkspaceInvalidated(notice); }
+      finally { decodedHandoff = previous; }
+    } : undefined;
     try {
-      if (binding.workspaceDeclared || typeof binding.observeWorkspace === 'function') {
+      let reusable = null;
+      if (handoff && wallpaperShellState(isCurrent, binding) === 'ready'
+        && binding.observation?.documentToken === handoff.documentToken
+        && binding.observation.workspaceEpoch > handoff.workspaceEpoch) reusable = handoff;
+      if (!reusable && (binding.workspaceDeclared || typeof binding.observeWorkspace === 'function')) {
         const state = await waitForWallpaperShell(isCurrent, binding, signal);
         if (state !== 'ready') return { applied: false, reason: state === 'cancelled' ? 'operation-cancelled' : 'wallpaper-unsupported',
           failureCode: state === 'timeout' ? 'shell-timeout' : 'shell-unsupported', imageDecoded: false };
       }
-      const encoded = image.slice(image.indexOf(',') + 1);
-      const bytes = Uint8Array.from(host.atob(encoded), character => character.charCodeAt(0));
-      const digest = await host.crypto.subtle.digest('SHA-256', bytes);
-      const imageSHA256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      let imageSHA256 = reusable?.sha;
+      if (!reusable) {
+        const encoded = image.slice(image.indexOf(',') + 1);
+        const bytes = Uint8Array.from(host.atob(encoded), character => character.charCodeAt(0));
+        const digest = await host.crypto.subtle.digest('SHA-256', bytes);
+        imageSHA256 = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+      }
       if (binding.workspaceInvalidated || signal?.aborted || (typeof isCurrent === 'function' && !isCurrent())) {
         return { applied: false, reason: 'operation-cancelled' };
       }
-
-      const shellState = await waitForWallpaperShell(isCurrent, binding, signal);
+      const shellState = reusable ? wallpaperShellState(isCurrent, binding) : await waitForWallpaperShell(isCurrent, binding, signal);
       if (shellState === 'cancelled' || signal?.aborted
         || (typeof isCurrent === 'function' && !isCurrent())) {
         return { applied: false, reason: 'operation-cancelled', imageDecoded: false };
@@ -202,7 +219,8 @@ export function createWallpaperApplicator(installRenderer, options, host = globa
         ...(workspaceOptions?.transactional === true ? {transactional:true} : {}),
         ...(binding.ports || binding.observation ? { pageAdapter } : {}),
         ...(binding.observation ? { workspaceObservation: binding.observation,
-          ...(typeof onWorkspaceInvalidated === 'function' ? { onWorkspaceInvalidated } : {}),
+          ...(notify ? { onWorkspaceInvalidated: notify } : {}),
+          ...(reusable ? { claimDecodedScene: reusable.claim } : {}),
           ...(typeof workspaceOptions?.onDecodeAdmitted === 'function' ? { onDecodeAdmitted: workspaceOptions.onDecodeAdmitted } : {}) } : {}),
       });
     } finally { binding.workspaceLease?.dispose(); }

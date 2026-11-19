@@ -23,6 +23,8 @@ def validate_browser_report(out: Path, selected: list[str]) -> None:
     required = set(selected) if selected else {
         "compiled native helper status and apply guard execute against the live fixture API objects",
         "generated Escape keeps Appearance hidden until host UI is ready",
+        "pinned gated wallpaper continuity",
+        "generated Dot wallpaper follows route and shell changes automatically",
     }
     if not isinstance(report, dict) or report.get("passed") is not True \
             or report.get("missingChecks") != [] or report.get("selectedChecks") != selected \

@@ -2931,6 +2931,21 @@ private func nativeEventContractChecks() async throws -> Int {
     let nativeDelegate = AppDelegate(runtime: nativeRuntime, presentation: nativeCandidatePresentation)
     nativeDelegate.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
     try await settleLaunch(nativeRuntime)
+    expect(nativeRuntime.terminated == 1 && nativeCandidatePresentation.orderedOutCount == 1,
+           "native completion requests termination and releases the startup cover before a late reopen")
+    let nativeEvaluationCount = nativeCandidatePresentation.evaluations.count
+    let nativeActivationCount = coldTarget.activationCount
+    let nativeJournalCount = nativeRuntime.output.count
+    for hasVisibleWindows in [false, true, false] {
+        expect(!nativeDelegate.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: hasVisibleWindows),
+               "terminal native AppDelegate rejects a late reopen event")
+    }
+    expect(nativeCandidatePresentation.visibleCount == 0 && nativeCandidatePresentation.nativeCoverCount == 1
+        && nativeCandidatePresentation.createdPlayers.count == 1 && nativeCandidatePresentation.coldRevealCount == 1
+        && nativeCandidatePresentation.orderedOutCount == 1 && nativeCandidatePresentation.evaluations.count == nativeEvaluationCount
+        && nativeRuntime.openCount == 1 && nativeRuntime.terminated == 1 && coldTarget.activationCount == nativeActivationCount
+        && nativeRuntime.output.count == nativeJournalCount,
+        "late reopen after native completion must not re-enter startup or replay the cover")
     nativeDelegate.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
     expect(nativeTransport.world.submittedInstall?.contains("native-prepare-entry-fixture") == true
         && nativeTransport.world.submittedInstall?.contains("test-only-probe") == false,
