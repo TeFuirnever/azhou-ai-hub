@@ -51,6 +51,6 @@ Canonical renames recorded in `CHANGELOG.md` (#178-#183, the #326 brand-prefix p
 | gh-axi | super-gh-axi |
 | session-insights | super-session-insights |
 
-`super-ci-test-reliability`, `super-prose-standard`, `super-llm-wiki` and `super-autoresearch` (the latter retired with #333) are maintainer retirements recorded in `CHANGELOG.md`: no canonical replacement exists, so the reinstall clause of migration step 3 does not apply to them — confirm and remove the residue, and record the removal.
+`super-ci-test-reliability`, `super-prose-standard`, `super-llm-wiki` and `super-autoresearch` (the latter retired with #333) are maintainer retirements recorded in `CHANGELOG.md`: no canonical replacement exists, so the reinstall clause of migration step 3 does not apply to them — confirm and remove the residue, and record the removal. For these retired targets a stale hook entry is removed outright once confirmed unused rather than rewritten per step 2: no canonical replacement exists to install, and rewriting to the retired name only leaves a dead reference that keeps the check failing.
 
 A future canonical rename lands its host-side migration guidance in the same commit as the rename; this page is the runbook step those commits update.
