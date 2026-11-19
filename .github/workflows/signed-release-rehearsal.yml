@@ -64,11 +64,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
         run: |
-          gh release create "$TAG" --draft --target "$GITHUB_SHA" \
+          bash scripts/draft_release.sh "$TAG" \
             --title "$TAG (signing rehearsal — draft)" \
             --notes "Keyless sigstore signing rehearsal (#225). Draft: not announced, not published. Assets: the per-skill SHA-256 manifest plus its sigstore bundle (keyless, OIDC-bound to this workflow)." \
             SKILL_SHA256SUMS.txt SKILL_SHA256SUMS.txt.sigstore
       - name: Receipt summary
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
           {
             echo "# Signed-release rehearsal receipt"
@@ -76,6 +78,6 @@ jobs:
             echo "- Manifest: SKILL_SHA256SUMS.txt (per-skill tree digests)"
             echo "- Signature: keyless sigstore (Fulcio OIDC, Rekor bundle SKILL_SHA256SUMS.txt.sigstore)"
             echo "- Identity bound to: this workflow file on refs/heads/main"
-            echo "- Draft release tag: ${{ inputs.tag }} (unpublished)"
+            echo "- Draft release tag: $TAG (unpublished)"
             echo "- Verify command: python -m sigstore verify identity --bundle SKILL_SHA256SUMS.txt.sigstore --cert-identity '<workflow uri>' --cert-oidc-issuer 'https://token.actions.githubusercontent.com' SKILL_SHA256SUMS.txt"
           } >> "$GITHUB_STEP_SUMMARY"
