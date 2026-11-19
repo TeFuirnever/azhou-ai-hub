@@ -1,5 +1,7 @@
 # anthropics/skills 文档品类引入 · 法务核查与采源冻结 — 2026-11-18
 
+> **2026-11-19 维护者后续裁决（取代下文的引入与候选计划）**：这批六项均移出 Azhou AI Hub 技术规划，不再排期或继续引入。曾合入的 PDF 包从当前发行、安装与路由撤下；DOCX [#515](https://github.com/TeFuirnever/azhou-ai-hub/pull/515) 已关闭且未合入；XLSX、PPTX、mcp-builder、webapp-testing 均未引入。下文仍按原样保留原审计、许可核查和当时裁决，不是当前采用承诺。
+
 本记录是只读采源核查与冻结（沿 [`docs/research/2026-11-11-pstack-upstream-gap.md`](2026-11-11-pstack-upstream-gap.md) 的先例）：未采用任何技能、未改动任何包、未新增任何支持声明；不触碰 pstack 排除范围。全部结论钉住 2026-11-18 的实测；本单元为 docskills-U0（差距补齐路线图首个单元），交付物是 §7 的三项维护者裁决与本文的冻结摘要。
 
 ## 1. 审计来源身份
