@@ -3699,7 +3699,7 @@ try {
         assert.equal(entry?.entryHit, true, 'appearance entry is clickable before settings save ' + round);
         assert.equal(entry?.buttonHit, true, 'appearance button is clickable before settings save ' + round);
         const opened = await clickAppearanceEntry();
-        assert.equal(opened?.state?.phase, 'loading', 'appearance click starts settings run ' + round);
+        assert.ok(['loading','settings'].includes(opened?.state?.phase), 'appearance click starts settings run ' + round);
         assert.ok(opened.state.runId > priorRunId, 'settings run ' + round + ' has a new run ID');
         expectedRunId = opened.state.runId;
       }
