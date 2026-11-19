@@ -189,7 +189,6 @@ function makeFixture(options = {}) {
     appearanceAvatar: options.appearanceAvatar,
     themeConfig: options.themeConfig,
     getAppearance: options.getAppearance,
-    dreamThemeStyle: options.dreamThemeStyle,
     Image: ImageConstructor,
     URL: {
       createObjectURL(blob) { blobs.push(blob); const value = `blob:fixture-${created.length + 1}`; created.push(value); return value; },

@@ -198,7 +198,7 @@ def decode_png(path: Path):
     return width, height, sample
 
 
-BUILD_FILES = (*BUILD_FILES, 'dream-theme-style.js', 'dream-theme-style.mjs', 'vendor/dream-safe-css-validator.mjs', 'vendor/dream-safe-css-ast.mjs', 'vendor/dream-safe-css.LICENSE', 'vendor/dream-theme-validator.mjs', 'vendor/dream-theme-validator.LICENSE')
+BUILD_FILES = (*BUILD_FILES, 'dream-theme-style.js', 'azhou-theme-snapshot.mjs')
 
 
 def clone_source_tree(destination: Path, *, private: bool = True) -> None:
@@ -263,7 +263,7 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
     marker = json.loads(marker_path.read_text(encoding="utf-8"))
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-    for name in (*IMAGE_METADATA_SOURCE_INPUTS, *artifacts.DREAM_THEME_INPUTS, "extension/codex-page-adapter.mjs"):
+    for name in (*IMAGE_METADATA_SOURCE_INPUTS, *artifacts.AZHOU_SNAPSHOT_INPUTS, "extension/codex-page-adapter.mjs"):
         marker["inputs"].pop(name)
         manifest["sourceInputs"].pop(name)
     for name in omit_marker_inputs:
@@ -280,7 +280,7 @@ def convert_bundle_to_pre_image_metadata(bundle: Path, artifacts, *, omit_source
 
     marker["inputSHA256"] = artifacts.aggregate_inputs(marker["inputs"])
     manifest["inputSHA256"] = marker["inputSHA256"]
-    for relative in (*IMAGE_METADATA_OUTPUTS, *artifacts.DREAM_PREVIEW_OUTPUTS):
+    for relative in (*IMAGE_METADATA_OUTPUTS, *artifacts.AZHOU_SNAPSHOT_PREVIEW_OUTPUTS):
         manifest["outputs"].pop(relative)
         (resources / relative).unlink()
     for relative in manifest["outputs"]:

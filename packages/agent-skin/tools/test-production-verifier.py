@@ -93,10 +93,9 @@ class VerifierApiTests(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         manifest.pop("startupEntrypoints", None)
         # Historical build 25/30 fixtures predate Dream preview outputs.
-        for relative in ("web/dream-theme-style.js", "web/vendor/dream-safe-css.LICENSE",
-                         "web/vendor/dream-theme-validator.LICENSE"):
-            manifest["outputs"].pop(relative)
-            (bundle / "Contents/Resources" / relative).unlink()
+        relative = "web/dream-theme-style.js"
+        manifest["outputs"].pop(relative)
+        (bundle / "Contents/Resources" / relative).unlink()
         manifest["outputs"].pop("startup/prepare.js", None)
         (bundle / "Contents/Resources/startup/prepare.js").unlink()
         manifest["outputs"].pop("web/assets/defaults/cold-cover.png", None)
@@ -828,6 +827,35 @@ class VerifierApiTests(unittest.TestCase):
             manifest["outputs"]["startup/prepare.js"] = hashlib.sha256(script.read_bytes()).hexdigest()
 
         tamper(change_preparation_owner, "未绑定原生播放所有权")
+
+    def test_prior_dream_bundle_keeps_an_exact_read_only_rollback_shape(self):
+        verifier = self.verifier
+        resources = self.bundle / "Contents/Resources"
+        manifest_path = resources / "startup/manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        marker = self.read_marker()
+        inputs = marker["inputs"]
+        inputs.pop("azhou-theme-snapshot.mjs")
+        for relative in verifier.LEGACY_DREAM_THEME_INPUTS:
+            data = (PACKAGE / relative).read_bytes()
+            inputs[relative] = hashlib.sha256(data).hexdigest()
+            if "web/" + relative in verifier.LEGACY_DREAM_PREVIEW_OUTPUTS:
+                output = resources / "web" / relative
+                output.parent.mkdir(parents=True, exist_ok=True)
+                output.write_bytes(data)
+                manifest["outputs"]["web/" + relative] = inputs[relative]
+        marker["inputSHA256"] = manifest["inputSHA256"] = verifier.aggregate_inputs(inputs)
+        manifest["sourceInputs"] = {name: inputs[name] for name in verifier.LEGACY_DREAM_STARTUP_REQUIRED_INPUTS}
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "sourceInputs"):
+            verifier.verify_startup(self.bundle, self.info, marker)
+        verifier.verify_startup(self.bundle, self.info, marker, current_source=False)
+        self.assertEqual(json.loads(manifest_path.read_text(encoding="utf-8")), manifest)
+        relative = "web/vendor/dream-safe-css.LICENSE"
+        manifest["outputs"].pop(relative)
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        with self.assertRaisesRegex(RuntimeError, "output"):
+            verifier.verify_startup(self.bundle, self.info, marker, current_source=False)
 
     def test_pre_page_adapter_build25_source_set_is_read_only_and_exact(self):
         historical = frozenset(self.verifier.PRE_PAGE_ADAPTER_STARTUP_REQUIRED_INPUTS)

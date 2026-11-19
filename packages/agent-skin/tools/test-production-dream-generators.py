@@ -44,13 +44,8 @@ class DreamGeneratorTests(unittest.TestCase):
         module = load('build-startup')
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            names = ('vendor/dream-safe-css-validator.mjs', 'vendor/dream-safe-css-ast.mjs',
-                     'vendor/dream-theme-validator.mjs',
-                     'dream-theme-style.mjs')
-            for name in names:
-                dest = root / name
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(ROOT / name, dest)
+            domain = root / 'azhou-theme-snapshot.mjs'
+            shutil.copyfile(ROOT / domain.name, domain)
             output = module.update_dream_theme_style(root)
             self.assertEqual(output.read_bytes(), (ROOT / 'dream-theme-style.js').read_bytes())
             module.verify_dream_theme_style(root)
@@ -64,18 +59,15 @@ class DreamGeneratorTests(unittest.TestCase):
                 module.update_dream_theme_style(root)
             self.assertEqual(target.read_bytes(), b'keep')
             output.unlink()
-            domain = root / 'dream-theme-style.mjs'
             original = domain.read_text()
-            domain.write_text(original.replace("import { parseSafeCssAst }", "import { changed }", 1))
-            with self.assertRaisesRegex(RuntimeError, 'imports changed'):
+            domain.write_text(original.replace('export function validateThemeSnapshot(', 'export function changed(', 1))
+            with self.assertRaisesRegex(RuntimeError, 'export changed'):
                 module.dream_theme_style_source(root)
             domain.write_text(original + "\nimport extra from './elsewhere.mjs';\n")
             with self.assertRaisesRegex(RuntimeError, 'module linkage'):
                 module.dream_theme_style_source(root)
             domain.write_text(original)
-            (root / 'vendor/dream-safe-css-ast.mjs').write_bytes(b'changed')
-            with self.assertRaisesRegex(RuntimeError, 'fixed pristine'):
-                module.dream_theme_style_source(root)
+            self.assertEqual(module.dream_theme_style_source(root), (ROOT / 'dream-theme-style.js').read_text(encoding='utf-8'))
             with mock.patch('sys.argv', ['build', '--update-dream-theme-style']), mock.patch.object(
                     module, 'update_dream_theme_style', return_value=ROOT / 'dream-theme-style.js') as update:
                 self.assertEqual(module.main(), 0)

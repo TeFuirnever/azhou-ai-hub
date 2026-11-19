@@ -38,38 +38,3 @@ export function mapDreamTheme(manifest, source) {
   return Object.freeze({profile: DREAM_PAINT_PROFILE, ruleCount: parsed.ruleCount,
     declarationCount: parsed.declarationCount, steps: Object.freeze(steps)});
 }
-
-const HASH = /^[0-9a-f]{64}$/;
-
-function requireValue(condition, reason) {
-  if (!condition) throw new Error(reason);
-}
-
-function exactKeys(value, keys) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-    && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
-}
-
-export function validateThemeSnapshot(value) {
-  requireValue(value && typeof value === 'object' && !Array.isArray(value), 'dream_snapshot_invalid');
-  requireValue(Number.isSafeInteger(value.revision) && value.revision >= 1
-    && typeof value.imagesBinding === 'string' && HASH.test(value.imagesBinding), 'dream_snapshot_invalid');
-  let selection;
-  if (value.schemaVersion === 1) {
-    requireValue(exactKeys(value,['schemaVersion','revision','activeThemeId','preferencesByTheme','imagesBinding'])
-      && value.activeThemeId === 'azhou-q-v3' && exactKeys(value.preferencesByTheme,['azhou-q-v3']), 'dream_snapshot_invalid');
-    selection = {kind:'bundled',id:'azhou-q-v3',surfaceTransparency:value.preferencesByTheme['azhou-q-v3']};
-  } else {
-    requireValue(value.schemaVersion === 2 && exactKeys(value,['schemaVersion','revision','imagesBinding','selection']), 'dream_snapshot_invalid');
-    selection = value.selection;
-  }
-  requireValue(exactKeys(selection,['kind','id','surfaceTransparency'])
-    && selection.kind === 'bundled' && selection.id === 'azhou-q-v3', 'dream_snapshot_invalid');
-  const preference = selection.surfaceTransparency;
-  requireValue((exactKeys(preference,['mode']) && preference.mode === 'follow')
-    || (exactKeys(preference,['mode','value']) && preference.mode === 'override'
-      && typeof preference.value === 'number' && Number.isFinite(preference.value)
-      && preference.value >= 0 && preference.value <= 100), 'dream_snapshot_invalid');
-  const normalized = Object.freeze({kind:'bundled',id:'azhou-q-v3',surfaceTransparency:Object.freeze({...preference})});
-  return Object.freeze({schemaVersion:2,revision:value.revision,imagesBinding:value.imagesBinding,selection:normalized});
-}
