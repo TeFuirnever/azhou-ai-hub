@@ -499,33 +499,19 @@ raise SystemExit(code)
                     worker.terminate(); worker.communicate(timeout=3)
                 self.tool.fcntl.flock(fd, self.tool.fcntl.LOCK_UN)
 
-    def test_export_capsule_preserves_original_files_and_never_applies(self):
+    def test_developer_library_only_reads_and_never_exports_an_appearance_capsule(self):
         data = self.path.read_bytes()
         result = self.tool.import_package(self.path, self.library)
-        exported = self.cli("export-capsule", result["archiveSha256"])
-        self.assertEqual(exported.returncode, 0, exported.stderr)
-        capsule = json.loads(exported.stdout)
-        self.assertEqual(set(capsule), {"schema", "archiveSha256", "files"})
-        self.assertEqual(capsule["schema"], "azhou-agent-skin.dream-capsule.v1")
-        self.assertEqual(capsule["archiveSha256"], hashlib.sha256(data).hexdigest())
-        package = self.tool.validate_package(data)
-        self.assertEqual(set(capsule["files"]), set(package.files))
-        for name, original in package.files.items():
-            record = capsule["files"][name]
-            self.assertEqual(set(record), {"bytes", "sha256", "base64"})
-            self.assertEqual(base64.b64decode(record["base64"], validate=True), original)
-            self.assertEqual(record["bytes"], len(original))
-            self.assertEqual(record["sha256"], hashlib.sha256(original).hexdigest())
-        self.assertEqual(json.loads(base64.b64decode(capsule["files"]["theme.json"]["base64"])), self.theme)
-        self.assertNotIn(str(self.root), exported.stdout.decode())
+        digest = result["archiveSha256"]
+        readback = self.cli("read", digest)
+        self.assertEqual(readback.returncode, 0, readback.stderr)
+        self.assertEqual(json.loads(readback.stdout)["applyStatus"], "blocked")
+        self.assertEqual(self.tool.read_package(self.library, digest).archive, data)
+        refused = self.cli("export-capsule", digest)
+        self.assertEqual(refused.returncode, 2)
+        self.assertEqual(refused.stdout, b"")
+        self.assertIn(b"invalid choice", refused.stderr)
         self.assertEqual(self.path.read_bytes(), data)
-        second = self.cli("export-capsule", result["archiveSha256"])
-        self.assertEqual(second.stdout, exported.stdout)
-        stored = self.library / "objects" / result["archiveSha256"] / "archive.zip"
-        stored.write_bytes(b"tampered")
-        blocked = self.cli("export-capsule", result["archiveSha256"])
-        self.assertEqual(blocked.returncode, 2)
-        self.assertEqual(json.loads(blocked.stdout)["reason"], "stored_archive_hash_mismatch")
 
     def test_read_requires_digest_and_never_creates_missing_library(self):
         result = self.cli('read', '../private')

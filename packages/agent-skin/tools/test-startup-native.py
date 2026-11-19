@@ -172,52 +172,23 @@ def theme_bridge_checks(output: Path) -> int:
     """Exercise the production source/Native/player boundary without graphics or real hosts."""
     with tempfile.TemporaryDirectory(prefix="azhou-theme-bridge-") as temporary:
         root = Path(temporary).resolve()
-        for kind in ("bundled", "png", "jpg", "webp", "png-large"):
-            environment = dict(os.environ,
-                AZHOU_THEME_BRIDGE_INPUT=str(root / (kind + "-input.json")),
-                AZHOU_THEME_BRIDGE_OUTPUT=str(root / (kind + "-output.json")),
-                AZHOU_THEME_BRIDGE_KIND=kind)
-            environment.pop("NODE_TEST_CONTEXT", None)
-            if kind != "bundled":
-                import io
-                import zipfile
-                from PIL import Image
-                extension = "png" if kind == "png-large" else kind
-                image = io.BytesIO()
-                Image.new("RGB", (2, 3), (23, 41, 79)).save(image, format={"png": "PNG", "jpg": "JPEG", "webp": "WEBP"}[extension])
-                image_bytes = image.getvalue()
-                if kind == "png-large":
-                    import struct
-                    import zlib
-                    # A valid private ancillary chunk preserves the same original
-                    # 2x3 pixels while exercising the honest >12MiB data-URL branch.
-                    chunk_type = b"raNd"
-                    padding = bytes(9_600_000)
-                    chunk = struct.pack(">I", len(padding)) + chunk_type + padding + struct.pack(">I", zlib.crc32(chunk_type + padding))
-                    image_bytes = image_bytes[:-12] + chunk + image_bytes[-12:]
-                source = root / (kind + ".zip")
-                with zipfile.ZipFile(source, "w") as archive:
-                    archive.writestr("theme.json", json.dumps({"schemaVersion": 1, "id": "dream.bridge", "name": "Bridge source", "image": "background." + extension}))
-                    archive.writestr("theme.css", '[data-ds-part="main"]{background-color:transparent;}[data-ds-part="main"]{background-color:rgba(12,34,56,.4);}')
-                    archive.writestr("background." + extension, image_bytes)
-                command = [sys.executable, "-B", str(ROOT / "tools/theme-library.py"), "--library", str(root / "library")]
-                receipt = json.loads(subprocess.check_output([*command, "import", str(source)], timeout=20))
-                capsule = subprocess.check_output([*command, "export-capsule", receipt["archiveSha256"]], timeout=20)
-                capsule_path = root / (kind + "-capsule.json")
-                capsule_path.write_bytes(capsule)
-                environment["AZHOU_THEME_BRIDGE_CAPSULE"] = str(capsule_path)
-            print("==> production theme bridge: " + kind, flush=True)
-            prepared = subprocess.run(["node", "--test", "--test-name-pattern=native theme bridge prepares",
-                "tools/image-settings.test.mjs"], cwd=ROOT, env=environment, check=False)
-            if prepared.returncode:
-                return prepared.returncode
-            tested = subprocess.run([str(output)], cwd=ROOT, env=environment, check=False)
-            if tested.returncode:
-                return tested.returncode
-            consumed = subprocess.run(["node", "--test", "--test-name-pattern=native theme bridge consumes",
-                "tools/animation.unit.test.mjs"], cwd=ROOT, env=environment, check=False)
-            if consumed.returncode:
-                return consumed.returncode
+        environment = dict(os.environ,
+            AZHOU_THEME_BRIDGE_INPUT=str(root / "bundled-input.json"),
+            AZHOU_THEME_BRIDGE_OUTPUT=str(root / "bundled-output.json"),
+            AZHOU_THEME_BRIDGE_KIND="bundled")
+        environment.pop("NODE_TEST_CONTEXT", None)
+        print("==> production theme bridge: bundled", flush=True)
+        prepared = subprocess.run(["node", "--test", "--test-name-pattern=native theme bridge prepares",
+            "tools/image-settings.test.mjs"], cwd=ROOT, env=environment, check=False)
+        if prepared.returncode:
+            return prepared.returncode
+        tested = subprocess.run([str(output)], cwd=ROOT, env=environment, check=False)
+        if tested.returncode:
+            return tested.returncode
+        consumed = subprocess.run(["node", "--test", "--test-name-pattern=native theme bridge consumes",
+            "tools/animation.unit.test.mjs"], cwd=ROOT, env=environment, check=False)
+        if consumed.returncode:
+            return consumed.returncode
 
     return 0
 

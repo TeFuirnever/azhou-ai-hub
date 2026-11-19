@@ -217,7 +217,7 @@ python scripts/azhou_hub.py verify
 |---|---|---|
 | `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面身份，外加可组装的 DeepSeek Harness 插件包；当前源码候选为 `0.9.0/build 43`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。代码采用 MIT，随附的阿舟素材采用 CC BY-NC-ND 4.0。 |
 
-源码候选还提供[有限 Dream 主区字面颜色 profile](packages/agent-skin/docs/design/azhou-immersive-experience/dream-main-literal-paint.md)。CLI 导出的源胶囊可导入独立本机目录，经显式应用、启动重读，并恢复先前保存的阿舟外观。未映射的样式声明或清单渲染字段会阻止应用。这不代表全面 Dream 兼容或已安装宿主验收。
+[阿舟外观](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary)可选用本机图片和阿舟 JSON 预设，不提供其他项目主题导入，也不会迁移其他项目的数据。
 
 候选[工作区主题切片](packages/agent-skin/docs/theme-appearance.md)提供一套批准的阿舟主题与工作区阅读底色透明度，保存与应用分别反馈。完整主题库、DSH 主题支持及真实宿主视觉验收仍未完成。 Skip 仅允许已准入的背景解码在原工作区收尾，仍在等待新外壳的请求继续取消。 主题设置提供可见标签、原生键盘控件，并明确显示遮罩数值或跟随主题。
 

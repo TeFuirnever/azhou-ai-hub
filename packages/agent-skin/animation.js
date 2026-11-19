@@ -645,13 +645,7 @@ function installAnimation(
     context.save();
     context.translate(artworkShiftX, 0);
     context.globalAlpha = alpha;
-    if (assets?.themeState?.selection?.kind === 'imported') {
-      const width = artworkBitmap.width || artworkBitmap.naturalWidth;
-      const height = artworkBitmap.height || artworkBitmap.naturalHeight;
-      const scale = Math.max(WIDTH / width, HEIGHT / height);
-      const sourceWidth = WIDTH / scale, sourceHeight = HEIGHT / scale;
-      context.drawImage(artworkBitmap,(width-sourceWidth)/2,(height-sourceHeight)/2,sourceWidth,sourceHeight,0,0,WIDTH,HEIGHT);
-    } else context.drawImage(artworkBitmap, 0, 0, WIDTH, HEIGHT);
+    context.drawImage(artworkBitmap, 0, 0, WIDTH, HEIGHT);
     context.restore();
   }
 
@@ -932,10 +926,9 @@ function installAnimation(
     });
   }
 
-  function decodeImage(source, expectedWidth, expectedHeight, generationAtStart, importedImage = null) {
-    const limit = importedImage ? 13981039 : expectedWidth === 512 ? 2 * 1024 * 1024 : 12 * 1024 * 1024;
-    const prefix = importedImage ? 'data:'+importedImage.mime+';base64,' : DATA_URL_PREFIX;
-    if (typeof source !== 'string' || !source.startsWith(prefix) || source.length > limit) {
+  function decodeImage(source, expectedWidth, expectedHeight, generationAtStart) {
+    const limit = expectedWidth === 512 ? 2 * 1024 * 1024 : 12 * 1024 * 1024;
+    if (typeof source !== 'string' || !source.startsWith(DATA_URL_PREFIX) || source.length > limit) {
       return Promise.reject(new Error('asset-invalid'));
     }
     const image = new Image();
@@ -1388,7 +1381,7 @@ function installAnimation(
     const themeState = snapshot.themeState == null ? null
       : (typeof createDreamThemeStyle === 'function'
         ? createDreamThemeStyle().validateThemeSnapshot(snapshot.themeState) : (() => {throw new Error('snapshot-invalid');})());
-    const importedImage = themeState?.selection.kind === 'imported' ? themeState.selection.image : null;
+    if (themeState?.selection.kind === 'imported') throw new Error('snapshot-invalid');
     const explicitText = snapshot.explicitText;
     const snapshotAppearance = snapshot.appearance;
     if (!snapshotAppearance || typeof snapshotAppearance !== 'object'
@@ -1396,12 +1389,11 @@ function installAnimation(
       || !['en', 'zh-CN'].includes(snapshotAppearance.locale)
       || !['light', 'dark'].includes(snapshotAppearance.theme)) throw new Error('snapshot-invalid');
     if (!record || typeof record !== 'object' || Array.isArray(record)
-      || record.schemaVersion !== (importedImage ? 2 : 1)
+      || record.schemaVersion !== 1
       || typeof record.avatar !== 'string' || record.avatar.length > 2 * 1024 * 1024
       || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(record.avatar)
-      || typeof record.artwork !== 'string' || record.artwork.length > (importedImage ? 13981039 : 12 * 1024 * 1024)
-      || !(importedImage ? record.artwork.startsWith('data:'+importedImage.mime+';base64,')
-        : /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(record.artwork))
+      || typeof record.artwork !== 'string' || record.artwork.length > 12 * 1024 * 1024
+      || !/^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(record.artwork)
       || !Array.isArray(record.contours) || record.contours.length < 1 || record.contours.length > MAX_PATHS
       || typeof record.introTitle !== 'string' || record.introTitle.length > 16
       || typeof record.introCaption !== 'string' || record.introCaption.length > 48
@@ -1474,11 +1466,6 @@ function installAnimation(
       }));
       if (disposed || currentGeneration !== generation) return null;
       const snapshot = validateStartupSnapshot(rawSnapshot);
-      if (snapshot.themeState?.selection.kind === 'imported') {
-        await createDreamThemeStyle().verifyThemeSnapshotArtwork(snapshot.themeState,snapshot.settings.artwork,
-          {crypto:window.crypto,signal:controller.signal});
-        if (disposed || currentGeneration !== generation || controller.signal.aborted) return null;
-      }
       return snapshot;
     } catch (error) {
       if (!controller.signal.aborted) {
@@ -1680,10 +1667,9 @@ function installAnimation(
       }
     }
     const stats = validateContours();
-    const importedImage = assets?.themeState?.selection?.kind === 'imported' ? assets.themeState.selection.image : null;
     const decodeResults = await Promise.allSettled([
       decodeImage(rawAvatar, 512, 512, currentGeneration),
-      decodeImage(rawArtwork, importedImage?.width ?? WIDTH, importedImage?.height ?? HEIGHT, currentGeneration, importedImage),
+      decodeImage(rawArtwork, WIDTH, HEIGHT, currentGeneration),
     ]);
     const decoded = decodeResults.map(result => result.status === 'fulfilled' ? result.value : null);
     const decodeFailure = decodeResults.find(result => result.status === 'rejected');
@@ -1888,8 +1874,6 @@ function installAnimation(
           if (frameSpec?.intent === 'play') message('settings-open');
         },
         onPreview(draft) { return startSettingsPreview(draft); },
-        onThemeApply(request) { return message('theme-apply',request); },
-        onThemeCancel() { return message('theme-cancel'); },
         onApply(saved) {
           finishSettingsPreview(settingsPreview, settingsPreview?.started, false);
           return applySavedWallpaper(saved);

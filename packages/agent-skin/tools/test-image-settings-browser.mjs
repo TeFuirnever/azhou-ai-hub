@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Uses an isolated headless Chrome and test-generated image pixels only.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -95,7 +95,7 @@ class CDP {
   close() { this.socket.close(); }
 }
 
-function browserChecks(maxInputBytes,dreamCapsuleText) {
+function browserChecks(maxInputBytes) {
   return (async () => {
     const frame = document.createElement('iframe');
     frame.width = '800';
@@ -332,7 +332,8 @@ function browserChecks(maxInputBytes,dreamCapsuleText) {
         + JSON.stringify({ visible: keyboardTarget.matches(':focus-visible'), style: focusStyle.outlineStyle, width: focusStyle.outlineWidth }));
     }
     const disclosures = [...settingsDialog.querySelectorAll('[data-agent-skin-disclosure]')];
-    if (disclosures.length !== 3 || disclosures.some(el => el.open)) throw new Error('Optional Appearance content must start collapsed');
+    if (disclosures.map(el=>el.dataset.agentSkinDisclosure).join(',')!=='theme-help,presets'
+      || disclosures.some(el => el.open)) throw new Error('Optional Appearance content must start collapsed');
     for (const locale of ['zh-CN', 'en']) {
       localization.setLocale(locale);
       if (/CLI|profile|main/.test(settingsDialog.innerText)) throw new Error('Technical theme details leaked into default view');
@@ -859,56 +860,42 @@ function browserChecks(maxInputBytes,dreamCapsuleText) {
       await rawCatalog('write',savedP2Records);await api.load(defaults);
     }
 
-    const dreamBefore=await rawCatalog('read');
-    const dreamPaintBefore=child.getComputedStyle(childDocument.body).backgroundImage;
-    let dreamApplied=0;api.openSettings({onApply(){dreamApplied++;return {applied:true};}});
-    const dreamInput=settingsDialog.querySelector('[data-agent-skin-dream-import]');
-    const dreamList=settingsDialog.querySelector('[data-agent-skin-dream-list]');
-    const draftText=settingsDialog.querySelector('input[type="text"]:not([data-agent-skin-preset-name])');
-    draftText.value='Unsaved during source import';draftText.dispatchEvent(new child.Event('input',{bubbles:true}));
-    const draftBeforeImport=draftText.value;
-    const importDreamFile=async()=>{
-      const transfer=new child.DataTransfer();transfer.items.add(new child.File([dreamCapsuleText],'dream-source.json',{type:'application/json'}));
-      dreamInput.files=transfer.files;dreamInput.dispatchEvent(new child.Event('change',{bubbles:true}));
-      await waitFor(()=>!api.isBusy(),'Dream source file UI import');
-    };
-    await importDreamFile();
-    const dreamStored=await rawCatalog('read');
-    if(dreamList.options.length!==1||dreamList.options[0].textContent!=='<img onerror=window.dreamXss=true>'||window.dreamXss||child.dreamXss)throw new Error('Dream UI name rendering');
-    for(const key of ['images','themeState','appearancePresets'])if(JSON.stringify(dreamBefore[key])!==JSON.stringify(dreamStored[key]))throw new Error('Dream import changed '+key);
-    const dreamUnchanged={source:dreamStored.dreamThemes.entries[0].capsule===dreamCapsuleText,notApplied:dreamApplied===0,
-      draft:draftText.value===draftBeforeImport,paint:child.getComputedStyle(childDocument.body).backgroundImage===dreamPaintBefore};
-    if(Object.values(dreamUnchanged).some(value=>!value))throw new Error('Dream source/draft/paint changed '+JSON.stringify(dreamUnchanged));
-    await importDreamFile();if((await rawCatalog('read')).dreamThemes.entries.length!==1)throw new Error('Dream duplicate source');
-    api.cancelSettings();await api.load(defaults);api.openSettings();
-    await waitFor(()=>!api.isBusy(),'Dream directory reopen');
-    if(dreamList.options.length!==1||dreamList.options[0].textContent!=='<img onerror=window.dreamXss=true>')throw new Error('Dream directory did not reopen');
-    if(!settingsDialog.querySelector('[data-agent-skin-dream-apply]').disabled)throw new Error('unimplemented Dream apply enabled');
-    api.cancelSettings();
-    const dreamFileExchange={cliSource:true,fileInput:true,originalCapsuleRetained:true,reopened:true,duplicateIdempotent:true,
-      activeRecordsUnchanged:true,draftPreserved:true,nameAsText:true,applyCalls:dreamApplied};
-
-    const disposalAPI=createImageSettings({document:childDocument,Image:child.Image,URL:urlApi,indexedDB:child.indexedDB,
-      crypto:child.crypto,TextEncoder:child.TextEncoder,TextDecoder:child.TextDecoder,Blob:child.Blob,AbortController:child.AbortController,
-      localization,appearanceAvatar,getAppearance:()=>currentAppearance,setTimeout:child.setTimeout.bind(child),
-      clearTimeout:child.clearTimeout.bind(child),performance:child.performance});
-    await disposalAPI.load(defaults);
-    const disposeBefore=await rawCatalog('read');let disposeChecks=0,disposeRollback=0,postcommitDisposed=false,disposeReason='';
+    // Seed authentic legacy pointer shape and opaque source bytes in the synthetic DB.
+    const legacyBefore=await rawCatalog('read');
+    const prior=legacyBefore.themeState;
+    const legacyTheme={schemaVersion:2,revision:prior.revision,imagesBinding:prior.imagesBinding,
+      selection:{kind:'imported',capsuleSha256:'a'.repeat(64)},commitId:'b'.repeat(32),
+      previousThemeId:prior.activeThemeId,preferencesByTheme:prior.preferencesByTheme};
+    const obsoleteDirectory={opaque:'must not be interpreted or changed'};
+    await rawCatalog('write',{themeState:legacyTheme,dreamThemes:obsoleteDirectory});
+    const reads=[],writes=[];
+    const prototype=child.IDBObjectStore.prototype,originalGet=prototype.get,originalPut=prototype.put;
     try {
-      await disposalAPI.applyDreamTheme(dreamStored.dreamThemes.entries[0].capsuleSha256,{expectedToken:await disposalAPI.themeApplyToken(),activate:async()=>({applied:true,transaction:{
-        current(){if(++disposeChecks===2){postcommitDisposed=true;disposalAPI.dispose();return false;}return true;},
-        finalize(){throw new Error('disposed source finalized');},rollback(){disposeRollback++;return true;},
-      }})});
-    }catch(error){disposeReason=error?.reason;}
-    const disposeAfter=await rawCatalog('read');
-    if(disposeReason!=='operation-cancelled'||!postcommitDisposed||disposeRollback!==1||disposalAPI.isBusy())throw new Error('postcommit disposal settlement');
-    if(JSON.stringify(disposeBefore.images)!==JSON.stringify(disposeAfter.images)
-      ||JSON.stringify(disposeBefore.appearancePresets)!==JSON.stringify(disposeAfter.appearancePresets)
-      ||JSON.stringify(disposeBefore.dreamThemes)!==JSON.stringify(disposeAfter.dreamThemes)
-      ||disposeBefore.themeState.activeThemeId!==disposeAfter.themeState.activeThemeId
-      ||JSON.stringify(disposeBefore.themeState.preferencesByTheme)!==JSON.stringify(disposeAfter.themeState.preferencesByTheme)
-      ||disposeAfter.themeState.revision!==disposeBefore.themeState.revision+2)throw new Error('postcommit disposal left a committed candidate');
-    const dreamDisposeCompensation={realIDB:true,postcommitDisposed:true,activeRestored:true,catalogsPreserved:true,rollbackCalls:disposeRollback};
+      prototype.get=function(key){reads.push(key);return originalGet.call(this,key);};
+      prototype.put=function(value,key){writes.push(key);return originalPut.call(this,value,key);};
+      const resumed=await api.load(defaults);
+      if(resumed.themeState.activeThemeId!==prior.activeThemeId
+        || JSON.stringify(resumed.themeState.preferencesByTheme)!==JSON.stringify(prior.preferencesByTheme)
+        || resumed.settings.artwork!==legacyBefore.images.artwork
+        || resumed.settings.introTitle!==legacyBefore.images.introTitle)throw new Error('legacy pointer changed the saved Azhou appearance');
+      if(!api.openSettings())throw new Error('legacy pointer prevents opening settings');
+      await waitFor(()=>!api.isBusy(),'Appearance ready without foreign directory');
+      const foreignSelectors=['section','import','import-button','list','apply','restore'].map(part=>'[data-agent-skin-dream-'+part+']').join(',');
+      if(settingsDialog.querySelector(foreignSelectors)||['importDreamCapsule','loadDreamDirectory','applyDreamTheme'].some(key=>key in api))
+        throw new Error('retired external theme surface reachable');
+      if(!settingsDialog.querySelector('[data-agent-skin-image-input=artwork]')
+        || !settingsDialog.querySelector('[data-agent-skin-preset-import]'))throw new Error('ordinary Azhou inputs lost');
+      api.cancelSettings();
+    } finally {prototype.get=originalGet;prototype.put=originalPut;}
+    const legacyAfter=await rawCatalog('read');
+    if(reads.includes('dreamThemes')||writes.length!==0||JSON.stringify(legacyAfter.themeState)!==JSON.stringify(legacyTheme)
+      ||JSON.stringify(legacyAfter.dreamThemes)!==JSON.stringify(obsoleteDirectory)
+      ||JSON.stringify(legacyAfter.images)!==JSON.stringify(legacyBefore.images)
+      ||JSON.stringify(legacyAfter.appearancePresets)!==JSON.stringify(legacyBefore.appearancePresets))
+      throw new Error('retired external theme data read or rewritten');
+    const retiredExternalAppearance={noDirectoryRead:true,noWrite:true,recordsPreserved:true,nativeInputsPreserved:true};
+    await rawCatalog('write',{themeState:prior});
+    await api.load(defaults);
 
     const versionchange = await new Promise((resolve, reject) => {
       const request = child.indexedDB.open('azhou-codex-startup', 2);
@@ -1022,8 +1009,7 @@ function browserChecks(maxInputBytes,dreamCapsuleText) {
       storage: {
         p2BrowserResults,
         presetFileExchange,
-        dreamFileExchange,
-        dreamDisposeCompensation,
+        retiredExternalAppearance,
         initialReason: initiallyLoaded.reason,
         initialBaseline: initiallyLoaded.baseline,
         initialTitle: initialCommit.introTitle,
@@ -1151,22 +1137,7 @@ try {
   await until(() => cdp.evaluate('window.imageSettingsReady === true'), 10_000, 'image settings source load');
   await until(() => cdp.evaluate('window.imageMetadataReady === true'), 10_000,
     'classic metadata reader before deferred image settings script');
-  const dreamCapsuleText=execFileSync(process.env.AZHOU_TEST_PYTHON || 'python3',['-B','-c',`
-import sys,io,json,zipfile,subprocess
-from pathlib import Path
-from PIL import Image
-root=Path(sys.argv[1]).resolve();tool=Path(sys.argv[2])/'tools/theme-library.py'
-image=io.BytesIO();Image.new('RGB',(2,3),(23,41,79)).save(image,format='PNG')
-source=root/'dream-source.zip'
-with zipfile.ZipFile(source,'w') as z:
- z.writestr('theme.json',json.dumps({'schemaVersion':1,'id':'dream.browser','name':'<img onerror=window.dreamXss=true>','image':'background.png'}))
- z.writestr('theme.css','[data-ds-part="main"]{background-color:rgba(12,34,56,.4);}')
- z.writestr('background.png',image.getvalue())
-base=[sys.executable,'-B',str(tool),'--library',str(root/'dream-library')]
-receipt=json.loads(subprocess.check_output([*base,'import',str(source)]))
-sys.stdout.buffer.write(subprocess.check_output([*base,'export-capsule',receipt['archiveSha256']]))
-`,profile,PACKAGE_ROOT],{encoding:'utf8',timeout:20000});
-  const expression = '(' + browserChecks.toString() + ')(' + MAX_INPUT_BYTES + ',' + JSON.stringify(dreamCapsuleText) + ')';
+  const expression = '(' + browserChecks.toString() + ')(' + MAX_INPUT_BYTES + ')';
   let checkFailure;
   const checks = cdp.evaluate(expression).then(value => ({ value }), error => {
     checkFailure = error;
@@ -1178,7 +1149,7 @@ sys.stdout.buffer.write(subprocess.check_output([*base,'export-capsule',receipt[
   await cdp.call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await cdp.call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
   await cdp.evaluate('window.finishSettingsFocusTest()');
-  for (let index = 0; index < 12; index++) {
+  for (let index = 0; index < 2 * 2 * 2; index++) {
     await until(async () => checkFailure || await cdp.evaluate('window.disclosureTestReady === true'), 10_000, 'disclosure keyboard setup');
     if (checkFailure) throw checkFailure;
     await cdp.evaluate('window.disclosureTestReady = false');
@@ -1220,8 +1191,7 @@ sys.stdout.buffer.write(subprocess.check_output([*base,'export-capsule',receipt[
   assert.equal(downloadedPreset.name,'<img onerror=window.presetXss=true>');
   assert.deepEqual(Object.keys(downloadedPreset).sort(),['appearance','name','recipeId','schema','surfaceTransparency']);
   result.storage.presetFileExchange.downloadedFileVerified=true;
-  assert.deepEqual(result.storage.dreamFileExchange,{cliSource:true,fileInput:true,originalCapsuleRetained:true,reopened:true,duplicateIdempotent:true,activeRecordsUnchanged:true,draftPreserved:true,nameAsText:true,applyCalls:0});
-  assert.deepEqual(result.storage.dreamDisposeCompensation,{realIDB:true,postcommitDisposed:true,activeRestored:true,catalogsPreserved:true,rollbackCalls:1});
+  assert.deepEqual(result.storage.retiredExternalAppearance,{noDirectoryRead:true,noWrite:true,recordsPreserved:true,nativeInputsPreserved:true});
   assert.equal(result.storage.presetFileExchange.activeRecordsUnchanged,true);
   assert.equal(result.storage.presetFileExchange.onApplyCalls,0);
   assert.equal(result.storage.presetFileExchange.onSavedCalls,1);
@@ -1378,19 +1348,6 @@ sys.stdout.buffer.write(subprocess.check_output([*base,'export-capsule',receipt[
     format: 'png', fromSurface: true, captureBeyondViewport: true,
   });
   await writeFile(screenshotPath, Buffer.from(screenshot.data, 'base64'));
-  if (options.out) {
-    const dreamGeometry = await cdp.evaluate(`(async()=>{
-      const frame=document.querySelector('iframe'),doc=frame.contentDocument;
-      const section=doc.querySelector('[data-agent-skin-dream-section]');section.scrollIntoView({block:'center'});
-      await new Promise(resolve=>frame.contentWindow.requestAnimationFrame(()=>frame.contentWindow.requestAnimationFrame(resolve)));
-      const rect=section.getBoundingClientRect(),button=doc.querySelector('[data-agent-skin-dream-import-button]');
-      button.focus();return {top:rect.top,bottom:rect.bottom,buttonText:button.textContent,buttonFocused:doc.activeElement===button,inputHidden:doc.querySelector('[data-agent-skin-dream-import]').hidden};
-    })()`);
-    assert.equal(dreamGeometry.buttonFocused,true);assert.equal(dreamGeometry.inputHidden,true);
-    const image=await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true,captureBeyondViewport:true});
-    await writeFile(join(options.out,'dream-directory.png'),Buffer.from(image.data,'base64'));
-    result.dreamDirectoryGeometry=dreamGeometry;
-  }
   const previewCommand = await readFile(join(PACKAGE_ROOT, '预览动画.command'), 'utf8');
   assert.ok(previewCommand.includes('cd "$(dirname "$0")"')
     && previewCommand.includes('open "$PWD/index.html"'),

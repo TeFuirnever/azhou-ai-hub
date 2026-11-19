@@ -35,7 +35,7 @@ class DreamStyleTests(unittest.TestCase):
             "const context=vm.createContext({TextEncoder});"
             "vm.runInContext(fs.readFileSync('dream-theme-style.js','utf8'),context);"
             "const api=context.createDreamThemeStyle();assert.equal(api.DREAM_PAINT_PROFILE,'codex-main-literal-paint/v1');"
-            "assert.equal(typeof api.readDreamCapsule,'function');"
+            "assert.equal(api.readDreamCapsule,undefined);"
             "const p=api.mapDreamTheme({schemaVersion:1,id:'demo',name:'A',image:'background.png'},'[data-ds-part=\"main\"]{background-color:#abc;}');"
             "assert.deepEqual(JSON.parse(JSON.stringify(p.steps[0].rgba)),[170,187,204,1]);"],
             cwd=ROOT, capture_output=True, timeout=10)
@@ -44,7 +44,6 @@ class DreamStyleTests(unittest.TestCase):
     def test_javascript_source_contracts_and_pristine_corpus(self):
         for arguments in [
             ['tools/dream-theme-style.test.mjs'],
-            ['tools/dream-capsule.test.mjs'],
             ['tools/dream-theme-snapshot.test.mjs'],
             ['tools/dream-safe-css.test.mjs', (ROOT / 'vendor/dream-safe-css-ast.mjs').as_uri()],
         ]:
