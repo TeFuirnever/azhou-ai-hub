@@ -40,6 +40,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ inputs.tag }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Validate tag and create draft
         run: |
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
@@ -63,9 +67,4 @@ jobs:
               exit 1
             fi
           fi
-          gh release create "$RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "$RELEASE_TAG" \
-            --draft \
-            --generate-notes
+          bash scripts/draft_release.sh "$RELEASE_TAG" --title "$RELEASE_TAG" --generate-notes

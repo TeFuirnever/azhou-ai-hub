@@ -976,6 +976,9 @@ class RepositoryPolicyTest(unittest.TestCase):
         for scenario, git_ref, expected_code, creates_release in cases:
             with self.subTest(scenario=scenario), tempfile.TemporaryDirectory() as directory:
                 temp = Path(directory)
+                remote = temp / "TeFuirnever" / "azhou-ai-hub.git"
+                remote.parent.mkdir()
+                subprocess.run(["git", "init", "--quiet", "--bare", str(remote)], check=True)
                 calls = temp / "gh-calls.log"
                 gh = temp / "gh"
                 gh.write_text(
@@ -1002,6 +1005,7 @@ exit 0
                         "MOCK_GH_SCENARIO": scenario,
                         "GITHUB_REF": git_ref,
                         "GITHUB_REPOSITORY": "TeFuirnever/azhou-ai-hub",
+                        "GITHUB_SERVER_URL": str(temp),
                         "GITHUB_SHA": "a" * 40,
                         "RELEASE_TAG": "v0.1.0",
                         "RUNNER_TEMP": str(temp),

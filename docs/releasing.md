@@ -20,6 +20,8 @@ Before external distribution, check package-local rights in the [provenance ledg
 4. Use the manual “Draft release” workflow with the intended SemVer tag.
 5. Review generated notes, installation commands, breaking changes, skill digests and known limitations before publishing the draft.
 
+Both draft workflows compare an existing remote tag to the verified workflow commit, using the commit behind an annotated tag. If no tag exists, the draft records the verified commit as its target. The workflows check again after creating the draft, but draft creation and the tag check are separate operations. Immediately before publishing, confirm the current tag still resolves to the workflow commit, or, if it is absent, that the draft target is that exact commit. If the workflow failed its final tag check, leave any draft unpublished; investigate rather than moving the tag or publishing the draft.
+
 Do not rewrite a published tag or default-branch history. A faulty release gets a new patch release and an explicit changelog correction.
 
 ## Release notes
