@@ -2,6 +2,14 @@
 
 Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtime packages preserve or build on separately copyrighted open-source material. Their upstream notices remain effective.
 
+## Agent Rules Books
+
+The project includes 14 book-inspired engineering skills by Maciej Ciemborowicz from [ciembor/agent-rules-books at the imported revision](https://github.com/ciembor/agent-rules-books/tree/893a88a6fce3a80c565bf39ac65021b43a8b2990). The upstream [MIT notice](LICENSES/agent-rules-books-MIT.txt) covers the rule files. The [upstream catalog](https://github.com/ciembor/agent-rules-books/blob/893a88a6fce3a80c565bf39ac65021b43a8b2990/README.md#release-matrix) lists the books. Each directory name doubles as its project skill name.
+
+To reproduce the import, check out the linked commit. For each top-level book directory containing `SKILL.md`, copy its four Markdown files to the matching directory under `.agents/skills/`. Add `metadata.internal: true` as a nested YAML field in each skill's frontmatter. Keep the full, mini, and nano rule texts byte-for-byte. Copy the root `LICENSE` to `LICENSES/agent-rules-books-MIT.txt`.
+
+For an update, review the upstream diff and license at the proposed commit first. Reapply the import to the reviewed book directories, update the revision links here, and register any added or removed entries in `PROJECT_LOCAL_SKILL_PATHS` in `scripts/check_repository.py`. Verify the changed files with `python3 scripts/verify.py`.
+
 ## Optional external integrations
 
 The two optional integration projects are complete projects under `packages/` (`agent-skin`, `pstack-agent-harness`); there is no `integrations/` directory, and no tracked external source lock exists — `hub-package.json` plus `runtime_paths` fingerprints record the imported provenance instead. The table below holds one active package row (pstack-agent-harness) and two retired historical rows. See [integration provenance](docs/integration-provenance.md) for the full chain, selected file boundaries and fixed-version update procedure.
