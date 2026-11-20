@@ -769,6 +769,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
 
   // Only the attested conversation/room layout, not an arbitrary ancestor walk.
   const dotNonPaint = '[data-floating],[contenteditable]:not([contenteditable="false"])';
+  const dotHelperVeto = '.workspace, main.thread-pane';
   const dotRoomWrappers = [
     ['h-full', 'min-h-0'],
     ['relative', 'flex', 'h-full', 'min-h-0', 'flex-col'],
@@ -850,7 +851,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
           && [...pane.classList].every(name => ['thread-pane', 'flex-1', 'drag-active'].includes(name))
           && !pane.matches('[role],[data-composer-layout]')
           && !pane.closest(dotNonPaint)
-          && !node.querySelector('.workspace, main.thread-pane, ' + dotMessagingShell);
+          && !node.querySelector(dotHelperVeto + ', ' + dotMessagingShell);
       });
       const dotPaint = primaryRoom && knownHelpersOnly && uniqueActiveDotDestination
         && !activeMain.contains(activeDotDestination) ? primaryRoom.node : null;
@@ -1016,7 +1017,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         if (record.type === 'childList') {
           const helper = dotHelperFor(record.target);
           if (helper && (record.target === helper || [...record.addedNodes, ...record.removedNodes]
-            .some(node => node.matches?.('.workspace') || node.querySelector?.('.workspace')))) refresh = true;
+            .some(node => node.matches?.(dotHelperVeto) || node.querySelector?.(dotHelperVeto)))) refresh = true;
           if ([...record.removedNodes].some(removed => [...activityNodes].some(node => removed === node || removed.contains?.(node)))) {
             endObservation();
             return;
@@ -1030,8 +1031,11 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         if (record.attributeName === 'class' && observation.activeMain.contains(record.target)
           && wasDotShell(record.oldValue)) refresh = true;
         const helper = dotHelperFor(record.target);
-        if (helper && record.attributeName === 'class'
-          && (record.target.matches('.workspace') || (record.oldValue ?? '').split(/\s+/).includes('workspace'))) refresh = true;
+        if (helper && record.attributeName === 'class') {
+          const oldClasses = (record.oldValue ?? '').split(/\s+/);
+          if (record.target.matches(dotHelperVeto) || oldClasses.includes('workspace')
+            || record.target.tagName === 'MAIN' && oldClasses.includes('thread-pane')) refresh = true;
+        }
         if ((dotStructureNodes.has(record.target) || helper && (record.target === helper || record.target.parentElement === helper))
           && ['class', 'style', 'hidden', 'data-floating', ...dotGuardAttributes].includes(record.attributeName)) refresh = true;
         if (dotGuardAttributes.includes(record.attributeName)

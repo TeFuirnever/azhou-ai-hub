@@ -7634,6 +7634,19 @@ try {
       "f.helper.firstElementChild.classList.remove('flex-1')",false);
     await checkRoom('in-place helper class repair restores automatic paint',
       "f.helper.firstElementChild.classList.add('flex-1')",true);
+    await checkRoom('a bare main under the helper pane is not a competing room',`
+      const nestedMain=document.createElement('main');
+      f.helper.firstElementChild.append(nestedMain);f.nestedMain=nestedMain;
+    `,true);
+    await checkRoom('class-only nested thread pane withdraws room ownership',
+      "f.nestedMain.classList.add('thread-pane')",false);
+    await checkRoom('removing only the nested pane class restores exact wallpaper',
+      "f.nestedMain.classList.remove('thread-pane')",true);
+    await checkRoom('adding a preclassified nested thread pane also withdraws ownership',`
+      f.nestedMain.remove();f.nestedMain.className='thread-pane';
+      f.helper.firstElementChild.append(f.nestedMain);
+    `,false);
+    await checkRoom('removing the nested thread pane restores exact wallpaper',"f.nestedMain.remove()",true);
     await checkRoom('two identical helper-shaped descendants are ambiguous',`
       const extra=f.helper.cloneNode(true);extra.style.left='520px';f.pane.append(extra);f.secondHelper=extra;
     `,false);
