@@ -22,6 +22,7 @@ import unittest
 
 from scripts.check_repository import (
     INSTALLABLE_SKILL_PATHS,
+    PROJECT_LOCAL_SKILL_PATHS,
     REPOSITORY_EXTENSION_SKILL_PATHS,
     check_router_generated_index,
 )
@@ -73,6 +74,15 @@ def install_generator(root: Path) -> None:
 
 
 class RoutingIndexGenerationTest(unittest.TestCase):
+    def test_workspace_book_list_matches_registered_mini_rule_sets(self) -> None:
+        books = []
+        for entry in PROJECT_LOCAL_SKILL_PATHS:
+            package = (ROOT / entry).parent
+            if (package / f"{package.name}.mini.md").is_file():
+                books.append(package.name)
+        book_list = ROUTER.parent / "references" / "book-skills.txt"
+        self.assertEqual(sorted(books), book_list.read_text(encoding="utf-8").splitlines())
+
     def test_checked_in_block_matches_the_manifest(self) -> None:
         result = run_script(GENERATOR, "--root", str(ROOT), "--check")
         self.assertEqual(0, result.returncode, result.stderr.decode("utf-8"))

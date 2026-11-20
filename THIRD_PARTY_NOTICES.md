@@ -8,7 +8,7 @@ The project includes 14 book-inspired engineering skills by Maciej Ciemborowicz 
 
 To reproduce the import, check out the linked commit. For each top-level book directory containing `SKILL.md`, copy its four Markdown files to the matching directory under `.agents/skills/`. Add `metadata.internal: true` as a nested YAML field in each skill's frontmatter. Keep the full, mini, and nano rule texts byte-for-byte. Copy the root `LICENSE` to `LICENSES/agent-rules-books-MIT.txt`.
 
-For an update, review the upstream diff and license at the proposed commit first. Reapply the import to the reviewed book directories, update the revision links here, and register any added or removed entries in `PROJECT_LOCAL_SKILL_PATHS` in `scripts/check_repository.py`. Verify the changed files with `python3 scripts/verify.py`.
+For an update, review the upstream diff and license at the proposed commit first. Reapply the import to the reviewed book directories, update the revision links here, and register any added or removed entries in `PROJECT_LOCAL_SKILL_PATHS` in `scripts/check_repository.py` and the [Ask Azhou book list](skills/super-ask-azhou/references/book-skills.txt). Verify the changed files with `python3 scripts/verify.py`.
 
 ## Optional external integrations
 

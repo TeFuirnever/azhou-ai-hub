@@ -1,6 +1,6 @@
 ---
 name: super-ask-azhou
-description: "Azhou skill. Renamed from ask-azhou (the old name still triggers this skill). One-line router for the Azhou AI Hub skill catalog: describe what you want to do and get a recommendation of the right canonical skill, its mode, and its boundary. MUST trigger for which-skill questions: which skill should I use, which skill handles this, is there a skill for X, 该用哪个 skill, 有没有能做这个的 skill, 帮我挑个 skill, or any routing question over this catalog; it recommends and never invokes another skill on the user's behalf."
+description: "Azhou skill. Renamed from ask-azhou (the old name still triggers this skill). One-line router for the Azhou AI Hub skill catalog: describe what you want to do and get a recommendation of a Hub skill or an available workspace book skill, its mode, and its boundary. MUST trigger for which-skill questions: which skill should I use, which skill handles this, is there a skill for X, 该用哪个 skill, 有没有能做这个的 skill, 帮我挑个 skill, or any routing question over this catalog; it recommends and never invokes another skill on the user's behalf."
 invocation: user-invoked orchestrator
 ---
 
@@ -12,7 +12,7 @@ invocation: user-invoked orchestrator
 
 Invocation class: user-invoked orchestrator, declared in frontmatter; the axis, its semantics and the composition rules are defined once in docs/skill-standard.md §2.2 (spec #126 ID-9) — invoked by name or by an explicit "which skill" request; it recommends and never invokes another skill on the user's behalf.
 
-It is guidance, not a script. This is the hub's front door: sixteen canonical skills, organized by what you are trying to do. Answer with a recommendation (skill, mode, and the boundary that matters), not an invocation.
+Recommend one skill for the user's task. Consider both the Hub catalog and the engineering books available in the active workspace.
 
 ## Brand protocol
 
@@ -22,7 +22,7 @@ Emit this exact display event once:
 🦊 阿舟 · Ask Azhou 启动（mode=route, scope=<catalog>）
 ```
 
-Use `✅ 验证通过` only after the recommendation names a real canonical skill whose boundary fits the request. Use `❌ 验证失败` when no canonical skill fits and `🔒 阿舟暂停这一项` when the request is outside this hub's catalog entirely. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values. Raw evidence stays out of receipts unless the user supplied it.
+Use `✅ 验证通过` only after the recommendation names a matching Hub skill or a verified workspace book skill. Use `❌ 验证失败` when no eligible skill fits and `🔒 阿舟暂停这一项` when the request is outside this hub's catalog entirely. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values. Raw evidence stays out of receipts unless the user supplied it.
 
 In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
 
@@ -36,7 +36,7 @@ Match the request to a family first, then to the catalog's intent keywords: inst
 - `super-arch-doc` — Azhou skill. Renamed from arch-doc (the old name still triggers this skill). End-to-end authoring and calibration of an architecture design document from upstream sources. MUST trigger for 写架构设计文档, 架构说明书, ARCH 文档, 软件实现架构说明书, 架构文档补时序图, PlantUML 时序图（架构文档内）, 交叉校准, 回源核对, 上游研读, 上游真源, 最佳实践评审, 架构评审对标, 架构文档模板, PRD 模板, 产品需求文档模板, 功能详细设计模板, 校准架构文档, 质量场景卡, or whenever a repository needs a software-implementation-architecture document drafted, calibrated against upstream design docs, or reviewed against industry best practices. Distilled from the MCC ARCH-2026-001 authoring pipeline. Output shaping for a reader with ADHD belongs to super-i-have-adhd.
 - `super-archify` — Azhou skill. Create validated architecture, workflow, sequence, data-flow, lifecycle/state, ERD, class, tree, timeline and waterfall diagrams as explorable standalone HTML with dark/light themes, motion and image/SVG/WebM export. Accept requirements or Mermaid; inspect repository evidence for code-backed diagrams. Use when visualizing systems, API calls, pipelines, schemas, histories, timings, or everyday steps, parts, relationships and states. Also turn an answer into a one-page explainer with the conclusion first, structured panels, native diagrams and charts, when the user asks for a page, an explainer or answer to share (做成一页, 用页面讲), or proactively when the user's rules opt in with an [archify explainer: ...] line. Not for dashboards. Editable .excalidraw source scenes and scene editing belong to super-excalidraw-diagram; this skill delivers read-only diagrams and explainer pages; a human-annotated browser feedback loop on a generated page belongs to super-lavish; raster images belong to super-imagegen.
 - `super-asd-ste100` — Azhou skill. Renamed from asd-ste100 (the old name still triggers this skill). Use when English text must be parsed without a human to resolve ambiguity — tool descriptions, error messages, inter-agent instructions, system prompts, status reports — and misreading has a real cost, or when text reads as dense, hedged, or easy to misparse. Triggers: disambiguate, STE100 rewrite, apply Simplified Technical English, plain-language rewrite, controlled-language rewrite, rewrite so an agent cannot misread this. Not for creative or marketing copy.
-- `super-ask-azhou` — Azhou skill. Renamed from ask-azhou (the old name still triggers this skill). One-line router for the Azhou AI Hub skill catalog: describe what you want to do and get a recommendation of the right canonical skill, its mode, and its boundary. MUST trigger for which-skill questions: which skill should I use, which skill handles this, is there a skill for X, 该用哪个 skill, 有没有能做这个的 skill, 帮我挑个 skill, or any routing question over this catalog; it recommends and never invokes another skill on the user's behalf.
+- `super-ask-azhou` — Azhou skill. Renamed from ask-azhou (the old name still triggers this skill). One-line router for the Azhou AI Hub skill catalog: describe what you want to do and get a recommendation of a Hub skill or an available workspace book skill, its mode, and its boundary. MUST trigger for which-skill questions: which skill should I use, which skill handles this, is there a skill for X, 该用哪个 skill, 有没有能做这个的 skill, 帮我挑个 skill, or any routing question over this catalog; it recommends and never invokes another skill on the user's behalf.
 - `super-azhou-doctor` — Azhou skill. Renamed from azhou-doctor (the old name still triggers this skill). Diagnose Azhou AI Hub checkout, package, explicit install-target, Treehouse lease, or host stale-install migration health without mutation. Use for health checks, broken installs, environment diagnostics, stale hook paths, residual installs after a canonical rename, or support verification; also for "is my checkout healthy", "what broke", 仓库体检, 哪里坏了, or a stuck-lease question.
 - `super-azhou-info` — Azhou skill. Renamed from azhou-info (the old name still triggers this skill). Report provable Azhou AI Hub checkout information or revision facts. Use for project info, skills installable from this checkout, support facts, version, commit, branch, or dirty-state questions; also for 这是什么版本, 这个仓库有哪些技能可安装, or "what revision is this checkout on".
 - `super-azhou-setup` — Azhou skill. Renamed from azhou-setup (the old name still triggers this skill). Plan and explicitly apply Azhou AI Hub skill installation or receipt-owned repair, migration, and uninstall. Use for checkout-assisted setup and managed lifecycle operations with an exact target root; also for 帮我安装这个 skill, 卸载或迁移 skill, or "set this hub up".
@@ -51,21 +51,27 @@ Match the request to a family first, then to the catalog's intent keywords: inst
 - `super-session-insights` — Azhou skill. Renamed from session-insights (the old name still triggers this skill). Analyze local agent session stores into fact-bound usage reports, or explicitly selected redacted conversations into evidence-linked reflections and optional workflow experiments. Use when the user asks how they actually use their coding agent, wants a weekly report, asks to be roasted on real numbers, or explicitly requests reflection on selected conversations; also for 我的 agent 使用报告, 这周用得怎么样, or "which tools do I actually use"; statistics mode is read-only; reflection uses only selected material explicitly authorized for model analysis.
 <!-- generated-routing-index:end -->
 
+## Workspace engineering books
+
+For engineering questions, compare the [book skill names](references/book-skills.txt) with the skills enabled for the current project. Use the active workspace root, even when this router is installed elsewhere. A book qualifies when its enabled entry points to this project's `.agents/skills/<name>/SKILL.md`, its frontmatter names that skill, and the adjacent `<name>.mini.md` is readable. Resolve both files within the workspace. Omit a book when you cannot verify those conditions. A global installation or a copy in another checkout does not establish availability here.
+
+Match the task to the local entry's description. Recommend the closest fit, give one reason tied to the user's situation, and show `$<name>` for direct use in the default mini mode. If the user specifically asks for something they can use here, verify any fallback skill is available to this project too. If nothing available fits, say so.
+
 ## Boundaries
 
 - Recommendation only: name the skill and its mode; the user stays in control of what runs.
 - Catalog edges: questions about mattpocock-skills workflows (tdd, grilling, specs) belong to the locally installed `ask-matt`, not this map — point there instead of duplicating it.
-- No request fits everything: when no canonical skill owns the intent, say so plainly, name the nearest boundary, and record the miss (see Unrouted telemetry).
+- No request fits everything: when no eligible skill owns the intent, say so plainly, name the nearest boundary, and record the miss (see Unrouted telemetry).
 
 ## Unrouted telemetry
 
-A routing miss is evidence. When no canonical skill fits — the `❌ 验证失败` or `🔒 阿舟暂停这一项` outcome — record it once from the working checkout:
+A routing miss is evidence. When no eligible skill fits — the `❌ 验证失败` or `🔒 阿舟暂停这一项` outcome — record it once from the working checkout:
 
 ```bash
 python skills/super-ask-azhou/scripts/record_unrouted.py --prompt "<the user's request as asked>"
 ```
 
-Quote the request through `--stdin` when shell quoting or history is a concern. The store is `.azhou/super-ask-azhou/unrouted-telemetry.json` (git-ignored runtime state): per-request SHA-256 hashes with counts and day stamps only — the raw text is never written, so it cannot leak into receipts, reports, or Git. `--summary` prints the aggregate; accumulated misses are trigger-candidate evidence under the same paired positive/negative standard as the trigger-phrase inventory.
+For a standalone router installation, use its own `scripts/record_unrouted.py` and pass the active workspace as `--root`. Quote the request through `--stdin` when shell quoting or history is a concern. The store is `.azhou/super-ask-azhou/unrouted-telemetry.json` (git-ignored runtime state): per-request SHA-256 hashes with counts and day stamps only — the raw text is never written, so it cannot leak into receipts, reports, or Git. `--summary` prints the aggregate; accumulated misses are trigger-candidate evidence under the same paired positive/negative standard as the trigger-phrase inventory.
 
 ## Verification
 
