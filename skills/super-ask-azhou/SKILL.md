@@ -55,7 +55,7 @@ Match the request to a family first, then to the catalog's intent keywords: inst
 
 For engineering questions, compare the [book skill names](references/book-skills.txt) with the skills enabled for the current project. Use the active workspace root, even when this router is installed elsewhere. A book qualifies when its enabled entry points to this project's `.agents/skills/<name>/SKILL.md`, its frontmatter names that skill, and the adjacent `<name>.mini.md` is readable. Resolve both files within the workspace. Omit a book when you cannot verify those conditions. A global installation or a copy in another checkout does not establish availability here.
 
-Match the task to the local entry's description. Recommend the closest fit, give one reason tied to the user's situation, and show `$<name>` for direct use in the default mini mode. If the user specifically asks for something they can use here, verify any fallback skill is available to this project too. If nothing available fits, say so.
+Match the task to the local entry's description. Recommend the closest fit, give one reason tied to the user's situation, and show `$<name>` for direct use in the default mini mode. If the user specifically asks for something they can use here, verify any fallback skill is available to this project too. If nothing available fits, lead with that result. Mention a missing prerequisite only to explain the outcome. Reserve book recommendations and invocation commands for verified, usable entries.
 
 ## Boundaries
 
