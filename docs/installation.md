@@ -235,10 +235,10 @@ For Skills CLI installations, use the owning scope and name the skill. Run proje
 ~~~bash
 npx skills list --agent codex
 npx skills update --project super-ask-azhou
-npx skills remove --agent codex super-ask-azhou
+npx skills remove super-ask-azhou
 ~~~
 
-For a user-wide install, add `--global` to `list` and `remove`, and replace `--project` with `--global` in `update`. See the [Skills CLI command reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md). Verify the resulting skill in the harness after updating.
+For a user-wide install, add `--global` to `list` and `remove`, and replace `--project` with `--global` in `update`. See the [Skills CLI command reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md). For a Skill shared through `.agents/skills/`, removing it by name from its installation scope also affects other agents that use that copy. Run `list` again after removal. Verify the resulting skill in the harness after updating.
 
 For a manual copy, review local changes before replacing the whole skill directory with the intended snapshot. For an unmanaged symlink, update its source checkout and rerun verification.
 
