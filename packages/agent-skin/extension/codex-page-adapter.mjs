@@ -1041,15 +1041,17 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       let refresh = false;
       for (const record of records) {
         if (record.type === 'childList') {
-          refresh ||= [...record.addedNodes, ...record.removedNodes].some(hasDotProfile);
+          const removedNodes = record.removedNodes ?? [];
+          const changedNodes = [...record.addedNodes ?? [], ...removedNodes];
+          refresh ||= changedNodes.some(hasDotProfile);
           const helper = dotHelperFor(record.target);
-          if (helper && (record.target === helper || [...record.addedNodes, ...record.removedNodes]
+          if (helper && (record.target === helper || changedNodes
             .some(node => node.matches?.(dotHelperVeto) || node.querySelector?.(dotHelperVeto)))) refresh = true;
-          if ([...record.removedNodes].some(removed => [...activityNodes].some(node => removed === node || removed.contains?.(node)))) {
+          if ([...removedNodes].some(removed => [...activityNodes].some(node => removed === node || removed.contains?.(node)))) {
             endObservation();
             return;
           }
-          refresh ||= [...record.addedNodes ?? [], ...record.removedNodes ?? []].some(node => node.matches?.(paintSelector) || node.querySelector?.(paintSelector));
+          refresh ||= changedNodes.some(node => node.matches?.(paintSelector) || node.querySelector?.(paintSelector));
           continue;
         }
         if (record.type !== 'attributes') continue;
