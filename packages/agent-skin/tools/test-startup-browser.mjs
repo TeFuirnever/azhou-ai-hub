@@ -7472,6 +7472,11 @@ try {
       };
       window.__dotRecovery = { main, nav, make, runId:window.__startupAPI.status().runId, dot:make(), scene, evidence };
     })()`);
+    const settleFrame = () => cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+    const clip = {x:484,y:164,width:12,height:12,scale:1};
+    const captureDot = async () => (await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true,clip})).data;
+    await settleFrame();
+    const workspacePixels = await captureDot();
     const settled = (marked, previous='null') => cdp.evaluate(`(() => {
       const current = window.__dotRecovery;
       return current.dot.hasAttribute('data-azhou-wallpaper-plane') === ${marked}
@@ -7487,6 +7492,61 @@ try {
       return dot.hasAttribute('data-azhou-wallpaper-plane') === ${expected}
         && getComputedStyle(dot).backgroundColor === (${expected} ? 'rgba(0, 0, 0, 0)' : 'rgb(11, 23, 37)');
     })()`);
+    const checkAlias = async (label, edit, painted) => {
+      await action(edit);
+      // Do not query controller state or synthesize layout events: only the
+      // production observer may react to these route/collision mutations.
+      await until(()=>dotPaintIs(painted),2500,label);
+      await settleFrame();
+      const pixels = await captureDot();
+      if (painted) assert.equal(pixels,workspacePixels,label+': exact wallpaper ROI');
+      else assert.notEqual(pixels,workspacePixels,label+': native surface retains its paint');
+      const preserved = await action(`
+        const rect=f.input.getBoundingClientRect();
+        f.input.focus();
+        return {inputColor:getComputedStyle(f.input).backgroundColor, focused:document.activeElement===f.input,
+          receivesPointer:document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)===f.input,
+          unrelatedColor:getComputedStyle(f.unrelated).backgroundColor,
+          unrelatedMarked:f.unrelated.hasAttribute('data-azhou-wallpaper-plane')};
+      `);
+      assert.deepEqual(preserved,{inputColor:'rgb(26, 36, 46)',focused:true,receivesPointer:true,
+        unrelatedColor:'rgb(91, 32, 73)',unrelatedMarked:false});
+    };
+    await checkAlias('unsupported prefix relinquishes the old route',`
+      f.nav.dataset.sidebarDestination='builtin:dot-hub-extra';
+      const input=document.createElement('textarea');
+      input.style.cssText='position:absolute;right:4px;bottom:4px;width:36px;height:19px;background:rgb(26,36,46)';
+      f.dot.querySelector('.thread-pane').append(input);f.input=input;
+      const unrelated=document.createElement('section');
+      unrelated.style.cssText='position:fixed;top:280px;left:480px;width:40px;height:30px;background:rgb(91,32,73)';
+      f.main.append(unrelated);f.unrelated=unrelated;
+    `,false);
+    await checkAlias('in-place marker changes to the precise current Dot alias',
+      "f.nav.dataset.sidebarDestination='builtin:dot-hub'",true);
+    await checkAlias('no active route does not attest Dot',"f.nav.removeAttribute('aria-current')",false);
+    await checkAlias('exact active alias attests Dot without layout hints',"f.nav.setAttribute('aria-current','page')",true);
+    await checkAlias('hidden inert duplicate marker and shell do not attest or interfere',`
+      const skeleton=f.make();skeleton.hidden=true;skeleton.inert=true;skeleton.style.display='none';
+      f.main.append(skeleton);f.hiddenShell=skeleton;
+      const hidden=f.nav.cloneNode();hidden.hidden=true;hidden.inert=true;hidden.style.display='none';
+      f.nav.after(hidden);f.hiddenNav=hidden;
+    `,true);
+    assert.equal(await action("return f.hiddenShell.hasAttribute('data-azhou-wallpaper-plane')"),false);
+    await checkAlias('visible duplicate of the active alias fails closed even when inactive',`
+      const duplicate=f.nav.cloneNode();duplicate.removeAttribute('aria-current');f.nav.after(duplicate);f.duplicate=duplicate;
+    `,false);
+    await checkAlias('an active exact legacy alias conflicts with the current alias',
+      "f.duplicate.dataset.sidebarDestination='builtin:orbit';f.duplicate.setAttribute('aria-current','page')",false);
+    await checkAlias('an inactive exact legacy alias does not conflict',
+      "f.duplicate.removeAttribute('aria-current')",true);
+    await checkAlias('exact active legacy route survives an inactive current alias',`
+      f.nav.removeAttribute('aria-current');f.duplicate.setAttribute('aria-current','page');
+    `,true);
+    await checkAlias('cleanup of other rows leaves the original legacy behavior',`
+      f.duplicate.remove();f.hiddenNav.remove();f.hiddenShell.remove();
+      f.nav.dataset.sidebarDestination='builtin:orbit';f.nav.setAttribute('aria-current','page');
+    `,true);
+
     await action("f.dot.firstElementChild.classList.remove('workspace')");
     await until(()=>dotPaintIs(false),2000,'losing the Dot workspace class restores native paint without a status query');
     await action("f.dot.firstElementChild.classList.add('workspace')");
