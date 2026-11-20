@@ -44,7 +44,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
 
-[校验安装内容](docs/installation.md#verify-what-you-installed) · [安装指南](docs/installation.md) · [离线恢复](docs/installation.md#offline-recovery)
+[更新或卸载](docs/installation.md#upgrade-or-uninstall) · [校验安装内容](docs/installation.md#verify-what-you-installed) · [安装指南](docs/installation.md) · [离线恢复](docs/installation.md#offline-recovery)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills.zh-CN-dark.jpg">

@@ -4,6 +4,12 @@
 
 The existing Skill installation paths below remain independent. For the two optional pstack and Agent Skin integrations, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
 
+## Install or update when a task needs it
+
+If a book skill is missing from the Azhou AI Hub checkout, check the current branch and the files under `.agents/skills/`. Update the checkout or restore the tracked files from the intended revision. These book skills ship with the project. Installing Ask Azhou by itself adds the router. To use a specific book in a different project, install it there from [agent-rules-books](https://github.com/ciembor/agent-rules-books).
+
+If you need Ask Azhou in a project where it is unavailable, use the single-skill install below. A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
+
 ## Package-manager install
 
 Install only the skill you need:
@@ -27,7 +33,13 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
 
-Run one command per desired skill. The package manager chooses the harness destination. This path has no repository-owned receipt; verify discovery and invocation in the target harness.
+Select the skill and harness in one command. For example, run this from the project where you want to use Ask Azhou in Codex.
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+~~~
+
+For a user-wide install, add `--global`. Keep the scope for later updates and removal. This installation has no repository-owned receipt. Verify discovery and invocation in the target harness.
 
 ## Verify what you installed
 
@@ -218,7 +230,17 @@ Copy that directory to the same path on the offline host — or set `PLAYWRIGHT_
 
 ## Upgrade or uninstall
 
-Package-manager installations follow the package manager's update/remove commands. For unmanaged manual copies, replace the whole skill directory only after reviewing local changes. For unmanaged symlinks, pull the repository and rerun verification.
+For Skills CLI installations, use the owning scope and name the skill. Run project commands from the project where you installed it.
+
+~~~bash
+npx skills list --agent codex
+npx skills update --project super-ask-azhou
+npx skills remove --agent codex super-ask-azhou
+~~~
+
+For a user-wide install, add `--global` to `list` and `remove`, and replace `--project` with `--global` in `update`. See the [Skills CLI command reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md). Verify the resulting skill in the harness after updating.
+
+For a manual copy, review local changes before replacing the whole skill directory with the intended snapshot. For an unmanaged symlink, update its source checkout and rerun verification.
 
 For a checkout-managed artifact, inspect before applying:
 
@@ -229,5 +251,7 @@ python scripts/azhou_hub.py uninstall --receipt "$RECEIPT" --target "$SKILLS_HOM
 ~~~
 
 Add `--apply` only after reviewing the JSON plan. There is no force overwrite, cross-root migration, hook cleanup or receipt-less adoption.
+
+To move a managed installation to changed package bytes, use the checkout that still matches the old receipt to dry-run and apply `uninstall`. After confirming removal, archive that receipt outside the active receipts directory. Update the source checkout, run managed `setup` for the new revision, and verify the new install with `doctor`. For rollback, keep the old revision and use the same sequence in reverse with a fresh receipt. If the old source already drifted, inspect with `doctor` and recover the receipt's exact source at its recorded path before using this sequence.
 
 Remove the legacy <code>neat-freak</code> name only after confirming <code>super-repo-pedant</code> resolves and passes its smoke checks. Do not keep a hidden alias unless a user explicitly needs a transition period.
