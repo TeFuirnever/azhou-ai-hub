@@ -748,7 +748,8 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
   const protectedPaint = '[data-composer-layout],pre,code,[role="menu"],[role="dialog"],'
     + '[contenteditable="true"],textarea,input,button,select';
   const generatedLayer = prefix => ':is([class^="' + prefix + '"],[class*=" ' + prefix + '"])';
-  const dotDestination = '[data-sidebar-destination="builtin:orbit"]';
+  const dotDestinationValues = ['builtin:orbit', 'builtin:dot-hub'];
+  const dotDestination = dotDestinationValues.map(value => '[data-sidebar-destination="' + value + '"]').join(',');
   const dotMessagingShell = '.messaging-root.messaging-embedded';
   const workspaceSelectors = {
     workspace: ':is([class^="_WorkspaceContent_"],[class*=" _WorkspaceContent_"])',
@@ -806,13 +807,17 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       // attests Dot. Never infer this from initialRoute or localized text.
       const dotDestinations = [...shell.querySelectorAll(dotDestination)].filter(node =>
         workspaceVisible(node, host));
+      const activeDotDestinations = dotDestinations.filter(node => node.getAttribute('aria-current') === 'page');
+      const activeDotDestination = activeDotDestinations.length === 1 ? activeDotDestinations[0] : null;
+      const activeDotIdentity = activeDotDestination?.getAttribute('data-sidebar-destination');
+      const uniqueActiveDotDestination = activeDotDestination && dotDestinations.filter(node =>
+        node.getAttribute('data-sidebar-destination') === activeDotIdentity).length === 1;
       const embedded = visible(dotMessagingShell);
       const dotThread = embedded.length === 1
         ? [...embedded[0].querySelectorAll(':scope > .workspace > main.thread-pane')]
         : [];
-      const dotPaint = embedded.length === 1 && dotDestinations.length === 1
-        && dotDestinations[0].getAttribute('aria-current') === 'page'
-        && !activeMain.contains(dotDestinations[0])
+      const dotPaint = embedded.length === 1 && uniqueActiveDotDestination
+        && !activeMain.contains(activeDotDestination)
         && embedded[0].parentElement === activeMain
         && !embedded[0].closest('[data-floating]')
         && dotThread.length === 1 && workspaceVisible(dotThread[0], host) && !dotThread[0].closest(protectedPaint)
@@ -974,6 +979,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         if (dotGuardAttributes.includes(record.attributeName)
           && (record.target.matches?.(dotGuardSelector) || record.target.querySelector?.(dotGuardSelector))) refresh = true;
         if (record.attributeName === 'data-sidebar-destination'
+            && (record.target.matches?.(dotDestination) || dotDestinationValues.includes(record.oldValue))
           || record.attributeName === 'aria-current' && record.target.matches?.(dotDestination)
           || record.attributeName === 'data-floating'
           || record.attributeName === 'class' && (record.target.parentElement === observation.activeMain
