@@ -265,6 +265,8 @@ The [Azhou Skill Standard](docs/skill-standard.md) is the single project authori
 
 ## Develop
 
+In Codex, open this checkout and type `$refactoring` to apply refactoring guidance to a change, or `$release-it` to review failure recovery. The 14 [book-inspired skills](THIRD_PARTY_NOTICES.md#agent-rules-books) ship with the repository and load their rules on demand.
+
 Python 3.11+ is enough for the repository gate:
 
 ~~~bash

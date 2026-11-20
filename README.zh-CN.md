@@ -265,6 +265,8 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 
 ## 开发
 
+在 Codex 中打开本仓库，输入 `$refactoring` 可以按《重构》的思路检查一次代码改动，输入 `$release-it` 可以检查故障后如何恢复。14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库提供，按需读取。
+
 仓库级验证只需要 Python 3.11+：
 
 ~~~bash
