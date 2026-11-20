@@ -7547,6 +7547,146 @@ try {
       f.nav.dataset.sidebarDestination='builtin:orbit';f.nav.setAttribute('aria-current','page');
     `,true);
 
+    const checkRoom = async (label, edit, painted) => {
+      await checkAlias(label,edit,painted);
+      const evidence = await action(`
+        const rect=f.input.getBoundingClientRect(); f.input.focus();
+        return {shellOwned:f.dot.hasAttribute('data-azhou-wallpaper-plane'),
+          shellColor:getComputedStyle(f.dot).backgroundColor,
+          paneOwned:f.pane.hasAttribute('data-azhou-wallpaper-plane'),
+          paneColor:getComputedStyle(f.pane).backgroundColor,
+          nativePanePaint:f.pane.style.backgroundColor,
+          editorColor:getComputedStyle(f.editor).backgroundColor,
+          editorMarked:f.editor.hasAttribute('data-azhou-wallpaper-plane'),
+          editorEditable:f.editor.isContentEditable,
+          inputFocused:document.activeElement===f.input,
+          inputHit:document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)===f.input};
+      `);
+      assert.deepEqual(evidence,{shellOwned:painted,shellColor:painted?'rgba(0, 0, 0, 0)':'rgb(11, 23, 37)',
+        paneOwned:true,paneColor:'rgba(0, 0, 0, 0)',nativePanePaint:'rgb(60, 30, 90)',
+        editorColor:'rgb(82, 31, 24)',editorMarked:false,editorEditable:true,inputFocused:true,inputHit:true},label);
+    };
+    await checkRoom('direct complete room control',`
+      f.nav.dataset.sidebarDestination='builtin:dot-hub';
+      const pane=f.dot.querySelector('.workspace > main.thread-pane');
+      pane.style.backgroundColor='rgb(60,30,90)';f.pane=pane;
+      const editor=document.createElement('div');
+      editor.contentEditable='true';
+      editor.style.cssText='position:absolute;left:60px;top:26px;width:19px;height:18px;background:rgb(82,31,24)';
+      pane.append(editor);f.editor=editor;
+    `,true);
+    await checkRoom('one room wrapper does not establish ownership by itself',`
+      const outer=document.createElement('div');outer.className='relative flex h-full min-h-0 flex-col';
+      f.dot.before(outer);outer.append(f.dot);f.roomOuter=outer;
+    `,false);
+    await checkRoom('exact host two-wrapper room loses centered wallpaper on current adapter',`
+      const inner=document.createElement('div');inner.className='relative min-h-0 flex-1';
+      f.roomOuter.insertBefore(inner,f.dot);inner.append(f.dot);f.roomInner=inner;
+    `,false);
+    await checkRoom('same wrapped room with nested transcript helper still denied',`
+      const helper=document.createElement('div');helper.className='messaging-root messaging-embedded';
+      helper.style.cssText='position:fixed;top:305px;left:480px;width:20px;height:20px;background:rgb(80,20,60)';
+      helper.innerHTML='<div class="thread-pane flex-1">test</div>';
+      f.pane.append(helper);f.helper=helper;
+    `,false);
+    assert.equal(await action("return f.helper.hasAttribute('data-azhou-wallpaper-plane')"),false);
+    await checkRoom('the confirmed three-wrapper room admits central wallpaper',`
+      f.helper.remove();
+      const conversation=document.createElement('div');conversation.className='h-full min-h-0';
+      f.roomOuter.before(conversation);conversation.append(f.roomOuter);f.conversation=conversation;
+    `,true);
+    await action("f.ownerBeforeHelper=window.__azhouWallpaper; f.sceneBeforeHelper=document.documentElement.style.getPropertyValue('--azhou-wallpaper-image')");
+    await checkRoom('known transcript helper inside three-wrapper room does not compete',`
+      const helper=document.createElement('div');helper.className='messaging-root messaging-embedded';
+      helper.style.cssText='position:fixed;top:305px;left:480px;width:20px;height:20px;background:rgb(80,20,60)';
+      helper.innerHTML='<div class="thread-pane flex-1">test</div>';
+      f.pane.append(helper);f.helper=helper;
+    `,true);
+    assert.deepEqual(await action("return [f.helper.hasAttribute('data-azhou-wallpaper-plane'),getComputedStyle(f.helper).backgroundColor]"),
+      [false,'rgb(80, 20, 60)']);
+    const stableHelperOwner = () => action(`
+      return f.ownerBeforeHelper===window.__azhouWallpaper
+        &&f.sceneBeforeHelper===document.documentElement.style.getPropertyValue('--azhou-wallpaper-image');
+    `);
+    assert.equal(await stableHelperOwner(),true,'known helper mount does not change wallpaper owner or URL');
+    await checkRoom('host drag-active helper token preserves exact ROI',
+      "f.helper.firstElementChild.classList.add('drag-active')",true);
+    assert.equal(await stableHelperOwner(),true,'drag-active does not change wallpaper owner or URL');
+    await checkRoom('host drag-active can clear without repaint',
+      "f.helper.firstElementChild.classList.remove('drag-active')",true);
+    assert.equal(await stableHelperOwner(),true,'drag-active clear does not change wallpaper owner or URL');
+    await checkRoom('a malformed helper with second child vetoes ownership',`
+      const invalid=document.createElement('div');f.helper.append(invalid);f.invalidHelperChild=invalid;
+    `,false);
+    await checkRoom('removing the old two-token helper root identity restores paint while node remains',
+      "f.helper.className='non-dot-helper'",true);
+    await checkRoom('restoring the old two-token identity reintroduces malformed ambiguity',
+      "f.helper.className='messaging-root messaging-embedded'",false);
+    await checkRoom('recovering helper shape restores paint without a new apply',
+      "f.invalidHelperChild.remove()",true);
+    await checkRoom('populated nested shell is an ambiguity even in the attested room',`
+      const workspace=document.createElement('div');workspace.className='workspace';
+      workspace.innerHTML='<main class="thread-pane" style="width:20px;height:20px">second</main>';
+      f.helper.append(workspace); f.helperWorkspace=workspace;
+    `,false);
+    await checkRoom('removing nested population admits the safe room again',"f.helperWorkspace.remove()",true);
+    await checkRoom('helper losing exact pane class fails closed',
+      "f.helper.firstElementChild.classList.remove('flex-1')",false);
+    await checkRoom('in-place helper class repair restores automatic paint',
+      "f.helper.firstElementChild.classList.add('flex-1')",true);
+    await checkRoom('two identical helper-shaped descendants are ambiguous',`
+      const extra=f.helper.cloneNode(true);extra.style.left='520px';f.pane.append(extra);f.secondHelper=extra;
+    `,false);
+    await checkRoom('removing second helper restores the recognized room',"f.secondHelper.remove()",true);
+    await checkRoom('incomplete direct sibling remains an ambiguity beside the attested room',`
+      const duplicate=f.helper.cloneNode(true);duplicate.style.left='530px';f.main.append(duplicate);f.competingRoom=duplicate;
+    `,false);
+    await checkRoom('removing the incomplete competing shell restores the attested room',
+      "f.competingRoom.remove(); f.helper.remove()",true);
+    await checkRoom('mutating the innermost wrapper class invalidates recognition',
+      "f.roomInner.classList.add('unexpected-wrapper-token')",false);
+    await checkRoom('repairing the wrapper classes restores automatic paint',
+      "f.roomInner.classList.remove('unexpected-wrapper-token')",true);
+    await checkRoom('explicit accessibility-role boundary cannot attest a room',
+      "f.roomInner.setAttribute('role','region')",false);
+    await checkRoom('removing role from exact wrapper restores automatic paint',
+      "f.roomInner.removeAttribute('role')",true);
+    await checkRoom('floating outer conversation wrapper cannot attest Dot',
+      "f.conversation.setAttribute('data-floating','')",false);
+    await action("f.conversation.removeAttribute('data-floating'); f.conversation.hidden=true; f.conversation.style.display='none'");
+    await until(()=>action("return !f.dot.hasAttribute('data-azhou-wallpaper-plane')"),2500,'hidden room remains unpainted');
+    await settleFrame();
+    const hiddenRoom=await action(`
+      return {outerMarked:f.dot.hasAttribute('data-azhou-wallpaper-plane'),
+        hiddenWrapper:getComputedStyle(f.conversation).display==='none',
+        editorColor:getComputedStyle(f.editor).backgroundColor,
+        editorMarked:f.editor.hasAttribute('data-azhou-wallpaper-plane')};
+    `);
+    assert.deepEqual(hiddenRoom,{outerMarked:false,hiddenWrapper:true,editorColor:'rgb(82, 31, 24)',editorMarked:false});
+    const hiddenROI=(await captureDot())===workspacePixels;
+    assert.equal(hiddenROI,true,'parked hidden room cannot obscure the wallpaper ROI');
+    await checkRoom('showing confirmed room again restores ownership',
+      "f.conversation.hidden=false; f.conversation.style.removeProperty('display')",true);
+    await checkRoom('per-profile orbit marker remains outside admitted family',
+      "f.nav.dataset.sidebarDestination='builtin:orbit:sample-profile'",false);
+    await checkRoom('restoring exact route and dropping outer wrapper',`
+      f.nav.dataset.sidebarDestination='builtin:dot-hub';
+      f.main.insertBefore(f.roomOuter,f.conversation);f.conversation.remove();
+    `,false);
+    await checkRoom('four wrappers do not establish ownership',`
+      f.helper.remove();
+      const third=document.createElement('div'),fourth=document.createElement('div');
+      f.dot.before(third);third.append(fourth);fourth.append(f.dot);f.extraWrappers=third;
+    `,false);
+    await checkRoom('direct control restores exact centered wallpaper',`
+      f.main.insertBefore(f.dot,f.roomOuter);f.roomOuter.remove();
+    `,true);
+    await checkRoom('second visible complete shell remains ambiguous',`
+      const duplicate=f.make();duplicate.style.left='590px';
+      f.main.append(duplicate);f.roomDuplicate=duplicate;
+    `,false);
+    await checkRoom('removing duplicate restores single direct control',"f.roomDuplicate.remove()",true);
+
     await action("f.dot.firstElementChild.classList.remove('workspace')");
     await until(()=>dotPaintIs(false),2000,'losing the Dot workspace class restores native paint without a status query');
     await action("f.dot.firstElementChild.classList.add('workspace')");

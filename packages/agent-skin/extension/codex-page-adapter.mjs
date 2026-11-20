@@ -767,6 +767,27 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     + generatedLayer('_background_') + ',' + generatedLayer('_fade_') + ','
     + generatedLayer('background-') + ',' + generatedLayer('fade-') + ')';
 
+  // Only the attested conversation/room layout, not an arbitrary ancestor walk.
+  const dotNonPaint = '[data-floating],[contenteditable]:not([contenteditable="false"])';
+  const dotRoomWrappers = [
+    ['h-full', 'min-h-0'],
+    ['relative', 'flex', 'h-full', 'min-h-0', 'flex-col'],
+    ['relative', 'min-h-0', 'flex-1'],
+  ];
+  function dotRoomChain(root, activeMain) {
+    if (root.parentElement === activeMain) return [];
+    const chain = [];
+    let node = root.parentElement;
+    for (const classes of [...dotRoomWrappers].reverse()) {
+      if (node?.tagName !== 'DIV' || node.classList.length !== classes.length
+        || !classes.every(name => node.classList.contains(name))
+        || node.matches('[role],[contenteditable]:not([contenteditable="false"]),[data-composer-layout],[data-floating]')) return null;
+      chain.unshift(node);
+      node = node.parentElement;
+    }
+    return node === activeMain ? chain : null;
+  }
+
   function workspaceVisible(node, host) {
     if (!node?.isConnected || node.closest(protectedWorkspace)) return false;
     for (let ancestor = node; ancestor; ancestor = ancestor.parentElement) {
@@ -813,15 +834,29 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       const uniqueActiveDotDestination = activeDotDestination && dotDestinations.filter(node =>
         node.getAttribute('data-sidebar-destination') === activeDotIdentity).length === 1;
       const embedded = visible(dotMessagingShell);
-      const dotThread = embedded.length === 1
-        ? [...embedded[0].querySelectorAll(':scope > .workspace > main.thread-pane')]
-        : [];
-      const dotPaint = embedded.length === 1 && uniqueActiveDotDestination
-        && !activeMain.contains(activeDotDestination)
-        && embedded[0].parentElement === activeMain
-        && !embedded[0].closest('[data-floating]')
-        && dotThread.length === 1 && workspaceVisible(dotThread[0], host) && !dotThread[0].closest(protectedPaint)
-        ? embedded[0] : null;
+      const primaryRooms = embedded.map(node => ({ node, wrappers: dotRoomChain(node, activeMain),
+        threads: [...node.querySelectorAll(':scope > .workspace > main.thread-pane')] }))
+        .filter(room => room.wrappers !== null && room.threads.length === 1
+          && workspaceVisible(room.threads[0], host) && !room.threads[0].closest(protectedPaint)
+          && !room.node.closest(dotNonPaint) && !room.threads[0].closest(dotNonPaint));
+      const primaryRoom = primaryRooms.length === 1 ? primaryRooms[0] : null;
+      // The inline helper inside an attested thread is not another main room.
+      // Unknown siblings or complete nested rooms still veto admission.
+      const helpers = primaryRoom ? embedded.filter(node => node !== primaryRoom.node) : [];
+      const knownHelpersOnly = primaryRoom && helpers.length <= 1 && helpers.every(node => {
+        const pane = node.children[0];
+        return node.tagName === 'DIV' && node.parentElement === primaryRoom.threads[0] && !node.closest(dotNonPaint)
+          && node.children.length === 1 && pane.matches('div.thread-pane.flex-1')
+          && [...pane.classList].every(name => ['thread-pane', 'flex-1', 'drag-active'].includes(name))
+          && !pane.matches('[role],[data-composer-layout]')
+          && !pane.closest(dotNonPaint)
+          && !node.querySelector('.workspace, main.thread-pane, ' + dotMessagingShell);
+      });
+      const dotPaint = primaryRoom && knownHelpersOnly && uniqueActiveDotDestination
+        && !activeMain.contains(activeDotDestination) ? primaryRoom.node : null;
+      const dotStructureNodes = primaryRoom ? [...primaryRoom.wrappers, primaryRoom.node,
+        primaryRoom.threads[0].parentElement, primaryRoom.threads[0]] : [];
+      layoutTargets.push(...dotStructureNodes.filter(node => !layoutTargets.includes(node)));
       const surfaces = [...new Set([shell, ...layoutAncestors.filter(node => node.matches(
         '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]')),
       ...visible('[data-app-shell-page-surface]'), ...visible(workspaceSelectors.messaging), ...(dotPaint ? [dotPaint] : [])])];
@@ -857,11 +892,13 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       if (workspaceObservation?.documentToken === identity.documentToken && workspaceObservation.shell === shell
         && workspaceObservation.activeMain === activeMain && sameNodes(workspaceObservation.layoutAncestors, layoutAncestors)
         && samePlanes(workspaceObservation.knownPaintPlanes, knownPaintPlanes)
-        && sameNodes(workspaceObservation.layoutTargets, layoutTargets) && sameUnknown) return workspaceObservation;
+        && sameNodes(workspaceObservation.layoutTargets, layoutTargets)
+        && sameNodes(workspaceObservation.dotStructureNodes, dotStructureNodes) && sameUnknown) return workspaceObservation;
       workspaceObservation = Object.freeze({ kind: 'observed', documentToken: identity.documentToken,
         workspaceEpoch: ++workspaceEpoch, shell, activeMain,
         themeSurfaces: Object.freeze({ contract: 'codex-theme-surfaces/v1',
           workspaceReadability: activeMain, fullCoverage: false }),
+        dotStructureNodes: Object.freeze(dotStructureNodes), dotThreadRoot: primaryRoom?.threads[0] ?? null,
         layoutTargets: Object.freeze(layoutTargets), layoutAncestors: Object.freeze(layoutAncestors), knownPaintPlanes: Object.freeze(knownPaintPlanes),
         unknownCandidates: Object.freeze(unknownCandidates),
         coverage: Object.freeze({ shell: 'observed', messaging: visible(workspaceSelectors.messaging).length ? 'observed' : 'unknown',
@@ -940,6 +977,17 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     for (let node = observation.activeMain; node; node = node.parentElement) activityNodes.add(node);
     const structuralSelector = '[data-app-shell-frame],[data-app-shell-main-surface],[data-app-shell-page-surface]';
     const dotGuardAttributes = ['role', 'contenteditable', 'data-composer-layout'];
+    const dotStructureNodes = new Set(observation.dotStructureNodes);
+    // Resolve direct helper dependencies at delivery time: mounting an equivalent
+    // helper must not replace an otherwise unchanged paint observation.
+    const dotHelperFor = node => {
+      const root = node?.closest?.(dotMessagingShell);
+      return root?.parentElement === observation.dotThreadRoot ? root : null;
+    };
+    const wasDotShell = value => {
+      const classes = new Set((value ?? '').split(/\s+/));
+      return classes.has('messaging-root') && classes.has('messaging-embedded');
+    };
     const dotGuardSelector = [dotDestination, dotMessagingShell, workspaceSelectors.messaging].join(',');
     const paintSelector = [structuralSelector, dotDestination, dotMessagingShell, ...Object.values(workspaceSelectors)].join(',');
     const ownRootProperties = new Set(['--azhou-wallpaper-image', '--azhou-wallpaper-wash', '--azhou-wallpaper-surface']);
@@ -966,6 +1014,9 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       let refresh = false;
       for (const record of records) {
         if (record.type === 'childList') {
+          const helper = dotHelperFor(record.target);
+          if (helper && (record.target === helper || [...record.addedNodes, ...record.removedNodes]
+            .some(node => node.matches?.('.workspace') || node.querySelector?.('.workspace')))) refresh = true;
           if ([...record.removedNodes].some(removed => [...activityNodes].some(node => removed === node || removed.contains?.(node)))) {
             endObservation();
             return;
@@ -976,6 +1027,13 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
         if (record.type !== 'attributes') continue;
         const inside = activityNodes.has(record.target) || observation.shell.contains(record.target);
         if (!inside) continue;
+        if (record.attributeName === 'class' && observation.activeMain.contains(record.target)
+          && wasDotShell(record.oldValue)) refresh = true;
+        const helper = dotHelperFor(record.target);
+        if (helper && record.attributeName === 'class'
+          && (record.target.matches('.workspace') || (record.oldValue ?? '').split(/\s+/).includes('workspace'))) refresh = true;
+        if ((dotStructureNodes.has(record.target) || helper && (record.target === helper || record.target.parentElement === helper))
+          && ['class', 'style', 'hidden', 'data-floating', ...dotGuardAttributes].includes(record.attributeName)) refresh = true;
         if (dotGuardAttributes.includes(record.attributeName)
           && (record.target.matches?.(dotGuardSelector) || record.target.querySelector?.(dotGuardSelector))) refresh = true;
         if (record.attributeName === 'data-sidebar-destination'
