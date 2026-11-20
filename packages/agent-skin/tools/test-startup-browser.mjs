@@ -7470,6 +7470,11 @@ try {
         evidence.revoked.push(value);
         return revoke.call(this, value);
       };
+      // Keep the generated image and sizing; remove gradient-wash rounding from the exact pixel oracle.
+      const visualProbe = document.createElement('style');
+      visualProbe.textContent = 'html[data-azhou-wallpaper="active"] body {'
+        + '--azhou-wallpaper-wash:linear-gradient(transparent,transparent)}';
+      document.head.append(visualProbe);
       window.__dotRecovery = { main, nav, make, runId:window.__startupAPI.status().runId, dot:make(), scene, evidence };
     })()`);
     const settleFrame = () => cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
@@ -7595,26 +7600,93 @@ try {
       const conversation=document.createElement('div');conversation.className='h-full min-h-0';
       f.roomOuter.before(conversation);conversation.append(f.roomOuter);f.conversation=conversation;
     `,true);
-    await action("f.ownerBeforeHelper=window.__azhouWallpaper; f.sceneBeforeHelper=document.documentElement.style.getPropertyValue('--azhou-wallpaper-image')");
+    const assertSameHelperScene = async label => {
+      assert.deepEqual(await action(`
+        const scene=document.documentElement.style.getPropertyValue('--azhou-wallpaper-image');
+        const state=window.__startupAPI.status();
+        return {sameScene:!!f.scene&&scene===f.scene,decodes:f.evidence.decodes,
+          revoked:f.evidence.revoked,phase:state.phase,sameRun:state.runId===f.runId};
+      `),{sameScene:true,decodes:0,revoked:[],phase:'complete',sameRun:true},label);
+    };
     await checkRoom('known transcript helper inside three-wrapper room does not compete',`
       const helper=document.createElement('div');helper.className='messaging-root messaging-embedded';
       helper.style.cssText='position:fixed;top:305px;left:480px;width:20px;height:20px;background:rgb(80,20,60)';
       helper.innerHTML='<div class="thread-pane flex-1">test</div>';
       f.pane.append(helper);f.helper=helper;
     `,true);
-    assert.deepEqual(await action("return [f.helper.hasAttribute('data-azhou-wallpaper-plane'),getComputedStyle(f.helper).backgroundColor]"),
-      [false,'rgb(80, 20, 60)']);
-    const stableHelperOwner = () => action(`
-      return f.ownerBeforeHelper===window.__azhouWallpaper
-        &&f.sceneBeforeHelper===document.documentElement.style.getPropertyValue('--azhou-wallpaper-image');
-    `);
-    assert.equal(await stableHelperOwner(),true,'known helper mount does not change wallpaper owner or URL');
+    await assertSameHelperScene('off-center helper mount retains the decoded scene and completed run');
+    await checkRoom('in-flow transcript helper preserves exact central wallpaper pixels',`
+      const css = document.createElement('style');
+      css.textContent = '#dot-paint-probe.messaging-root {background:var(--color-background-primary);}'
+        + '#dot-paint-probe.messaging-embedded {flex-direction:column;width:100%;min-width:0;height:100%;min-height:0;display:flex;position:relative;}'
+        + ':where(#dot-paint-probe.messaging-root) .thread-pane {background:var(--color-background-primary);flex-direction:column;min-width:0;min-height:0;display:flex;position:relative;container-type:inline-size;}'
+        + '#dot-paint-probe .flex-1 {flex:1}';
+      document.head.append(css);
+      f.helper.firstElementChild.textContent='';
+      f.helper.id='dot-paint-probe';
+      f.helper.style.cssText='--color-background-primary:rgb(97,45,62)';
+      f.pane.style.display='flex';
+      f.pane.style.flexDirection='column';
+      f.input.style.zIndex='2';
+      const editor=document.createElement('input');
+      editor.style.cssText='position:absolute;left:12px;top:52px;box-sizing:border-box;width:20px;height:15px;background:rgb(44,63,89)';
+      f.helper.firstElementChild.append(editor);f.helperEditor=editor;
+    `,true);
+    assert.equal(await action(`
+      const rect=f.helper.firstElementChild.getBoundingClientRect();
+      return rect.left<=484 && rect.right>=496 && rect.top<=164 && rect.bottom>=176;
+    `),true,'center ROI actually intersects the in-flow helper pane');
+    assert.deepEqual(await action(`
+      return [f.helper,f.helper.firstElementChild].map(node=>[
+        node.hasAttribute('data-azhou-wallpaper-plane'),getComputedStyle(node).backgroundColor]);
+    `),[[true,'rgba(0, 0, 0, 0)'],[true,'rgba(0, 0, 0, 0)']],'own both attested helper paint planes');
+    await assertSameHelperScene('in-flow helper keeps the scene and completed run');
+    const assertHelperEditor = async () => {
+      assert.deepEqual(await action(`
+        const editor=f.helperEditor,rect=editor.getBoundingClientRect();editor.focus();
+        return {marked:editor.hasAttribute('data-azhou-wallpaper-plane'),
+          color:getComputedStyle(editor).backgroundColor,focused:document.activeElement===editor,
+          hit:document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)===editor};
+      `),{marked:false,color:'rgb(44, 63, 89)',focused:true,hit:true});
+    };
+    await assertHelperEditor();
+    await checkRoom('losing route attestation does not mark the nested input or helper',`
+      f.nav.removeAttribute('aria-current');
+    `,false);
+    assert.deepEqual(await action(`
+      return [f.helper,f.helper.firstElementChild].map(node=>[
+        node.hasAttribute('data-azhou-wallpaper-plane'),getComputedStyle(node).backgroundColor]);
+    `),[[false,'rgb(97, 45, 62)'],[false,'rgb(97, 45, 62)']]);
+    await assertHelperEditor();
+    await checkRoom('restoring route attestation keeps the nested input usable and exact center pixels',`
+      f.nav.setAttribute('aria-current','page');
+    `,true);
+    await assertHelperEditor();
+    await checkRoom('hidden helper leaves exact center wallpaper and existing controls intact',`
+      f.helper.hidden=true; f.helper.style.display='none';
+    `,true);
+    await assertSameHelperScene('hiding helper keeps the scene and completed run');
+    await checkRoom('showing the same helper restores transparent planes without replay',`
+      f.helper.hidden=false; f.helper.style.removeProperty('display');
+    `,true);
+    await assertSameHelperScene('showing helper keeps the scene and completed run');
+    await checkRoom('returning the helper off-center preserves the remaining route guards',`
+      f.helperEditor.remove();
+      f.helper.removeAttribute('id');
+      f.helper.style.cssText='position:fixed;top:305px;left:480px;width:20px;height:20px;background:rgb(80,20,60)';
+      f.pane.style.removeProperty('display');f.pane.style.removeProperty('flex-direction');f.input.style.removeProperty('z-index');
+    `,true);
+    await assertSameHelperScene('returning helper off-center keeps the scene and completed run');
+    await action("f.ownerBeforeDrag=window.__azhouWallpaper");
+    const stableHelperOwner = () => action("return f.ownerBeforeDrag===window.__azhouWallpaper");
     await checkRoom('host drag-active helper token preserves exact ROI',
       "f.helper.firstElementChild.classList.add('drag-active')",true);
-    assert.equal(await stableHelperOwner(),true,'drag-active does not change wallpaper owner or URL');
+    assert.equal(await stableHelperOwner(),true,'drag-active does not change the paint lease');
+    await assertSameHelperScene('drag-active keeps the scene and completed run');
     await checkRoom('host drag-active can clear without repaint',
       "f.helper.firstElementChild.classList.remove('drag-active')",true);
-    assert.equal(await stableHelperOwner(),true,'drag-active clear does not change wallpaper owner or URL');
+    assert.equal(await stableHelperOwner(),true,'drag-active clear does not change the paint lease');
+    await assertSameHelperScene('drag-active clear keeps the scene and completed run');
     await checkRoom('a malformed helper with second child vetoes ownership',`
       const invalid=document.createElement('div');f.helper.append(invalid);f.invalidHelperChild=invalid;
     `,false);
@@ -7647,13 +7719,31 @@ try {
       f.helper.firstElementChild.append(f.nestedMain);
     `,false);
     await checkRoom('removing the nested thread pane restores exact wallpaper',"f.nestedMain.remove()",true);
+    await action(`
+      f.freshHelper=left=>{
+        const helper=document.createElement('div');helper.className='messaging-root messaging-embedded';
+        helper.style.cssText='position:fixed;top:305px;left:'+left+'px;width:20px;height:20px;background:rgb(80,20,60)';
+        helper.innerHTML='<div class="thread-pane flex-1"></div>';
+        return helper;
+      };
+    `);
+    const assertNativeHelpers = async other => {
+      assert.deepEqual(await action(`
+        return [f.helper,f.${other}].map(helper=>[
+          helper.hasAttribute('data-azhou-wallpaper-plane'),
+          helper.firstElementChild.hasAttribute('data-azhou-wallpaper-plane'),
+          getComputedStyle(helper).backgroundColor]);
+      `),[[false,false,'rgb(80, 20, 60)'],[false,false,'rgb(80, 20, 60)']]);
+    };
     await checkRoom('two identical helper-shaped descendants are ambiguous',`
-      const extra=f.helper.cloneNode(true);extra.style.left='520px';f.pane.append(extra);f.secondHelper=extra;
+      const extra=f.freshHelper(520);f.pane.append(extra);f.secondHelper=extra;
     `,false);
+    await assertNativeHelpers('secondHelper');
     await checkRoom('removing second helper restores the recognized room',"f.secondHelper.remove()",true);
     await checkRoom('incomplete direct sibling remains an ambiguity beside the attested room',`
-      const duplicate=f.helper.cloneNode(true);duplicate.style.left='530px';f.main.append(duplicate);f.competingRoom=duplicate;
+      const duplicate=f.freshHelper(530);f.main.append(duplicate);f.competingRoom=duplicate;
     `,false);
+    await assertNativeHelpers('competingRoom');
     await checkRoom('removing the incomplete competing shell restores the attested room',
       "f.competingRoom.remove(); f.helper.remove()",true);
     await checkRoom('mutating the innermost wrapper class invalidates recognition',
@@ -7680,8 +7770,75 @@ try {
     assert.equal(hiddenROI,true,'parked hidden room cannot obscure the wallpaper ROI');
     await checkRoom('showing confirmed room again restores ownership',
       "f.conversation.hidden=false; f.conversation.style.removeProperty('display')",true);
-    await checkRoom('per-profile orbit marker remains outside admitted family',
+    await checkRoom('a per-profile orbit marker outside official navigation is not admitted',
       "f.nav.dataset.sidebarDestination='builtin:orbit:sample-profile'",false);
+    await checkRoom('inactive profile in attested native sidebar navigation remains denied',`
+      const sidebar=document.querySelector('#app-shell-sidebar')||document.createElement('aside');
+      if(!sidebar.isConnected){sidebar.id='app-shell-sidebar';document.querySelector('#root').append(sidebar);}
+      const root=document.createElement('div'),nav=document.createElement('nav'),group=document.createElement('div');
+      root.setAttribute('data-sidebar-navigation-root','');
+      nav.setAttribute('role','navigation');group.className='group/nav-list';
+      sidebar.append(root);root.append(nav);nav.append(group);
+      f.profileRoot=root;f.profileNav=nav;f.profileGroup=group;
+      f.nav.removeAttribute('aria-current');group.append(f.nav);
+    `,false);
+    await checkRoom('aria-current alone admits the scoped native profile row',
+      "f.nav.setAttribute('aria-current','page')",true);
+    await checkRoom('removing the sidebar navigation root marker withdraws paint',
+      "f.profileRoot.removeAttribute('data-sidebar-navigation-root')",false);
+    await checkRoom('restoring only the sidebar navigation root marker recovers paint',
+      "f.profileRoot.setAttribute('data-sidebar-navigation-root','')",true);
+    await checkRoom('disabling the selected native profile row fails closed',
+      "f.nav.disabled=true",false);
+    await checkRoom('enabling the same profile row recovers without route replay',
+      "f.nav.disabled=false",true);
+    await checkRoom('a plain fieldset wrapper preserves the selected native row',`
+      const fieldset=document.createElement('fieldset');
+      f.profileGroup.append(fieldset);fieldset.append(f.nav);f.profileFieldset=fieldset;
+    `,true);
+    await checkRoom('native row disabled by its fieldset loses attestation',
+      "f.profileFieldset.disabled=true",false);
+    assert.deepEqual(await action("return [f.nav.disabled,f.nav.hasAttribute('disabled'),f.nav.matches(':disabled')]"),
+      [false,false,true],'fieldset alone makes the mounted button effectively disabled');
+    await checkRoom('re-enabling the fieldset restores paint through the observer',
+      "f.profileFieldset.disabled=false",true);
+    await checkRoom('removing the fieldset keeps the selected native row eligible',
+      "f.profileGroup.append(f.nav);f.profileFieldset.remove()",true);
+    await checkRoom('native profile row is not evidence within an inert ancestor',
+      "f.profileRoot.inert=true",false);
+    await checkRoom('clearing inert restores the selected profile row',
+      "f.profileRoot.inert=false",true);
+    await checkRoom('an editable control cannot attest a profile',
+      "f.nav.setAttribute('contenteditable','')",false);
+    await checkRoom('clearing editability restores native navigation attestation',
+      "f.nav.removeAttribute('contenteditable')",true);
+    await checkRoom('composer marker excludes the profile control itself',
+      "f.nav.setAttribute('data-composer-layout','')",false);
+    await checkRoom('clearing composer marker restores the selected profile',
+      "f.nav.removeAttribute('data-composer-layout')",true);
+    await checkRoom('a selected profile moved outside the scoped native sidebar is denied',
+      "document.querySelector('#root').append(f.nav)",false);
+    await checkRoom('moving the same profile back under native navigation restores paint',
+      "f.profileGroup.append(f.nav)",true);
+    await checkRoom('empty profile suffix cannot attest the right conversation',
+      "f.nav.dataset.sidebarDestination='builtin:orbit:'",false);
+    await checkRoom('restoring the same selected concrete profile recovers paint',
+      "f.nav.dataset.sidebarDestination='builtin:orbit:sample-profile'",true);
+    await checkRoom('a visible duplicate of the active profile remains ambiguous',`
+      const duplicate=document.createElement('button');
+      duplicate.dataset.sidebarDestination='builtin:orbit:sample-profile';
+      duplicate.style.cssText='position:fixed;left:27px;top:0;width:20px;height:20px';
+      f.profileGroup.append(duplicate);f.profileDuplicate=duplicate;
+    `,false);
+    await checkRoom('only the remaining selected profile attests after duplicate removal',
+      "f.profileDuplicate.remove()",true);
+    await checkRoom('aria-current on the profile ancestor alone is not profile evidence',`
+      f.nav.removeAttribute('aria-current');f.profileGroup.setAttribute('aria-current','page');
+    `,false);
+    await action(`
+      document.querySelector('#root').append(f.nav);f.profileRoot.remove();
+      f.nav.setAttribute('aria-current','page');
+    `);
     await checkRoom('restoring exact route and dropping outer wrapper',`
       f.nav.dataset.sidebarDestination='builtin:dot-hub';
       f.main.insertBefore(f.roomOuter,f.conversation);f.conversation.remove();
