@@ -7470,6 +7470,11 @@ try {
         evidence.revoked.push(value);
         return revoke.call(this, value);
       };
+      // Keep the generated image and sizing; remove gradient-wash rounding from the exact pixel oracle.
+      const visualProbe = document.createElement('style');
+      visualProbe.textContent = 'html[data-azhou-wallpaper="active"] body {'
+        + '--azhou-wallpaper-wash:linear-gradient(transparent,transparent)}';
+      document.head.append(visualProbe);
       window.__dotRecovery = { main, nav, make, runId:window.__startupAPI.status().runId, dot:make(), scene, evidence };
     })()`);
     const settleFrame = () => cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
