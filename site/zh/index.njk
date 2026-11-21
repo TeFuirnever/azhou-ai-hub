@@ -1,0 +1,45 @@
+---
+layout: base.njk
+lang: zh
+title: "不止能演示，更要经得起真实任务"
+description: "阿舟 AI 能力站：可安装的 agent skill 包、一个确定性仓库门禁、只有人类批准的演化。"
+permalink: "zh/index.html"
+---
+
+<section>
+  <h1>🦊 Azhou AI Hub · 阿舟 AI 能力站</h1>
+  <p class="tagline"><strong>不止能演示，更要经得起真实任务。</strong></p>
+  <p class="tagline">足够小，可以改；足够严，可以验；足够中立，可以跨 Agent harness 使用。</p>
+  <img class="hero" src="{{ '/assets/hero.png' | url }}" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——16 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%">
+</section>
+
+<section>
+  <h2>浏览</h2>
+  <ul class="navcards">
+    <li class="card"><a href="{{ '/skills/' | url }}">技能目录</a> — 可独立安装的 skill 包目录，构建时从每个包的 SKILL.md 自动生成。</li>
+    <li class="card"><a href="{{ '/docs/' | url }}">文档地图</a> — 文档索引清单；文档本体仍以仓库版本为准，站点不转存全文。</li>
+    <li class="card"><a href="{{ '/support/' | url }}">支持面</a> — 当前维护的 agent harness 集合，深链进入支持矩阵。</li>
+  </ul>
+</section>
+
+<section>
+  <h2>在 Codex 里首次安装</h2>
+  <p>先登录 Codex，并确认电脑已安装带 <code>npx</code> 的 Node.js。在终端进入你想使用 Ask Azhou 的项目目录，再执行下面的命令。它只安装到这个项目。</p>
+  <pre><code>npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
+  <p>在同一项目打开一个新的 Codex 会话，试着问下面的问题：</p>
+  <blockquote><p><code>$super-ask-azhou</code> 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub Skill？</p></blockquote>
+  <p>Ask Azhou 应推荐 <code>super-archify</code>。如果 Codex 找不到 Ask Azhou，先看<a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#first-install-in-codex">首次安装排查</a>；已经装过时，可以<a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#upgrade-or-uninstall">检查更新、更新或卸载</a>。</p>
+</section>
+
+<section>
+  <h2>一套架构</h2>
+  <pre class="arch">docs/skill-standard.md ── 约束 ──&gt; skills/&lt;name&gt;/       可安装运行包
+          │                              │
+          ├── 分配 ──────────────────&gt; .azhou/&lt;name&gt;/      私有运行状态
+          ├── 约束 ──────────────────&gt; tests/              确定性证明
+          └── 约束 ──────────────────&gt; benchmarks/&lt;name&gt;/  隔离行为证据
+
+历史信号 ──&gt; 隔离 candidate ──&gt; paired review ──&gt; 人类 promotion
+                    永远不直接写 live skill</pre>
+  <p><a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/skill-standard.md">Azhou Skill Standard</a> 是项目唯一准则。<a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/architecture.md">架构说明</a>解释边界，<a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/GOVERNANCE.md">治理规则</a>解释决策方式。</p>
+</section>
