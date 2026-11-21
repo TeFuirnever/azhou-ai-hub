@@ -1,24 +1,47 @@
 ---
 layout: base.njk
 lang: en
+bodyClass: doc
 title: "Skills"
 description: "The installable skill package catalog of the Azhou AI Hub, generated from each package's SKILL.md frontmatter at build time."
 permalink: "skills/index.html"
 ---
 
-<section>
-  <h1>Skills</h1>
-  <p>Every canonical package is independently installable from the repository checkout. This catalog is generated at build time from each package's <code>SKILL.md</code> frontmatter, so it follows the packages as they change; each card links to the package in the repository. Choose one installation method per skill; see the <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md">installation guide</a>.</p>
-  <p>{{ skills.length }} packages</p>
-  <ul class="cards">
-    {%- for skill in skills %}
-    <li class="card">
-      <h2><a href="{{ skill.url }}">{{ skill.name }}</a></h2>
-      {%- if skill.invocation %}
-      <p class="invocation"><code>{{ skill.invocation }}</code></p>
-      {%- endif %}
-      <p class="desc">{{ skill.description }}</p>
-    </li>
-    {%- endfor %}
-  </ul>
-</section>
+<div class="doc-grid">
+  <nav class="doc-nav" aria-label="Skill packages">
+    <p class="dn-group">Catalog</p>
+    <ul class="dn-list">
+      {%- for skill in skills %}
+      <li><a href="#{{ skill.name }}">{{ skill.name }}</a></li>
+      {%- endfor %}
+    </ul>
+    <p class="dn-note"><a href="https://github.com/TeFuirnever/azhou-ai-hub/tree/main/skills/">All {{ skills.length }} packages in the repo</a></p>
+  </nav>
+  <article class="doc-card">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="{{ '/' | url }}">azhou-ai-hub</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">Skills</span>
+    </nav>
+    <h1>Skills</h1>
+    <p class="doc-lede">Every canonical package is independently installable from the repository checkout. This catalog is generated at build time from each package's <code>SKILL.md</code> frontmatter, so it follows the packages as they change; each card links to the package in the repository.</p>
+    <p class="count">{{ skills.length }} packages</p>
+    <div class="callout note">
+      <p>Choose one installation method per skill; see the <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md">installation guide</a>.</p>
+    </div>
+    <ul class="cardgrid">
+      {%- for skill in skills %}
+      <li id="{{ skill.name }}">
+        <a class="gcard" href="{{ skill.url }}">
+          {%- if skill.invocation %}
+          <span class="badge">{{ skill.invocation }}</span>
+          {%- endif %}
+          <span class="gcard-t">{{ skill.name }}</span>
+          <span class="gcard-d">{{ skill.description }}</span>
+        </a>
+      </li>
+      {%- endfor %}
+    </ul>
+    <p class="doc-source">Generated from <code>SKILL.md</code> frontmatter at build time · <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md">installation guide</a></p>
+  </article>
+</div>
