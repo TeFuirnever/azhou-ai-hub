@@ -13,10 +13,17 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 30
     steps:
+      - name: Checkout the matching isolated probe
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: lab
+          persist-credentials: false
       - name: Checkout the pinned evaluator
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: 6f604ad2b35b7a5e14958f1404645b2caed5b006
+          path: evaluator
           fetch-depth: 0
           persist-credentials: false
       - name: Set up Python
@@ -29,6 +36,7 @@ jobs:
           node-version: "24.15.0"
       - name: Register and run only preflight and displacement controls
         shell: bash
+        working-directory: evaluator
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         run: |
@@ -37,14 +45,16 @@ jobs:
           test -z "$(git status --porcelain --untracked-files=all)"
           python -m pip install --only-binary=:all: Pillow==12.3.0
           chrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-          browser="$("$chrome" --version | sed -nE 's/^Google Chrome ([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)$/Chrome\/\1/p')"
-          test -n "$browser"
           out="$RUNNER_TEMP/p07-isolated"
           mkdir "$out"
+          python -B ../lab/.github/p07/chrome_identity.py "$chrome" >"$out/chrome-identity.json" 2> >(tee "$out/chrome-identity.stderr" >&2)
+          browser="$(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["browser"])' "$out/chrome-identity.json")"
+          printf 'Measurement Browser: %s\n' "$browser"
           tool=packages/agent-skin/tools
           python -B "$tool/test-theme-readability-measurement.py" --register "$out/registration" --browser-version "$browser" --node-version "$(node --version)"
           python -B "$tool/test-startup-payload-browser.py" --chrome "$chrome" --theme-protocol "$out/registration/train-0.json" --measurement-preflight --out "$out/preflight"
           python -B "$tool/test-startup-payload-browser.py" --chrome "$chrome" --theme-protocol "$out/registration/train-0.json" --only 'generated measurement scene detects actual image displacement in four conditions' --out "$out/displacement"
+          python -c 'import json,sys; expected=json.load(open(sys.argv[1])); actual=json.load(open(sys.argv[2]))["environment"]; assert (actual["browser"],actual["protocolVersion"]) == (expected["browser"],expected["protocolVersion"])' "$out/chrome-identity.json" "$out/displacement/report.json"
           test -z "$(git status --porcelain --untracked-files=all)"
       - name: Retain synthetic control evidence
         if: always()
