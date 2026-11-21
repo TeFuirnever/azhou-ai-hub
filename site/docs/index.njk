@@ -1,0 +1,22 @@
+---
+layout: base.njk
+lang: en
+title: "Docs"
+description: "The documentation map of the Azhou AI Hub; documents stay versioned in the repository."
+permalink: "docs/index.html"
+---
+
+<section>
+  <h1>Docs</h1>
+  <p>This page mirrors the docs index only. The documents stay versioned in the repository and every link points there, so the site never drifts from the authoritative text.</p>
+  <ul class="doclist">
+    {%- for row in docsIndex %}
+    <li>
+      {{ row.need }} —
+      {%- for source in row.sources %}
+      <a href="{{ source.url }}">{{ source.label }}</a>{% if not loop.last %} and {% endif %}
+      {%- endfor %}
+    </li>
+    {%- endfor %}
+  </ul>
+</section>

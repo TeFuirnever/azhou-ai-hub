@@ -39,6 +39,10 @@ node_modules/
 .parcel-cache/
 .cache/
 
+# Static documentation site build output (Eleventy); the global
+# node_modules/ entry above already covers site/node_modules/.
+/site/_site/
+
 # Local agent, planning and review state
 .azhou/
 .omc/

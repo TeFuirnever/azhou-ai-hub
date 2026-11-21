@@ -1,0 +1,24 @@
+---
+layout: base.njk
+lang: en
+title: "Skills"
+description: "The installable skill package catalog of the Azhou AI Hub, generated from each package's SKILL.md frontmatter at build time."
+permalink: "skills/index.html"
+---
+
+<section>
+  <h1>Skills</h1>
+  <p>Every canonical package is independently installable from the repository checkout. This catalog is generated at build time from each package's <code>SKILL.md</code> frontmatter, so it follows the packages as they change; each card links to the package in the repository. Choose one installation method per skill; see the <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md">installation guide</a>.</p>
+  <p>{{ skills.length }} packages</p>
+  <ul class="cards">
+    {%- for skill in skills %}
+    <li class="card">
+      <h2><a href="{{ skill.url }}">{{ skill.name }}</a></h2>
+      {%- if skill.invocation %}
+      <p class="invocation"><code>{{ skill.invocation }}</code></p>
+      {%- endif %}
+      <p class="desc">{{ skill.description }}</p>
+    </li>
+    {%- endfor %}
+  </ul>
+</section>

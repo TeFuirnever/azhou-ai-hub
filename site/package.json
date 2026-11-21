@@ -1,0 +1,13 @@
+{
+  "name": "azhou-ai-hub-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Static documentation site for the Azhou AI Hub repository, built with Eleventy.",
+  "scripts": {
+    "build": "eleventy"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "3.1.8",
+    "gray-matter": "4.0.3"
+  }
+}

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} · Azhou AI Hub</title>
+  {%- if description %}
+  <meta name="description" content="{{ description }}">
+  {%- endif %}
+  {%- set siteUrl = "https://tefuirnever.github.io/azhou-ai-hub" %}
+  {%- set ogImage = siteUrl ~ "/assets/hero.png" %}
+  <link rel="canonical" href="{{ siteUrl }}{{ page.url }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
+  <meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161a1e" media="(prefers-color-scheme: dark)">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Azhou AI Hub">
+  <meta property="og:title" content="{{ title }}">
+  {%- if description %}
+  <meta property="og:description" content="{{ description }}">
+  {%- endif %}
+  <meta property="og:url" content="{{ siteUrl }}{{ page.url }}">
+  <meta property="og:image" content="{{ ogImage }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ title }}">
+  {%- if description %}
+  <meta name="twitter:description" content="{{ description }}">
+  {%- endif %}
+  <meta name="twitter:image" content="{{ ogImage }}">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #faf9f7;
+      --surface: #ffffff;
+      --border: #e3ded6;
+      --text: #1d2733;
+      --text-soft: #3c4652;
+      --text-muted: #6b6459;
+      --accent: #2f6f4f;
+      --chip: #efece6;
+      --pre-bg: #10231b;
+      --pre-text: #d7efe2;
+      --code-bg: #efece6;
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161a1e;
+        --surface: #1e242b;
+        --border: #333c46;
+        --text: #e6e1d8;
+        --text-soft: #c5cdd6;
+        --text-muted: #a39b8f;
+        --accent: #7fc9a6;
+        --chip: #262e36;
+        --pre-bg: #0c1a13;
+        --pre-text: #d7efe2;
+        --code-bg: #262e36;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.65 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--text); background: var(--bg); }
+    a { color: var(--accent); }
+    a:hover { text-decoration: underline; text-underline-offset: .15em; }
+    ::selection { background: var(--accent); color: var(--bg); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: .25rem; }
+    .skip-link { position: absolute; left: -9999px; top: 1rem; background: var(--accent); color: var(--bg); padding: .5rem .9rem; border-radius: .375rem; z-index: 100; text-decoration: none; font-weight: 600; }
+    .skip-link:focus-visible { left: 1rem; }
+    header { position: sticky; top: 0; z-index: 10; background: var(--bg); background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%); border-bottom: 1px solid var(--border); }
+    header nav { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; align-items: center; max-width: 56rem; margin: 0 auto; padding: .5rem 1.25rem; }
+    .brand { font-weight: 700; text-decoration: none; color: inherit; padding: .5rem .4rem; margin: -.5rem -.4rem; }
+    nav a { text-decoration: none; padding: .5rem .5rem; margin: -.5rem -.5rem; border-radius: .375rem; }
+    nav a:hover { background: var(--chip); text-decoration: none; }
+    nav a[aria-current="page"] { background: var(--chip); font-weight: 600; }
+    .spacer { flex: 1; }
+    main { max-width: 56rem; margin: 0 auto; padding: 2.5rem 1.25rem 3rem; }
+    h1 { font-size: clamp(1.9rem, 1.35rem + 2.2vw, 2.4rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .5rem; }
+    h2 { font-size: 1.3rem; line-height: 1.3; letter-spacing: -0.01em; margin-top: 2.5rem; }
+    .tagline { font-size: 1.15rem; margin: .25rem 0; }
+    picture { display: block; }
+    img.hero { width: 100%; height: auto; border-radius: .5rem; border: 1px solid var(--border); margin: 1.25rem 0; }
+    pre { background: var(--pre-bg); color: var(--pre-text); padding: .9rem 1rem; border-radius: .5rem; overflow-x: auto; margin: 1rem 0; }
+    pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre code { font: .92rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: transparent; padding: 0; color: inherit; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); padding: .1rem .3rem; border-radius: .3rem; font-size: .92em; }
+    .cards { list-style: none; padding: 0; margin: 1.5rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: 1rem; }
+    .card { border: 1px solid var(--border); border-radius: .5rem; padding: 1rem 1.1rem; background: var(--surface); margin: 0; }
+    @media (hover: hover) and (pointer: fine) {
+      .card { transition: border-color 120ms var(--ease-out); }
+      .card:hover, .card:has(a:focus-visible) { border-color: var(--accent); }
+    }
+    .card h2 { margin: 0 0 .3rem; font-size: 1.05rem; }
+    .card h2 a { text-decoration: none; }
+    .invocation { font-size: .78rem; color: var(--text-muted); margin: 0 0 .4rem; }
+    .invocation code { font-size: 1em; background: var(--chip); }
+    .card .desc { margin: .3rem 0 0; font-size: .88rem; color: var(--text-soft); }
+    .navcards { list-style: none; padding: 0; margin: 1.5rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: 1rem; }
+    .navcards a { font-weight: 600; text-decoration: none; }
+    blockquote { margin: 1.5rem 0; padding: 1rem 1.25rem; border-left: 3px solid var(--accent); background: var(--surface); border-radius: .25rem; }
+    .arch { font: .84rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 1rem; border-radius: .5rem; overflow-x: auto; white-space: pre; margin: 1rem 0; }
+    .doclist { list-style: none; padding: 0; margin: 1.5rem 0; }
+    .doclist li { padding: .45rem 0; border-bottom: 1px solid var(--border); }
+    footer { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 2.5rem; border-top: 1px solid var(--border); font-size: .85rem; color: var(--text-muted); }
+    footer p { margin: .3rem 0; }
+    @media (prefers-reduced-transparency: reduce) {
+      header { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition-duration: 0.01ms !important; }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      @view-transition { navigation: auto; }
+    }
+    @media print {
+      header, footer { display: none; }
+      body { color: #000; background: #fff; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">{{ '跳到正文' if lang == 'zh' else 'Skip to content' }}</a>
+  <header>
+    <nav aria-label="{{ '站内导航' if lang == 'zh' else 'Site' }}">
+      <a class="brand" href="{{ '/' | url }}"><span aria-hidden="true">🦊</span> Azhou AI Hub</a>
+      <a href="{{ '/skills/' | url }}"{% if page.url == '/skills/' %} aria-current="page"{% endif %}>{{ site.labels[lang].skills }}</a>
+      <a href="{{ '/docs/' | url }}"{% if page.url == '/docs/' %} aria-current="page"{% endif %}>{{ site.labels[lang].docs }}</a>
+      <a href="{{ '/support/' | url }}"{% if page.url == '/support/' %} aria-current="page"{% endif %}>{{ site.labels[lang].support }}</a>
+      <span class="spacer"></span>
+      <a href="{{ site.githubUrl }}">GitHub</a>
+      {%- if lang == "zh" %}
+      <a href="{{ '/' | url }}" lang="en" hreflang="en">{{ site.labels[lang].switchLang }}</a>
+      {%- else %}
+      <a href="{{ '/zh/' | url }}" lang="zh-CN" hreflang="zh-CN">{{ site.labels[lang].switchLang }}</a>
+      {%- endif %}
+    </nav>
+  </header>
+  <main id="main">
+    {{ content | safe }}
+  </main>
+  <footer>
+    {%- set blobBase = "https://github.com/TeFuirnever/azhou-ai-hub/blob/main" %}
+    {%- if lang == "zh" %}
+    <p>阿舟自研代码使用 <a href="{{ blobBase }}/LICENSE">MIT</a>。阿舟素材使用 <a href="{{ blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>。名称、标识与角色见 <a href="{{ blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>。第三方组件保留自己的版权与许可证：<a href="{{ blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
+    {%- else %}
+    <p>Azhou-maintained code: <a href="{{ blobBase }}/LICENSE">MIT</a>. Azhou artwork: <a href="{{ blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>. Name, logo and character: <a href="{{ blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>. Third-party components retain their own notices and licenses: <a href="{{ blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.</p>
+    {%- endif %}
+    <p>Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0</p>
+  </footer>
+</body>
+</html>
