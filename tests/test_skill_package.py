@@ -41,6 +41,11 @@ PACKAGE_COUNT_WORDS = {
     "eighteen": 18,
     "nineteen": 19,
     "twenty": 20,
+    "十六": 16,
+    "十七": 17,
+    "十八": 18,
+    "十九": 19,
+    "二十": 20,
 }
 
 
@@ -152,7 +157,14 @@ class SkillPackageTest(unittest.TestCase):
         self.assertRegex(changelog.lower(), r"draft|unpublished")
 
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
-        support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
+        support = "\n".join(
+            (ROOT / relative).read_text(encoding="utf-8").lower()
+            for relative in (
+                "docs/support-matrix.md",
+                "docs/integrations.md",
+                "docs/skill-standard.md",
+            )
+        )
 
         shipped = tuple(sorted(path.parent.name for path in ROOT.glob("skills/*/SKILL.md")))
         self.assertEqual(tuple(sorted(path.name for path in SKILL_DIRS)), shipped)
@@ -161,6 +173,7 @@ class SkillPackageTest(unittest.TestCase):
             r"\bhas ([a-z]+|\d+) packages\b",
             r"\b([a-z]+|\d+)-package catalog\b",
             r"\b([a-z]+|\d+) canonical skills\b",
+            r"全部\s*([0-9一二三四五六七八九十百]+)\s*个\s*canonical\s+skills?\b",
         )
         counts = set()
         for pattern in claim_families:
