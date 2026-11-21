@@ -394,7 +394,8 @@ def asset_work_directory(parent, artifacts):
         raise
 
 
-def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex', lock_fd: int | None = None) -> dict:
+def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex', lock_fd: int | None = None,
+                  approved_video_manifest_sha256: str | None = None) -> dict:
     if host not in ('codex', 'dsh'):
         raise RuntimeError('Unsupported startup host.')
     root = Path(root).resolve()
@@ -411,16 +412,21 @@ def build_startup(bundle: Path, *, root: Path = ROOT, host: str = 'codex', lock_
             raise RuntimeError('Invalid inherited build lock.') from exc
     if lock_fd is not None:
         lock.checked_lock_file(lock_fd)
-        result = _build_startup_locked(bundle, root=root, host=host)
+        result = _build_startup_locked(bundle, root=root, host=host,
+                                       approved_video_manifest_sha256=approved_video_manifest_sha256)
         lock.checked_lock_file(lock_fd)
         return result
     with lock.acquired() as fd:
-        result = _build_startup_locked(bundle, root=root, host=host)
+        result = _build_startup_locked(bundle, root=root, host=host,
+                                       approved_video_manifest_sha256=approved_video_manifest_sha256)
         lock.checked_lock_file(fd)
         return result
 
 
-def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
+def _build_startup_locked(bundle: Path, *, root: Path, host: str,
+                          approved_video_manifest_sha256: str | None = None) -> dict:
+    if host != 'codex' and approved_video_manifest_sha256 is not None:
+        raise RuntimeError('optional startup video is Codex-only')
     bundle = Path(bundle)
     artifacts = load_artifacts(root)
     bundle = artifacts.staged_path(bundle)
@@ -431,12 +437,20 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
     verify_image_metadata_reader(root)
     verify_dream_theme_style(root)
     inputs = artifacts.source_inputs()
+    resources = bundle / 'Contents/Resources'
+    video_inputs = {}
     if host == 'dsh':
         inputs.pop('assets/private/startup-cover.png', None)
+    elif approved_video_manifest_sha256 is not None:
+        marker = artifacts.read_marker(bundle, required=True)
+        video_inputs = artifacts.native_startup_video_inputs(marker['inputs'])
+        if video_inputs.get(artifacts.NATIVE_STARTUP_VIDEO_INPUTS["manifest.json"]) != approved_video_manifest_sha256:
+            raise RuntimeError('optional startup video approval does not match the staged marker')
+        inputs.update(video_inputs)
+    video_outputs = artifacts.verify_native_startup_video_outputs(resources, video_inputs)
     if not set(required_inputs).issubset(inputs):
         raise RuntimeError('Startup manifest cannot bind every required source input.')
 
-    resources = bundle / 'Contents/Resources'
     startup_dir = resources / 'startup'
     defaults_dir = resources / 'web/assets/defaults'
     startup_dir.mkdir(parents=True, exist_ok=True)
@@ -543,6 +557,7 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str) -> dict:
     outputs = {}
     for relative in output_paths:
         outputs[relative] = hashlib.sha256((resources / relative).read_bytes()).hexdigest()
+    outputs.update(video_outputs)
     source_inputs = {name: inputs[name] for name in required_inputs}
     manifest = {
         'schema': 1,
@@ -597,7 +612,8 @@ def main() -> int:
     if args.bundle is None:
         parser.error('--bundle is required unless --update-image-metadata-reader is used')
     try:
-        manifest = build_startup(args.bundle, host=args.host)
+        video_pin = os.environ.get('AZHOU_APPROVED_STARTUP_VIDEO_MANIFEST_SHA256') if args.host == 'codex' else None
+        manifest = build_startup(args.bundle, host=args.host, approved_video_manifest_sha256=video_pin)
     except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
         parser.exit(1, f'启动载荷构建失败：{exc}\n')
     print(json.dumps({

@@ -284,7 +284,7 @@ LEGACY_DREAM_THEME_INPUTS = ('dream-theme-style.mjs', 'dream-theme-style.js', 'v
 PRE_DREAM_STARTUP_REQUIRED_INPUTS = STARTUP_REQUIRED_INPUTS
 LEGACY_DREAM_STARTUP_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, *LEGACY_DREAM_THEME_INPUTS)
 AZHOU_SNAPSHOT_INPUTS = ('azhou-theme-snapshot.mjs', 'dream-theme-style.js')
-INPUT_FILES = (*INPUT_FILES, *AZHOU_SNAPSHOT_INPUTS)
+INPUT_FILES = (*INPUT_FILES, *AZHOU_SNAPSHOT_INPUTS, 'tools/approved_startup_video.py')
 STARTUP_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, *AZHOU_SNAPSHOT_INPUTS)
 # A web plugin package, never a macOS bundle.
 DSH_PLUGIN_REQUIRED_INPUTS = (*STARTUP_REQUIRED_INPUTS, 'extension/hosts/dsh.mjs',
@@ -553,7 +553,92 @@ def read_marker(path, required=False):
     return marker
 
 
-def write_marker(path, *, approved_icon_sha256=None):
+NATIVE_STARTUP_VIDEO_DIR = "startup/native-video"
+NATIVE_STARTUP_VIDEO_INPUTS = {
+    "manifest.json": "assets/private/startup-video.json",
+    "clip.mp4": "assets/private/startup-video.mp4",
+}
+
+
+def native_startup_video_inputs(inputs):
+    selected = {key: inputs[key] for key in NATIVE_STARTUP_VIDEO_INPUTS.values() if key in inputs}
+    if selected and len(selected) != len(NATIVE_STARTUP_VIDEO_INPUTS):
+        raise RuntimeError("optional startup video source marker is incomplete")
+    return selected
+
+
+def _startup_video_verifier():
+    # Also loaded by importlib/runpy-based builders; bind to this checkout's code.
+    import runpy
+    return runpy.run_path(str(ROOT / "tools/approved_startup_video.py"))
+
+
+def _open_native_video_directory(stack, path, parent=None):
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+    fd = os.open(path, flags, dir_fd=parent)
+    stack.callback(os.close, fd)
+    return fd
+
+
+def stage_native_startup_video(bundle, approval_pin):
+    """Use the approved bytes directly; the private source path never reaches runtime."""
+    if approval_pin is None:
+        return {}
+    approved = _startup_video_verifier()["read_approved_startup_video"](ROOT, approval_pin)
+    from contextlib import ExitStack
+
+    with ExitStack() as stack:
+        contents = _open_native_video_directory(stack, bundle / "Contents")
+        resources = _open_native_video_directory(stack, "Resources", contents)
+        try:
+            os.mkdir("startup", dir_fd=resources)
+        except FileExistsError:
+            pass
+        startup = _open_native_video_directory(stack, "startup", resources)
+        os.mkdir("native-video", mode=0o700, dir_fd=startup)
+        native = _open_native_video_directory(stack, "native-video", startup)
+        for name, data in (("manifest.json", approved.manifest_bytes), ("clip.mp4", approved.clip_bytes)):
+            fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=native)
+            with os.fdopen(fd, "wb") as stream:
+                stream.write(data)
+    return {NATIVE_STARTUP_VIDEO_INPUTS["manifest.json"]: approved.manifest_sha256,
+            NATIVE_STARTUP_VIDEO_INPUTS["clip.mp4"]: approved.clip_sha256}
+
+
+def verify_native_startup_video_outputs(resources, inputs):
+    """Verify the bundled pair from marker pins, never the original private source."""
+    selected = native_startup_video_inputs(inputs)
+    directory = resources / NATIVE_STARTUP_VIDEO_DIR
+    if not selected:
+        if directory.exists() or directory.is_symlink():
+            raise RuntimeError("unapproved optional startup video output")
+        return {}
+    from contextlib import ExitStack
+
+    verifier = _startup_video_verifier()
+    names = {verifier["MANIFEST_NAME"]: "manifest.json", verifier["CLIP_NAME"]: "clip.mp4"}
+    with ExitStack() as stack:
+        root = _open_native_video_directory(stack, resources)
+        startup = _open_native_video_directory(stack, "startup", root)
+        native = _open_native_video_directory(stack, "native-video", startup)
+        if set(os.listdir(native)) != set(NATIVE_STARTUP_VIDEO_INPUTS):
+            raise RuntimeError("optional startup video output set is invalid")
+        manifest = selected[NATIVE_STARTUP_VIDEO_INPUTS["manifest.json"]]
+        approved = verifier["verify_approved_startup_video"](
+            manifest, lambda name, limit: verifier["_read_at"](native, names[name], limit)
+        )
+        identity = verifier["_identity"]
+        for fd, name, parent in ((root, resources, None), (startup, "startup", root),
+                                 (native, "native-video", startup)):
+            if identity(os.fstat(fd)) != identity(os.stat(name, dir_fd=parent, follow_symlinks=False)):
+                raise RuntimeError("optional startup video output directory changed during verification")
+    if approved.clip_sha256 != selected[NATIVE_STARTUP_VIDEO_INPUTS["clip.mp4"]]:
+        raise RuntimeError("optional startup video bytes do not match the build marker")
+    return {f"{NATIVE_STARTUP_VIDEO_DIR}/{name}": selected[source]
+            for name, source in NATIVE_STARTUP_VIDEO_INPUTS.items()}
+
+
+def write_marker(path, *, approved_icon_sha256=None, approved_video_manifest_sha256=None):
     path = staged_path(path)
     actual, info = identity(path)
     if actual != IDENTITY or (info.get('CFBundleShortVersionString'), info.get('CFBundleVersion')) != (VERSION, BUILD):
@@ -570,6 +655,7 @@ def write_marker(path, *, approved_icon_sha256=None):
         with icon_snapshot.open('rb') as stream:
             if hashlib.file_digest(stream, 'sha256').hexdigest() != approved:
                 raise RuntimeError('图标源图与已批准的 SHA-256 不符，未发布。')
+    inputs.update(stage_native_startup_video(path, approved_video_manifest_sha256))
     marker = {
         'schema': 1, 'projectID': PROJECT_ID, 'projectRoot': str(ROOT),
         'bundleID': IDENTITY[0], 'executable': IDENTITY[1],
@@ -584,10 +670,17 @@ def write_marker(path, *, approved_icon_sha256=None):
     marker_path.write_text(json.dumps(marker, ensure_ascii=False, sort_keys=True, indent=2) + '\n', encoding='utf-8')
 
 
-def check_inputs(path):
+def check_inputs(path, *, approved_video_manifest_sha256=None):
     marker = read_marker(path, required=True)
-    if marker['inputs'] != source_inputs():
+    expected = source_inputs()
+    selected = native_startup_video_inputs(marker['inputs'])
+    if approved_video_manifest_sha256 is not None:
+        approved = _startup_video_verifier()["read_approved_startup_video"](ROOT, approved_video_manifest_sha256)
+        expected.update({NATIVE_STARTUP_VIDEO_INPUTS["manifest.json"]: approved.manifest_sha256,
+                         NATIVE_STARTUP_VIDEO_INPUTS["clip.mp4"]: approved.clip_sha256})
+    if marker['inputs'] != expected:
         raise RuntimeError('编译期间源码或私有素材发生变化，未发布；请在修改完成后重新构建。')
+    verify_native_startup_video_outputs(Path(path) / 'Contents/Resources', selected)
 
 
 def staged_path(path):
@@ -769,7 +862,7 @@ def create_registry_receipt(receipt):
         verify_registry_receipt(receipt)
 
 
-def publish_build(staged, sealed):
+def publish_build(staged, sealed, *, approved_video_manifest_sha256=None):
     staged = staged_path(staged)
     root = staged.parent
     identity = sealed.get('identity') if isinstance(sealed, dict) else None
@@ -816,7 +909,10 @@ def publish_build(staged, sealed):
         require_file(REGISTRY_TOOL, old if reused else new)
         if old is not None:
             require_file(source, new if reused else old)
-        publish(staged)
+        if approved_video_manifest_sha256 is None:
+            publish(staged)
+        else:
+            publish(staged, approved_video_manifest_sha256=approved_video_manifest_sha256)
     except BaseException as error:
         try:
             if stage_root_identity(root) != identity:
@@ -1315,9 +1411,12 @@ def verify_startup(path, info, marker, *, current_source=True):
                             else LEGACY_IMAGE_METADATA_STARTUP_OUTPUTS)
     else:
         expected_outputs = PRE_IMAGE_METADATA_STARTUP_OUTPUTS
+    native_video_outputs = verify_native_startup_video_outputs(resources, marker['inputs'])
     outputs = manifest.get('outputs')
-    if not isinstance(outputs, dict) or set(outputs) != set(expected_outputs):
+    if not isinstance(outputs, dict) or set(outputs) != set(expected_outputs) | set(native_video_outputs):
         raise RuntimeError('startup manifest 的 output 路径清单不完整。')
+    if any(outputs[name] != digest for name, digest in native_video_outputs.items()):
+        raise RuntimeError('optional startup video outputs are not bound to the startup manifest')
     output_bytes = {}
     for relative in expected_outputs:
         candidate = resources / relative
@@ -1543,6 +1642,8 @@ def verify_product(path, *, current_source=True):
         if not current_source:
             theme = _payload_theme_config(path, marker['version'], marker['build'])
             verify_localized_names(path, info, theme_config=theme, legacy=theme is None)
+    elif verify_native_startup_video_outputs(Path(path) / 'Contents/Resources', marker['inputs']):
+        raise RuntimeError('optional startup video requires a supported startup bundle version')
     subprocess.run(['/usr/bin/codesign', '--verify', '--strict', str(path)], check=True)
     return info
 
@@ -1574,10 +1675,10 @@ def check():
     }, ensure_ascii=False))
 
 
-def publish(staged):
+def publish(staged, *, approved_video_manifest_sha256=None):
     staged = staged_path(staged)
     verify_product(staged)
-    check_inputs(staged)
+    check_inputs(staged, approved_video_manifest_sha256=approved_video_manifest_sha256)
     new_tree = tree_receipt(staged)
     if PAYLOAD.is_symlink():
         raise RuntimeError('拒绝替换符号链接构建载荷。')
@@ -1648,16 +1749,18 @@ if __name__ == '__main__':
     actions.add_argument('--cleanup-stage', metavar='STAGE_ROOT')
     options = parser.parse_args()
     try:
+        video_pin = os.environ.get('AZHOU_APPROVED_STARTUP_VIDEO_MANIFEST_SHA256')
         if options.publish:
-            publish(options.publish)
+            publish(options.publish, approved_video_manifest_sha256=video_pin)
         elif options.publish_build:
-            publish_build(options.publish_build, json.load(sys.stdin))
+            publish_build(options.publish_build, json.load(sys.stdin), approved_video_manifest_sha256=video_pin)
         elif options.write_marker:
-            write_marker(options.write_marker, approved_icon_sha256=os.environ.get('AZHOU_APPROVED_ICON_SHA256'))
+            write_marker(options.write_marker, approved_icon_sha256=os.environ.get('AZHOU_APPROVED_ICON_SHA256'),
+                         approved_video_manifest_sha256=video_pin)
         elif options.write_bundle_info:
             write_bundle_info(options.write_bundle_info)
         elif options.check_inputs:
-            check_inputs(options.check_inputs)
+            check_inputs(options.check_inputs, approved_video_manifest_sha256=video_pin)
         elif options.verify_dsh_plugin:
             verify_dsh_plugin(options.verify_dsh_plugin)
         elif options.stage_identity:

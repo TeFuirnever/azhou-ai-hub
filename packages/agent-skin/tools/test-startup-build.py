@@ -78,6 +78,7 @@ BUILD_FILES = (
     "tools/image-settings.test.mjs",
     "tools/animation.unit.test.mjs",
     "tools/build-startup.py",
+    "tools/approved_startup_video.py",
     "tools/build-dsh-plugin.py",
     "tools/build-startup-assets.swift",
     "tools/verify-artifacts.py",
