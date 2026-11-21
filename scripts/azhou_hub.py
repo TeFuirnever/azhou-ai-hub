@@ -72,6 +72,14 @@ class PackageError(RuntimeError):
     """Raised when a source package cannot be copied or compared safely."""
 
 
+class UninstallRecordReview(PackageError):
+    """A published record needs a person to inspect its current ownership."""
+
+    def __init__(self, message: str, recovery: dict[str, Any]) -> None:
+        super().__init__(message)
+        self.recovery = recovery
+
+
 def _setup_failure(target: Path, mode: str, error: str) -> dict[str, Any]:
     return {
         "schema_version": "azhou-ai-hub.setup.v1",
@@ -171,6 +179,56 @@ def _uninstall_marker(path: Path, receipt: dict[str, Any]) -> Path:
         raise PackageError(str(exc)) from exc
 
 
+def _directory_fd_path(fd: int, identity: tuple[int, int, int]) -> str | None:
+    """Return a verified path observation, never an authority for mutation."""
+    try:
+        if sys.platform == "darwin":
+            import fcntl
+
+            raw = fcntl.fcntl(fd, fcntl.F_GETPATH, bytes(1024))
+            name = os.fsdecode(raw.split(b"\0", 1)[0])
+        elif sys.platform.startswith("linux"):
+            name = os.readlink(f"/proc/self/fd/{fd}")
+        else:
+            return None
+        candidate = Path(name)
+        return str(candidate) if candidate.is_absolute() and _path_identity(candidate) == identity else None
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _uninstall_record_observation(fd: int, marker: Path, receipt: Path, identity: tuple[int, int, int]) -> dict[str, Any]:
+    directory = os.fstat(fd)
+    directory_identity = (directory.st_dev, directory.st_ino, directory.st_mode)
+    try:
+        entry = os.stat(marker.name, dir_fd=fd, follow_symlinks=False)
+        entry_identity = (entry.st_dev, entry.st_ino, entry.st_mode)
+        state = "present"
+    except FileNotFoundError:
+        entry_identity, state = None, "missing"
+    except (OSError, NotImplementedError, TypeError):
+        entry_identity, state = None, "unknown"
+    return {
+        "receipt": str(receipt),
+        "expected_directory": str(marker.parent),
+        "observed_directory": _directory_fd_path(fd, directory_identity),
+        "directory_identity": _identity_payload(directory_identity),
+        "record_name": marker.name,
+        "record_state": state,
+        "record_identity": _identity_payload(entry_identity),
+        "receipt_identity": _identity_payload(identity),
+        "next_action": "Stop concurrent changes and inspect the receipt and record manually; paths and identities are observations and may have changed. Do not automatically delete or retry.",
+    }
+
+
+def _verify_uninstall_record(path: Path, receipt: dict[str, Any], target: Path, identity: tuple[int, int, int], target_identity: tuple[int, int, int], marker: Path) -> None:
+    if _receipt_path_error(path, target) or _path_identity(target) != target_identity or path.is_symlink() or _path_identity(path) != identity or _path_identity(marker) != identity:
+        raise PackageError("receipt changed while uninstall was running")
+    current, error = _load_receipt(path)
+    if error or current is None or current.get("integrity_digest") != receipt.get("integrity_digest") or current.get("lifecycle_state") != "uninstalled":
+        raise PackageError("receipt changed while uninstall was running")
+
+
 def _mark_receipt_uninstalled(path: Path, receipt: dict[str, Any], target: Path, identity: tuple[int, int, int], target_identity: tuple[int, int, int]) -> None:
     path = path.expanduser().absolute()
     if _receipt_path_error(path, target) or path.is_symlink() or _path_identity(path) != identity:
@@ -179,6 +237,7 @@ def _mark_receipt_uninstalled(path: Path, receipt: dict[str, Any], target: Path,
     if error or current is None or current.get("integrity_digest") != receipt.get("integrity_digest"):
         raise PackageError("receipt changed while uninstall was running")
     marker = _uninstall_marker(path, receipt)
+    posix_observation = None
     try:
         if LINK_SUPPORTS_DIR_FD:
             flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -206,7 +265,12 @@ def _mark_receipt_uninstalled(path: Path, receipt: dict[str, Any], target: Path,
                     raise PackageError("uninstall records directory is not private")
                 if _path_identity(path.parent) != src_identity or _path_identity(marker.parent) != dst_identity:
                     raise PackageError("receipt directory changed while uninstall was running")
-                os.link(path.name, marker.name, src_dir_fd=src_fd, dst_dir_fd=dst_fd, follow_symlinks=False)
+                try:
+                    os.link(path.name, marker.name, src_dir_fd=src_fd, dst_dir_fd=dst_fd, follow_symlinks=False)
+                    _verify_uninstall_record(path, receipt, target, identity, target_identity, marker)
+                except (OSError, ValueError, PackageError) as exc:
+                    raise UninstallRecordReview(str(exc), _uninstall_record_observation(dst_fd, marker, path, identity)) from exc
+                posix_observation = _uninstall_record_observation(dst_fd, marker, path, identity)
         elif os.name == "nt":
             from azhou_windows_path_guard import PathGuard
 
@@ -225,11 +289,12 @@ def _mark_receipt_uninstalled(path: Path, receipt: dict[str, Any], target: Path,
             raise PackageError("safe uninstall recording is unavailable on this platform")
     except azhou_runtime_state.StateError as exc:
         raise PackageError(str(exc)) from exc
-    if _receipt_path_error(path, target) or _path_identity(target) != target_identity or path.is_symlink() or _path_identity(path) != identity or _path_identity(marker) != identity:
-        raise PackageError("receipt changed while uninstall was running")
-    current, error = _load_receipt(path)
-    if error or current is None or current.get("integrity_digest") != receipt.get("integrity_digest") or current.get("lifecycle_state") != "uninstalled":
-        raise PackageError("receipt changed while uninstall was running")
+    try:
+        _verify_uninstall_record(path, receipt, target, identity, target_identity, marker)
+    except (OSError, ValueError, PackageError) as exc:
+        if posix_observation is not None:
+            raise UninstallRecordReview(str(exc), posix_observation) from exc
+        raise
 
 
 def _receipt_path_error(path: Path, target: Path) -> str | None:
@@ -1115,8 +1180,13 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             if state != "missing":
                 raise PackageError(f"uninstall could not confirm absence: {details}")
             _mark_receipt_uninstalled(receipt_path, receipt, target, receipt_identity, target_identity)
+        except UninstallRecordReview as exc:
+            return _lifecycle_report("partial", rows, error=f"uninstall receipt update failed: {exc}", recovery=exc.recovery)
         except (OSError, ValueError, PackageError) as exc:
-            return _lifecycle_report("partial", rows, error=f"uninstall receipt update failed: {exc}")
+            return _lifecycle_report(
+                "partial", rows, error=f"uninstall receipt update failed: {exc}",
+                next_action="Stop concurrent changes and inspect the receipt and target manually; do not automatically delete or retry.",
+            )
     return _lifecycle_report("pass", rows)
 
 
@@ -2164,7 +2234,20 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
                     payload = fn(receipt_path=receipt, target=target, root=root, apply=args.apply)
             except PackageError as exc:
                 payload = _lifecycle_report("fail", [], error=str(exc))
-        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            print(payload["status"])
+            if args.command == "uninstall" and payload["status"] == "partial":
+                print(json.dumps(payload.get("error", "uninstall did not complete"), ensure_ascii=True))
+                recovery = payload.get("recovery")
+                if recovery:
+                    print(f"Receipt: {json.dumps(recovery['receipt'], ensure_ascii=True)}; expected directory: {json.dumps(recovery['expected_directory'], ensure_ascii=True)}")
+                    print(f"Observed record directory (may have changed): {json.dumps(recovery['observed_directory'], ensure_ascii=True)}")
+                    print(f"Record name: {recovery['record_name']}; state: {recovery['record_state']}")
+                    print(f"Directory identity: {recovery['directory_identity']}")
+                    print(f"Record identity: {recovery['record_identity']}; receipt identity: {recovery['receipt_identity']}")
+                print((recovery or payload).get("next_action", "Stop concurrent changes and inspect the receipt and target manually; do not automatically delete or retry."))
         return 0 if payload["status"] in {"pass", "dry_run"} else 1
 
     if args.command == "migrate":

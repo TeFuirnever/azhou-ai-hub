@@ -1681,6 +1681,111 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual("partial", result["status"])
             self.assertEqual([], list(outside.iterdir()))
             self.assertTrue(receipt.is_file())
+            recovery = result["recovery"]
+            self.assertEqual(str(moved.resolve()), recovery["observed_directory"])
+            self.assertEqual("present", recovery["record_state"])
+            self.assertEqual(recovery["receipt_identity"], recovery["record_identity"])
+            self.assertEqual([recovery["record_name"]], [p.name for p in moved.iterdir()])
+            self.assertIn("Do not automatically delete", recovery["next_action"])
+
+    @unittest.skipUnless(azhou_hub.LINK_SUPPORTS_DIR_FD, "directory handles are unavailable")
+    def test_uninstall_partial_preserves_replaced_record_and_reports_its_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            records = receipt.parent.parent / "uninstalled"
+            link = os.link
+
+            def replace_after_link(*args, **kwargs):
+                result = link(*args, **kwargs)
+                marker = records / args[1]
+                marker.unlink()
+                marker.write_text("another process owns this", encoding="utf-8")
+                return result
+
+            with mock.patch.object(azhou_hub.os, "link", side_effect=replace_after_link):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            recovery = result["recovery"]
+            self.assertEqual("present", recovery["record_state"])
+            self.assertNotEqual(recovery["receipt_identity"], recovery["record_identity"])
+            self.assertEqual("another process owns this", (records / recovery["record_name"]).read_text(encoding="utf-8"))
+
+    @unittest.skipUnless(azhou_hub.LINK_SUPPORTS_DIR_FD, "directory handles are unavailable")
+    def test_uninstall_partial_reports_identity_when_directory_path_is_unavailable(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            records = receipt.parent.parent / "uninstalled"
+            moved = Path(directory) / "moved-records"
+            link = os.link
+
+            def move_before_link(*args, **kwargs):
+                records.rename(moved)
+                return link(*args, **kwargs)
+
+            with mock.patch.object(azhou_hub.os, "link", side_effect=move_before_link), \
+                 mock.patch.object(azhou_hub, "_directory_fd_path", return_value=None):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            recovery = result["recovery"]
+            self.assertIsNone(recovery["observed_directory"])
+            self.assertEqual(moved.stat().st_ino, recovery["directory_identity"]["inode"])
+            self.assertTrue((moved / recovery["record_name"]).exists())
+
+    @unittest.skipUnless(azhou_hub.LINK_SUPPORTS_DIR_FD, "directory handles are unavailable")
+    def test_uninstall_partial_reports_observation_if_directory_moves_after_first_check(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            records = receipt.parent.parent / "uninstalled"
+            moved = Path(directory) / "moved-records"
+            verify = azhou_hub._verify_uninstall_record
+            checks = 0
+
+            def move_before_final_check(*args, **kwargs):
+                nonlocal checks
+                checks += 1
+                if checks == 2:
+                    records.rename(moved)
+                return verify(*args, **kwargs)
+
+            with mock.patch.object(azhou_hub, "_verify_uninstall_record", side_effect=move_before_final_check):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertEqual(str(records.resolve()), result["recovery"]["observed_directory"])
+            self.assertIn("may have changed", result["recovery"]["next_action"])
+            self.assertTrue((moved / result["recovery"]["record_name"]).exists())
+
+    @unittest.skipUnless(azhou_hub.LINK_SUPPORTS_DIR_FD, "directory handles are unavailable")
+    def test_uninstall_partial_explains_manual_review_without_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            scope = Path(directory) / "scope-\x1b[31m"
+            scope.mkdir()
+            root, target, receipt = self._managed_fixture(str(scope), mode="copy")
+            records = receipt.parent.parent / "uninstalled"
+            moved = scope / "moved-records"
+            link = os.link
+            output = io.StringIO()
+
+            def move_before_link(*args, **kwargs):
+                records.rename(moved)
+                return link(*args, **kwargs)
+
+            with mock.patch.object(azhou_hub.os, "link", side_effect=move_before_link), redirect_stdout(output):
+                exit_code = azhou_hub.main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply"], root=root,
+                )
+            self.assertEqual(1, exit_code)
+            self.assertIn("partial", output.getvalue())
+            self.assertIn(json.dumps(str(moved.resolve()), ensure_ascii=True), output.getvalue())
+            self.assertNotIn("\x1b", output.getvalue())
+            self.assertIn("Do not automatically delete or retry", output.getvalue())
 
     @unittest.skipUnless(azhou_hub.LINK_SUPPORTS_DIR_FD, "directory handles are unavailable")
     def test_uninstall_record_directory_creation_does_not_follow_redirected_hub(self) -> None:
