@@ -8,6 +8,8 @@ The OS columns carry the deterministic-gate granularity only. Per the matrix OS 
 
 > This table covers the gate and the shipped runtime scripts; the harness rows above are OS-neutral claims about adapters and receipts and are not extended by it.
 
+The Windows CI job is skipped for confirmed docs-only changes; manual CI runs execute it.
+
 ## Per-skill platform summary
 
 | Skill | Codex | Claude Code | MiMo Code | zcode | DeepSeek Harness | Other harnesses (unsupported) | Linux | macOS | Windows |

@@ -87,7 +87,7 @@ The deterministic verification gate (`python scripts/verify.py`, Python 3.11+ st
 
 | Surface | Linux | macOS | Windows |
 |---|---|---|---|
-| Repository gate `scripts/verify.py` | enforced: `Required` CI job (ubuntu-latest, `.github/workflows/ci.yml`) | verified on the maintainer macOS checkout for every landing | enforced: `Verify on Windows` CI job (windows-latest), folded into the `Required` gate by win-13 after the residual divergences were root-caused and fixed (evidence/windows-ci-receipt-2026-09-09.md) |
+| Repository gate `scripts/verify.py` | enforced: `Required` CI job (ubuntu-latest, `.github/workflows/ci.yml`) | verified on the maintainer macOS checkout for every landing | enforced: `Verify on Windows` CI job (windows-latest), folded into the `Required` gate by win-13 after the residual divergences were root-caused and fixed (evidence/windows-ci-receipt-2026-09-09.md). Confirmed docs-only changes skip this job; manual CI runs execute it. |
 | Host lifecycle hooks, MCP transports and memory APIs | per harness rows above | per harness rows above | not claimed beyond those rows; hooks and transports stay host-local |
 
 ## Meaning of “supported”
