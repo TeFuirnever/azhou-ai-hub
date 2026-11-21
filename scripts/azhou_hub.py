@@ -1293,6 +1293,42 @@ def _doctor_verify(root: Path) -> tuple[str, str]:
     return status, details
 
 
+def _doctor_codex_skills(project: Path, selected: list[str]) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    from codex_skill_discovery import DiscoveryError, read_skills
+
+    requested = {"project": str(project), "catalog_read": False, "catalog_complete": False, "entries": []}
+    try:
+        if not project.is_absolute() or not project.is_dir():
+            raise DiscoveryError("--codex-project must point to an existing absolute project directory.")
+        project = project.resolve(strict=True)
+        entries, complete = read_skills(project, set(selected))
+    except (DiscoveryError, OSError) as exc:
+        return [_check("codex_discovery", "fail", str(exc))], requested
+
+    checks = []
+    for name in selected:
+        matches = [entry for entry in entries if entry["name"] == name]
+        enabled = [entry for entry in matches if entry["enabled"]]
+        if not matches and not complete:
+            status, detail = "fail", "Codex reported catalog errors. Discovery of this Skill could not be verified."
+        elif not matches:
+            status, detail = "fail", "Codex did not find the Skill. Check the project and installation scope."
+        elif not enabled:
+            status, detail = "fail", "Codex found the Skill but it is disabled. Enable the intended copy in Codex."
+        elif len(enabled) > 1:
+            status, detail = "warn", "Codex found multiple enabled copies. Confirm which copy you intend to use."
+        else:
+            status, detail = "pass", "Codex found an enabled copy. Try an explicit Skill invocation in this project."
+        if matches:
+            locations = ", ".join(
+                f'{entry["path"]} ({entry["scope"]}, {"enabled" if entry["enabled"] else "disabled"})'
+                for entry in matches
+            )
+            detail = f"{detail} {locations}"
+        checks.append(_check(f"codex:{name}", status, detail))
+    return checks, {"project": str(project), "catalog_read": True, "catalog_complete": complete, "entries": entries}
+
+
 def run_doctor(
     *,
     root: Path,
@@ -1301,6 +1337,7 @@ def run_doctor(
     run_verification: bool,
     treehouse_root: Path | None = None,
     host_root: Path | None = None,
+    codex_project: Path | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, str]] = []
     required = [root / "README.md", root / "docs/skill-standard.md", root / "scripts/verify.py"]
@@ -1468,6 +1505,12 @@ def run_doctor(
         except (OSError, subprocess.TimeoutExpired, TimeoutError, ValueError, RuntimeError, AttributeError) as exc:
             checks.append(_check("treehouse", "fail", str(exc)))
 
+    discovery = {}
+    if codex_project is not None:
+        codex_checks, data = _doctor_codex_skills(codex_project, selected)
+        checks.extend(codex_checks)
+        discovery["codex_discovery"] = data
+
     has_failure = any(check["status"] == "fail" for check in checks)
     has_warning = any(check["status"] == "warn" for check in checks)
     return {
@@ -1475,6 +1518,7 @@ def run_doctor(
         "valid": not has_failure,
         "status": "unhealthy" if has_failure else "degraded" if has_warning else "healthy",
         "checks": checks,
+        **discovery,
     }
 
 
@@ -1804,6 +1848,7 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     doctor = subcommands.add_parser("doctor", help="Run read-only repository and installation diagnostics")
     doctor.add_argument("--target", type=Path, help="Optional harness skill root to inspect")
     doctor.add_argument("--skill", action="append", choices=skill_names, help="Limit checks to one skill; repeatable")
+    doctor.add_argument("--codex-project", type=Path, help="Explicit Codex project directory for live Skill discovery")
     doctor.add_argument("--verify", action="store_true", help="Run the complete repository verification gate")
     doctor.add_argument("--treehouse-root", type=Path, help="Explicit Treehouse pool root for read-only lease diagnostics")
     doctor.add_argument("--host-root", type=Path, help="Explicit host harness root for read-only stale-install migration diagnostics")
@@ -1900,6 +1945,7 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             run_verification=args.verify,
             treehouse_root=args.treehouse_root,
             host_root=args.host_root,
+            codex_project=args.codex_project,
         )
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))

@@ -30,6 +30,7 @@ In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<pro
 2. Build `python scripts/azhou_hub.py doctor --json` and add only explicitly grounded options:
    - `--target <skill-root>` for an exact install root.
    - `--skill <canonical-name>` for each requested package.
+   - `--codex-project <absolute-project-path>` to check which requested Skill entries Codex discovers and enables for that project. Report discovery and invocation separately.
    - `--treehouse-root <pool-root>` for the explicit Treehouse boundary.
    - `--host-root <host-root>` for the read-only stale-install migration probe (residual installs and stale hook paths left behind by a canonical rename).
    - `--verify` only when the user requests the complete repository gate or the claim requires it.

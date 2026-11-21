@@ -214,6 +214,8 @@ python scripts/azhou_hub.py setup --skill super-repo-pedant --target /absolute/p
 python scripts/azhou_hub.py verify
 ~~~
 
+如果 Codex 找不到已安装的 Skill，可以用 Doctor 核对它在当前项目是否被发现和启用。[Codex 发现检查](docs/installation.md#check-codex-discovery)
+
 [基础 CLI 合同](docs/foundations.md)
 
 <picture>

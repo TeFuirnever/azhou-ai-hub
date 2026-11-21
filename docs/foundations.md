@@ -29,6 +29,12 @@ python scripts/azhou_hub.py verify
 - `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical package presence, and optional install-target package integrity. It does not claim that package-specific runtimes, host activation, Node, Chromium, hooks, or harness tools are ready. With `--verify`, it runs the public deterministic repository gate. The verification subprocess has a 600-second deadline. Doctor retains the last 8 KiB of combined output and reports the last nonempty line when available. On timeout, it fails the check and stops the verifier. On POSIX it signals the verifier's process group. On Windows it stops the direct verifier process and reports that the state of its descendants is unverified.
 - `verify` delegates to `python scripts/verify.py` and preserves its exit code. The default mode is reproducible from a clean public checkout: it checks repository policy, unit tests, checked-in benchmark integrity, and Git whitespace without private evidence.
 
+### Codex Skill discovery
+
+Use `doctor --codex-project <absolute-project-path> --skill <canonical-name>` to query Codex's live Skill catalog. The installed `codex` CLI must support App Server `skills/list`. Run the check from the environment and profile used for the project.
+
+When requested, JSON includes a `codex_discovery` object with the project path, `catalog_read`, `catalog_complete`, and matching entries with their names, paths, scopes, and enabled states. A missing or disabled Skill fails its check. Multiple enabled entries returned by Codex produce a warning. A missing CLI or timeout has a separate failure. When Codex reports catalog errors, Doctor retains the entries Codex returned and marks absent entries as unverified. Discovery does not start a model turn or establish invocation in an existing chat. The independent `--target` check can still verify installed bytes.
+
 ### Experimental change scope
 
 For planning or review with an explicit baseline, inspect the four Git layers:
