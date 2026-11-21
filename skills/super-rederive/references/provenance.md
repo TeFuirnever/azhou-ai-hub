@@ -1,0 +1,11 @@
+# Provenance and compatibility
+
+Classification: `adapted`
+
+Upstream: [EricJujianZou/rederive](https://github.com/EricJujianZou/rederive), commit `f8f4629de73a04ba23f40fe4659b629364fa47e9`, MIT, Copyright (c) 2026 Eric Zou. The complete upstream license is in [LICENSE.upstream](../LICENSE.upstream). This revision was the upstream default branch on 2026-11-21, with no release or tag observed; it is a pinned source snapshot, not a claimed stable release.
+
+Original upstream script SHA-256: `history.sh` `12025e3d8eb3f6d3e1c9ba38dfc348f2022dcef59dd793ee5880a5fceb1e8b8d`, `structure.py` `3bc6608053ae89b86710c933fe839d64280e60ad2f51057ed690f461ace8941b`. License SHA-256 `9a502bbe6d9b2224b4c8b670a49fdbb1060862bf318e4cb9edb02612e82e06f8`. The local structure.py adds explicit UTF-8 subprocess decoding to satisfy the repository encoding policy. Check upstream revision, full license, source and capability differences before any update. Preserve this attribution and record changes separately.
+
+The upstream question-and-constraint method, alternative solutions, hints, sketch, source pointers, skip, resume and session summary are retained. Adaptations: direct explanations on request; explicit commit-bound reads; no automatic pull, repository ignore edits or deletion on reset; optional private state and share draft; neutral host behavior and Azhou interaction. The upstream scripts are included as source references because their live-worktree reads do not meet the commit-bound input contract; the agent reads Git objects directly. This is an intentional change in execution, not a claim that the reference scripts were executed or are sandboxed.
+
+One live exploratory conversation on 2026-11-21 covered state migration and was found useful by the maintainer. It did not include the planned direct-explanation comparison, independent evaluation or cross-host verification, so it cannot establish a general learning benefit.
