@@ -1,5 +1,31 @@
 # Installation
 
+## First install in Codex
+
+Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Codex and open a terminal in the folder you normally open as a Codex project. You need internet access for installation and Node.js with `npx`. Skills CLI 1.9.0, used to verify this walkthrough, requires Node.js 22.20 or later.
+
+1. **Install in this project.** Run the following in the terminal and confirm the installation. The installer shows where it put Ask Azhou.
+
+   ~~~bash
+   npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+   ~~~
+
+   This command installs into the current project. Add `--global` on the first install if you want a user-wide copy instead. For later updates and removal, use the scope you installed into.
+
+2. **Try Ask Azhou.** Open a new Codex chat in the same project and enter the following question.
+
+   > `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
+
+   The expected recommendation is `super-archify` for an interactive HTML diagram. This confirms that you can use the router. Install the recommended Skill separately when you want to run it.
+
+3. **If Codex cannot find Ask Azhou, check the install.** Run this from the same project.
+
+   ~~~bash
+   npx skills list --agent codex
+   ~~~
+
+   Add `--global` for a user-wide install. If `super-ask-azhou` is absent, check the terminal folder and the installation output. If it is listed, compare the displayed scope and path with the project open in Codex, then try the question in a fresh chat.
+
 ## Optional external integrations
 
 The existing Skill installation paths below remain independent. For the two optional pstack and Agent Skin integrations, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
@@ -33,13 +59,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
 
-Select the skill and harness in one command. For example, run this from the project where you want to use Ask Azhou in Codex.
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
-~~~
-
-For a user-wide install, add `--global`. Keep the scope for later updates and removal. This installation has no repository-owned receipt. Open a new session in the target harness and try the [Ask Azhou example](../README.md). Check that the answer recommends the expected skill.
+See [First install in Codex](#first-install-in-codex) for the target, first invocation, and troubleshooting steps. Skills CLI installations use the selected scope and carry no Hub receipt.
 
 ## Verify what you installed
 

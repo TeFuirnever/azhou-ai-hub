@@ -23,7 +23,9 @@ https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
   <img src="assets/github/readme-banner-install.jpg" alt="Install: one command per skill" width="100%">
 </picture>
 
-In the project where you want to use Ask Azhou, run this command.
+### First install in Codex
+
+Have Codex signed in and Node.js with `npx` available. In a terminal, open the project folder where you want to use Ask Azhou and run this command. It installs into that project.
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
@@ -33,13 +35,7 @@ Open a new Codex chat in that project and try the following question.
 
 > `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
 
-Look for a recommendation of `super-archify`.
-
-To check for an update to this project installation, run the following command.
-
-~~~bash
-npx skills check --project super-ask-azhou
-~~~
+Look for a recommendation of `super-archify`. If Ask Azhou is missing, check the [first-install guide](docs/installation.md#first-install-in-codex). For an existing installation, see [check, update, or uninstall](docs/installation.md#upgrade-or-uninstall).
 
 <details>
 <summary>More Skill install commands</summary>

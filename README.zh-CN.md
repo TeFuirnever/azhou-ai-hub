@@ -23,7 +23,9 @@ https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
   <img src="assets/github/readme-banner-install.zh-CN.jpg" alt="安装：一条命令，装一个 skill" width="100%">
 </picture>
 
-在你想使用 Ask Azhou 的项目里执行下面的命令。
+### 在 Codex 里首次安装
+
+先登录 Codex，并确认电脑已安装带 `npx` 的 Node.js。在终端进入你想使用 Ask Azhou 的项目目录，再执行下面的命令。它只安装到这个项目。
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
@@ -33,13 +35,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 
 > `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub Skill？
 
-Ask Azhou 应推荐 `super-archify`。
-
-想检查当前项目里这套 Skill 是否有更新，可以执行下面的命令。
-
-~~~bash
-npx skills check --project super-ask-azhou
-~~~
+Ask Azhou 应推荐 `super-archify`。如果 Codex 找不到 Ask Azhou，先看[首次安装排查](docs/installation.md#first-install-in-codex)。已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
 
 <details>
 <summary>其他 Skill 安装命令</summary>
