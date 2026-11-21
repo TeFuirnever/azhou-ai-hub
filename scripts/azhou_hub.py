@@ -131,7 +131,7 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     item = payload["skills"][0]
     if not isinstance(item, dict) or any(not isinstance(item.get(key), str) or not item.get(key) for key in ("name", "source", "source_root", "source_digest", "destination", "installed_digest")):
         return None, "receipt_invalid: malformed skill item"
-    if payload.get("lifecycle_state", "active") not in {"active", "uninstalled"}:
+    if payload.get("lifecycle_state", "active") not in ("active", "uninstalled"):
         return None, "receipt_invalid: unsupported lifecycle state"
     if payload.get("lifecycle_state") == "uninstalled" and payload["schema"] != RECEIPT_SCHEMA:
         return None, "receipt_invalid: legacy receipt cannot record an uninstall"

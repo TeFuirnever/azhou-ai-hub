@@ -1626,6 +1626,22 @@ class AzhouHubCliTest(unittest.TestCase):
             )
             self.assertEqual(0, exit_code, report)
 
+    def test_doctor_rejects_malformed_lifecycle_state_without_crashing(self) -> None:
+        for invalid in ([], {}, None, 1):
+            with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as directory:
+                root, target, receipt = self._managed_fixture(directory, mode="copy")
+                data = json.loads(receipt.read_text())
+                data["lifecycle_state"] = invalid
+                data["integrity_digest"] = azhou_hub._receipt_digest(data)
+                receipt.write_text(json.dumps(data))
+                exit_code, report = self._json_main(
+                    ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+                )
+                self.assertEqual(1, exit_code, report)
+                check = next(c for c in report["checks"] if c["name"] == "target:hub-receipts")
+                self.assertEqual("fail", check["status"])
+                self.assertIn("unsupported lifecycle state", check["details"])
+
     def test_receipt_write_failure_after_uninstall_reports_partial(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")
