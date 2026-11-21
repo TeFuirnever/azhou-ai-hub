@@ -81,7 +81,7 @@ struct OptionalStartupAVPlaybackTests {
         var signals: [OptionalStartupAVPlayback.Signal] = []
         var policy = OptionalStartupMedia()
         let now = ProcessInfo.processInfo.systemUptime
-        try require(policy.start(.init(timeout: 8), attempt: key, now: now) == [.startMedia(key)],
+        try require(policy.start(.init(timeout: 8, holdAt: 0.8, fadeStart: 1.4, fadeEnd: 1.9), attempt: key, now: now) == [.startMedia(key)],
                 "adapter owner starts exact policy generation")
         var revealed = false
         var mismatchedSignal = false
