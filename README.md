@@ -63,6 +63,14 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 
 Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
 
+If the repository download fails, Codex users can install Rederive into the current project with the bundled installer and a sparse Git checkout:
+
+~~~bash
+python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-rederive --method git --dest "$PWD/.agents/skills"
+~~~
+
+The destination must not already contain `super-rederive`; this command does not update an existing install.
+
 [Update or uninstall](docs/installation.md#upgrade-or-uninstall) · [Verify what you installed](docs/installation.md#verify-what-you-installed) · [Installation guide](docs/installation.md) · [Offline recovery](docs/installation.md#offline-recovery)
 
 <picture>

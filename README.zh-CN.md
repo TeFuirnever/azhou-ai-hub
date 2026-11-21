@@ -63,6 +63,14 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
 
+如果仓库下载失败，Codex 用户可以用自带安装器通过 Git 稀疏检出，将 Rederive 安装到当前项目：
+
+~~~bash
+python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-rederive --method git --dest "$PWD/.agents/skills"
+~~~
+
+目标目录中不能已有 `super-rederive`；这条命令不会更新已有安装。
+
 [更新或卸载](docs/installation.md#upgrade-or-uninstall) · [校验安装内容](docs/installation.md#verify-what-you-installed) · [安装指南](docs/installation.md) · [离线恢复](docs/installation.md#offline-recovery)
 
 <picture>
