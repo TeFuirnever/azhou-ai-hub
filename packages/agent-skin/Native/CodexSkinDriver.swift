@@ -92,6 +92,7 @@ final class InstallObservingStartupTransport: StartupTransport {
 
 enum CodexNativePresentationEvent {
     case ready(duration: Double)
+    case optionalMediaRevealed
     case completed
     case skipped
     case interrupted
@@ -106,11 +107,18 @@ struct NativeCoverReceipt {
 
 @MainActor
 protocol CodexNativePresentation: AnyObject {
+    var observesWorkspaceProof: Bool { get }
+    func workspaceProofChanged(_ proof: StartupProvisionalWorkspaceProof?)
     func showCover() throws -> NativeCoverReceipt
     func play(_ snapshot: StartupSettingsSnapshot, deadline: TimeInterval) async throws
     func beginPlayback(deadline: TimeInterval)
     func releaseCover()
     func scheduleDeadline(after: TimeInterval, action: @escaping () -> Void) -> any NativeScheduledAction
+}
+
+extension CodexNativePresentation {
+    var observesWorkspaceProof: Bool { false }
+    func workspaceProofChanged(_ proof: StartupProvisionalWorkspaceProof?) {}
 }
 
 @MainActor
@@ -307,6 +315,9 @@ final class CodexSkinDriver: SkinHostDriver {
             }
             run.state = .playing
             run.presentation?.beginPlayback(deadline: run.deadline)
+        case .optionalMediaRevealed:
+            guard case .preparing = run.state, runtime.uptime < run.deadline else { return }
+            run.state = .playing
         case .completed:
             guard case .playing = run.state else { return }
             run.state = .completed
@@ -377,6 +388,15 @@ final class CodexSkinDriver: SkinHostDriver {
             if let failure = run.failure { throw StartupFailure(reason: failure, message: "原生呈现已结束。") }
             if !run.skipped {
                 installObservation.reset()
+                let proofObserver: ((StartupProvisionalWorkspaceProof?) -> Void)? = presentation.observesWorkspaceProof ? { proof in
+                    guard self.nativeRun === run, !run.released else { return }
+                    if let proof, proof.targetPID == facts.pid, proof.targetLaunchTime == facts.launchTime,
+                       proof.runNonce == nonce {
+                        presentation.workspaceProofChanged(proof)
+                    } else {
+                        presentation.workspaceProofChanged(nil)
+                    }
+                } : nil
                 let result = try await makeConnector(facts, port, system, capture, stream).runPrepared(
                     payload: payload, runNonce: run.nonce, deadline: run.deadline,
                     playbackReserve: 12,
@@ -387,7 +407,7 @@ final class CodexSkinDriver: SkinHostDriver {
                         catch { if !run.skipped { throw error } }
                         if let failure = run.failure { throw StartupFailure(reason: failure, message: "原生播放器失败。") }
                     }, presentationFinished: { run.completed }, releaseRequested: { run.skipped || run.interrupted },
-                    presentationFailure: { run.failure })
+                    presentationFailure: { run.failure }, observeWorkspace: proofObserver)
                 if case .observed(let observed) = result {
                     workspace = SkinNativeWorkspaceObservation(pageGeneration: observed.pageID, runID: observed.runID,
                         wallpaperDisposition: observed.wallpaperDisposition, wallpaperReason: observed.wallpaperReason)

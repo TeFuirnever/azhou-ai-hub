@@ -167,6 +167,7 @@ def python_coverage(out: Path, sources: list[str]) -> dict:
         encoding="utf-8",
     )
     suites = ["test-startup-build.py", "test-dsh-build.py", "test-install-macos.py", "test-build-publish-safety.py", "test-functional-verdict.py"]
+    suites += ["test-approved-startup-video.py", "test-startup-video-packaging.py"]
     suites += sorted(path.name for path in (ROOT / "tools").glob("test-production-*.py"))
     for suite in suites:
         run([sys.executable, "-m", "coverage", "run", "--rcfile", str(config),

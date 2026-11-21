@@ -43,7 +43,8 @@ mkdir -p "$bundle/Contents/MacOS"
 python3 tools/verify-artifacts.py --write-bundle-info "$bundle"
 python3 tools/verify-artifacts.py --write-marker "$bundle"
 "$system_bin/xcrun" --sdk macosx swiftc -O -target "$(uname -m)-apple-macos13.0" -module-cache-path .build/module-cache \
-  Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift Native/CodexSkinDriver.swift \
+  Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift Native/CodexSkinDriver.swift Native/OptionalStartupMedia.swift Native/OptionalStartupAVPlayback.swift Native/OptionalStartupPresentation.swift \
+  Native/OptionalStartupVideoResolver.swift Native/OptionalStartupVideoFiles.swift \
   -o "$bundle/Contents/MacOS/$native_executable" -framework AppKit -framework WebKit
 "$system_bin/xcrun" --sdk macosx swiftc -O -target "$(uname -m)-apple-macos13.0" -module-cache-path .build/module-cache Native/InstallRegistry.swift Native/InstallRegistryCore.swift -o "$stage_root/azhou-install-registry" -framework AppKit -framework CoreServices
 python3 tools/build-wallpaper.py --bundle "$bundle"

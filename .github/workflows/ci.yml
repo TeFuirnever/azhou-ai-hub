@@ -169,7 +169,10 @@ jobs:
           mkdir -p .build
           xcrun --sdk macosx swiftc -target "$(uname -m)-apple-macos13.0" \
             Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift \
-            Native/CodexSkinDriver.swift -o .build/startup-app-compile \
+            Native/CodexSkinDriver.swift Native/OptionalStartupMedia.swift Native/OptionalStartupAVPlayback.swift \
+            Native/OptionalStartupPresentation.swift \
+            Native/OptionalStartupVideoResolver.swift Native/OptionalStartupVideoFiles.swift \
+            -o .build/startup-app-compile \
             -framework AppKit -framework WebKit
       - name: Retain isolated startup functional evidence
         if: always()

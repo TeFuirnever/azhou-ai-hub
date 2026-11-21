@@ -120,6 +120,8 @@ def main() -> int:
             ["tools/test-production-assets.py"],
         ),
     ]
+    for suite in ("test-approved-startup-video.py", "test-startup-video-packaging.py"):
+        results.append(run_suite("agent-skin approved startup video contracts", packages["agent-skin"], ["tools/" + suite]))
     results.append(run_suite("agent-skin Dream AST/capsule/total mapping contracts", packages["agent-skin"],
                              ["tools/test-production-dream-style.py"]))
     if sys.platform == "darwin":

@@ -11,7 +11,9 @@ if sys.platform != "darwin":
     raise SystemExit(0)
 command = ["xcrun", "--sdk", "macosx", "swiftc", "-typecheck", "-target",
            f"{platform.machine()}-apple-macos13.0", "Native/App.swift", "Native/Wallpaper.swift",
-           "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift"]
+           "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
+           "Native/OptionalStartupAVPlayback.swift", "Native/OptionalStartupPresentation.swift",
+           "Native/OptionalStartupVideoResolver.swift", "Native/OptionalStartupVideoFiles.swift"]
 result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
 print(result.stdout, end="")
 print(result.stderr, end="", file=sys.stderr)

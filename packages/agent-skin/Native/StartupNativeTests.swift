@@ -3,8 +3,10 @@
 import Foundation
 import Darwin
 import AppKit
+import AVFoundation
 import WebKit
 import CryptoKit
+import QuartzCore
 
 @MainActor
 private final class FakeNativeApplication: NativeApplication {
@@ -168,6 +170,23 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
         return NativeCoverReceipt(runNonce: runNonce, drawObserved: coverValid, transactionCommitted: coverValid)
     }
     func revealColdPlayer() { coldRevealCount += 1 }
+    var acceptsOptionalSurface = false
+    private(set) var optionalSurfaceMounts = 0
+    private(set) var optionalRestores = 0
+    private(set) var optionalReveals = 0
+    private(set) var optionalOpacity: [Double] = []
+    private let optionalLayer = CALayer()
+    var optionalTestPlayer: AVPlayer? { (optionalLayer.sublayers?.first as? AVPlayerLayer)?.player }
+    var optionalRevealHook: (() -> Void)?
+    func revealOptionalMedia() { optionalReveals += 1; optionalRevealHook?() }
+    func setOptionalCoverOpacity(_ opacity: Double) { optionalOpacity.append(opacity) }
+    func mountOptionalMedia() -> NativeOptionalMediaSurface? {
+        guard acceptsOptionalSurface else { return nil }
+        optionalSurfaceMounts += 1
+        return NativeOptionalMediaSurface(layer: optionalLayer, frame: CGRect(x: 0, y: 0, width: 160, height: 90))
+    }
+    func restoreOptionalMediaCover() { optionalRestores += 1 }
+
 
     func createPlayer(locale: NativeDisplayLocale, mode: String, theme: String, inspect: Bool,
                       nativeStartup: NativeStartupBridgeInput?,
@@ -451,6 +470,11 @@ struct StartupNativeTests {
             print(text)
             return
         }
+
+        OptionalStartupMediaTests.run()
+        try await OptionalStartupAVPlaybackTests.run()
+        try await OptionalStartupVideoResolverTests.run()
+        try await OptionalStartupVideoFilesTests.run()
 
         var checks = 0
         checks += startupIdentityDiagnosticChecks()
@@ -5891,9 +5915,78 @@ private func startupPreparedConnectorChecks() async throws -> Int {
         expect(!world.operationLog.contains("page-a:cancelWorkspace"), "expired budget sends no cleanup business request past its deadline")
         expect(transport.closed, "expired native run releases transport while independent page deadline prevents late writes")
     }
+    do {
+        let world = StartupSnapshotWorld(); world.preparedMode = true
+        let transport = PreparedConnectorTransport(world)
+        var time = 1.0
+        var finished = false
+        var accepted = false
+        var sleeps = 0
+        var events: [StartupProvisionalWorkspaceProof?] = []
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport,
+            now: { time }, sleep: { _ in
+                sleeps += 1
+                if sleeps == 1 {
+                    expect(events.count == 1 && events[0]?.isCurrent(at: time) == true && !finished,
+                           "provisional proof available before presentation or final receipt")
+                    time = events[0]!.expiresAt
+                    expect(events[0]?.isCurrent(at: time) == false, "cached proof fails at expiry without another poll")
+                    world.preparedDisposition = "pending"
+                } else {
+                    expect(events.last! == nil, "pending workspace revoked before sleeping again")
+                    world.preparedDisposition = "disabled"
+                    finished = true
+                }
+            })
+        let result = try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+            deadline: 60, playbackReserve: 12, acceptSnapshot: { _ in accepted = true },
+            presentationFinished: { finished }, releaseRequested: { false }, observeWorkspace: { proof in
+                if let proof {
+                    expect(accepted && proof.targetPID == 4123 && proof.targetLaunchTime == 100 &&
+                           proof.pageID == "page-a" && proof.runID == 1 && proof.runNonce == "test-run-1",
+                           "proof is bound to current target, page and accepted run")
+                }
+                events.append(proof)
+            })
+        expect(result == .observed(.init(pageID: "page-a", runID: 1,
+            wallpaperDisposition: "disabled", wallpaperReason: "disabled")),
+               "provisional notices leave final workspace reconciliation unchanged")
+        expect(events.count == 4 && events[1] == nil && events[3] == nil &&
+               events[2]?.isCurrent(at: time) == false && transport.closed,
+               "final return synchronously revokes last proof without changing receipt")
+    }
+    do {
+        let world = StartupSnapshotWorld(); world.preparedMode = true
+        let transport = PreparedConnectorTransport(world)
+        var events: [StartupProvisionalWorkspaceProof?] = []
+        var finished = false
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport,
+            now: { 1 }, sleep: { _ in transport.selected = "page-b"; finished = true })
+        let result = try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+            deadline: 60, playbackReserve: 12, acceptSnapshot: { _ in },
+            presentationFinished: { finished }, releaseRequested: { false }, observeWorkspace: { proof in
+                if proof?.pageID == "page-b" {
+                    expect(events.count == 2 && events.first!?.isCurrent(at: 1) == false && events[1] == nil,
+                           "retired page proof is revoked before the replacement publishes")
+                }
+                events.append(proof)
+            })
+        expect(result == .observed(.init(pageID: "page-b", runID: 1,
+            wallpaperDisposition: "disabled", wallpaperReason: "disabled")) && events.count == 4 && events[3] == nil,
+               "replacement receives only its own proof and the unchanged final receipt")
+    }
     return checks
 }
 
+
+@MainActor
+private final class NativeMediaLeaseFixture: StartupVideoTemporaryClip {
+    let fileURL = URL(fileURLWithPath: "/synthetic-video-fixture.mp4")
+    private(set) var releases = 0
+    func release() { releases += 1 }
+}
 
 @MainActor
 private func nativeColdLaunchChecks() async throws -> Int {
@@ -5902,6 +5995,8 @@ private func nativeColdLaunchChecks() async throws -> Int {
     let root = FileManager.default.temporaryDirectory.appendingPathComponent("skin-native-cover-" + UUID().uuidString)
     try FileManager.default.createDirectory(at: root.appendingPathComponent("web"), withIntermediateDirectories: true)
     try Data("<html></html>".utf8).write(to: root.appendingPathComponent("web/index.html"))
+    let syntheticMedia = root.appendingPathComponent("preview-fixture.mov")
+    try await OptionalStartupAVPlaybackTests.makeMedia(syntheticMedia)
     defer { try? FileManager.default.removeItem(at: root) }
     let bundle = URL(fileURLWithPath: "/Applications/Codex.app")
     let key = HostApplicationKey(host: .codex, bundleURL: bundle,
@@ -5916,7 +6011,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
     _ = NSApplication.shared
     let originalMenu = NSApp.mainMenu
     defer { NSApp.mainMenu = originalMenu }
-    for mode in ["complete", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
+    for mode in ["complete", "media-fallback", "media-reduced", "media-complete", "media-expired", "media-late-skip", "media-motion-flip", "media-hold-motion", "media-stage-skip", "media-short-to-canvas", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
                  "cancel-open", "cancel-task", "short-preflight", "short-cover", "short-attach", "window-close",
                  "host-activation", "interrupt-open", "interrupt-prepare", "interrupt-wait", "space-wait"] {
         let runtime = FakeNativeAppRuntime(arguments: ["skin"], resourceURL: root)
@@ -5930,7 +6025,8 @@ private func nativeColdLaunchChecks() async throws -> Int {
         let transport = PreparedConnectorTransport(world)
         let system = FakeStartupSystem(expectedPID: 4123, ports: [49221])
         let presentation = FakeNativePlayerPresentation()
-        let workspaceNotifications = NotificationCenter()
+        let workspaceNotifications = TrackingWorkspaceNotifications()
+        let motionOrigin = NSObject()
         let unrelated = FakeNativeApplication(pid: 800, bundleIdentifier: "fixture.other", bundleURL: URL(fileURLWithPath: "/Applications/Other.app"))
         presentation.coverValid = mode != "bad-cover"
         presentation.coverHook = {
@@ -5938,6 +6034,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
             if mode == "short-cover" { runtime.uptime = 108 }
         }
         if mode == "short-attach" { world.afterWorkspaceClock = { runtime.uptime = 130 } }
+        if mode == "media-short-to-canvas" { world.afterWorkspaceClock = { runtime.uptime = 131.8 } }
         if mode == "interrupt-prepare" { world.afterWorkspaceClock = { presentation.nativeHandler?.applicationActivated(unrelated) } }
         let callerDeadline: TimeInterval = ["short-preflight", "short-cover"].contains(mode) ? 108 : mode == "short-attach" ? 130 : 160
         var closeWindow: NSWindow?
@@ -5982,10 +6079,59 @@ private func nativeColdLaunchChecks() async throws -> Int {
             return app
         }, onTargetOpened: { _ in }, onCaptureReady: { _ in }, eventStream: { events },
         onOpeningChanged: { _ in }, startupFacts: { _ in facts }, performDisable: nil)
+        var optionalSelections = 0
+        var optionalItemBuilds = 0
+        var completedLatePreparation = false
+        let clipLease = NativeMediaLeaseFixture()
+        var motionEnabled = mode != "media-reduced"
+        if mode == "media-motion-flip" { presentation.optionalRevealHook = { motionEnabled = false } }
+        var heldStart: TimeInterval?
+        var heldFlipSample: TimeInterval?
+        if mode == "media-hold-motion" { world.preparedDisposition = "pending" }
+        presentation.acceptsOptionalSurface = mode.hasPrefix("media-")
+        let provider: NativeStartupMediaProvider?
+        if presentation.acceptsOptionalSurface || mode == "hot" {
+            provider = {
+                optionalSelections += 1
+                let configuration: OptionalStartupMedia.Configuration
+                if ["media-complete", "media-motion-flip", "media-hold-motion"].contains(mode) {
+                    configuration = .init(timeout: 4, holdAt: 0.35, fadeStart: 0.72, fadeEnd: 1.07)!
+                } else {
+                    configuration = .init(timeout: 24, holdAt: 11.3, fadeStart: 12.7, fadeEnd: 13.65)!
+                }
+                let prepare: NativeStartupMediaPreparation = { admission in
+                    if mode == "media-complete" { try? await Task.sleep(nanoseconds: 50_000_000) }
+                    if mode == "media-late-skip" {
+                        await Task.yield()
+                        presentation.nativeHandler?.requestSkip()
+                        completedLatePreparation = true
+                    }
+                    if mode == "media-stage-skip" {
+                        try admission.onOwned(clipLease)
+                        presentation.nativeHandler?.requestSkip()
+                        precondition(clipLease.releases == 1, "Skip must unlink the registered stage before exit")
+                        return nil
+                    }
+                    let lease = ["media-complete", "media-late-skip", "media-motion-flip", "media-hold-motion"].contains(mode) ? clipLease : nil
+                    return NativeStartupMediaSlot(configuration: configuration, clipLease: lease, makeItem: {
+                        optionalItemBuilds += 1
+                        if ["media-complete", "media-motion-flip", "media-hold-motion"].contains(mode) { return AVPlayerItem(url: syntheticMedia) }
+                        if mode == "media-expired" {
+                            runtime.uptime = 133
+                            return AVPlayerItem(url: syntheticMedia)
+                        }
+                        throw StartupFailure(reason: "asset-invalid", message: "fixture has no media")
+                    })
+                }
+                return prepare
+            }
+        } else { provider = nil }
         assembly.nativePresentation = { nonce, event in
             sequence.append("cover")
             return NativeColdPlayer(nonce: nonce, expectedApplication: key, runtime: runtime,
-                presentation: realPresentation ?? presentation, workspaceNotifications: workspaceNotifications, event: event)
+                presentation: realPresentation ?? presentation, workspaceNotifications: workspaceNotifications,
+                optionalMediaProvider: provider, optionalMotionAllowed: { motionEnabled },
+                motionNotificationObject: motionOrigin, event: event)
         }
         presentation.evaluationHook = { source in
             if source.contains("finishNativeSnapshot") {
@@ -6005,31 +6151,103 @@ private func nativeColdLaunchChecks() async throws -> Int {
             }
             return (true, nil)
         }
+        let fixtureStarted = ProcessInfo.processInfo.systemUptime
         let driver = CodexSkinDriver(inputs: inputs, runtime: runtime, readPayload: { sequence.append("payload"); return "trusted-native-prepare" },
             makeTargetSystem: { system }, makeConnector: { target, port, system, capture, events in
                 let observing = NativeStartupEventTransport(base: transport, capture: capture, events: events, now: { runtime.uptime })
                 return StartupConnector(target: target, expectedPort: port, system: system, transport: observing,
-                    now: { runtime.uptime }, sleep: { _ in try await Task.sleep(nanoseconds: 1_000_000) })
+                    now: { runtime.uptime }, sleep: { _ in
+                        let now = ProcessInfo.processInfo.systemUptime
+                        if mode == "media-hold-motion", heldFlipSample == nil,
+                           let player = presentation.optionalTestPlayer, player.rate == 0,
+                           player.currentTime().seconds >= 0.35, presentation.optionalReveals == 1 {
+                            if heldStart == nil { heldStart = now }
+                            if let heldStart, now - heldStart >= 0.15 {
+                                heldFlipSample = player.currentTime().seconds
+                                motionEnabled = false
+                                workspaceNotifications.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                                                            object: NSObject())
+                                expect(presentation.optionalTestPlayer != nil && clipLease.releases == 0,
+                                       "an unrelated sender cannot trigger display preference teardown")
+                                workspaceNotifications.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                                                            object: motionOrigin)
+                                expect(presentation.optionalTestPlayer == nil && clipLease.releases == 1,
+                                       "display preference change releases paused media synchronously without PTS or workspace proof")
+                            }
+                        }
+                        if ["media-complete", "media-motion-flip", "media-hold-motion"].contains(mode), now - fixtureStarted >= 6 {
+                            throw StartupFailure(reason: "attach-timeout", message: "fake media completion fixture deadline")
+                        }
+                        try await Task.sleep(nanoseconds: 1_000_000)
+                    })
             }, installObservation: CodexInstallObservation(), assembly: assembly)
         let result = await Task { @MainActor in
             await driver.launch(.init(expectedApplication: key, operationID: operationID, startedAt: 100, deadline: callerDeadline))
         }.value
         if mode == "hot" {
             if case .activated = result {} else { preconditionFailure("native assembly changed hot activation") }
-            expect(sequence.isEmpty && presentation.nativeCoverCount == 0, "hot path reads no payload and constructs no cover")
+            expect(sequence.isEmpty && presentation.nativeCoverCount == 0 && optionalSelections == 0, "hot path constructs neither cover nor optional slot")
             continue
         }
         guard case .nativePresentation(let receipt) = result else { preconditionFailure("cold native result lost its presentation identity") }
-        if mode == "complete" || mode == "host-activation" {
-            expect(receipt.presentation == .completed && receipt.workspace?.wallpaperDisposition == "disabled", "native completion reconciles independently observed workspace")
+        if ["complete", "host-activation", "media-fallback", "media-reduced", "media-short-to-canvas"].contains(mode) {
+            expect(receipt.presentation == .completed && receipt.workspace?.wallpaperDisposition == "disabled", "native completion reconciles independently observed workspace: \(mode)")
             expect(sequence == ["preflight", "payload", "cover", "open", "play"], "production driver invokes real NativeColdPlayer in the intended order")
             expect(presentation.evaluations.contains { $0.contains("acceptNativeSnapshotDescriptor") }
                 && presentation.evaluations.contains { $0.contains("acceptNativeSnapshotChunk") }
                 && presentation.evaluations.contains { $0.contains("finishNativeSnapshot") }, "actual NativeColdPlayer consumes the bounded snapshot bridge")
             expect(presentation.createdPlayers.count == 1 && presentation.coldRevealCount == 1, "native player mounts and reveals exactly once")
+            let selected = ["media-fallback", "media-short-to-canvas"].contains(mode) ? 1 : 0
+            let admitted = mode == "media-fallback" ? 1 : 0
+            expect(optionalSelections == selected && optionalItemBuilds == admitted &&
+                presentation.optionalSurfaceMounts == admitted && presentation.optionalRestores == admitted,
+                "nil/reduced never selects media, short budget never builds it, absent media falls back once")
+
             expect(events.resolveNative(receipt, at: 110) == .ready, "native journal accepts independent evidence without page-player ready")
             expect(records.contains { $0["event"] as? String == "startup-native-result" }
                 && !records.contains { $0["event"] as? String == "startup-ready" }, "native evidence is not relabelled as page playback")
+        } else if mode == "media-complete" {
+            expect(receipt.presentation == .completed && receipt.workspace?.pageGeneration == "page-a" &&
+                   receipt.workspace?.wallpaperDisposition == "disabled",
+                   "media success is joined only with the real fake-transport final workspace receipt")
+            expect(sequence == ["preflight", "payload", "cover", "open"] &&
+                   presentation.createdPlayers.isEmpty && presentation.coldRevealCount == 0,
+                   "injected optional video uses one cover/opener and never constructs default Canvas")
+            expect(optionalSelections == 1 && optionalItemBuilds == 1 && presentation.optionalSurfaceMounts == 1 &&
+                   presentation.optionalReveals == 1 && presentation.optionalRestores == 0 &&
+                   presentation.optionalOpacity.last == 0 && clipLease.releases == 1, "real synthetic AV drives one reveal, opacity zero, and one clip release")
+            expect(events.resolveNative(receipt, at: 110) == .ready,
+                   "existing receipt, not media completion alone, produces success")
+        } else if mode == "media-motion-flip" {
+            expect(receipt.presentation == .failed && receipt.reason == "startup-interrupted" && receipt.workspace == nil &&
+                   presentation.optionalReveals == 1 && presentation.optionalRestores == 1 &&
+                   presentation.createdPlayers.isEmpty && presentation.optionalOpacity.isEmpty && clipLease.releases == 1,
+                   "Reduce Motion enabled after real first frame releases optional media once without Canvas replay")
+        } else if mode == "media-hold-motion" {
+            expect(heldFlipSample != nil && receipt.presentation == .failed && receipt.reason == "startup-interrupted" &&
+                   receipt.workspace == nil && presentation.createdPlayers.isEmpty && presentation.optionalOpacity.isEmpty,
+                   "motion change in a quiet pending hold never replays Canvas or invents workspace success")
+            expect(workspaceNotifications.removalCount == 3, "all two original observers and the opt-in display observer are removed")
+            motionEnabled = true
+            workspaceNotifications.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: motionOrigin)
+            motionEnabled = false
+            workspaceNotifications.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: motionOrigin)
+            expect(presentation.optionalRestores == 1 && presentation.optionalReveals == 1 && clipLease.releases == 1,
+                   "duplicate or stale preference notices cannot restore, release or replay again")
+            print("Quiet held media released synchronously at \(heldFlipSample!)s without workspace proof")
+        } else if mode == "media-stage-skip" {
+            expect(receipt.presentation == .skipped && receipt.workspace == nil && clipLease.releases == 1 &&
+                   optionalItemBuilds == 0 && presentation.optionalSurfaceMounts == 0,
+                   "normal exit releases the known staged inode before AV can mount")
+        } else if mode == "media-late-skip" {
+            expect(receipt.presentation == .skipped && receipt.workspace == nil && completedLatePreparation &&
+                   optionalItemBuilds == 0 && presentation.optionalSurfaceMounts == 0 && clipLease.releases == 1,
+                   "late async preparation after Skip releases its lease without mounting or reporting success")
+        } else if mode == "media-expired" {
+            expect(receipt.presentation == .failed && receipt.reason == "attach-timeout" && receipt.workspace == nil &&
+                   presentation.createdPlayers.isEmpty && presentation.optionalOpacity.isEmpty &&
+                   optionalItemBuilds == 1 && presentation.optionalRestores == 1,
+                   "expired optional media without full remaining Canvas cannot restart or report workspace success")
         } else if mode == "cancel-open" || mode == "cancel-task" || mode.hasPrefix("interrupt-") || mode == "space-wait" {
             expect(receipt.presentation == .interrupted && receipt.reason == "startup-interrupted" && receipt.workspace == nil,
                 "actual driver distinguishes Task cancellation from protocol failure and user skip")
@@ -6104,6 +6322,21 @@ private func nativeColdLaunchChecks() async throws -> Int {
     let cover = try panel.showColdCover(locale: .chinese, runNonce: "appkit-unit", delegate: previewDelegate)
     expect(firstWindow?.level == .floating, "cold cover stays above a subsequently opened normal host window")
     let coverView = firstWindow?.contentView?.subviews.first
+    let videoSurface = panel.mountOptionalMedia()!
+    let sizingAttempt = OptionalStartupMedia.Attempt(generation: UUID(), item: UUID())
+    let sizingPlayback = OptionalStartupAVPlayback(attempt: sizingAttempt,
+                                                   item: AVPlayerItem(asset: AVMutableComposition())) { _, _ in }
+    expect(sizingPlayback.prepare(in: videoSurface.layer, frame: videoSurface.frame),
+           "optional player fits same owned cover before resize")
+    let resized = NSSize(width: videoSurface.frame.width + 96, height: videoSurface.frame.height + 54)
+    firstWindow?.setContentSize(resized)
+    firstWindow?.contentView?.layoutSubtreeIfNeeded()
+    videoSurface.layer.layoutIfNeeded()
+    CATransaction.flush()
+    expect(videoSurface.layer.bounds.size == resized && videoSurface.layer.sublayers?.first?.frame.size == resized,
+           "optional video tracks the same owned cover window after resize")
+    sizingPlayback.release()
+    panel.unmountOptionalMedia()
     panel.createPlayer(locale: .chinese, mode: "launch", theme: "light", inspect: false,
         nativeStartup: .init(runNonce: "appkit-unit", locale: "zh-CN", theme: "light"),
         messageHandler: previewDelegate, navigationDelegate: previewDelegate)

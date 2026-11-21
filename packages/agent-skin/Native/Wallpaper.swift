@@ -2215,6 +2215,38 @@ struct StartupPreparedWorkspace: Equatable {
     let wallpaperReason: String
 }
 
+
+@MainActor
+final class StartupProvisionalWorkspaceProof {
+    let targetPID: Int32
+    let targetLaunchTime: TimeInterval
+    let pageID: String
+    let runID: Int
+    let runNonce: String
+    let checkedAt: TimeInterval
+    let expiresAt: TimeInterval
+    private var revoked = false
+
+    fileprivate init(targetPID: Int32, targetLaunchTime: TimeInterval, pageID: String, runID: Int,
+                     runNonce: String, checkedAt: TimeInterval, expiresAt: TimeInterval) {
+        self.targetPID = targetPID
+        self.targetLaunchTime = targetLaunchTime
+        self.pageID = pageID
+        self.runID = runID
+        self.runNonce = runNonce
+        self.checkedAt = checkedAt
+        self.expiresAt = expiresAt
+    }
+
+    /// Consumers compare the bound identity as well, and check this on every
+    /// decision: an async poll cannot keep a previously issued proof alive.
+    func isCurrent(at now: TimeInterval) -> Bool {
+        !revoked && now.isFinite && now >= checkedAt && now < expiresAt
+    }
+
+    fileprivate func revoke() { revoked = true }
+}
+
 enum StartupPreparedResult: Equatable {
     case observed(StartupPreparedWorkspace)
     case released
@@ -2314,18 +2346,29 @@ struct StartupConnector {
         }
     }
 
+    @MainActor
     func runPrepared(payload: String, runNonce: String, deadline: TimeInterval,
                      playbackReserve: TimeInterval,
                      acceptSnapshot: (StartupSettingsSnapshot) async throws -> Void,
                      presentationFinished: () -> Bool,
                      releaseRequested: () -> Bool,
-                     presentationFailure: () -> String? = { nil }) async throws -> StartupPreparedResult {
+                     presentationFailure: () -> String? = { nil },
+                     observeWorkspace: ((StartupProvisionalWorkspaceProof?) -> Void)? = nil) async throws -> StartupPreparedResult {
         guard StartupSettingsSnapshotReceiver.validNonce(runNonce), playbackReserve.isFinite,
               playbackReserve >= 0 else {
             throw StartupFailure(reason: "protocol-error", message: "原生启动身份或播放预算无效。")
         }
         var snapshotAccepted = false
+        // The normal Canvas path supplies no observer and keeps its prior behavior.
+        var provisional: StartupProvisionalWorkspaceProof?
+        func revokeProvisional() {
+            guard let previous = provisional else { return }
+            previous.revoke()
+            provisional = nil
+            observeWorkspace?(nil)
+        }
         return try await withAttachedPage(payload: payload, deadline: deadline) { selected, attempted, stage in
+            defer { revokeProvisional() }
             if releaseRequested() { return .released }
             let reserve = snapshotAccepted ? 0 : playbackReserve + Self.completionObservationReserve
             let admissionDeadline = deadline - reserve
@@ -2365,6 +2408,8 @@ struct StartupConnector {
                 if let failure = presentationFailure() { throw StartupFailure(reason: failure, message: "原生呈现失败。") }
                 if releaseRequested() { return .released }
                 try requireBudget(deadline)
+                if let provisional, !provisional.isCurrent(at: now()) { revokeProvisional() }
+                let proofStartedAt = observeWorkspace == nil ? nil : now()
                 stage = "native-status"
                 let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, deadline - now()))
                 try requireBudget(deadline)
@@ -2380,6 +2425,7 @@ struct StartupConnector {
                 if workspaceRequested, status.workspaceNonce != runNonce {
                     throw StartupFailure(reason: "startup-interrupted", message: "本次工作区准备身份已变化。")
                 }
+                if !shellReady || status.disposition == "pending" { revokeProvisional() }
                 _ = try await requireCurrentPage(selected, deadline: deadline, recoverOverlap: true)
                 let page = StartupSnapshotPage(id: selected.id, href: href)
                 let request = StartupSettingsSnapshotRequest(owner: "azhou-codex-startup", runID: status.runID, runNonce: runNonce)
@@ -2411,6 +2457,25 @@ struct StartupConnector {
                     continue
                 }
                 if releaseRequested() { return .released }
+                if let observeWorkspace, let proofStartedAt, let launchTime = target.launchTime,
+                   launchTime.isFinite, launchTime > 0, shellReady, status.disposition != "pending" {
+                    let checkedAt = now()
+                    // Bound freshness from the start of the whole status/page
+                    // round trip, not the time when a slow reply finally arrived.
+                    let expiresAt = min(deadline, proofStartedAt + 0.25)
+                    if checkedAt.isFinite, checkedAt >= proofStartedAt, checkedAt < expiresAt {
+                        provisional?.revoke()
+                        let next = StartupProvisionalWorkspaceProof(targetPID: target.pid,
+                            targetLaunchTime: launchTime, pageID: selected.id, runID: status.runID,
+                            runNonce: runNonce, checkedAt: checkedAt, expiresAt: expiresAt)
+                        provisional = next
+                        observeWorkspace(next)
+                        if releaseRequested() { return .released }
+                        try requireBudget(deadline)
+                    } else {
+                        revokeProvisional()
+                    }
+                }
                 if presentationFinished(), shellReady, status.disposition != "pending" {
                     return .observed(StartupPreparedWorkspace(pageID: selected.id, runID: status.runID,
                         wallpaperDisposition: status.disposition, wallpaperReason: status.reason))
@@ -2418,6 +2483,7 @@ struct StartupConnector {
                 try await sleep(min(0.1, max(0, deadline - now())))
             }
             } catch {
+                revokeProvisional()
                 if let workspaceSession {
                     let cleanupTimeout = min(2, max(0, deadline - now()))
                     // Unstructured tasks do not inherit cancellation. Cleanup stays
