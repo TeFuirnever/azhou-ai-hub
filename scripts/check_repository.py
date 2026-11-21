@@ -460,7 +460,7 @@ SKILL_BRAND_CONTRACTS = {
     "skills/super-azhou-setup/SKILL.md": {
         "display_name": "Azhou Setup",
         "motto": "先看计划，再按同一计划执行。",
-        "startup": "🦊 阿舟 · Azhou Setup 启动（mode=<setup|repair|migrate|uninstall>, scope=<checkout>）",
+        "startup": "🦊 阿舟 · Azhou Setup 启动（mode=<setup|check|update|repair|migrate|uninstall>, scope=<checkout>）",
     },
     "skills/super-azhou-verify/SKILL.md": {
         "display_name": "Azhou Verify",

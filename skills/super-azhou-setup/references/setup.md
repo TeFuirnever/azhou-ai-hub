@@ -24,3 +24,21 @@ Receipts under the prior metadata root are not read as a fallback. Use `migrate-
 Current managed installs write `azhou-ai-hub.install-receipt.v2`, including the installed object's filesystem identity and executable-aware package digest. Legacy v1 receipts cannot authorize migration or deletion; an explicit `repair --apply` validates their original byte digests, records the current object identity, and recomputes source and installed v2 digests. Byte drift remains blocked.
 
 Package-manager installations stay owned by their package manager. This Skill cannot adopt or remove them.
+
+## Skills CLI installation
+
+Use the project directory as the working directory for a project-scoped install. Add `--global` when the user chooses user scope. Confirm the chosen scope and the Skill name before an operation.
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+npx skills list --agent codex
+npx skills check --project super-ask-azhou
+npx skills update --project super-ask-azhou
+npx skills remove super-ask-azhou
+~~~
+
+For a user-wide installation, add `--global` to `list` and `remove`, and replace `--project` with `--global` in `check` and `update`. The shared project Skill directory can be used by multiple agents. Name-based removal affects that shared copy. Check the remaining list and the destination after removal. The documented check syntax was verified with Skills CLI 1.9.0.
+
+## Managed update
+
+The receipt records the source path and digest as well as the installed artifact identity. A changed source is a conflict for repair and uninstall. Before changing the source checkout, use the existing source to inspect the receipt and preview `uninstall`. After an explicitly authorized uninstall succeeds, move the old receipt out of the active receipt directory. Preserve the original source revision and archived receipt. Update the source checkout, run managed `setup` against the same target with a fresh plan, and verify the new bytes with `doctor`. Restore the old revision through the same receipt-owned sequence if rollback is needed. An absent old source or changed installed artifact requires recovery of the exact source or user-owned changes before proceeding.
