@@ -203,7 +203,7 @@ Each adapter delegates to the checkout's zero-dependency Foundation CLI:
 |---|---|---|
 | `super-azhou-info` | `info`, `version` | Read-only project, runtime, Git revision and dirty-state facts. |
 | `super-azhou-doctor` | `doctor` | Read-only repository, explicit install-target, optional Treehouse lease and host stale-install migration diagnostics. With `--verify`, the verification subprocess has a 10-minute deadline and reports the last output line if available. |
-| `super-azhou-setup` | `setup`, `repair`, `migrate`, `uninstall` | Dry-run first; only an exact reviewed plan with `--apply` may mutate its explicit target. |
+| `super-azhou-setup` | `setup`, `repair`, `migrate`, `uninstall` | Dry-run first. Setup binds apply to the reviewed plan; repair, migrate and uninstall recheck current state when applied. |
 | `super-azhou-verify` | `verify` | Runs the reproducible public repository-integrity gate and rejects captured Foundation setup JSON results that are malformed or non-passing. |
 
 ~~~bash
