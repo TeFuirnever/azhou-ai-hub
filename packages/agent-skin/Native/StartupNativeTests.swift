@@ -453,6 +453,7 @@ struct StartupNativeTests {
         }
 
         OptionalStartupMediaTests.run()
+        try await OptionalStartupAVPlaybackTests.run()
 
         var checks = 0
         checks += startupIdentityDiagnosticChecks()

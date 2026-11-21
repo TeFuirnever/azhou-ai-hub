@@ -19,7 +19,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE_INPUTS = ("Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
                  "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
+                 "Native/OptionalStartupAVPlayback.swift",
                  "Native/StartupNativeTests.swift", "Native/OptionalStartupMediaTests.swift",
+                 "Native/OptionalStartupAVPlaybackTests.swift",
                  "tools/test-startup-native.py",
                  "tools/test-native-warning-contract.py")
 
@@ -225,7 +227,9 @@ def main() -> int:
         "xcrun", "--sdk", "macosx", "swiftc", "-DAGENT_SKIN_NATIVE_EVENT_TESTS", "-target", target,
         "Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
         "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
+        "Native/OptionalStartupAVPlayback.swift",
         "Native/StartupNativeTests.swift", "Native/OptionalStartupMediaTests.swift",
+        "Native/OptionalStartupAVPlaybackTests.swift",
         "-o", str(output), "-framework", "AppKit", "-framework", "WebKit",
     ]
     print("==> " + " ".join(command), flush=True)
