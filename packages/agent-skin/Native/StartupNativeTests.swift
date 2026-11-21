@@ -452,6 +452,8 @@ struct StartupNativeTests {
             return
         }
 
+        OptionalStartupMediaTests.run()
+
         var checks = 0
         checks += startupIdentityDiagnosticChecks()
         checks += launcherCommandLineChecks()

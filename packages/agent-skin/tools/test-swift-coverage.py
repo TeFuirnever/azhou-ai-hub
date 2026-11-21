@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PRODUCTION_SOURCES = (
     "Native/App.swift",
     "Native/Wallpaper.swift",
+    "Native/OptionalStartupMedia.swift",
     "Native/InstallRegistry.swift",
     "Native/InstallRegistryCore.swift",
     "tools/build-startup-assets.swift",
@@ -138,7 +139,8 @@ def main() -> int:
     objects = [
         compile_binary(out, "startup-tests", ["Native/App.swift", "Native/Wallpaper.swift",
                        "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
-                       "Native/StartupNativeTests.swift"], frameworks=["AppKit", "WebKit"],
+                       "Native/StartupNativeTests.swift", "Native/OptionalStartupMedia.swift",
+                       "Native/OptionalStartupMediaTests.swift"], frameworks=["AppKit", "WebKit"],
                       defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
         compile_binary(out, "wallpaper-tests", ["Native/App.swift", "Native/Wallpaper.swift",
                        "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
@@ -149,7 +151,8 @@ def main() -> int:
         compile_binary(out, "install-registry-cli", ["Native/InstallRegistryCore.swift",
                        "Native/InstallRegistry.swift"], frameworks=["AppKit", "CoreServices"]),
         compile_binary(out, "startup-cli", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift"],
+                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
+                       "Native/OptionalStartupMedia.swift"],
                        frameworks=["AppKit", "WebKit"]),
     ]
     objects.append(asset_builder_checks(out, raw_dir))
