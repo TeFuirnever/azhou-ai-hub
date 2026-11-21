@@ -38,7 +38,7 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
     rows = [json.loads(line) for line in stdout.splitlines() if line.strip()]
     observations, cleanup = {}, {}
     for row in rows:
-        if not isinstance(row, dict) or row.get("schema") != "azhou-cold-window-order.v1" \
+        if not isinstance(row, dict) or row.get("schema") != "azhou-cold-window-order.v2" \
                 or type(row.get("control")) is not bool:
             raise ValueError("invalid window observation record")
         control = row["control"]
@@ -52,6 +52,13 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
                     ("coverWindowPresent", False), ("hostWindowPresent", False),
                     ("geometryEmpty", True), ("secondDiscardEmpty", True))):
                 raise ValueError("missing or duplicate owned-window teardown")
+            expected_hits = {} if control else {
+                "opaque": row["coverWindowID"], "transparentBeforeDiscard": row["hostWindowID"],
+                "restored": row["coverWindowID"], "afterDiscard": row["hostWindowID"],
+            }
+            hits = row.get("mouseDownHitTargets")
+            if not isinstance(hits, dict) or hits != expected_hits or any(type(hit) is not int for hit in hits.values()):
+                raise ValueError("missing or incorrect owned-window mouse-down hit targets")
             cleanup[control] = row
         elif row.get("event") == "observation":
             if type(row.get("revealed")) is not bool:
@@ -103,7 +110,7 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
 def window_ordering_checks(output: Path, out: Path, source_before: dict, binary_before: str) -> int:
     command = [str(output), "--probe-cold-window-ordering"]
     report = {"kind": "synthetic-owned-window-ordering", "unitCoverageInput": False,
-              "scope": "owned-window ordering with a synthetic same-process host",
+              "scope": "owned-window ordering and mouse-down target queries with a synthetic same-process host",
               "visualContinuity": "not-measured", "passed": False, "command": command,
               "startedAt": datetime.now(timezone.utc).isoformat(),
               "sourceBefore": source_before, "binaryBefore": binary_before}

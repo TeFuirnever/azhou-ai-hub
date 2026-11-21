@@ -1908,12 +1908,19 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
 
     func revealOptionalMedia() { cover?.alphaValue = 0 }
     func setOptionalCoverOpacity(_ opacity: Double) {
-        panel?.alphaValue = opacity
-        if opacity == 0 { CATransaction.flush() }
+        guard let panel else { return }
+        panel.alphaValue = opacity
+        if opacity == 0 {
+            CATransaction.flush()
+            // WindowServer can still hit-test a fully transparent window.
+            panel.ignoresMouseEvents = true
+        } else if panel.ignoresMouseEvents {
+            panel.ignoresMouseEvents = false
+        }
     }
     func restoreOptionalMediaCover() {
         cover?.alphaValue = 1
-        panel?.alphaValue = 1
+        setOptionalCoverOpacity(1)
     }
     func unmountOptionalMedia() {
         optionalMediaView?.removeFromSuperview()
