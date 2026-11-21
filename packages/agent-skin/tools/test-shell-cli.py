@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -80,11 +81,15 @@ exit "${FAKE_XCRUN_EXIT:-0}"
 ''')
     write_executable(bin_dir / "sips", common + '''
 output=""
+source="${4:-}"
 while (($#)); do
   if [[ "$1" == "--out" && $# -ge 2 ]]; then output="$2"; break; fi
   shift
 done
 [[ -n "$output" ]] || exit 90
+if [[ -n "${AZHOU_APPROVED_ICON_SHA256:-}" ]]; then
+  [[ -f "$source" && "$source" == */approved-icon.png ]] || exit 89
+fi
 : > "$output"
 exit "${FAKE_SIPS_EXIT:-0}"
 ''')
@@ -132,7 +137,12 @@ case "${1:-}" in
   tools/verify-artifacts.py)
     case "${2:-}" in
       --write-bundle-info) mkdir -p "$3/Contents"; : > "$3/Contents/Info.plist" ;;
-      --write-marker) mkdir -p "$3/Contents/Resources"; : > "$3/Contents/Resources/azhou-build.json" ;;
+      --write-marker)
+        mkdir -p "$3/Contents/Resources"; : > "$3/Contents/Resources/azhou-build.json"
+        if [[ -n "${AZHOU_APPROVED_ICON_SHA256:-}" ]]; then
+          cp "assets/private/app-icon/source.png" "$(dirname "$3")/approved-icon.png"
+        fi
+        ;;
       --stage-identity) printf '%s' 'synthetic-identity' ;;
       --seal-stage) cat >/dev/null; printf '%s' 'synthetic-receipt' ;;
       --publish-build)
@@ -304,7 +314,8 @@ def run_suite(report_path: Path) -> dict[str, object]:
         def add_case(name: str, entrypoint: str, args: tuple[str, ...] = (), *,
                      environment: dict[str, str] | None = None, missing: str | None = None,
                      build_symlink: bool = False, icon_size: int = 1024,
-                     missing_private: bool = False, library: bool = False) -> Path:
+                     missing_private: bool = False, library: bool = False,
+                     approved_icon: bool = False) -> Path:
             fixture = make_fixture(fixtures_root / f"f{len(case_specs)}", missing=missing,
                                    build_symlink=build_symlink, icon_size=icon_size,
                                    missing_private=missing_private, library=library)
@@ -322,6 +333,9 @@ def run_suite(report_path: Path) -> dict[str, object]:
                 "FAKE_BASH_EXIT": "0",
                 **(environment or {}),
             }
+            if approved_icon:
+                path = fixture / "assets" / ("azhou" if library else "private") / "app-icon/source.png"
+                case_env["AZHOU_APPROVED_ICON_SHA256"] = hashlib.sha256(path.read_bytes()).hexdigest()
             case_specs.append({
                 "name": name,
                 "entrypoint": entrypoint,
@@ -332,6 +346,7 @@ def run_suite(report_path: Path) -> dict[str, object]:
             })
             return fixture
 
+        add_case("build-reject-unexpected-argument", "build", ("--open",))
         add_case("missing-input", "build", missing="working.png")
         add_case("missing-private-directory", "build", missing_private=True)
         add_case("library-missing-input", "build", missing="entry-avatar.png", library=True)
@@ -345,6 +360,7 @@ def run_suite(report_path: Path) -> dict[str, object]:
         add_case("preflight-bad-icon", "build", icon_size=256)
         add_case("build-success", "build")
         add_case("build-library-only", "build", library=True)
+        add_case("build-approved-icon", "build", approved_icon=True)
         add_case("build-preserve-stage", "build", environment={"FAKE_PRESERVE_STAGE": "1"})
         add_case("build-xcrun-failure", "build", environment={"FAKE_XCRUN_EXIT": "18"})
         add_case("build-codesign-failure", "build", environment={"FAKE_CODESIGN_EXIT": "19"})
@@ -409,6 +425,8 @@ exit status.exitstatus
             )
 
         expected_cases = {
+            "build-reject-unexpected-argument": (2, "", "Usage: build-macos.sh", (),
+                                                 ("build-preflight.py", "xcrun", "--write-marker")),
             "missing-input": (1, "", "缺少阿舟素材 working.png", ("build-preflight.py",), ("xcrun",)),
             "missing-private-directory": (1, "", "缺少阿舟素材", ("build-preflight.py",), ("xcrun",)),
             "library-missing-input": (1, "", "缺少阿舟素材 entry-avatar.png", ("build-preflight.py",), ("xcrun",)),
@@ -424,6 +442,7 @@ exit status.exitstatus
                 "-framework AppKit -framework CoreServices",
             ), ()),
             "build-library-only": (0, "构建完成", "", ("xcrun", "sips", "iconutil", "codesign"), ()),
+            "build-approved-icon": (0, "构建完成", "", ("--write-marker", "approved-icon.png"), ()),
             "build-preserve-stage": (1, "", "暂存无法确认安全清理", ("--publish-build",), ()),
             "build-xcrun-failure": (18, "", "", ("xcrun",), ("codesign", "--publish")),
             "build-codesign-failure": (19, "", "", ("codesign",), ("--publish",)),
@@ -449,10 +468,25 @@ exit status.exitstatus
             assert all(f"/assets/{icon_base}/app-icon/source.png --out " in line for line in resizes), \
                 f"{name}: production shell selected the wrong host icon: {resizes!r}"
 
+        approved_events = (output_root / "build-approved-icon" / "events.log").read_text(encoding="utf-8").splitlines()
+        approved_resizes = [event for event in approved_events if event.startswith("sips\t")]
+        assert len(approved_resizes) == 10 and all("/approved-icon.png --out " in event
+                                                  for event in approved_resizes), approved_resizes
+        assert next(i for i, event in enumerate(approved_events) if "--write-marker" in event) < \
+            approved_events.index(approved_resizes[0]), "icon must be staged before it is used"
+
         build_success = output_root / "build-success"
         build_stdout = (build_success / "stdout").read_text(encoding="utf-8", errors="replace")
         assert "~/Applications/" in build_stdout, "build hint did not include the user Applications install path"
         build_events = (build_success / "events.log").read_text(encoding="utf-8", errors="replace").splitlines()
+        compile_args = next(line.split("\t", 2)[-1].split() for line in build_events
+                            if line.startswith("xcrun\t") and "Native/App.swift" in line)
+        assert [arg for arg in compile_args if arg.startswith("Native/")] == [
+            "Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
+            "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
+            "Native/OptionalStartupAVPlayback.swift", "Native/OptionalStartupPresentation.swift",
+            "Native/OptionalStartupVideoResolver.swift", "Native/OptionalStartupVideoFiles.swift",
+        ], compile_args
         icon_events = [line for line in build_events if line.startswith("sips\t")]
         assert len(icon_events) == 10, f"expected 10 icon resize calls, got {len(icon_events)}"
         for size in (16, 32, 128, 256, 512):
@@ -467,6 +501,11 @@ exit status.exitstatus
                 f"missing {size}x@2x icon resize: {icon_events!r}"
 
         # Assertions that depend on event ordering or filesystem cleanup.
+        rejected = next(Path(case["fixture"]) for case in case_specs
+                        if case["name"] == "build-reject-unexpected-argument") / ".build"
+        assert not list(rejected.glob("azhou-stage.*")) and not (rejected / "module-cache").exists(), \
+            "bad arguments must not create staging or compiler cache"
+
         install_events = (output_root / "install-success-build/events.log").read_text(
             encoding="utf-8", errors="replace").splitlines()
         assert install_events.index(next(line for line in install_events if "codesign" in line)) < \
