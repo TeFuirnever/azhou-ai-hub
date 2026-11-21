@@ -75,6 +75,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-verify/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
+    "skills/super-frontend-design/SKILL.md",
     "skills/super-gh-axi/SKILL.md",
     "skills/super-i-have-adhd/SKILL.md",
     "skills/super-imagegen/SKILL.md",
@@ -530,6 +531,11 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "第一行就是下一步动作。",
         "startup": "🦊 阿舟 · i-have-adhd 启动（mode=<start|resume|stop>, scope=<session>）",
         "brand_path": "skills/super-i-have-adhd/references/brand-layer.md",
+    },
+    "skills/super-frontend-design/SKILL.md": {
+        "display_name": "Frontend Design",
+        "motto": "每个界面长出自己的身份，而不是模板的回声。",
+        "startup": "🦊 阿舟 · Frontend Design 启动（mode=<new-ui|restyle>, scope=<brief-or-codebase>）",
     },
     "skills/super-gh-axi/SKILL.md": {
         "display_name": "Gh Axi",
