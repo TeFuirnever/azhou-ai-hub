@@ -1006,12 +1006,15 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             except (OSError, PackageError) as exc:
                 row["status"], row["details"] = "fail", str(exc)
                 return _lifecycle_report("partial", rows, error="uninstall failed")
-    if any(row["status"] == "removed" for row in rows):
+    if receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled":
         try:
+            state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
+            if state != "missing":
+                raise PackageError(f"uninstall could not confirm absence: {details}")
             receipt["lifecycle_state"] = "uninstalled"
             _write_receipt(receipt_path, receipt)
-        except (OSError, ValueError) as exc:
-            return _lifecycle_report("partial", rows, error=f"artifact removed but receipt update failed: {exc}")
+        except (OSError, ValueError, PackageError) as exc:
+            return _lifecycle_report("partial", rows, error=f"uninstall receipt update failed: {exc}")
     return _lifecycle_report("pass", rows)
 
 

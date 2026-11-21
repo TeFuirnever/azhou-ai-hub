@@ -1616,6 +1616,15 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(1, exit_code, report)
             self.assertEqual("fail", next(c for c in report["checks"] if c["name"] == "target:hub-receipts")["status"])
             self.assertNotIn("lifecycle_state", json.loads(receipt.read_text()))
+            exit_code, repaired = self._json_main(
+                ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+            )
+            self.assertEqual(0, exit_code, repaired)
+            self.assertEqual("uninstalled", json.loads(receipt.read_text())["lifecycle_state"])
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(0, exit_code, report)
 
     def test_receipt_write_failure_after_uninstall_reports_partial(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
