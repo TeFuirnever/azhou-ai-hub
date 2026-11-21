@@ -6557,9 +6557,40 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 expect(opaque == windowNumber, "opaque cold cover is the mouse-down hit target")
                 presentation.setOptionalCoverOpacity(0)
                 let transparent = waitForHit(hostNumber)
-                expect(transparent == hostNumber && cover.alphaValue == 0
-                    && windowIDs(onScreen: false).contains(windowNumber) && cover.windowNumber == windowNumber,
-                    "zero opacity targets the synthetic host before the cold cover is discarded")
+                let alphaZero = cover.alphaValue == 0
+                let oldIDInOptionAll = windowIDs(onScreen: false).contains(windowNumber)
+                let modelWindowIDStable = cover.windowNumber == windowNumber
+                let transparentPass = transparent == hostNumber && alphaZero && oldIDInOptionAll && modelWindowIDStable
+                if !transparentPass {
+                    // Preserve the primary observation before any diagnostic-only changes.
+                    func hitCategory(_ hit: Int) -> String {
+                        if hit == windowNumber { return "cover" }
+                        if hit == hostNumber { return "fixture" }
+                        return hit <= 0 ? "none" : "other"
+                    }
+                    let ownerAlive = NSApp.windows.contains { $0 === cover } && cover.delegate === delegate
+                    let fixtureVisible = host.isVisible && host.frame.contains(hitPoint)
+                    let originallyIgnoring = cover.ignoresMouseEvents
+                    cover.ignoresMouseEvents = true
+                    let forcedIgnore = waitForHit(hostNumber)
+                    cover.ignoresMouseEvents = originallyIgnoring
+                    presentation.restoreOptionalMediaCover()
+                    let restoredControl = waitForHit(windowNumber)
+                    presentation.discardColdPlayer()
+                    let discardedControl = waitForHit(hostNumber)
+                    host.orderOut(nil)
+                    host.close()
+                    let diagnostic = [
+                        "alpha-zero hit=\(hitCategory(transparent))",
+                        "alphaZero=\(alphaZero)", "ownerAlive=\(ownerAlive)",
+                        "oldIDInOptionAll=\(oldIDInOptionAll)", "modelWindowIDStable=\(modelWindowIDStable)",
+                        "fixtureVisible=\(fixtureVisible)", "originallyIgnoring=\(originallyIgnoring)",
+                        "opaque=\(hitCategory(opaque))", "testOnlyForcedIgnore=\(hitCategory(forcedIgnore))",
+                        "restored=\(hitCategory(restoredControl))", "afterDiscard=\(hitCategory(discardedControl))",
+                    ].joined(separator: " ")
+                    FileHandle.standardError.write(Data((diagnostic + "\n").utf8))
+                }
+                expect(transparentPass, "zero opacity targets the synthetic host before the cold cover is discarded")
                 presentation.restoreOptionalMediaCover()
                 let restored = waitForHit(windowNumber)
                 expect(restored == windowNumber, "the restored cold cover is again the mouse-down hit target")
