@@ -28,7 +28,7 @@ def observations():
     rows = []
     for control in (True, False):
         for revealed in (False, True):
-            rows.append({"schema": "azhou-cold-window-order.v1", "event": "observation",
+            rows.append({"schema": "azhou-cold-window-order.v2", "event": "observation",
                 "control": control, "revealed": revealed, "coverWindowID": 101, "hostWindowID": 102,
                 "coverIndex": 3 if control else 1, "hostIndex": 1 if control else 3,
                 "foregroundPIDBefore": 42, "foregroundPID": 42, "probePID": 99,
@@ -37,9 +37,11 @@ def observations():
                 "webViewID": "view-1", "webViewCount": 1, "webViewMounted": True,
                 "webViewHidden": not revealed, "coverPresent": not revealed,
                 "coverIsKey": False, "canJoinAllSpaces": False, "moveToActiveSpace": False})
-        rows.append({"schema": "azhou-cold-window-order.v1", "event": "cleanup", "control": control,
+        rows.append({"schema": "azhou-cold-window-order.v2", "event": "cleanup", "control": control,
             "coverWindowID": 101, "hostWindowID": 102, "coverWindowPresent": False,
-            "hostWindowPresent": False, "geometryEmpty": True, "secondDiscardEmpty": True})
+            "hostWindowPresent": False, "geometryEmpty": True, "secondDiscardEmpty": True,
+            "mouseDownHitTargets": {} if control else {
+                "opaque": 101, "transparentBeforeDiscard": 102, "restored": 101, "afterDiscard": 102}})
     return rows
 
 
@@ -113,6 +115,18 @@ class WindowEvidenceTests(unittest.TestCase):
                 rows[index][field] = value
                 with self.assertRaises(ValueError):
                     native.validate_window_observations(stream(rows), 0)
+
+    def test_requires_the_underlying_hit_while_the_cover_still_exists(self):
+        for phase, target in (("opaque", 999), ("transparentBeforeDiscard", 101),
+                              ("restored", 102), ("afterDiscard", 102.0)):
+            rows = observations()
+            rows[5]["mouseDownHitTargets"][phase] = target
+            with self.subTest(phase=phase), self.assertRaisesRegex(ValueError, "mouse-down hit targets"):
+                native.validate_window_observations(stream(rows), 0)
+        rows = observations()
+        del rows[5]["mouseDownHitTargets"]
+        with self.assertRaisesRegex(ValueError, "mouse-down hit targets"):
+            native.validate_window_observations(stream(rows), 0)
 
     def test_probe_failure_output_and_source_or_binary_drift_are_retained(self):
         for mode in ("success", "partial", "nonzero", "timeout", "missing", "changed", "added", "removed", "binary"):

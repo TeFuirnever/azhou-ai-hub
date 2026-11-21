@@ -5780,12 +5780,15 @@ private final class PreparedConnectorTransport: StartupTransport {
     let base: WallpaperTransport
     var selected = "page-a"
     var closed = false
+    var beforePages: (() -> Void)?
+    var afterEvaluate: ((String) -> Void)?
     init(_ world: StartupSnapshotWorld) {
         self.world = world
         base = WallpaperTransport(session: nil, socketFactory: { world.socket($0) })
     }
     func pages(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
-        [["id": selected, "type": "page", "url": world.href,
+        beforePages?()
+        return [["id": selected, "type": "page", "url": world.href,
           "webSocketDebuggerUrl": "ws://127.0.0.1:49221/devtools/page/\(selected)"]]
     }
     func targets(port: Int, timeout: TimeInterval) async throws -> [[String: Any]] {
@@ -5793,7 +5796,9 @@ private final class PreparedConnectorTransport: StartupTransport {
     }
     func connect(to url: URL, timeout: TimeInterval) throws { try base.connect(to: url, timeout: timeout) }
     func evaluate(_ source: String, timeout: TimeInterval) async throws -> [String: Any] {
-        try await base.evaluate(source, timeout: timeout)
+        let reply = try await base.evaluate(source, timeout: timeout)
+        afterEvaluate?(source)
+        return reply
     }
     func makeSettingsSnapshotSession(page: StartupSnapshotPage, request: StartupSettingsSnapshotRequest,
                                      timeout: TimeInterval) async throws -> any StartupSettingsSnapshotSession {
@@ -5976,6 +5981,50 @@ private func startupPreparedConnectorChecks() async throws -> Int {
         expect(result == .observed(.init(pageID: "page-b", runID: 1,
             wallpaperDisposition: "disabled", wallpaperReason: "disabled")) && events.count == 4 && events[3] == nil,
                "replacement receives only its own proof and the unchanged final receipt")
+    }
+    // The status response and same-page identity recheck share one proof lifetime.
+    for roundTripMs in [249, 250, 251] {
+        let world = StartupSnapshotWorld(); world.preparedMode = true
+        let transport = PreparedConnectorTransport(world)
+        let start: TimeInterval = 1
+        let arrival = start + Double(roundTripMs) / 1000
+        var time = start
+        var statusReplies = 0
+        var rechecks = 0
+        var proofs: [StartupProvisionalWorkspaceProof?] = []
+        let connector = StartupConnector(target: target, expectedPort: 49221,
+            system: FakeStartupSystem(expectedPID: 4123, ports: [49221]), transport: transport,
+            now: { time }, sleep: { _ in preconditionFailure("expected one proof decision, not another poll") })
+        let result = try await connector.runPrepared(payload: "native-prepare-fixture", runNonce: "test-run-1",
+            deadline: 60, playbackReserve: 12, acceptSnapshot: { _ in
+                transport.afterEvaluate = { source in
+                    guard source == StartupConnector.statusExpression else { return }
+                    statusReplies += 1
+                    time = start + 0.1
+                }
+                transport.beforePages = {
+                    expect(statusReplies == 1 && time == start + 0.1,
+                           "the same-page recheck follows exactly one post-snapshot status reply")
+                    rechecks += 1
+                    time = arrival
+                }
+            }, presentationFinished: { true }, releaseRequested: { false }, observeWorkspace: { proof in
+                if let proof {
+                    expect(proof.pageID == "page-a" && proof.checkedAt == arrival &&
+                           proof.expiresAt == start + 0.25 && proof.isCurrent(at: time),
+                           "same-page proof retains only the lifetime left after the recheck")
+                }
+                proofs.append(proof)
+            })
+        expect(statusReplies == 1 && rechecks == 1 && transport.closed && result == .observed(.init(pageID: "page-a", runID: 1,
+            wallpaperDisposition: "disabled", wallpaperReason: "disabled")),
+               "proof freshness must not change the final workspace receipt at \(roundTripMs)ms")
+        if roundTripMs == 249 {
+            expect(proofs.count == 2 && proofs[0] != nil && proofs[1] == nil,
+                   "same-page round trip under 250ms admits one revocable proof")
+        } else {
+            expect(proofs.isEmpty, "same-page round trip at or beyond 250ms must not admit a proof: \(roundTripMs)ms")
+        }
     }
     return checks
 }
@@ -6425,7 +6474,7 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
     var checks = 0
     func expect(_ condition: Bool, _ label: String) { precondition(condition, "FAILED: " + label); checks += 1 }
     guard let beforePID = NSWorkspace.shared.frontmostApplication?.processIdentifier, beforePID > 0,
-          NSScreen.main != nil else {
+          let screen = NSScreen.main else {
         preconditionFailure("window-ordering requires an active graphical desktop and foreground application")
     }
     func emit(_ value: [String: Any]) throws {
@@ -6452,9 +6501,11 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
     let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
     for normalControl in [true, false] {
         // Release the probe's own strong references before observing WindowServer teardown.
-        let discarded = try autoreleasepool { () throws -> (cover: Int, host: Int, geometry: Bool, second: Bool) in
+        let discarded = try autoreleasepool { () throws -> (cover: Int, host: Int, geometry: Bool, second: Bool, hits: [String: Int]) in
             let previousWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
-            let frame = NSRect(x: 24, y: 40, width: 260, height: 160)
+            let visible = screen.visibleFrame
+            let frame = NSRect(x: visible.midX - 130, y: visible.midY - 80, width: 260, height: 160)
+            expect(visible.contains(frame), "graphical desktop contains the synthetic hit-test fixture")
             let presentation = AppKitNativePlayerPresentation(
                 activateApp: { preconditionFailure("cold ordering must not activate") },
                 makeVisible: { _ in preconditionFailure("cold ordering must not select a key window") },
@@ -6470,6 +6521,8 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             cover.setFrame(frame, display: false)
             let host = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
             host.isReleasedWhenClosed = false
+            host.isOpaque = true
+            host.backgroundColor = .white
             defer { presentation.discardColdPlayer(); host.orderOut(nil); host.close() }
             let activeBeforeHostOrder = NSApp.isActive
             expect(!activeBeforeHostOrder, "synthetic host ordering is exercised while the probe is inactive")
@@ -6486,6 +6539,32 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 preconditionFailure("real cold window must contain its cover and WKWebView")
             }
             let hostNumber = host.windowNumber
+            var hits: [String: Int] = [:]
+            let hitPoint = NSPoint(x: frame.midX, y: frame.midY)
+            func waitForHit(_ expected: Int) -> Int {
+                let deadline = ProcessInfo.processInfo.systemUptime + 2
+                var hit = NSWindow.windowNumber(at: hitPoint, belowWindowWithWindowNumber: 0)
+                while hit != expected && ProcessInfo.processInfo.systemUptime < deadline {
+                    RunLoop.main.run(until: Date().addingTimeInterval(0.01))
+                    hit = NSWindow.windowNumber(at: hitPoint, belowWindowWithWindowNumber: 0)
+                }
+                return hit
+            }
+            if !normalControl {
+                // Query the WindowServer target, not delivery. No input is posted.
+                // Hold the fixture open across compositor updates; no discard is scheduled.
+                let opaque = waitForHit(windowNumber)
+                expect(opaque == windowNumber, "opaque cold cover is the mouse-down hit target")
+                presentation.setOptionalCoverOpacity(0)
+                let transparent = waitForHit(hostNumber)
+                expect(transparent == hostNumber && cover.alphaValue == 0
+                    && windowIDs(onScreen: false).contains(windowNumber) && cover.windowNumber == windowNumber,
+                    "zero opacity targets the synthetic host before the cold cover is discarded")
+                presentation.restoreOptionalMediaCover()
+                let restored = waitForHit(windowNumber)
+                expect(restored == windowNumber, "the restored cold cover is again the mouse-down hit target")
+                hits = ["opaque": opaque, "transparentBeforeDiscard": transparent, "restored": restored]
+            }
             for revealed in [false, true] {
                 if revealed {
                     presentation.revealColdPlayer()
@@ -6509,7 +6588,7 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 let foregroundPID = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
                 let mounted = content.subviews.compactMap { $0 as? WKWebView }
                 let coverPresent = coverView.superview === content
-                try emit(["schema": "azhou-cold-window-order.v1", "event": "observation",
+                try emit(["schema": "azhou-cold-window-order.v2", "event": "observation",
                     "control": normalControl, "revealed": revealed,
                     "coverWindowID": windowNumber, "hostWindowID": hostNumber,
                     "coverIndex": coverIndex, "hostIndex": hostIndex,
@@ -6537,18 +6616,26 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             expect(!cover.collectionBehavior.contains(.canJoinAllSpaces) && !cover.collectionBehavior.contains(.moveToActiveSpace),
                 "cold window never follows the user to another Space")
             presentation.discardColdPlayer()
+            if !normalControl {
+                let afterDiscard = waitForHit(hostNumber)
+                expect(afterDiscard == hostNumber && !NSApp.isActive
+                    && NSWorkspace.shared.frontmostApplication?.processIdentifier == beforePID,
+                    "discard leaves the synthetic host as hit target without foreground activation")
+                hits["afterDiscard"] = afterDiscard
+            }
             host.orderOut(nil)
             host.close()
             let geometryEmpty = presentation.geometry.isEmpty
             presentation.discardColdPlayer()
             let secondDiscardEmpty = presentation.geometry.isEmpty
-            return (windowNumber, hostNumber, geometryEmpty, secondDiscardEmpty)
+            return (windowNumber, hostNumber, geometryEmpty, secondDiscardEmpty, hits)
         }
         let remaining = waitForWindows({ !$0.contains(discarded.cover) && !$0.contains(discarded.host) }, onScreen: false)
-        try emit(["schema": "azhou-cold-window-order.v1", "event": "cleanup", "control": normalControl,
+        try emit(["schema": "azhou-cold-window-order.v2", "event": "cleanup", "control": normalControl,
             "coverWindowID": discarded.cover, "hostWindowID": discarded.host,
             "coverWindowPresent": remaining.contains(discarded.cover), "hostWindowPresent": remaining.contains(discarded.host),
-            "geometryEmpty": discarded.geometry, "secondDiscardEmpty": discarded.second])
+            "geometryEmpty": discarded.geometry, "secondDiscardEmpty": discarded.second,
+            "mouseDownHitTargets": discarded.hits])
         expect(!remaining.contains(discarded.cover) && !remaining.contains(discarded.host) && discarded.geometry && discarded.second,
             "discard removes both owned WindowServer identities and remains harmless when repeated")
     }
