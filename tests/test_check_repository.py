@@ -832,6 +832,7 @@ class RepositoryPolicyTest(unittest.TestCase):
             root = Path(directory)
             expected = [
                 root / "skills" / "super-excalidraw-diagram" / "SKILL.md",
+                root / "skills" / "super-frontend-design" / "SKILL.md",
                 root / "skills" / "super-azhou-doctor" / "SKILL.md",
                 root / "skills" / "super-azhou-info" / "SKILL.md",
                 root / "skills" / "super-azhou-setup" / "SKILL.md",
