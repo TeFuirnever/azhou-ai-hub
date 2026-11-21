@@ -111,6 +111,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 
 > 🧭 说意图，拿 skill、模式和边界。
 
+在本仓库里可以直接问「Ask Azhou，这段旧代码没有测试，我要改一个分支，该用哪套规则？」它会把当前工作区可用的书籍 Skill 纳入推荐。知道书名时，仍可直接点名调用。
+
 ![Ask Azhou 效果图](assets/skills/super-ask-azhou-effect.png)
 
 ## Session Insights

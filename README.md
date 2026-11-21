@@ -111,6 +111,8 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 > 🧭 Describe the intent, get the skill, its mode and its boundary.
 
+In this checkout, ask “Ask Azhou, which skill can help me change old code that has no tests?” The router considers the book skills available in your workspace. You can also invoke a book directly by name.
+
 ![Ask Azhou effect preview](assets/skills/super-ask-azhou-effect.png)
 
 ## Session Insights
