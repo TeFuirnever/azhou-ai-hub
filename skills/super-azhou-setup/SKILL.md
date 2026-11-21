@@ -1,6 +1,6 @@
 ---
 name: super-azhou-setup
-description: Azhou skill. Renamed from azhou-setup (the old name still triggers this skill). Plan and explicitly apply Azhou AI Hub skill installation or receipt-owned repair, migration, and uninstall. Use for checkout-assisted setup and managed lifecycle operations with an exact target root; also for 帮我安装这个 skill, 卸载或迁移 skill, or "set this hub up".
+description: Azhou skill. Renamed from azhou-setup (the old name still triggers this skill). Guide installation, update, and removal of an Azhou AI Hub skill. Route package-manager installs to their owner, and use checkout-assisted setup or receipt-owned lifecycle operations for managed installs. Use for installing, updating, or uninstalling a skill, 帮我安装这个 skill, 更新或卸载 skill, or "set this hub up".
 invocation: user-invoked orchestrator
 ---
 
@@ -10,19 +10,27 @@ invocation: user-invoked orchestrator
 
 > 🧰 先看计划，再按同一计划执行。
 
-Use the repository Foundation CLI as the mutation authority. Always inspect first. Never reimplement copy, link, receipt, lock, rollback, or deletion logic in the prompt.
+Use the installation owner as the mutation authority. For checkout-managed installs, use the Foundation CLI. Always inspect first. Never reimplement copy, link, receipt, lock, rollback, or deletion logic in the prompt.
 
 ## Brand protocol
 
 Emit this exact display event once, at the start of every run, with the selected mode and resolved checkout scope:
 
 ```text
-🦊 阿舟 · Azhou Setup 启动（mode=<setup|repair|migrate|uninstall>, scope=<checkout>）
+🦊 阿舟 · Azhou Setup 启动（mode=<setup|check|update|repair|migrate|uninstall>, scope=<checkout>）
 ```
 
-Use `✅ 验证通过` only after the exact reviewed plan is applied when mutation was requested, or after a declared dry-run is read back. Use `❌ 验证失败` for a plan, apply, rollback, or evidence failure and `🔒 阿舟暂停这一项` for missing target or authorization. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, managed receipts, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
+Use `✅ 验证通过` only after verifying the requested package-manager operation, applying the reviewed checkout-managed plan, or reading back a declared dry-run. Use `❌ 验证失败` for a plan, apply, rollback, or evidence failure and `🔒 阿舟暂停这一项` for missing target or authorization. Emoji is display-only; keep JSON keys, schema values, digests, paths, commands, test names, managed receipts, and raw evidence emoji-free. A host without Unicode may remove the leading emoji while preserving the fixed text, `（k=v, k=v）` field groups, fields, and values.
 
 In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<protocol-tail>` (S1). Peeling the leading `>` and paired `**` must restore the protocol line. Emit the startup broadcast **before any tool call**. Headless, CI logs, receipts, and machine fields stay protocol-only.
+
+## Choose the installation path
+
+Ask what the user wants to install, update, or remove, and which project or user scope they intend. Use the current project only when its identity is explicit in the conversation or host. Explain the proposed destination and verify the actual installation path before an update or removal.
+
+For a Skills CLI installation, use the package manager for that exact skill and scope. The [installation guide](../../docs/installation.md#upgrade-or-uninstall) gives commands and verification steps when this checkout is available. For a standalone Setup installation, use [setup and compatibility](references/setup.md). Check for updates before changing an installed package. After installing or updating, verify discovery and, when requested, invoke the skill in a fresh session. After removal, verify the installed entry is gone. Report a failed or ambiguous result without claiming success. Do not treat a package-manager installation as receipt-managed.
+
+For checkout-managed installations, follow the workflow below. To update a managed installation after source bytes change, first inspect the receipt and the installed bytes. If the original source is still at the receipt-recorded path and matches the receipt, preview and perform receipt-owned uninstall, preserve the old receipt outside the active receipt directory, then install the new source with a new managed setup plan. Verify with Doctor. Retain the previous source revision and receipt so the user can restore them. If the original source no longer matches, stop the affected update and explain the exact mismatch. Do not delete the destination or receipt to bypass it.
 
 ## Workflow
 
