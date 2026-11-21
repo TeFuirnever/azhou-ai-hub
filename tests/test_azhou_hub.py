@@ -625,14 +625,18 @@ class AzhouHubCliTest(unittest.TestCase):
             project = root.resolve()
             skill_path = str(project / ".agents/skills/sample/SKILL.md")
             enabled = {"name": "sample", "path": skill_path, "scope": "repo", "enabled": True}
-            for entries, expected_status, expected_detail in (
-                ([enabled], "pass", "enabled copy"),
-                ([{**enabled, "enabled": False}], "fail", "disabled"),
-                ([], "fail", "did not find"),
+            for entries, complete, expected_status, expected_detail in (
+                ([enabled], True, "pass", "enabled copy"),
+                ([{**enabled, "enabled": False}], True, "fail", "disabled"),
+                ([], True, "fail", "did not find"),
+                ([], False, "fail", "could not be verified"),
+                ([enabled], False, "pass", "enabled copy"),
                 ([enabled, {**enabled, "path": str(project / "other/sample/SKILL.md"), "scope": "user"}],
-                 "warn", "multiple enabled copies"),
+                 True, "warn", "multiple enabled copies"),
             ):
-                with self.subTest(entries=entries), mock.patch("codex_skill_discovery.read_skills", return_value=entries) as read:
+                with self.subTest(entries=entries, complete=complete), mock.patch(
+                    "codex_skill_discovery.read_skills", return_value=(entries, complete),
+                ) as read:
                     exit_code, payload = self._json_main(
                         ["doctor", "--codex-project", str(project), "--skill", "sample", "--json"], root=root,
                     )
@@ -641,7 +645,7 @@ class AzhouHubCliTest(unittest.TestCase):
                     self.assertEqual(expected_status, check["status"])
                     self.assertIn(expected_detail, check["details"])
                     self.assertEqual(int(expected_status == "fail"), exit_code)
-                    self.assertEqual({"project": str(project), "catalog_read": True, "entries": entries},
+                    self.assertEqual({"project": str(project), "catalog_read": True, "catalog_complete": complete, "entries": entries},
                                      payload["codex_discovery"])
 
     def test_doctor_distinguishes_codex_probe_error_from_missing_skill(self) -> None:

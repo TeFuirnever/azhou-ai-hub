@@ -33,7 +33,7 @@ python scripts/azhou_hub.py verify
 
 Use `doctor --codex-project <absolute-project-path> --skill <canonical-name>` to query Codex's live Skill catalog. The installed `codex` CLI must support App Server `skills/list`. Run the check from the environment and profile used for the project.
 
-When requested, JSON includes a `codex_discovery` object with the project path, `catalog_read`, and matching entries with their names, paths, scopes, and enabled states. A missing or disabled Skill fails its check. Multiple enabled entries returned by Codex produce a warning. A missing CLI, timeout, or incomplete catalog has a separate failure. Discovery does not start a model turn or establish invocation in an existing chat. The independent `--target` check can still verify installed bytes.
+When requested, JSON includes a `codex_discovery` object with the project path, `catalog_read`, `catalog_complete`, and matching entries with their names, paths, scopes, and enabled states. A missing or disabled Skill fails its check. Multiple enabled entries returned by Codex produce a warning. A missing CLI or timeout has a separate failure. When Codex reports catalog errors, Doctor retains the entries Codex returned and marks absent entries as unverified. Discovery does not start a model turn or establish invocation in an existing chat. The independent `--target` check can still verify installed bytes.
 
 ### Experimental change scope
 

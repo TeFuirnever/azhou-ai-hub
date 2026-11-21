@@ -1296,12 +1296,12 @@ def _doctor_verify(root: Path) -> tuple[str, str]:
 def _doctor_codex_skills(project: Path, selected: list[str]) -> tuple[list[dict[str, str]], dict[str, Any]]:
     from codex_skill_discovery import DiscoveryError, read_skills
 
-    requested = {"project": str(project), "catalog_read": False, "entries": []}
+    requested = {"project": str(project), "catalog_read": False, "catalog_complete": False, "entries": []}
     try:
         if not project.is_absolute() or not project.is_dir():
             raise DiscoveryError("--codex-project must point to an existing absolute project directory.")
         project = project.resolve(strict=True)
-        entries = read_skills(project, set(selected))
+        entries, complete = read_skills(project, set(selected))
     except (DiscoveryError, OSError) as exc:
         return [_check("codex_discovery", "fail", str(exc))], requested
 
@@ -1309,7 +1309,9 @@ def _doctor_codex_skills(project: Path, selected: list[str]) -> tuple[list[dict[
     for name in selected:
         matches = [entry for entry in entries if entry["name"] == name]
         enabled = [entry for entry in matches if entry["enabled"]]
-        if not matches:
+        if not matches and not complete:
+            status, detail = "fail", "Codex reported catalog errors. Discovery of this Skill could not be verified."
+        elif not matches:
             status, detail = "fail", "Codex did not find the Skill. Check the project and installation scope."
         elif not enabled:
             status, detail = "fail", "Codex found the Skill but it is disabled. Enable the intended copy in Codex."
@@ -1324,7 +1326,7 @@ def _doctor_codex_skills(project: Path, selected: list[str]) -> tuple[list[dict[
             )
             detail = f"{detail} {locations}"
         checks.append(_check(f"codex:{name}", status, detail))
-    return checks, {"project": str(project), "catalog_read": True, "entries": entries}
+    return checks, {"project": str(project), "catalog_read": True, "catalog_complete": complete, "entries": entries}
 
 
 def run_doctor(
