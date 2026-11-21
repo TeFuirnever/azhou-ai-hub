@@ -1578,6 +1578,61 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(0, result)
             self.assertEqual("already_absent", payload["skills"][0]["status"])
 
+    def test_doctor_accepts_recorded_uninstall_but_rejects_unexpected_changes(self) -> None:
+        for mode in ("copy", "link"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                root, target, receipt = self._managed_fixture(directory, mode=mode)
+                args = ["doctor", "--target", str(target), "--skill", "sample", "--json"]
+                exit_code, before = self._json_main(args, root=root)
+                self.assertEqual(0, exit_code, before)
+                exit_code, removed = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+                self.assertEqual(0, exit_code, removed)
+                self.assertEqual("uninstalled", json.loads(receipt.read_text())["lifecycle_state"])
+                exit_code, after = self._json_main(args, root=root)
+                self.assertEqual(0, exit_code, after)
+                self.assertEqual("pass", next(c for c in after["checks"] if c["name"] == "target:hub-receipts")["status"])
+                exit_code, repair = self._json_main(
+                    ["repair", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+                self.assertEqual(1, exit_code, repair)
+                shutil.copytree(root / "skills" / "sample", target / "sample")
+                exit_code, replaced = self._json_main(args, root=root)
+                self.assertEqual(1, exit_code, replaced)
+                exit_code, refused = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+                self.assertEqual(1, exit_code, refused)
+                self.assertTrue((target / "sample" / "SKILL.md").exists())
+
+    def test_doctor_still_reports_unexpected_missing_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            shutil.rmtree(target / "sample")
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(1, exit_code, report)
+            self.assertEqual("fail", next(c for c in report["checks"] if c["name"] == "target:hub-receipts")["status"])
+            self.assertNotIn("lifecycle_state", json.loads(receipt.read_text()))
+
+    def test_receipt_write_failure_after_uninstall_reports_partial(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            with mock.patch.object(azhou_hub, "_write_receipt", side_effect=OSError("disk full")):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertFalse((target / "sample").exists())
+            self.assertNotIn("lifecycle_state", json.loads(receipt.read_text()))
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(1, exit_code, report)
+
     def test_uninstall_refuses_drifted_managed_copy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")

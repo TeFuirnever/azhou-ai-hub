@@ -286,6 +286,8 @@ python scripts/azhou_hub.py migrate --receipt "$RECEIPT" --target "$SKILLS_HOME"
 python scripts/azhou_hub.py uninstall --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
 ~~~
 
+A successful managed uninstall keeps its receipt and records the removal. Doctor verifies that the target remains absent. A missing Skill can still appear as a warning when specifically selected for installation checks.
+
 Add `--apply` only after reviewing the JSON plan. There is no force overwrite, cross-root migration, hook cleanup or receipt-less adoption.
 
 To move a managed installation to changed package bytes, use the checkout that still matches the old receipt to dry-run and apply `uninstall`. After confirming removal, archive that receipt outside the active receipts directory. Update the source checkout, run managed `setup` for the new revision, and verify the new install with `doctor`. For rollback, keep the old revision and use the same sequence in reverse with a fresh receipt. If the old source already drifted, inspect with `doctor` and recover the receipt's exact source at its recorded path before using this sequence.

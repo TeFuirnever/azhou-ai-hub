@@ -131,6 +131,10 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     item = payload["skills"][0]
     if not isinstance(item, dict) or any(not isinstance(item.get(key), str) or not item.get(key) for key in ("name", "source", "source_root", "source_digest", "destination", "installed_digest")):
         return None, "receipt_invalid: malformed skill item"
+    if payload.get("lifecycle_state", "active") not in {"active", "uninstalled"}:
+        return None, "receipt_invalid: unsupported lifecycle state"
+    if payload.get("lifecycle_state") == "uninstalled" and payload["schema"] != RECEIPT_SCHEMA:
+        return None, "receipt_invalid: legacy receipt cannot record an uninstall"
     if payload["schema"] == RECEIPT_SCHEMA:
         if _receipt_identity(item.get("installed_identity")) is None:
             return None, "receipt_invalid: malformed installed identity"
@@ -257,7 +261,10 @@ def _doctor_hub_receipts(root: Path, target: Path) -> tuple[str, str]:
         if Path(receipt["source_root"]).resolve() != (root / "skills").resolve():
             return "fail", f"{path.name}: canonical source mismatch"
         state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
-        if state != "current":
+        if receipt.get("lifecycle_state") == "uninstalled":
+            if state != "missing":
+                return "fail", f"{path.name}: uninstalled receipt conflicts with destination or source: {details}"
+        elif state != "current":
             return "fail", f"{path.name}: {details}"
     return "pass", f"{len(managed)} checkout-managed receipt(s) verified in .azhou/hub/receipts"
 
@@ -877,6 +884,8 @@ def repair_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bool)
     receipt, error = _load_receipt(receipt_path)
     if error:
         return _lifecycle_report("fail", [], error=error)
+    if receipt.get("lifecycle_state") == "uninstalled":
+        return _lifecycle_report("fail", [], error="receipt records an uninstalled artifact")
     target = target.expanduser().resolve()
     if Path(receipt["target"]).resolve() != target:
         return _lifecycle_report("fail", [], error="receipt_invalid: target mismatch")
@@ -973,6 +982,8 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
     identities: dict[str, tuple[int, int, int]] = {}
     for item in receipt["skills"]:
         state, details = _receipt_item_state(item, receipt["mode"], target, root)
+        if receipt.get("lifecycle_state") == "uninstalled" and state != "missing":
+            state, details = "conflict", "uninstalled receipt conflicts with destination or source"
         if state == "current":
             identity = _receipt_identity(item.get("installed_identity"))
             if identity is None:
@@ -995,6 +1006,12 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             except (OSError, PackageError) as exc:
                 row["status"], row["details"] = "fail", str(exc)
                 return _lifecycle_report("partial", rows, error="uninstall failed")
+    if any(row["status"] == "removed" for row in rows):
+        try:
+            receipt["lifecycle_state"] = "uninstalled"
+            _write_receipt(receipt_path, receipt)
+        except (OSError, ValueError) as exc:
+            return _lifecycle_report("partial", rows, error=f"artifact removed but receipt update failed: {exc}")
     return _lifecycle_report("pass", rows)
 
 
@@ -1005,6 +1022,8 @@ def migrate_receipt(*, receipt_path: Path, target: Path, root: Path, mode: str, 
     receipt, error = _load_receipt(receipt_path)
     if error:
         return _lifecycle_report("fail", [], error=error)
+    if receipt.get("lifecycle_state") == "uninstalled":
+        return _lifecycle_report("fail", [], error="receipt records an uninstalled artifact")
     target = target.expanduser().resolve()
     if Path(receipt["target"]).resolve() != target:
         return _lifecycle_report("fail", [], error="receipt_invalid: target mismatch")
