@@ -9,10 +9,11 @@
   {%- endif %}
   {%- set siteUrl = "https://tefuirnever.github.io/azhou-ai-hub" %}
   {%- set ogImage = siteUrl ~ "/assets/hero.png" %}
+  {%- set themeColorLight = "#f8f9fa" if bodyClass == "doc" else "#ffffff" %}
   <link rel="canonical" href="{{ siteUrl }}{{ page.url }}">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
-  <meta name="theme-color" content="#faf9f7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#161a1e" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="{{ themeColorLight }}" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#2a2b2e" media="(prefers-color-scheme: dark)">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Azhou AI Hub">
   <meta property="og:title" content="{{ title }}">
@@ -28,98 +29,311 @@
   {%- endif %}
   <meta name="twitter:image" content="{{ ogImage }}">
   <style>
+    /* Tokens: light carries the azhou accents on the adopted neutral scale;
+       dark mirrors the reference dark theme with azhou green mapped in.
+       --az-brand-mid is chosen locally to bridge the two brand hues; it is
+       not a reference value. */
     :root {
       color-scheme: light dark;
-      --bg: #faf9f7;
-      --surface: #ffffff;
-      --border: #e3ded6;
-      --text: #1d2733;
-      --text-soft: #3c4652;
-      --text-muted: #6b6459;
-      --accent: #2f6f4f;
-      --chip: #efece6;
-      --pre-bg: #10231b;
-      --pre-text: #d7efe2;
-      --code-bg: #efece6;
-      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      --az-bg: #ffffff;
+      --az-bg-2: #f8f9fa;
+      --az-bg-3: #f1f3f4;
+      --az-card: #ffffff;
+      --az-border: #dadce0;
+      --az-border-2: #e8eaed;
+      --az-text: #202124;
+      --az-text-2: #5f6368;
+      --az-accent: #2f6f4f;
+      --az-accent-hover: #265c40;
+      --az-accent-active: #1f4c34;
+      --az-accent-surface: #e7f1eb;
+      --az-btn-text: #ffffff;
+      --az-badge-bg: #e4efe8;
+      --az-badge-text: #1d5b3b;
+      --az-note-bg: #e7f1eb;
+      --az-note-text: #1d5b3b;
+      --az-note-border: rgba(47, 111, 79, .28);
+      --az-caution-bg: #feefe3;
+      --az-caution-text: #b31412;
+      --az-caution-border: rgba(179, 20, 18, .25);
+      --az-tint-bg: rgba(47, 111, 79, .06);
+      --az-tint-border: rgba(47, 111, 79, .2);
+      --az-code-bg: #f1f3f4;
+      --az-code-text: #37474f;
+      --az-brand: #e8710a;
+      --az-brand-mid: #dfa53e;
+      --az-brand-2: #2f6f4f;
+      /* Fox orange never renders as text in light mode; small orange text
+         takes --az-brand-text instead of --az-brand. */
+      --az-brand-text: #a34d00;
+      --az-band: #faf9f7;
+      --az-band-border: #e3ded6;
+      --az-head-bg: rgba(255, 255, 255, .85);
+      --az-shadow-card: 0 1px 2px 0 rgba(60, 64, 67, .3), 0 1px 3px 1px rgba(60, 64, 67, .15);
+      --az-shadow-hover: 0 2px 6px rgba(60, 64, 67, .15);
+      --az-font: "Roboto", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+      --az-mono: "Roboto Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #161a1e;
-        --surface: #1e242b;
-        --border: #333c46;
-        --text: #e6e1d8;
-        --text-soft: #c5cdd6;
-        --text-muted: #a39b8f;
-        --accent: #7fc9a6;
-        --chip: #262e36;
-        --pre-bg: #0c1a13;
-        --pre-text: #d7efe2;
-        --code-bg: #262e36;
+        /* Dark secondary keeps the digest value #9aa0a6: measured 4.93:1 on the
+           #303134 card surface and 5.32:1 on the page background, both above AA. */
+        --az-bg: #2a2b2e;
+        --az-bg-2: #303134;
+        --az-bg-3: #36373a;
+        --az-card: #303134;
+        --az-border: #3c4043;
+        --az-border-2: #333538;
+        --az-text: #e8eaed;
+        --az-text-2: #9aa0a6;
+        --az-accent: #8fd4ab;
+        --az-accent-hover: #a5ddbd;
+        --az-accent-active: #bce7cf;
+        --az-accent-surface: rgba(143, 212, 171, .16);
+        --az-btn-text: #0f2418;
+        --az-badge-bg: rgba(143, 212, 171, .16);
+        --az-badge-text: #8fd4ab;
+        --az-note-bg: rgba(143, 212, 171, .1);
+        --az-note-text: #a9dfc0;
+        --az-note-border: rgba(143, 212, 171, .3);
+        --az-caution-bg: rgba(242, 139, 130, .12);
+        --az-caution-text: #f5a39d;
+        --az-caution-border: rgba(242, 139, 130, .3);
+        /* Dark tint stays at .03 so the 13px secondary text on the toolbar
+           callout keeps 4.5:1 over the #303134 sec-alt surface; the prototype
+           value .08 measured below AA there. */
+        --az-tint-bg: rgba(143, 212, 171, .03);
+        --az-tint-border: rgba(143, 212, 171, .24);
+        --az-code-bg: #36373a;
+        --az-code-text: #f1f3f4;
+        --az-brand: #f08c3d;
+        --az-brand-mid: #d9b168;
+        --az-brand-2: #58a37b;
+        --az-brand-text: #f2a35e;
+        /* The warm hero band is a light-mode identity signal; dark keeps the
+           neutral dark scale and lets the brand rule carry the fox. */
+        --az-band: #303134;
+        --az-band-border: #3c4043;
+        --az-head-bg: rgba(42, 43, 46, .85);
+        --az-shadow-card: 0 1px 2px 0 rgba(0, 0, 0, .3), 0 1px 3px 1px rgba(0, 0, 0, .15);
+        --az-shadow-hover: 0 2px 6px rgba(0, 0, 0, .4);
       }
     }
     * { box-sizing: border-box; }
-    body { margin: 0; font: 16px/1.65 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--text); background: var(--bg); }
-    a { color: var(--accent); }
-    a:hover { text-decoration: underline; text-underline-offset: .15em; }
-    ::selection { background: var(--accent); color: var(--bg); }
-    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: .25rem; }
-    .skip-link { position: absolute; left: -9999px; top: 1rem; background: var(--accent); color: var(--bg); padding: .5rem .9rem; border-radius: .375rem; z-index: 100; text-decoration: none; font-weight: 600; }
-    .skip-link:focus-visible { left: 1rem; }
-    header { position: sticky; top: 0; z-index: 10; background: var(--bg); background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%); border-bottom: 1px solid var(--border); }
-    header nav { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; align-items: center; max-width: 56rem; margin: 0 auto; padding: .5rem 1.25rem; }
-    .brand { font-weight: 700; text-decoration: none; color: inherit; padding: .5rem .4rem; margin: -.5rem -.4rem; }
-    nav a { text-decoration: none; padding: .5rem .5rem; margin: -.5rem -.5rem; border-radius: .375rem; }
-    nav a:hover { background: var(--chip); text-decoration: none; }
-    nav a[aria-current="page"] { background: var(--chip); font-weight: 600; }
-    .spacer { flex: 1; }
-    main { max-width: 56rem; margin: 0 auto; padding: 2.5rem 1.25rem 3rem; }
-    h1 { font-size: clamp(1.9rem, 1.35rem + 2.2vw, 2.4rem); line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 .5rem; }
-    h2 { font-size: 1.3rem; line-height: 1.3; letter-spacing: -0.01em; margin-top: 2.5rem; }
-    .tagline { font-size: 1.15rem; margin: .25rem 0; }
-    picture { display: block; }
-    img.hero { width: 100%; height: auto; border-radius: .5rem; border: 1px solid var(--border); margin: 1.25rem 0; }
-    pre { background: var(--pre-bg); color: var(--pre-text); padding: .9rem 1rem; border-radius: .5rem; overflow-x: auto; margin: 1rem 0; }
-    pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
-    pre code { font: .92rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: transparent; padding: 0; color: inherit; }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--code-bg); padding: .1rem .3rem; border-radius: .3rem; font-size: .92em; }
-    .cards { list-style: none; padding: 0; margin: 1.5rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: 1rem; }
-    .card { border: 1px solid var(--border); border-radius: .5rem; padding: 1rem 1.1rem; background: var(--surface); margin: 0; }
-    @media (hover: hover) and (pointer: fine) {
-      .card { transition: border-color 120ms var(--ease-out); }
-      .card:hover, .card:has(a:focus-visible) { border-color: var(--accent); }
+    html { scroll-padding-top: 88px; }
+    body {
+      margin: 0;
+      background: var(--az-bg);
+      color: var(--az-text);
+      font: 400 16px/24px var(--az-font);
     }
-    .card h2 { margin: 0 0 .3rem; font-size: 1.05rem; }
-    .card h2 a { text-decoration: none; }
-    .invocation { font-size: .78rem; color: var(--text-muted); margin: 0 0 .4rem; }
-    .invocation code { font-size: 1em; background: var(--chip); }
-    .card .desc { margin: .3rem 0 0; font-size: .88rem; color: var(--text-soft); }
-    .navcards { list-style: none; padding: 0; margin: 1.5rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr)); gap: 1rem; }
-    .navcards a { font-weight: 600; text-decoration: none; }
-    blockquote { margin: 1.5rem 0; padding: 1rem 1.25rem; border-left: 3px solid var(--accent); background: var(--surface); border-radius: .25rem; }
-    .arch { font: .84rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--surface); color: var(--text); border: 1px solid var(--border); padding: 1rem; border-radius: .5rem; overflow-x: auto; white-space: pre; margin: 1rem 0; }
-    .doclist { list-style: none; padding: 0; margin: 1.5rem 0; }
-    .doclist li { padding: .45rem 0; border-bottom: 1px solid var(--border); }
-    footer { max-width: 56rem; margin: 0 auto; padding: 1.5rem 1.25rem 2.5rem; border-top: 1px solid var(--border); font-size: .85rem; color: var(--text-muted); }
-    footer p { margin: .3rem 0; }
+    body.doc { background: var(--az-bg-2); }
+    @media (prefers-reduced-motion: no-preference) {
+      @view-transition { navigation: auto; }
+    }
+    a { color: var(--az-accent); }
+    a:hover { text-decoration: underline; text-underline-offset: .15em; }
+    :focus-visible { outline: 2px solid var(--az-accent); outline-offset: 2px; border-radius: 2px; }
+    ::selection { background: var(--az-accent); color: var(--az-btn-text); }
+    .skip-link {
+      position: absolute; left: -9999px; top: 1rem; z-index: 100;
+      background: var(--az-accent); color: var(--az-btn-text);
+      padding: .5rem .9rem; border-radius: 4px;
+      font: 500 14px/20px var(--az-font); text-decoration: none;
+    }
+    .skip-link:focus-visible { left: 1rem; }
+    .brand-rule {
+      height: 3px;
+      background: linear-gradient(90deg, var(--az-brand) 0%, var(--az-brand-mid) 46%, var(--az-brand-2) 100%);
+    }
+    .site-head {
+      position: sticky; top: 0; z-index: 10;
+      background: var(--az-head-bg);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+      backdrop-filter: blur(14px) saturate(160%);
+      border-bottom: 1px solid var(--az-border);
+    }
+    .site-head nav {
+      display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center;
+      min-height: 64px; max-width: 1120px; margin: 0 auto; padding: 8px 24px;
+    }
+    body.doc .site-head nav { max-width: 1440px; }
+    .brand { font: 500 16px/24px var(--az-font); color: var(--az-text); text-decoration: none; padding: 8px 8px; margin: -8px 0 -8px -8px; }
+    .site-head nav a:not(.brand) {
+      font: 500 14px/20px var(--az-font);
+      color: var(--az-text-2); text-decoration: none;
+      padding: 8px 10px; border-radius: 4px;
+    }
+    .site-head nav a:not(.brand):hover { background: var(--az-bg-3); color: var(--az-text); text-decoration: none; }
+    .site-head nav a[aria-current="page"] { background: var(--az-accent-surface); color: var(--az-accent); }
+    .spacer { flex: 1; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+    .band { background: var(--az-band); border-bottom: 1px solid var(--az-band-border); }
+    .band .wrap { padding-top: 60px; padding-bottom: 60px; }
+    .band h1 {
+      font: 500 44px/52px var(--az-font);
+      letter-spacing: 0;
+      margin: 0 0 16px;
+      max-width: 24ch;
+    }
+    .lede { font: 400 20px/32px var(--az-font); color: var(--az-text-2); margin: 0 0 16px; max-width: 52ch; }
+    /* ch-based caps measure Latin glyphs; on zh they orphan single CJK glyphs
+       at the line end, so zh hero text wraps on the band width instead. */
+    :lang(zh) .band h1, :lang(zh) .lede { max-width: none; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
+    .chip {
+      font: 500 12px/20px var(--az-mono);
+      background: var(--az-badge-bg); color: var(--az-badge-text);
+      border-radius: 4px; padding: 3px 8px;
+    }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 32px; }
+    .btn {
+      display: inline-flex; align-items: center; height: 36px; padding: 0 24px;
+      border-radius: 4px; border: 0;
+      font: 500 14px/36px var(--az-font); text-decoration: none;
+    }
+    .btn-primary { background: var(--az-accent); color: var(--az-btn-text); }
+    .btn-primary:hover { background: var(--az-accent-hover); color: var(--az-btn-text); text-decoration: none; }
+    .btn-primary:active { background: var(--az-accent-active); }
+    .btn-outline { border: 1px solid var(--az-border); color: var(--az-text); }
+    .btn-outline:hover { background: var(--az-bg-2); text-decoration: none; color: var(--az-text); }
+    picture { display: block; margin: 0; }
+    .hero { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--az-border); }
+    .sec { padding: 60px 0; }
+    .sec-alt { background: var(--az-bg-2); border-top: 1px solid var(--az-border-2); border-bottom: 1px solid var(--az-border-2); }
+    .sec h2 { font: 500 24px/32px var(--az-font); letter-spacing: 0; margin: 0 0 16px; }
+    .sec > .wrap > p { margin: 0 0 16px; max-width: 72ch; }
+    code {
+      font-family: var(--az-mono); font-size: 100%;
+      background: var(--az-code-bg); color: var(--az-code-text);
+      padding: 1px 4px; border-radius: 3px;
+    }
+    pre {
+      background: var(--az-code-bg); color: var(--az-code-text);
+      font: 400 14px/24px var(--az-mono);
+      padding: 16px 20px; border-radius: 4px;
+      overflow-x: auto; margin: 16px 0 24px;
+    }
+    pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre.arch {
+      background: var(--az-card); color: var(--az-text);
+      border: 1px solid var(--az-border); border-radius: 8px;
+      white-space: pre;
+    }
+    .callout { border-radius: 16px; padding: 16px 20px; margin: 16px 0 24px; border: 1px solid; }
+    .callout p { margin: 0 0 8px; max-width: 70ch; }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout a { color: inherit; }
+    .callout.note { background: var(--az-note-bg); border-color: var(--az-note-border); color: var(--az-note-text); }
+    .callout.caution { background: var(--az-caution-bg); border-color: var(--az-caution-border); color: var(--az-caution-text); }
+    .toolbar-callout {
+      border-radius: 16px; padding: 16px 20px; margin: 16px 0 24px;
+      background: var(--az-tint-bg); border: 1px solid var(--az-tint-border);
+    }
+    .toolbar-callout p { margin: 0 0 8px; max-width: 70ch; }
+    .toolbar-callout p:last-child { margin-bottom: 0; }
+    .tc-title { font: 500 14px/20px var(--az-font); color: var(--az-accent); }
+    .tc-foot { font: 400 13px/20px var(--az-font); color: var(--az-text-2); }
+    .cardgrid {
+      list-style: none; padding: 0; margin: 16px 0 32px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;
+    }
+    .gcard {
+      display: flex; flex-direction: column; gap: 6px; height: 100%;
+      background: var(--az-card);
+      border: 1px solid var(--az-border); border-radius: 8px;
+      padding: 16px; text-decoration: none;
+    }
+    .gcard-t { font: 500 16px/1.3 var(--az-font); color: var(--az-accent); }
+    .badge {
+      align-self: flex-start;
+      font: 500 12px/20px var(--az-mono);
+      background: var(--az-badge-bg); color: var(--az-badge-text);
+      border-radius: 4px; padding: 2px 6px;
+    }
+    .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); }
+    @media (hover: hover) and (pointer: fine) {
+      .gcard { transition: border-color 160ms ease, box-shadow 160ms ease; }
+      .gcard:hover { border-color: var(--az-accent); box-shadow: var(--az-shadow-hover); text-decoration: none; }
+    }
+    .gcard:focus-visible { border-color: var(--az-accent); box-shadow: var(--az-shadow-hover); }
+    .doc-shell { max-width: 1440px; margin: 0 auto; padding: 32px 24px 72px; }
+    .doc-grid { display: grid; grid-template-columns: 269px minmax(0, 1fr); gap: 32px; align-items: start; }
+    .doc-nav { position: sticky; top: 88px; }
+    .dn-group {
+      font: 500 11px/20px var(--az-font);
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--az-text-2);
+      margin: 0 0 8px;
+    }
+    .dn-list { list-style: none; margin: 0; padding: 0; }
+    .dn-list a {
+      display: block; padding: 6px 10px; border-radius: 4px;
+      font: 400 14px/20px var(--az-font);
+      color: var(--az-text); text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+    .dn-list a:hover { background: var(--az-bg-3); text-decoration: none; }
+    .dn-note { margin: 24px 0 0; padding: 16px 0 0; border-top: 1px solid var(--az-border-2); font: 400 13px/20px var(--az-font); }
+    .doc-card {
+      background: var(--az-card);
+      border-radius: 2px;
+      padding: 40px;
+      box-shadow: var(--az-shadow-card);
+      max-width: 1072px;
+    }
+    .doc-card h1 { font: 500 32px/40px var(--az-font); letter-spacing: 0; margin: 0 0 24px; }
+    .doc-lede { margin: 0 0 16px; max-width: 72ch; }
+    .count { font: 500 13px/20px var(--az-mono); color: var(--az-text-2); margin: 0 0 16px; }
+    .crumbs {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline;
+      margin: 0 0 16px;
+      font: 400 13px/20px var(--az-font);
+      color: var(--az-text-2);
+    }
+    .crumbs a { color: var(--az-accent); text-decoration: none; }
+    .crumbs [aria-current="page"] { color: var(--az-text); }
+    .doclist { list-style: none; padding: 0; margin: 16px 0 24px; }
+    .doclist li { padding: 8px 0; border-bottom: 1px solid var(--az-border-2); }
+    .doc-source {
+      margin: 40px 0 0; padding: 16px 0 0;
+      border-top: 1px solid var(--az-border);
+      font: 400 13px/20px var(--az-font); color: var(--az-text-2);
+    }
+    .site-foot { border-top: 0; }
+    .site-foot .wrap { padding-top: 32px; padding-bottom: 48px; font: 400 13px/20px var(--az-font); color: var(--az-text-2); }
+    body.doc .site-foot .wrap { max-width: 1440px; }
+    .site-foot p { margin: 4px 0; max-width: 90ch; }
+    .site-foot a { color: var(--az-accent); }
+    @media (max-width: 599px) {
+      .band .wrap { padding-top: 40px; padding-bottom: 40px; }
+      .band h1 { font: 500 32px/40px var(--az-font); }
+      .lede { font: 400 18px/28px var(--az-font); }
+      .sec { padding: 40px 0; }
+    }
+    @media (max-width: 959px) {
+      .doc-grid { grid-template-columns: 1fr; gap: 24px; }
+      .doc-nav { position: static; }
+      .doc-card { padding: 24px; }
+    }
     @media (prefers-reduced-transparency: reduce) {
-      header { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+      .site-head { background: var(--az-bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+      body.doc .site-head { background: var(--az-bg-2); }
     }
     @media (prefers-reduced-motion: reduce) {
       * { transition-duration: 0.01ms !important; }
     }
-    @media (prefers-reduced-motion: no-preference) {
-      @view-transition { navigation: auto; }
-    }
     @media print {
-      header, footer { display: none; }
-      body { color: #000; background: #fff; }
+      .site-head, .site-foot, .brand-rule, .doc-nav { display: none; }
+      body, body.doc { color: #000; background: #fff; }
+      .doc-card { box-shadow: none; }
     }
   </style>
 </head>
-<body>
+<body{% if bodyClass %} class="{{ bodyClass }}"{% endif %}>
   <a class="skip-link" href="#main">{{ '跳到正文' if lang == 'zh' else 'Skip to content' }}</a>
-  <header>
+  <div class="brand-rule" aria-hidden="true"></div>
+  <header class="site-head">
     <nav aria-label="{{ '站内导航' if lang == 'zh' else 'Site' }}">
       <a class="brand" href="{{ '/' | url }}"><span aria-hidden="true">🦊</span> Azhou AI Hub</a>
       <a href="{{ '/skills/' | url }}"{% if page.url == '/skills/' %} aria-current="page"{% endif %}>{{ site.labels[lang].skills }}</a>
@@ -134,17 +348,20 @@
       {%- endif %}
     </nav>
   </header>
-  <main id="main">
+  <main id="main"{% if bodyClass == "doc" %} class="doc-shell"{% endif %}>
     {{ content | safe }}
   </main>
-  <footer>
-    {%- set blobBase = "https://github.com/TeFuirnever/azhou-ai-hub/blob/main" %}
-    {%- if lang == "zh" %}
-    <p>阿舟自研代码使用 <a href="{{ blobBase }}/LICENSE">MIT</a>。阿舟素材使用 <a href="{{ blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>。名称、标识与角色见 <a href="{{ blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>。第三方组件保留自己的版权与许可证：<a href="{{ blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
-    {%- else %}
-    <p>Azhou-maintained code: <a href="{{ blobBase }}/LICENSE">MIT</a>. Azhou artwork: <a href="{{ blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>. Name, logo and character: <a href="{{ blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>. Third-party components retain their own notices and licenses: <a href="{{ blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.</p>
-    {%- endif %}
-    <p>Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0</p>
+  <div class="brand-rule" aria-hidden="true"></div>
+  <footer class="site-foot">
+    <div class="wrap">
+      {%- set blobBase = "https://github.com/TeFuirnever/azhou-ai-hub/blob/main" %}
+      {%- if lang == "zh" %}
+      <p>阿舟自研代码使用 <a href="{{ blobBase }}/LICENSE">MIT</a>。阿舟素材使用 <a href="{{ blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>。名称、标识与角色见 <a href="{{ blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>。第三方组件保留自己的版权与许可证：<a href="{{ blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
+      {%- else %}
+      <p>Azhou-maintained code: <a href="{{ blobBase }}/LICENSE">MIT</a>. Azhou artwork: <a href="{{ blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>. Name, logo and character: <a href="{{ blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>. Third-party components retain their own notices and licenses: <a href="{{ blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.</p>
+      {%- endif %}
+      <p>Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0</p>
+    </div>
   </footer>
 </body>
 </html>
