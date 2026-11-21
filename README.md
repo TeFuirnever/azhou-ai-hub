@@ -23,6 +23,23 @@ https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
   <img src="assets/github/readme-banner-install.jpg" alt="Install: one command per skill" width="100%">
 </picture>
 
+### First install in Codex
+
+Have Codex signed in and Node.js with `npx` available. In a terminal, open the project folder where you want to use Ask Azhou and run this command. It installs into that project.
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+~~~
+
+Open a new Codex chat in that project and try the following question.
+
+> `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
+
+Look for a recommendation of `super-archify`. If Ask Azhou is missing, check the [first-install guide](docs/installation.md#first-install-in-codex). For an existing installation, see [check, update, or uninstall](docs/installation.md#upgrade-or-uninstall).
+
+<details>
+<summary>More Skill install commands</summary>
+
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
 npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
@@ -31,7 +48,6 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
 npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
@@ -42,9 +58,11 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
 
+</details>
+
 Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
 
-[Verify what you installed](docs/installation.md#verify-what-you-installed) · [Installation guide](docs/installation.md) · [Offline recovery](docs/installation.md#offline-recovery)
+[Update or uninstall](docs/installation.md#upgrade-or-uninstall) · [Verify what you installed](docs/installation.md#verify-what-you-installed) · [Installation guide](docs/installation.md) · [Offline recovery](docs/installation.md#offline-recovery)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills-dark.jpg">
