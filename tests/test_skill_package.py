@@ -187,6 +187,23 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
 
+    def test_public_install_and_catalog_enumerations_match_the_shipped_tree(self) -> None:
+        shipped = sorted(path.parent.name for path in ROOT.glob("skills/*/SKILL.md"))
+        for relative in ("docs/installation.md", "README.md", "README.zh-CN.md"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            enumerated = re.findall(
+                r"^npx skills add TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+)", text, re.MULTILINE
+            )
+            self.assertEqual(shipped, sorted(enumerated), relative)
+            every = re.findall(r"npx skills add TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+)", text)
+            self.assertEqual(shipped, sorted(set(every)), relative)
+        for relative in ("README.md", "README.zh-CN.md"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            rows = re.findall(
+                r"^\| \[[^]]+\]\(skills/([a-z0-9-]+)/SKILL\.md\)", text, re.MULTILINE
+            )
+            self.assertEqual(shipped, sorted(rows), relative)
+
     def test_public_provenance_contract_stays_reproducible(self) -> None:
         notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
         provenance = (
