@@ -447,9 +447,9 @@ def _build_startup_locked(bundle: Path, *, root: Path, host: str,
         if video_inputs.get(artifacts.NATIVE_STARTUP_VIDEO_INPUTS["manifest.json"]) != approved_video_manifest_sha256:
             raise RuntimeError('optional startup video approval does not match the staged marker')
         inputs.update(video_inputs)
-    video_outputs = artifacts.verify_native_startup_video_outputs(resources, video_inputs)
     if not set(required_inputs).issubset(inputs):
         raise RuntimeError('Startup manifest cannot bind every required source input.')
+    video_outputs = artifacts.verify_native_startup_video_outputs(resources, video_inputs)
 
     startup_dir = resources / 'startup'
     defaults_dir = resources / 'web/assets/defaults'

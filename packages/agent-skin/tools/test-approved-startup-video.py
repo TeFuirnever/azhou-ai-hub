@@ -38,6 +38,31 @@ class ApprovedStartupVideoTests(unittest.TestCase):
         with patch.object(subject.os, "open", side_effect=AssertionError("unexpected filesystem probe")):
             self.assertIsNone(subject.read_approved_startup_video(self.root / "missing", None))
 
+    def test_invalid_pin_is_rejected_before_any_media_read(self):
+        with patch.object(subject.os, "open", side_effect=AssertionError("unexpected media read")):
+            for pin in ("not-a-digest", "A" * 64):
+                with self.subTest(pin=pin), self.assertRaisesRegex(subject.StartupVideoInputError, "lowercase SHA-256"):
+                    subject.read_approved_startup_video(self.root, pin)
+
+    def test_pinned_malformed_manifest_is_rejected(self):
+        for raw in (b"{", bytes([255])):
+            self.manifest.write_bytes(raw)
+            with self.subTest(raw=raw), self.assertRaisesRegex(subject.StartupVideoInputError, "invalid startup video manifest JSON"):
+                self.read(raw)
+
+    def test_bundle_reader_rejects_a_short_clip_before_hash_comparison(self):
+        def read(name, _maximum):
+            return self.raw if name == subject.MANIFEST_NAME else self.clip[:-1]
+        self.assertIsNone(subject.verify_approved_startup_video(None, lambda *_: self.fail("read without a pin")))
+        with self.assertRaisesRegex(subject.StartupVideoInputError, "clip length mismatch"):
+            subject.verify_approved_startup_video(digest(self.raw), read)
+
+    def test_unsupported_platform_does_not_fall_back_to_unsafe_open(self):
+        with patch.object(subject.os, "supports_dir_fd", set()), \
+             patch.object(subject.os, "open", side_effect=AssertionError("unsafe media open")):
+            with self.assertRaisesRegex(subject.StartupVideoInputError, "unavailable on this platform"):
+                self.read()
+
     def test_validated_snapshot_keeps_exact_manifest_and_clip_after_source_change(self):
         sealed = self.read()
         self.manifest.write_bytes(b"replaced manifest")
