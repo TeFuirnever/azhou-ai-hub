@@ -38,7 +38,10 @@ module.exports = function () {
   let headerSeen = false;
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed.startsWith("|")) {
+    if (headerSeen && trimmed === "") {
+      break;
+    }
+    if (!headerSeen && !trimmed.startsWith("|")) {
       continue;
     }
     const inner = trimmed.endsWith("|")
@@ -47,7 +50,7 @@ module.exports = function () {
     const cells = inner.split("|").map((cell) => cell.trim());
 
     if (!headerSeen) {
-      if (cells.length < 2 || cells[0] !== "Need" || cells[1] !== "Maintained source") {
+      if (cells.length !== 2 || cells[0] !== "Need" || cells[1] !== "Maintained source") {
         throw new Error(
           `site/_data/docsIndex.js: docs/README.md table header changed, expected "| Need | Maintained source |": ${line}`
         );
@@ -55,13 +58,13 @@ module.exports = function () {
       headerSeen = true;
       continue;
     }
+    if (cells.length !== 2) {
+      throw new Error(
+        `site/_data/docsIndex.js: docs/README.md row does not have exactly two columns: ${line}`
+      );
+    }
     if (cells.every((cell) => /^:?-+:?$/.test(cell) && cell !== "")) {
       continue;
-    }
-    if (cells.length < 2) {
-      throw new Error(
-        `site/_data/docsIndex.js: docs/README.md row has fewer than two columns: ${line}`
-      );
     }
 
     const links = [...cells[1].matchAll(LINK_PATTERN)];

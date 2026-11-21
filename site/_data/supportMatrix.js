@@ -53,25 +53,30 @@ module.exports = function () {
     );
   }
 
-  let intro = "";
+  const introLines = [];
   for (let i = headingIndex + 1; i < lines.length; i += 1) {
     const trimmed = lines[i].trim();
     if (trimmed === "") {
+      if (introLines.length > 0) {
+        break;
+      }
       continue;
     }
-    if (trimmed.startsWith("#")) {
-      throw new Error(
-        "site/_data/supportMatrix.js: docs/support-matrix.md has no opening paragraph before the next heading"
-      );
+    if (/^#{1,6}(\s|$)/.test(trimmed)) {
+      if (introLines.length === 0) {
+        throw new Error(
+          "site/_data/supportMatrix.js: docs/support-matrix.md has no opening paragraph before the next heading"
+        );
+      }
+      break;
     }
-    intro = trimmed;
-    break;
+    introLines.push(trimmed);
   }
-  if (intro === "") {
+  if (introLines.length === 0) {
     throw new Error(
       "site/_data/supportMatrix.js: docs/support-matrix.md ends after the heading without an opening paragraph"
     );
   }
 
-  return { intro: inlineMarkdownToHtml(intro) };
+  return { intro: inlineMarkdownToHtml(introLines.join(" ")) };
 };
