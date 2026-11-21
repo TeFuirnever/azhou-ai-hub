@@ -47,8 +47,8 @@ class PathGuard:
             self._hold_one(path, directory=directory)
 
     def _hold_one(self, path: Path, *, directory: bool) -> None:
-        # Omitting FILE_SHARE_DELETE prevents rename and deletion until close.
-        handle = self._open(str(path), 0x80, 0x1 | 0x2, None, 3, 0x02000000 | 0x00200000, None)
+        # Attribute-only handles do not enforce sharing; request read data or directory listing.
+        handle = self._open(str(path), 0x1 | 0x80, 0x1 | 0x2, None, 3, 0x02000000 | 0x00200000, None)
         if handle == ctypes.c_void_p(-1).value:
             raise ctypes.WinError(ctypes.get_last_error())
         self._handles.append(handle)

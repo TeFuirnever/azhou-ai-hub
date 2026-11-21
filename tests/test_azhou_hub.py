@@ -1836,7 +1836,7 @@ class AzhouHubCliTest(unittest.TestCase):
                     )
                     result = subprocess.run([sys.executable, "-c", command, str(path), str(destination)],
                                             capture_output=True, text=True, encoding="utf-8", timeout=15)
-                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertEqual(0, result.returncode, f"{path}: {result.stderr}")
                     self.assertIn(json.loads(result.stdout)["winerror"], (5, 32, 33))
                     self.assertFalse(destination.exists())
                     attempted.append(path)
