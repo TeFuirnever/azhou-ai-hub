@@ -1679,6 +1679,46 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertTrue(archive.is_file())
             self.assertNotIn("lifecycle_state", json.loads(archive.read_text()))
 
+    def test_uninstall_reports_partial_if_receipt_becomes_malformed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            remove = azhou_hub._remove_exact_installation
+
+            def corrupt_during_removal(*args, **kwargs):
+                result = remove(*args, **kwargs)
+                receipt.write_text('{"schema": []}')
+                return result
+
+            with mock.patch.object(azhou_hub, "_remove_exact_installation", side_effect=corrupt_during_removal):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertEqual({"schema": []}, json.loads(receipt.read_text()))
+            self.assertFalse((target / "sample").exists())
+
+    def test_uninstall_rejects_redirected_receipts_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            moved = Path(directory) / "moved-receipts"
+            remove = azhou_hub._remove_exact_installation
+
+            def redirect_during_removal(*args, **kwargs):
+                result = remove(*args, **kwargs)
+                receipt.parent.rename(moved)
+                receipt.parent.symlink_to(moved, target_is_directory=True)
+                return result
+
+            with mock.patch.object(azhou_hub, "_remove_exact_installation", side_effect=redirect_during_removal):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertNotIn("lifecycle_state", json.loads((moved / receipt.name).read_text()))
+            self.assertFalse((target / "sample").exists())
+
     def test_reinstall_explains_archiving_completed_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")

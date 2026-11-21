@@ -96,9 +96,14 @@ def _write_receipt(
     *,
     expected_identity: tuple[int, int, int] | None = None,
     expected_digest: str | None = None,
+    expected_target: Path | None = None,
 ) -> None:
     path = path.expanduser().absolute() if expected_identity is not None else path.expanduser().resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if expected_identity is not None:
+        if expected_target is None or _receipt_path_error(path, expected_target):
+            raise PackageError("receipt path changed while uninstall was running")
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
     payload = dict(receipt)
     payload["integrity_digest"] = _receipt_digest(payload)
     fd, stage_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -111,14 +116,10 @@ def _write_receipt(
             handle.flush()
             os.fsync(handle.fileno())
         if expected_identity is not None:
+            if _receipt_path_error(path, expected_target) or path.is_symlink() or _path_identity(path) != expected_identity:
+                raise PackageError("receipt changed while uninstall was running")
             current, error = _load_receipt(path)
-            if (
-                path.is_symlink()
-                or _path_identity(path) != expected_identity
-                or error
-                or current is None
-                or current.get("integrity_digest") != expected_digest
-            ):
+            if error or current is None or current.get("integrity_digest") != expected_digest:
                 raise PackageError("receipt changed while uninstall was running")
         os.replace(stage, path)
     finally:
@@ -133,7 +134,7 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
         payload = json.loads(path.expanduser().read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return None, f"cannot read receipt: {exc}"
-    if not isinstance(payload, dict) or payload.get("schema") not in {LEGACY_RECEIPT_SCHEMA, RECEIPT_SCHEMA}:
+    if not isinstance(payload, dict) or payload.get("schema") not in (LEGACY_RECEIPT_SCHEMA, RECEIPT_SCHEMA):
         return None, "receipt_invalid: unsupported receipt schema"
     if payload.get("integrity_digest") != _receipt_digest(payload):
         return None, "receipt_invalid: integrity digest mismatch"
@@ -1038,7 +1039,10 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             if state != "missing":
                 raise PackageError(f"uninstall could not confirm absence: {details}")
             receipt["lifecycle_state"] = "uninstalled"
-            _write_receipt(receipt_path, receipt, expected_identity=receipt_identity, expected_digest=receipt_digest)
+            _write_receipt(
+                receipt_path, receipt, expected_identity=receipt_identity,
+                expected_digest=receipt_digest, expected_target=target,
+            )
         except (OSError, ValueError, PackageError) as exc:
             return _lifecycle_report("partial", rows, error=f"uninstall receipt update failed: {exc}")
     return _lifecycle_report("pass", rows)
