@@ -1,4 +1,4 @@
-name: Agent Skin P07 isolated measurement controls
+name: Agent Skin P07 formal synthetic measurement
 
 on:
   push:
@@ -9,9 +9,9 @@ permissions:
   contents: read
 
 jobs:
-  preflight:
+  measurement:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 55
     steps:
       - name: Checkout the matching isolated probe
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -56,10 +56,21 @@ jobs:
           python -B "$tool/test-startup-payload-browser.py" --chrome "$chrome" --theme-protocol "$out/registration/train-0.json" --only 'generated measurement scene detects actual image displacement in four conditions' --out "$out/displacement"
           python -c 'import json,sys; expected=json.load(open(sys.argv[1])); actual=json.load(open(sys.argv[2]))["environment"]; assert (actual["browser"],actual["protocolVersion"]) == (expected["browser"],expected["protocolVersion"])' "$out/chrome-identity.json" "$out/displacement/report.json"
           test -z "$(git status --porcelain --untracked-files=all)"
-      - name: Retain synthetic control evidence
+      - name: Collect fresh training and independent holdout
+        shell: bash
+        working-directory: evaluator
+        timeout-minutes: 45
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          export P07_EVIDENCE="$RUNNER_TEMP/p07-isolated"
+          export P07_CHROME='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+          bash ../lab/.github/p07/collect.sh
+      - name: Retain synthetic evidence, including failed stages
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: agent-skin-p07-isolated-preflight
+          name: agent-skin-p07-formal-measurement
+          compression-level: 0
           path: ${{ runner.temp }}/p07-isolated
           retention-days: 5
