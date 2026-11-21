@@ -21,6 +21,8 @@ PRODUCTION_SOURCES = (
     "Native/OptionalStartupMedia.swift",
     "Native/OptionalStartupAVPlayback.swift",
     "Native/OptionalStartupPresentation.swift",
+    "Native/OptionalStartupVideoResolver.swift",
+    "Native/OptionalStartupVideoFiles.swift",
     "Native/InstallRegistry.swift",
     "Native/InstallRegistryCore.swift",
     "tools/build-startup-assets.swift",
@@ -142,11 +144,13 @@ def main() -> int:
         "Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
         "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
         "Native/OptionalStartupAVPlayback.swift", "Native/OptionalStartupPresentation.swift",
+        "Native/OptionalStartupVideoResolver.swift", "Native/OptionalStartupVideoFiles.swift",
     ]
     objects = [
         compile_binary(out, "startup-tests", startup_sources + [
             "Native/StartupNativeTests.swift", "Native/OptionalStartupMediaTests.swift",
-            "Native/OptionalStartupAVPlaybackTests.swift",
+            "Native/OptionalStartupAVPlaybackTests.swift", "Native/OptionalStartupVideoResolverTests.swift",
+            "Native/OptionalStartupVideoFilesTests.swift",
         ], frameworks=["AppKit", "WebKit"], defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
         compile_binary(out, "wallpaper-tests", startup_sources + ["Native/WallpaperValidationTests.swift"],
                        frameworks=["AppKit", "WebKit"], defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),

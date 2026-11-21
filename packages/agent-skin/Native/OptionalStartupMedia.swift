@@ -31,6 +31,7 @@ struct OptionalStartupMedia {
         case hostReadinessChanged
         case handoffFinished
         case skip
+        case motionDisabled
         case mediaFailed(item: UUID)
         case tick
     }
@@ -91,6 +92,7 @@ struct OptionalStartupMedia {
 
         lastTime = now
         if case .skip = event { return finish(fallback: false) }
+        if case .motionDisabled = event { return finish(fallback: true, alwaysStatic: true) }
         if now >= deadline || (phase == .fading || phase == .fadeComplete) && !hostReadyNow {
             return finish(fallback: true)
         }
@@ -129,11 +131,11 @@ struct OptionalStartupMedia {
         return effects
     }
 
-    private mutating func finish(fallback: Bool) -> [Effect] {
+    private mutating func finish(fallback: Bool, alwaysStatic: Bool = false) -> [Effect] {
         phase = .terminal
         attempt = nil
         configuration = nil
         if !fallback { return [.release] }
-        return [.release, frameReady ? .fallBackToStatic : .fallBackToDefault]
+        return [.release, frameReady || alwaysStatic ? .fallBackToStatic : .fallBackToDefault]
     }
 }

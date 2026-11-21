@@ -171,6 +171,7 @@ jobs:
             Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift \
             Native/CodexSkinDriver.swift Native/OptionalStartupMedia.swift Native/OptionalStartupAVPlayback.swift \
             Native/OptionalStartupPresentation.swift \
+            Native/OptionalStartupVideoResolver.swift Native/OptionalStartupVideoFiles.swift \
             -o .build/startup-app-compile \
             -framework AppKit -framework WebKit
       - name: Retain isolated startup functional evidence

@@ -38,6 +38,10 @@ BUILD_FILES = (
     "Native/OptionalStartupMediaTests.swift",
     "Native/OptionalStartupAVPlayback.swift",
     "Native/OptionalStartupPresentation.swift",
+    "Native/OptionalStartupVideoResolver.swift",
+    "Native/OptionalStartupVideoResolverTests.swift",
+    "Native/OptionalStartupVideoFiles.swift",
+    "Native/OptionalStartupVideoFilesTests.swift",
     "Native/OptionalStartupAVPlaybackTests.swift",
     "extension/renderer.mjs",
     "extension/codex-page-adapter.mjs",
@@ -1232,7 +1236,8 @@ for (language, name) in [("en", "Azhou AI Lab for Codex"), ("zh-Hans", "阿舟 A
     def test_shared_contract_sources_are_registered_everywhere_and_stay_neutral(self):
         shared_sources = ("Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
                           "Native/OptionalStartupMedia.swift", "Native/OptionalStartupAVPlayback.swift",
-                          "Native/OptionalStartupPresentation.swift", "extension/codex-page-adapter.mjs")
+                          "Native/OptionalStartupPresentation.swift", "Native/OptionalStartupVideoResolver.swift",
+                          "Native/OptionalStartupVideoFiles.swift", "extension/codex-page-adapter.mjs")
         package = json.loads((PACKAGE / "hub-package.json").read_text(encoding="utf-8"))
         verifier_inputs = set(self.verifier.INPUT_FILES)
         for source in shared_sources:

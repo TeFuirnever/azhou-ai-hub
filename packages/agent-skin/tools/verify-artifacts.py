@@ -262,6 +262,7 @@ INPUT_FILES = (
     'Native/App.swift', 'Native/Wallpaper.swift', 'Native/InstallRegistry.swift', 'Native/InstallRegistryCore.swift',
     'Native/SkinHostContract.swift', 'Native/CodexSkinDriver.swift', 'Native/OptionalStartupMedia.swift',
     'Native/OptionalStartupAVPlayback.swift', 'Native/OptionalStartupPresentation.swift',
+    'Native/OptionalStartupVideoResolver.swift', 'Native/OptionalStartupVideoFiles.swift',
     'tools/build-macos.sh', 'tools/build-lock.py', 'tools/build-preflight.py', 'tools/build-wallpaper.py', 'tools/build-startup.py',
     'tools/build-dsh-plugin.py',
     'tools/build-startup-assets.swift', 'tools/verify-artifacts.py', 'hub-package.json', 'theme-config.json',

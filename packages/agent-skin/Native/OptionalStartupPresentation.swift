@@ -18,6 +18,7 @@ final class OptionalStartupPresentation {
     private let attempt: OptionalStartupMedia.Attempt
     private let now: () -> TimeInterval
     private let workspaceReadyNow: (OptionalStartupMedia.Attempt) -> Bool
+    private let motionAllowedNow: () -> Bool
     private let output: (Output) -> Void
     private var policy = OptionalStartupMedia()
     private var playback: OptionalStartupAVPlayback?
@@ -27,10 +28,11 @@ final class OptionalStartupPresentation {
 
     init(attempt: OptionalStartupMedia.Attempt, now: @escaping () -> TimeInterval,
          workspaceReadyNow: @escaping (OptionalStartupMedia.Attempt) -> Bool,
-         output: @escaping (Output) -> Void) {
+         motionAllowedNow: @escaping () -> Bool = { true }, output: @escaping (Output) -> Void) {
         self.attempt = attempt
         self.now = now
         self.workspaceReadyNow = workspaceReadyNow
+        self.motionAllowedNow = motionAllowedNow
         self.output = output
     }
 
@@ -77,10 +79,13 @@ final class OptionalStartupPresentation {
 
     private func send(_ event: OptionalStartupMedia.Event) {
         guard started, !terminal else { return }
+        let currentEvent: OptionalStartupMedia.Event
         let ready: Bool
-        if case .skip = event { ready = false } else { ready = workspaceReadyNow(attempt) }
+        if case .skip = event { currentEvent = event; ready = false }
+        else if !motionAllowedNow() { currentEvent = .motionDisabled; ready = false }
+        else { currentEvent = event; ready = workspaceReadyNow(attempt) }
         guard !terminal else { return }
-        let effects = policy.receive(event, generation: attempt.generation, now: now(), hostReadyNow: ready)
+        let effects = policy.receive(currentEvent, generation: attempt.generation, now: now(), hostReadyNow: ready)
         if effects.contains(.release) {
             terminal = true
             let end: End
@@ -110,7 +115,7 @@ final class OptionalStartupPresentation {
             case .beginHandoff: output(.beginHandoff)
             case .setCoverOpacity(let opacity):
                 // A synchronous begin callback may have revoked current proof.
-                guard workspaceReadyNow(attempt) else { send(.hostReadinessChanged); return }
+                guard motionAllowedNow(), workspaceReadyNow(attempt) else { send(.hostReadinessChanged); return }
                 guard !terminal else { return }
                 if opacity == 0 { emittedZeroOpacity = true }
                 output(.coverOpacity(opacity))

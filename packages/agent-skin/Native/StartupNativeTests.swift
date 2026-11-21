@@ -176,7 +176,8 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
     private(set) var optionalReveals = 0
     private(set) var optionalOpacity: [Double] = []
     private let optionalLayer = CALayer()
-    func revealOptionalMedia() { optionalReveals += 1 }
+    var optionalRevealHook: (() -> Void)?
+    func revealOptionalMedia() { optionalReveals += 1; optionalRevealHook?() }
     func setOptionalCoverOpacity(_ opacity: Double) { optionalOpacity.append(opacity) }
     func mountOptionalMedia() -> NativeOptionalMediaSurface? {
         guard acceptsOptionalSurface else { return nil }
@@ -471,6 +472,8 @@ struct StartupNativeTests {
 
         OptionalStartupMediaTests.run()
         try await OptionalStartupAVPlaybackTests.run()
+        try await OptionalStartupVideoResolverTests.run()
+        try await OptionalStartupVideoFilesTests.run()
 
         var checks = 0
         checks += startupIdentityDiagnosticChecks()
@@ -5978,6 +5981,13 @@ private func startupPreparedConnectorChecks() async throws -> Int {
 
 
 @MainActor
+private final class NativeMediaLeaseFixture: StartupVideoTemporaryClip {
+    let fileURL = URL(fileURLWithPath: "/synthetic-video-fixture.mp4")
+    private(set) var releases = 0
+    func release() { releases += 1 }
+}
+
+@MainActor
 private func nativeColdLaunchChecks() async throws -> Int {
     var checks = 0
     func expect(_ condition: Bool, _ label: String) { precondition(condition, "FAILED: " + label); checks += 1 }
@@ -6000,7 +6010,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
     _ = NSApplication.shared
     let originalMenu = NSApp.mainMenu
     defer { NSApp.mainMenu = originalMenu }
-    for mode in ["complete", "media-fallback", "media-reduced", "media-complete", "media-expired", "media-short-to-canvas", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
+    for mode in ["complete", "media-fallback", "media-reduced", "media-complete", "media-expired", "media-late-skip", "media-motion-flip", "media-stage-skip", "media-short-to-canvas", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
                  "cancel-open", "cancel-task", "short-preflight", "short-cover", "short-attach", "window-close",
                  "host-activation", "interrupt-open", "interrupt-prepare", "interrupt-wait", "space-wait"] {
         let runtime = FakeNativeAppRuntime(arguments: ["skin"], resourceURL: root)
@@ -6069,26 +6079,53 @@ private func nativeColdLaunchChecks() async throws -> Int {
         onOpeningChanged: { _ in }, startupFacts: { _ in facts }, performDisable: nil)
         var optionalSelections = 0
         var optionalItemBuilds = 0
+        var completedLatePreparation = false
+        let clipLease = NativeMediaLeaseFixture()
+        var motionEnabled = mode != "media-reduced"
+        if mode == "media-motion-flip" { presentation.optionalRevealHook = { motionEnabled = false } }
         presentation.acceptsOptionalSurface = mode.hasPrefix("media-")
-        assembly.nativePresentation = { nonce, event in
-            sequence.append("cover")
-            return NativeColdPlayer(nonce: nonce, expectedApplication: key, runtime: runtime,
-                presentation: realPresentation ?? presentation, workspaceNotifications: workspaceNotifications,
-                optionalMediaProvider: presentation.acceptsOptionalSurface || mode == "hot" ? {
-                    optionalSelections += 1
-                    let configuration: OptionalStartupMedia.Configuration = mode == "media-complete"
-                        ? .init(timeout: 4, holdAt: 0.35, fadeStart: 0.72, fadeEnd: 1.07)!
-                        : .init(timeout: 24, holdAt: 11.3, fadeStart: 12.7, fadeEnd: 13.65)!
-                    return NativeStartupMediaSlot(configuration: configuration) {
+        let provider: NativeStartupMediaProvider?
+        if presentation.acceptsOptionalSurface || mode == "hot" {
+            provider = {
+                optionalSelections += 1
+                let configuration: OptionalStartupMedia.Configuration
+                if mode == "media-complete" || mode == "media-motion-flip" {
+                    configuration = .init(timeout: 4, holdAt: 0.35, fadeStart: 0.72, fadeEnd: 1.07)!
+                } else {
+                    configuration = .init(timeout: 24, holdAt: 11.3, fadeStart: 12.7, fadeEnd: 13.65)!
+                }
+                let prepare: NativeStartupMediaPreparation = { admission in
+                    if mode == "media-complete" { try? await Task.sleep(nanoseconds: 50_000_000) }
+                    if mode == "media-late-skip" {
+                        await Task.yield()
+                        presentation.nativeHandler?.requestSkip()
+                        completedLatePreparation = true
+                    }
+                    if mode == "media-stage-skip" {
+                        try admission.onOwned(clipLease)
+                        presentation.nativeHandler?.requestSkip()
+                        precondition(clipLease.releases == 1, "Skip must unlink the registered stage before exit")
+                        return nil
+                    }
+                    let lease = ["media-complete", "media-late-skip", "media-motion-flip"].contains(mode) ? clipLease : nil
+                    return NativeStartupMediaSlot(configuration: configuration, clipLease: lease, makeItem: {
                         optionalItemBuilds += 1
-                        if mode == "media-complete" { return AVPlayerItem(url: syntheticMedia) }
+                        if mode == "media-complete" || mode == "media-motion-flip" { return AVPlayerItem(url: syntheticMedia) }
                         if mode == "media-expired" {
                             runtime.uptime = 133
                             return AVPlayerItem(url: syntheticMedia)
                         }
                         throw StartupFailure(reason: "asset-invalid", message: "fixture has no media")
-                    }
-                } : nil, optionalMotionAllowed: { mode != "media-reduced" }, event: event)
+                    })
+                }
+                return prepare
+            }
+        } else { provider = nil }
+        assembly.nativePresentation = { nonce, event in
+            sequence.append("cover")
+            return NativeColdPlayer(nonce: nonce, expectedApplication: key, runtime: runtime,
+                presentation: realPresentation ?? presentation, workspaceNotifications: workspaceNotifications,
+                optionalMediaProvider: provider, optionalMotionAllowed: { motionEnabled }, event: event)
         }
         presentation.evaluationHook = { source in
             if source.contains("finishNativeSnapshot") {
@@ -6114,7 +6151,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
                 let observing = NativeStartupEventTransport(base: transport, capture: capture, events: events, now: { runtime.uptime })
                 return StartupConnector(target: target, expectedPort: port, system: system, transport: observing,
                     now: { runtime.uptime }, sleep: { _ in
-                        if mode == "media-complete", ProcessInfo.processInfo.systemUptime - fixtureStarted >= 6 {
+                        if ["media-complete", "media-motion-flip"].contains(mode), ProcessInfo.processInfo.systemUptime - fixtureStarted >= 6 {
                             throw StartupFailure(reason: "attach-timeout", message: "fake media completion fixture deadline")
                         }
                         try await Task.sleep(nanoseconds: 1_000_000)
@@ -6154,9 +6191,22 @@ private func nativeColdLaunchChecks() async throws -> Int {
                    "injected optional video uses one cover/opener and never constructs default Canvas")
             expect(optionalSelections == 1 && optionalItemBuilds == 1 && presentation.optionalSurfaceMounts == 1 &&
                    presentation.optionalReveals == 1 && presentation.optionalRestores == 0 &&
-                   presentation.optionalOpacity.last == 0, "real synthetic AV drives one reveal and cover opacity to zero")
+                   presentation.optionalOpacity.last == 0 && clipLease.releases == 1, "real synthetic AV drives one reveal, opacity zero, and one clip release")
             expect(events.resolveNative(receipt, at: 110) == .ready,
                    "existing receipt, not media completion alone, produces success")
+        } else if mode == "media-motion-flip" {
+            expect(receipt.presentation == .failed && receipt.reason == "startup-interrupted" && receipt.workspace == nil &&
+                   presentation.optionalReveals == 1 && presentation.optionalRestores == 1 &&
+                   presentation.createdPlayers.isEmpty && presentation.optionalOpacity.isEmpty && clipLease.releases == 1,
+                   "Reduce Motion enabled after real first frame releases optional media once without Canvas replay")
+        } else if mode == "media-stage-skip" {
+            expect(receipt.presentation == .skipped && receipt.workspace == nil && clipLease.releases == 1 &&
+                   optionalItemBuilds == 0 && presentation.optionalSurfaceMounts == 0,
+                   "normal exit releases the known staged inode before AV can mount")
+        } else if mode == "media-late-skip" {
+            expect(receipt.presentation == .skipped && receipt.workspace == nil && completedLatePreparation &&
+                   optionalItemBuilds == 0 && presentation.optionalSurfaceMounts == 0 && clipLease.releases == 1,
+                   "late async preparation after Skip releases its lease without mounting or reporting success")
         } else if mode == "media-expired" {
             expect(receipt.presentation == .failed && receipt.reason == "attach-timeout" && receipt.workspace == nil &&
                    presentation.createdPlayers.isEmpty && presentation.optionalOpacity.isEmpty &&

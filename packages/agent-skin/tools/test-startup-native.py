@@ -20,8 +20,10 @@ ROOT = Path(__file__).resolve().parents[1]
 NATIVE_INPUTS = ("Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
                  "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
                  "Native/OptionalStartupAVPlayback.swift", "Native/OptionalStartupPresentation.swift",
+                 "Native/OptionalStartupVideoResolver.swift", "Native/OptionalStartupVideoFiles.swift",
                  "Native/StartupNativeTests.swift", "Native/OptionalStartupMediaTests.swift",
-                 "Native/OptionalStartupAVPlaybackTests.swift",
+                 "Native/OptionalStartupAVPlaybackTests.swift", "Native/OptionalStartupVideoResolverTests.swift",
+                 "Native/OptionalStartupVideoFilesTests.swift",
                  "tools/test-startup-native.py",
                  "tools/test-native-warning-contract.py")
 
@@ -228,8 +230,10 @@ def main() -> int:
         "Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
         "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
         "Native/OptionalStartupAVPlayback.swift", "Native/OptionalStartupPresentation.swift",
+        "Native/OptionalStartupVideoResolver.swift", "Native/OptionalStartupVideoFiles.swift",
         "Native/StartupNativeTests.swift", "Native/OptionalStartupMediaTests.swift",
-        "Native/OptionalStartupAVPlaybackTests.swift",
+        "Native/OptionalStartupAVPlaybackTests.swift", "Native/OptionalStartupVideoResolverTests.swift",
+        "Native/OptionalStartupVideoFilesTests.swift",
         "-o", str(output), "-framework", "AppKit", "-framework", "WebKit",
     ]
     print("==> " + " ".join(command), flush=True)
