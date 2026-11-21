@@ -1857,6 +1857,37 @@ class AzhouHubCliTest(unittest.TestCase):
             records.rename(moved)
             moved.rename(records)
 
+    @unittest.skipUnless(os.name == "nt", "Windows CLI acceptance required")
+    def test_windows_cli_managed_install_uninstall_and_doctor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "project" / ".agents" / "skills"
+            target.mkdir(parents=True)
+            receipt = target / ".azhou" / "hub" / "receipts" / "super-ask-azhou.json"
+
+            def run(*args):
+                process = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts" / "azhou_hub.py"), *map(str, args), "--json"],
+                    capture_output=True, text=True, encoding="utf-8", timeout=60,
+                )
+                self.assertEqual(0, process.returncode, process.stderr + process.stdout)
+                return json.loads(process.stdout)
+
+            setup = ("setup", "--target", target, "--skill", "super-ask-azhou", "--mode", "copy", "--managed", "--receipt", receipt)
+            plan = run(*setup)
+            self.assertFalse((target / "super-ask-azhou").exists())
+            self.assertEqual("pass", run(*setup, "--apply", "--plan-id", plan["planId"])["status"])
+            original = receipt.read_bytes()
+            before = run("doctor", "--target", target, "--skill", "super-ask-azhou")
+            self.assertEqual("healthy", before["status"])
+            uninstall = ("uninstall", "--target", target, "--receipt", receipt)
+            self.assertEqual("dry_run", run(*uninstall)["status"])
+            self.assertEqual("pass", run(*uninstall, "--apply")["status"])
+            self.assertEqual(original, receipt.read_bytes())
+            self.assertFalse((target / "super-ask-azhou").exists())
+            after = run("doctor", "--target", target, "--skill", "super-ask-azhou")
+            self.assertEqual("pass", next(c for c in after["checks"] if c["name"] == "target:hub-receipts")["status"])
+            self.assertEqual("already_absent", run(*uninstall, "--apply")["skills"][0]["status"])
+
     def test_uninstall_reports_partial_if_receipt_becomes_malformed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")
