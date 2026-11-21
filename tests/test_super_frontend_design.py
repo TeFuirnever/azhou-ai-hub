@@ -38,6 +38,13 @@ UPSTREAM_BODY_SECTIONS = (
     "## More on writing in design",
 )
 UPSTREAM_INTRO_OPENING = "Approach this as the design lead at a design studio"
+# The contiguous embedded upstream region: the pinned upstream file's tail from
+# the intro sentence through upstream EOF (9,056 characters including the
+# upstream trailing newline — the intro plus all five sections), embedded
+# byte-identical between the brand protocol and the wrapper boundary sections.
+UPSTREAM_BODY_CHARS = 9056
+UPSTREAM_BODY_SHA256 = "2db4877f31dfe7ea245b55ee9cc2ddcb3ff022951f3d65031644c8b6e278bd86"
+UPSTREAM_BODY_TAIL = "Let each written element do exactly one job.\n"
 CARVE_NEIGHBORS = ("super-archify", "super-lavish", "super-eli5", "super-excalidraw-diagram")
 
 
@@ -73,6 +80,17 @@ class SuperFrontendDesignPackageTest(unittest.TestCase):
         self.assertIn(UPSTREAM_INTRO_OPENING, self.text)
         offsets = [self.text.index(section) for section in UPSTREAM_BODY_SECTIONS]
         self.assertEqual(sorted(offsets), offsets)
+
+    def test_upstream_body_digest_is_pinned(self) -> None:
+        # Binds the embedded upstream region itself, not just its headings: any
+        # byte change inside the span (including the trailing newline boundary)
+        # changes the digest and fails the suite.
+        start = self.text.index(UPSTREAM_INTRO_OPENING)
+        span = self.text[start : start + UPSTREAM_BODY_CHARS]
+        self.assertEqual(
+            UPSTREAM_BODY_SHA256, hashlib.sha256(span.encode("utf-8")).hexdigest()
+        )
+        self.assertTrue(span.endswith(UPSTREAM_BODY_TAIL))
 
     def test_brand_contract_is_present(self) -> None:
         contract = SKILL_BRAND_CONTRACTS["skills/super-frontend-design/SKILL.md"]
