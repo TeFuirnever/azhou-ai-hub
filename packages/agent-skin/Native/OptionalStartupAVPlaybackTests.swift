@@ -21,7 +21,7 @@ struct OptionalStartupAVPlaybackTests {
         return ready()
     }
 
-    private static func makeMedia(_ url: URL) async throws {
+    static func makeMedia(_ url: URL) async throws {
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.jpeg, AVVideoWidthKey: 160, AVVideoHeightKey: 90,

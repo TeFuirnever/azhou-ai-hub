@@ -57,10 +57,11 @@ struct OptionalStartupMedia {
     private var lastMediaTime: TimeInterval?
     private var frameReady = false
 
-    mutating func start(_ configuration: Configuration?, attempt: Attempt, now: TimeInterval) -> [Effect] {
+    mutating func start(_ configuration: Configuration?, attempt: Attempt, now: TimeInterval, deadlineLimit: TimeInterval? = nil) -> [Effect] {
         guard phase == .inactive, let configuration, now.isFinite, now >= 0 else { return [] }
-        let deadline = now + configuration.timeout
-        guard deadline.isFinite, deadline > now else { return [] }
+        if let deadlineLimit, !deadlineLimit.isFinite { return [] }
+        let deadline = min(now + configuration.timeout, deadlineLimit ?? .infinity)
+        guard deadline.isFinite, deadline > now + configuration.fadeEnd else { return [] }
         self.attempt = attempt
         self.configuration = configuration
         self.deadline = deadline

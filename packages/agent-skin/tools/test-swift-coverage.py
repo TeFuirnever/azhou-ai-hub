@@ -138,26 +138,23 @@ def main() -> int:
     for previous in raw_dir.glob("*.profraw"):
         previous.unlink()
     (out / "coverage.json").unlink(missing_ok=True)
+    startup_sources = [
+        "Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
+        "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
+        "Native/OptionalStartupAVPlayback.swift", "Native/OptionalStartupPresentation.swift",
+    ]
     objects = [
-        compile_binary(out, "startup-tests", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
-                       "Native/StartupNativeTests.swift", "Native/OptionalStartupMedia.swift",
-                       "Native/OptionalStartupMediaTests.swift", "Native/OptionalStartupAVPlayback.swift",
-                       "Native/OptionalStartupAVPlaybackTests.swift", "Native/OptionalStartupPresentation.swift"], frameworks=["AppKit", "WebKit"],
-                      defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
-        compile_binary(out, "wallpaper-tests", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
-                       "Native/WallpaperValidationTests.swift"], frameworks=["AppKit", "WebKit"],
-                      defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
+        compile_binary(out, "startup-tests", startup_sources + [
+            "Native/StartupNativeTests.swift", "Native/OptionalStartupMediaTests.swift",
+            "Native/OptionalStartupAVPlaybackTests.swift",
+        ], frameworks=["AppKit", "WebKit"], defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
+        compile_binary(out, "wallpaper-tests", startup_sources + ["Native/WallpaperValidationTests.swift"],
+                       frameworks=["AppKit", "WebKit"], defines=["AGENT_SKIN_NATIVE_EVENT_TESTS"]),
         compile_binary(out, "install-registry-tests", ["Native/InstallRegistryCore.swift",
                        "Native/InstallRegistryTests.swift"], frameworks=["CoreServices"]),
         compile_binary(out, "install-registry-cli", ["Native/InstallRegistryCore.swift",
                        "Native/InstallRegistry.swift"], frameworks=["AppKit", "CoreServices"]),
-        compile_binary(out, "startup-cli", ["Native/App.swift", "Native/Wallpaper.swift",
-                       "Native/SkinHostContract.swift", "Native/CodexSkinDriver.swift",
-                       "Native/OptionalStartupMedia.swift", "Native/OptionalStartupAVPlayback.swift",
-                       "Native/OptionalStartupPresentation.swift"],
-                       frameworks=["AppKit", "WebKit"]),
+        compile_binary(out, "startup-cli", startup_sources, frameworks=["AppKit", "WebKit"]),
     ]
     objects.append(asset_builder_checks(out, raw_dir))
 

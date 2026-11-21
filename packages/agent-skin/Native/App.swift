@@ -18,6 +18,7 @@
 // 无副作用，执行层只消费已验证的语义值。
 
 import AppKit
+import AVFoundation
 import WebKit
 import Darwin
 import CoreFoundation
@@ -1182,10 +1183,25 @@ protocol NativeScheduledAction: AnyObject {
     func cancel()
 }
 
+struct NativeOptionalMediaSurface {
+    let layer: CALayer
+    let frame: CGRect
+}
+
+struct NativeStartupMediaSlot {
+    let configuration: OptionalStartupMedia.Configuration
+    let makeItem: () throws -> AVPlayerItem
+}
+
 @MainActor
 protocol NativePlayerPresentation: AnyObject {
     func showColdCover(locale: NativeDisplayLocale, runNonce: String, delegate: NSWindowDelegate) throws -> NativeCoverReceipt
     func revealColdPlayer()
+    func mountOptionalMedia() -> NativeOptionalMediaSurface?
+    func revealOptionalMedia()
+    func setOptionalCoverOpacity(_ opacity: Double)
+    func restoreOptionalMediaCover()
+    func unmountOptionalMedia()
     func discardColdPlayer()
     var geometry: [String: Any] { get }
     func createPlayer(locale: NativeDisplayLocale, mode: String, theme: String, inspect: Bool,
@@ -1207,6 +1223,12 @@ protocol NativePlayerPresentation: AnyObject {
 }
 
 extension NativePlayerPresentation {
+    func mountOptionalMedia() -> NativeOptionalMediaSurface? { nil }
+    func revealOptionalMedia() {}
+    func setOptionalCoverOpacity(_ opacity: Double) {}
+    func restoreOptionalMediaCover() {}
+    func unmountOptionalMedia() {}
+
     func showColdCover(locale: NativeDisplayLocale, runNonce: String, delegate: NSWindowDelegate) throws -> NativeCoverReceipt {
         throw StartupFailure(reason: "protocol-error", message: "当前呈现端口不支持原生底板。")
     }
@@ -1255,14 +1277,32 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
     private var attached = false
     private var root: URL?
     private var evaluations: [UUID: (Error) -> Void] = [:]
+    private let optionalMediaProvider: (() -> NativeStartupMediaSlot?)?
+    private let optionalMotionAllowed: () -> Bool
+    private var selectedMedia: NativeStartupMediaSlot?
+    private var optionalMedia: OptionalStartupPresentation?
+    private var optionalDeadline: (any NativeScheduledAction)?
+    private var fallbackTask: Task<Void, Never>?
+    private var workspaceProof: StartupProvisionalWorkspaceProof?
+
+    var observesWorkspaceProof: Bool { selectedMedia != nil }
+    func workspaceProofChanged(_ proof: StartupProvisionalWorkspaceProof?) {
+        guard !released, optionalMedia != nil else { return }
+        workspaceProof = proof
+        optionalMedia?.workspaceReadinessChanged()
+    }
 
     init(nonce: String, expectedApplication: HostApplicationKey, runtime: any NativeAppRuntime,
          presentation: any NativePlayerPresentation,
          workspaceNotifications: NotificationCenter = NSWorkspace.shared.notificationCenter,
+         optionalMediaProvider: (() -> NativeStartupMediaSlot?)? = nil,
+         optionalMotionAllowed: (() -> Bool)? = nil,
          event: @escaping (CodexNativePresentationEvent) -> Void) {
         self.nonce = nonce; self.expectedApplication = expectedApplication
         self.runtime = runtime; self.presentation = presentation; self.event = event
         self.workspaceNotifications = workspaceNotifications
+        self.optionalMediaProvider = optionalMediaProvider
+        self.optionalMotionAllowed = optionalMotionAllowed ?? { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     }
     func showCover() throws -> NativeCoverReceipt {
         guard !released else { throw CancellationError() }
@@ -1280,7 +1320,11 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
                 MainActor.assumeIsolated { self?.interrupt() }
             }
         ]
-        return try presentation.showColdCover(locale: runtime.systemFallbackLocale(), runNonce: nonce, delegate: self)
+        let receipt = try presentation.showColdCover(locale: runtime.systemFallbackLocale(), runNonce: nonce, delegate: self)
+        if !released, receipt.drawObserved, receipt.transactionCommitted, let optionalMediaProvider, optionalMotionAllowed() {
+            selectedMedia = optionalMediaProvider()
+        }
+        return receipt
     }
     func applicationActivated(_ application: (any NativeApplication)?) {
         guard !released else { return }
@@ -1295,8 +1339,75 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
         releaseCover()
     }
     func play(_ snapshot: StartupSettingsSnapshot, deadline: TimeInterval) async throws {
-        guard !released, !attached, snapshot.runNonce == nonce, let resources = runtime.resourceURL else { throw CancellationError() }
+        guard !released, !attached, snapshot.runNonce == nonce else { throw CancellationError() }
         attached = true
+        if let selectedMedia, optionalMotionAllowed(), startOptionalMedia(selectedMedia, snapshot: snapshot, deadline: deadline) { return }
+        try await playCanvas(snapshot, deadline: deadline)
+    }
+
+    private func startOptionalMedia(_ slot: NativeStartupMediaSlot, snapshot: StartupSettingsSnapshot,
+                                    deadline: TimeInterval) -> Bool {
+        let mediaDeadline = min(deadline - 1.5, runtime.uptime + slot.configuration.timeout)
+        guard mediaDeadline > runtime.uptime + slot.configuration.fadeEnd,
+              let mount = presentation.mountOptionalMedia() else { return false }
+        let attempt = OptionalStartupMedia.Attempt(generation: UUID(), item: UUID())
+        let media = OptionalStartupPresentation(attempt: attempt, now: { [runtime] in runtime.uptime },
+            workspaceReadyNow: { [weak self] _ in
+                guard let self, !self.released, self.optionalMotionAllowed() else { return false }
+                return self.workspaceProof?.isCurrent(at: self.runtime.uptime) == true
+            }, output: { [weak self] output in
+                self?.receiveOptionalMedia(output, snapshot: snapshot, deadline: deadline)
+            })
+        optionalMedia = media
+        let started = media.start(slot.configuration, in: mount.layer, frame: mount.frame,
+                                  deadlineLimit: mediaDeadline, makeItem: slot.makeItem)
+        if !started {
+            optionalMedia = nil
+            presentation.unmountOptionalMedia()
+        } else if optionalMedia === media {
+            optionalDeadline = presentation.schedule(after: max(0, mediaDeadline - runtime.uptime)) { [weak media] in
+                media?.tick()
+            }
+        }
+        return started
+    }
+
+    private func receiveOptionalMedia(_ output: OptionalStartupPresentation.Output, snapshot: StartupSettingsSnapshot,
+                                      deadline: TimeInterval) {
+        guard !released else { return }
+        switch output {
+        case .revealVideo:
+            event(.optionalMediaRevealed)
+            presentation.revealOptionalMedia()
+        case .beginHandoff: break
+        case .coverOpacity(let opacity):
+            presentation.setOptionalCoverOpacity(opacity)
+            if opacity == 0 { optionalMedia?.coverFadeCommitted() }
+        case .restoreOpaqueCover:
+            presentation.restoreOptionalMediaCover()
+        case .ended(let end):
+            optionalDeadline?.cancel()
+            optionalDeadline = nil
+            optionalMedia = nil
+            workspaceProof = nil
+            presentation.unmountOptionalMedia()
+            switch end {
+            case .completed: event(.completed)
+            case .skipped: event(.skipped)
+            case .staticFallback: event(.failed("startup-interrupted"))
+            case .defaultFallback:
+                guard runtime.uptime + 13.5 < deadline else { event(.failed("attach-timeout")); return }
+                fallbackTask = Task { @MainActor [weak self] in
+                    guard let self, !self.released else { return }
+                    do { try await self.playCanvas(snapshot, deadline: deadline) }
+                    catch { if !self.released { self.event(.failed((error as? StartupFailure)?.reason ?? "asset-invalid")) } }
+                }
+            }
+        }
+    }
+
+    private func playCanvas(_ snapshot: StartupSettingsSnapshot, deadline: TimeInterval) async throws {
+        guard !released, let resources = runtime.resourceURL else { throw CancellationError() }
         let directory = PathCanonicalization.resolved(resources.appendingPathComponent("web", isDirectory: true))
         let page = directory.appendingPathComponent("index.html")
         guard FileManager.default.fileExists(atPath: page.path) else {
@@ -1341,6 +1452,13 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
         released = true
         workspaceObservers.forEach { workspaceNotifications.removeObserver($0) }
         workspaceObservers.removeAll()
+        optionalDeadline?.cancel()
+        optionalDeadline = nil
+        fallbackTask?.cancel()
+        fallbackTask = nil
+        optionalMedia?.skip()
+        optionalMedia = nil
+        workspaceProof = nil
         presentation.discardColdPlayer()
         let pending = Array(evaluations.values)
         evaluations.removeAll()
@@ -1367,7 +1485,10 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
             }
         }
     }
-    func requestSkip() { if !released { event(.skipped) } }
+    func requestSkip() {
+        guard !released else { return }
+        if let optionalMedia { optionalMedia.skip() } else { event(.skipped) }
+    }
     func windowShouldClose(_ sender: NSWindow) -> Bool { requestSkip(); return false }
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         receive(body: message.body, isMainFrame: message.frameInfo.isMainFrame)
@@ -1558,6 +1679,7 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
 
     private var panel: NSWindow?
     private var cover: NativeBrandCoverView?
+    private var optionalMediaView: NSView?
     private var webView: WKWebView?
     private var quitEntry: NSMenuItem?
     private var appMenuEntry: NSMenuItem?
@@ -1639,8 +1761,34 @@ final class AppKitNativePlayerPresentation: NativePlayerPresentation {
         }
     }
 
+    func mountOptionalMedia() -> NativeOptionalMediaSurface? {
+        guard let parent = panel?.contentView, let cover, optionalMediaView == nil else { return nil }
+        let view = NSView(frame: parent.bounds)
+        view.wantsLayer = true
+        guard let layer = view.layer else { return nil }
+        view.autoresizingMask = [.width, .height]
+        parent.addSubview(view, positioned: .below, relativeTo: cover)
+        optionalMediaView = view
+        return .init(layer: layer, frame: view.bounds)
+    }
+
+    func revealOptionalMedia() { cover?.alphaValue = 0 }
+    func setOptionalCoverOpacity(_ opacity: Double) {
+        panel?.alphaValue = opacity
+        if opacity == 0 { CATransaction.flush() }
+    }
+    func restoreOptionalMediaCover() {
+        cover?.alphaValue = 1
+        panel?.alphaValue = 1
+    }
+    func unmountOptionalMedia() {
+        optionalMediaView?.removeFromSuperview()
+        optionalMediaView = nil
+    }
+
     func discardColdPlayer() {
         panel?.orderOut(nil)
+        unmountOptionalMedia()
         webView?.stopLoading()
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "launcher")
         webView?.navigationDelegate = nil
@@ -2400,6 +2548,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
     private let session: TrustedLaunchSession
     private let exitLedger: ExitLedger
     private let nativeColdLaunch: Bool
+    private let optionalMediaProvider: (() -> NativeStartupMediaSlot?)?
     private var nativePlayer: NativeColdPlayer?
     private var nativeEntryFrontmostPID: Int32?
 
@@ -2408,11 +2557,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
 
     init(runtime: (any NativeAppRuntime)? = nil,
          presentation: (any NativePlayerPresentation)? = nil,
-         nativeColdLaunch: Bool = true) {
+         nativeColdLaunch: Bool = true,
+         optionalMediaProvider: (() -> NativeStartupMediaSlot?)? = nil) {
         let resolvedRuntime = runtime ?? SystemNativeAppRuntime()
         let parsedArguments = LauncherCommandLine(arguments: resolvedRuntime.arguments)
         self.runtime = resolvedRuntime
         self.nativeColdLaunch = nativeColdLaunch
+        self.optionalMediaProvider = optionalMediaProvider
         self.commandLine = parsedArguments
         self.identity = LauncherIdentity(bundleURL: resolvedRuntime.bundleURL)
         self.journal = LauncherJournal(runtime: resolvedRuntime, epoch: resolvedRuntime.epoch,
@@ -2708,7 +2859,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNa
             assembly.nativePresentation = { [weak self] nonce, event in
                 guard let self else { throw CancellationError() }
                 let player = NativeColdPlayer(nonce: nonce, expectedApplication: expectedApplication, runtime: self.runtime,
-                    presentation: self.stage.presentation ?? AppKitNativePlayerPresentation(), event: event)
+                    presentation: self.stage.presentation ?? AppKitNativePlayerPresentation(),
+                    optionalMediaProvider: self.optionalMediaProvider, event: event)
                 self.nativePlayer = player
                 return player
             }

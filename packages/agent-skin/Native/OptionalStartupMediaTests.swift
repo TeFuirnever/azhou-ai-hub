@@ -45,6 +45,12 @@ struct OptionalStartupMediaTests {
                policy.start(configured, attempt: key, now: .greatestFiniteMagnitude).isEmpty,
                "invalid or nonrepresentable wall clock cannot start")
 
+        expect(policy.start(configured, attempt: key, now: 100, deadlineLimit: .infinity).isEmpty &&
+               policy.start(configured, attempt: key, now: 100, deadlineLimit: 113.65).isEmpty,
+               "invalid or insufficient absolute driver deadline prevents optional media")
+        expect(policy.start(configured, attempt: key, now: 100, deadlineLimit: 114) == [.startMedia(key)] &&
+               send(.tick, 114) == [.release, .fallBackToDefault],
+               "absolute driver deadline caps configured optional budget without resetting")
         active()
         expect(policy.start(configured, attempt: key, now: 1).isEmpty, "duplicate start ignored")
         expect(send(.firstFrame(item: wrong), 99, host: true).isEmpty &&

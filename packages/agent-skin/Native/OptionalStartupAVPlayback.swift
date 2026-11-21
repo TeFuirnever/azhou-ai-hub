@@ -50,6 +50,7 @@ final class OptionalStartupAVPlayback {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         layer.frame = frame
+        layer.autoresizingMask = [.layerWidthSizable, .layerHeightSizable]
         container.addSublayer(layer)
         CATransaction.commit()
 

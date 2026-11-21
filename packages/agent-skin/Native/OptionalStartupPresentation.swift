@@ -34,14 +34,16 @@ final class OptionalStartupPresentation {
         self.output = output
     }
 
+    @discardableResult
     func start(_ config: OptionalStartupMedia.Configuration?, in container: CALayer,
-               frame: CGRect, makeItem: () throws -> AVPlayerItem) {
-        guard policy.start(config, attempt: attempt, now: now()) == [.startMedia(attempt)] else { return }
+               frame: CGRect, deadlineLimit: TimeInterval? = nil, makeItem: () throws -> AVPlayerItem) -> Bool {
+        guard policy.start(config, attempt: attempt, now: now(), deadlineLimit: deadlineLimit) == [.startMedia(attempt)]
+        else { return false }
         started = true
         do {
             let item = try makeItem()
             send(.tick)
-            guard !terminal else { return }
+            guard !terminal else { return true }
             let adapter = OptionalStartupAVPlayback(attempt: attempt, item: item) { [weak self] attempt, signal in
                 guard let self, self.attempt == attempt else { return }
                 switch signal {
@@ -53,14 +55,15 @@ final class OptionalStartupPresentation {
             playback = adapter
             guard adapter.prepare(in: container, frame: frame) else {
                 send(.mediaFailed(item: attempt.item))
-                return
+                return true
             }
             send(.tick)
-            guard !terminal else { return }
+            guard !terminal else { return true }
             adapter.play()
         } catch {
             send(.mediaFailed(item: attempt.item))
         }
+        return true
     }
 
     func workspaceReadinessChanged() { send(.hostReadinessChanged) }
