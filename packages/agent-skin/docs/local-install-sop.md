@@ -85,6 +85,8 @@ python3 -B tools/test-installed-acceptance.py --out .local/local-install/codex-r
 
 每次使用新的输出目录；已有目录和符号链接会在执行检查前被拒绝，避免覆盖或复用旧证据。冷启动使用同一工具的 `--cold-start`，前提是宿主已完整退出；工具不会自动退出运行中的宿主。没有 Dock 固定入口、未执行冷启动或缺少视觉审阅时保留 pending。整体非通过需要逐项解释，不能把 pending 改写成失败或全通过。
 
+`FT-WALLPAPER` 的 `runtimeStatusVerified: true` 只表示状态回执符合已应用要求，仍为 `pending-visual-review`。普通工作区和 Dot 中央会话区的可见结果分别记录；侧栏能看到壁纸不代表 Dot 通过。
+
 每轮在 Git 忽略的本地证据目录保留一份收据，至少记录：
 
 - 源码提交、候选输入与产物摘要、宿主版本/指纹；

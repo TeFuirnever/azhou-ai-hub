@@ -34,6 +34,7 @@ python3 -B tools/test-unit-coverage.py
 |---|---|---|---|
 | FT-LOCALE | 官方页面英文、浏览器语言中文；切换官方页面语言 | 页面语言优先；文案、bot、设置和动画同步，不新增语言偏好 | `localization.test.mjs`、`startup.test.mjs`、生成载荷浏览器测试；实机观察官方界面 |
 | FT-FINDER | 按当前 macOS 语言查看已安装应用；检查中英资源 | 英文显示 `Azhou AI Lab for Codex`，中文显示主题指定名称；真实安装文件名不充当本地化结论 | `test-startup-build.py` 的 Bundle 回退名与本地化资源；`test-installed-acceptance.py` 的 Finder API；真实 Finder 窗口检查 |
+| FT-WALLPAPER | 已安装候选通过壁纸状态检查后，在普通工作区与 Dot 间切换，再切出应用并返回 | 两处中央工作区均可见壁纸，切换无闪屏；不能用侧栏壁纸或通用 `applied` 回执替代 Dot 中央区画面 | `test-functional-verdict.py` 验证回执成功仍为 `pending-visual-review`，状态检查失败保留 `failed`；同一安装候选的实机视图须单独验收 |
 | FT-DOCK | 将旧版固定到 Dock，升级后再查看标签和启动目标 | 标签符合 macOS 语言，只启动唯一新入口；旧固定项或缓存不能算新版本已通过 | 安装归属 UT；Dock 实际标签与目标需现场验收。没有入口时保留 pending，不能以空列表通过 |
 | FT-ICON-IDENTITY | 使用已批准的源图 SHA-256 构建，分别在预检前和预检后换入同尺寸的图 | 正确摘要生成经校验的暂存图，替换图被拒绝，原载荷保留 | preflight UT 与真实构建命令的隔离用例。实际 Dock 图案、标签和点击按 FT-DOCK 现场核对 |
 | FT-COLD-PROTOCOL | 模拟宿主打开、身份校验、工作区就绪、取消和迟到事件 | 只有绑定的当前运行可完成；切换应用或 Space 立即中断；观察器和窗口只清理一次，迟到事件不复活播放器 | `StartupNativeTests.swift` 的生产 driver/transport UT；不证明真实窗口可见 |
