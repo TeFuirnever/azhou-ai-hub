@@ -10,7 +10,7 @@ invocation: user-invoked orchestrator
 
 > 从问题出发，自己推导设计。
 
-Emit `🦊 阿舟 · Rederive 启动（mode=<learn|resume>, scope=<repo>）` once before work. In Markdown chat wrap it as `> 🦊 **阿舟 · Rederive 启动**（mode=learn, scope=...）`; preserve its underlying fields. Read [brand layer](references/brand-layer.md) for stage events and the end receipt. [Provenance and compatibility](references/provenance.md) identifies upstream and intentional changes.
+Emit `🦊 阿舟 · Rederive 启动（mode=<learn|resume>, scope=<repo>）` once before work. In Markdown chat wrap it as `> 🦊 **阿舟 · Rederive 启动**（mode=learn, scope=...）`; preserve its underlying fields. Read [brand layer](references/brand-layer.md) for stage events and the end receipt. [Provenance](references/provenance.md) identifies upstream; [compatibility](references/upstream-compatibility.md) records retained and changed behavior.
 
 Keep raw evidence and private conversation out of receipts. A host without Unicode may strip emoji while retaining protocol text and fields.
 
@@ -28,4 +28,4 @@ Pose one problem without naming its solution, then ask how the learner would sol
 
 When a decision is reached, name the technique, acknowledge material differences, and offer to show the source. If accepted, show checked paths and symbols in reading order, and a commit only when verified. Discuss limits and unresolved assumptions. Repeat for another decision only if the learner wants to continue.
 
-Keep the conversation in memory by default. If the learner wants persistent notes, write only under the explicitly authorized root's `.azhou/super-rederive/` using the package's documented state contract. Preserve existing sessions when starting over. Notes may contain answers and private conversation, so never include them in Git or a public post. Offer a short end summary and generate a share draft only on request; never post it. End a completed exercise with the receipt in the brand layer.
+Keep the conversation in memory by default. If the learner wants persistent notes, write only under the explicitly authorized root's `.azhou/super-rederive/` using the package's documented state contract. When resuming a saved session, reopen and verify its recorded commit; if it is unavailable, report that and let the learner choose how to proceed. Preserve existing sessions when starting over. Notes may contain answers and private conversation, so never include them in Git or a public post. Offer a short end summary and generate a share draft only on request; never post it. End a completed exercise with the receipt in the brand layer.
