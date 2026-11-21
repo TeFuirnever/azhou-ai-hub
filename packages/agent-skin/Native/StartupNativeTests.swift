@@ -6540,8 +6540,7 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             }
             let hostNumber = host.windowNumber
             var hits: [String: Int] = [:]
-            let hitPoint = NSPoint(x: frame.midX, y: frame.midY)
-            func waitForHit(_ expected: Int) -> Int {
+            func waitForHit(_ expected: Int, at hitPoint: NSPoint) -> Int {
                 let deadline = ProcessInfo.processInfo.systemUptime + 2
                 var hit = NSWindow.windowNumber(at: hitPoint, belowWindowWithWindowNumber: 0)
                 while hit != expected && ProcessInfo.processInfo.systemUptime < deadline {
@@ -6550,38 +6549,71 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 }
                 return hit
             }
+            var calibratedHitPoint: NSPoint?
             if !normalControl {
-                // Query the WindowServer target, not delivery. No input is posted.
-                // Hold the fixture open across compositor updates; no discard is scheduled.
-                let opaque = waitForHit(windowNumber)
-                expect(opaque == windowNumber && !cover.ignoresMouseEvents,
-                    "opaque cold cover is the mouse-down hit target")
+                func coverAboveHost(_ ids: [Int]) -> Bool {
+                    guard let coverIndex = ids.firstIndex(of: windowNumber),
+                          let hostIndex = ids.firstIndex(of: hostNumber) else { return false }
+                    return coverIndex < hostIndex
+                }
+                let ordered = waitForWindows(coverAboveHost, onScreen: true)
+                guard let hostContent = host.contentView else {
+                    preconditionFailure("synthetic host must have drawable content")
+                }
+                let coverDrawable = cover.convertToScreen(content.convert(content.bounds, to: nil))
+                let hostDrawable = host.convertToScreen(hostContent.convert(hostContent.bounds, to: nil))
+                let overlap = coverDrawable.intersection(hostDrawable).intersection(screen.visibleFrame)
+                let usableOverlap = !overlap.isNull && overlap.width >= 16 && overlap.height >= 16
+                func hitCategory(_ hit: Int) -> String {
+                    if hit == windowNumber { return "cover" }
+                    if hit == hostNumber { return "fixture" }
+                    return hit <= 0 ? "none" : "other"
+                }
+                // Fix one point after real ordering settles. Query the unfiltered target; no input is posted.
+                let relativeOrder = coverAboveHost(ordered)
+                let canProbe = usableOverlap && relativeOrder
+                let point = canProbe ? NSPoint(x: overlap.midX, y: overlap.midY) : nil
+                let opaque = point.map { waitForHit(windowNumber, at: $0) } ?? 0
+                if opaque != windowNumber || cover.ignoresMouseEvents {
+                    let foregroundUnchanged = NSWorkspace.shared.frontmostApplication?.processIdentifier == beforePID
+                    let diagnostic = [
+                        "opaque hit=\(canProbe ? hitCategory(opaque) : "not-probed")",
+                        "coverOnScreen=\(ordered.contains(windowNumber))", "fixtureOnScreen=\(ordered.contains(hostNumber))",
+                        "relativeOrder=\(relativeOrder)", "usableOverlap=\(usableOverlap)",
+                        "coverFloating=\(cover.level == .floating)", "fixtureNormal=\(host.level == .normal)",
+                        "coverVisible=\(cover.isVisible)", "fixtureVisible=\(host.isVisible)",
+                        "appActive=\(NSApp.isActive)", "coverKey=\(cover.isKeyWindow)",
+                        "foregroundUnchanged=\(foregroundUnchanged)", "ignoresMouse=\(cover.ignoresMouseEvents)",
+                    ].joined(separator: " ")
+                    FileHandle.standardError.write(Data((diagnostic + "\n").utf8))
+                }
+                guard let hitPoint = point else {
+                    preconditionFailure("ordered owned windows must share a drawable hit-test point")
+                }
+                calibratedHitPoint = hitPoint
+                expect(!cover.ignoresMouseEvents, "opaque cold cover accepts mouse events")
+                expect(opaque == windowNumber, "opaque cold cover is the mouse-down hit target")
                 presentation.setOptionalCoverOpacity(0.5)
                 expect(cover.alphaValue == 0.5 && !cover.ignoresMouseEvents,
                     "partially faded cover still accepts mouse events")
                 presentation.setOptionalCoverOpacity(0)
-                let transparent = waitForHit(hostNumber)
+                let transparent = waitForHit(hostNumber, at: hitPoint)
                 let alphaZero = cover.alphaValue == 0
                 let oldIDInOptionAll = windowIDs(onScreen: false).contains(windowNumber)
                 let modelWindowIDStable = cover.windowNumber == windowNumber
                 let transparentPass = transparent == hostNumber && alphaZero && oldIDInOptionAll && modelWindowIDStable
                 if !transparentPass {
                     // Preserve the primary observation before any diagnostic-only changes.
-                    func hitCategory(_ hit: Int) -> String {
-                        if hit == windowNumber { return "cover" }
-                        if hit == hostNumber { return "fixture" }
-                        return hit <= 0 ? "none" : "other"
-                    }
                     let ownerAlive = NSApp.windows.contains { $0 === cover } && cover.delegate === delegate
                     let fixtureVisible = host.isVisible && host.frame.contains(hitPoint)
                     let originallyIgnoring = cover.ignoresMouseEvents
                     cover.ignoresMouseEvents = true
-                    let forcedIgnore = waitForHit(hostNumber)
+                    let forcedIgnore = waitForHit(hostNumber, at: hitPoint)
                     cover.ignoresMouseEvents = originallyIgnoring
                     presentation.restoreOptionalMediaCover()
-                    let restoredControl = waitForHit(windowNumber)
+                    let restoredControl = waitForHit(windowNumber, at: hitPoint)
                     presentation.discardColdPlayer()
-                    let discardedControl = waitForHit(hostNumber)
+                    let discardedControl = waitForHit(hostNumber, at: hitPoint)
                     host.orderOut(nil)
                     host.close()
                     let diagnostic = [
@@ -6601,7 +6633,7 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     "raising opacity lets the same cold cover accept mouse events again")
                 presentation.setOptionalCoverOpacity(0)
                 presentation.restoreOptionalMediaCover()
-                let restored = waitForHit(windowNumber)
+                let restored = waitForHit(windowNumber, at: hitPoint)
                 expect(restored == windowNumber && cover.alphaValue == 1 && !cover.ignoresMouseEvents,
                     "the restored cold cover is again the mouse-down hit target")
                 hits = ["opaque": opaque, "transparentBeforeDiscard": transparent, "restored": restored]
@@ -6658,7 +6690,10 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 "cold window never follows the user to another Space")
             presentation.discardColdPlayer()
             if !normalControl {
-                let afterDiscard = waitForHit(hostNumber)
+                guard let hitPoint = calibratedHitPoint else {
+                    preconditionFailure("discarded cover must reuse the calibrated hit-test point")
+                }
+                let afterDiscard = waitForHit(hostNumber, at: hitPoint)
                 expect(afterDiscard == hostNumber && !NSApp.isActive
                     && NSWorkspace.shared.frontmostApplication?.processIdentifier == beforePID,
                     "discard leaves the synthetic host as hit target without foreground activation")

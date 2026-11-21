@@ -1,0 +1,7 @@
+# Setup and state
+
+Copy this complete package into a harness's skill directory. Git is required to inspect a repository's committed content. Host discovery and actual invocation vary and must be verified in the target harness. No installation, network request, repository write or persistent state is needed for an ordinary local lesson.
+
+The packaged `scripts/history.sh` and `scripts/structure.py` are upstream references with explicit UTF-8 decoding added to structure.py. They read the working tree, and their path and import analysis does not establish semantic correctness or containment for untrusted files. Do not run them on the target checkout. Use the harness's read-only Git tools against the selected commit and validate evidence manually. This preserves the analysis method without assuming the scripts enforce the committed-content boundary.
+
+For a requested saved session, use `.azhou/super-rederive/` under an explicitly authorized root, use the bundled `scripts/azhou_runtime_state.py` `state_path` and `ensure_private_directory` functions to validate containment and create private directories. Open new files exclusively with user-only permissions and reject symlinks; never overwrite existing sessions. Store source revision, evidence, questions and progress separately. Starting over creates a new session and retains existing files. Do not modify another repository's ignore configuration. If private storage cannot be secured, continue in chat and report that persistence was unavailable.
