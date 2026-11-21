@@ -1327,6 +1327,7 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
     private var evaluations: [UUID: (Error) -> Void] = [:]
     private let optionalMediaProvider: NativeStartupMediaProvider?
     private let optionalMotionAllowed: () -> Bool
+    private let motionNotificationObject: AnyObject?
     private var selectedMedia: NativeStartupMediaPreparation?
     private var optionalMedia: OptionalStartupPresentation?
     private var optionalDeadline: (any NativeScheduledAction)?
@@ -1348,12 +1349,14 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
          workspaceNotifications: NotificationCenter = NSWorkspace.shared.notificationCenter,
          optionalMediaProvider: NativeStartupMediaProvider? = nil,
          optionalMotionAllowed: (() -> Bool)? = nil,
+         motionNotificationObject: AnyObject? = nil,
          event: @escaping (CodexNativePresentationEvent) -> Void) {
         self.nonce = nonce; self.expectedApplication = expectedApplication
         self.runtime = runtime; self.presentation = presentation; self.event = event
         self.workspaceNotifications = workspaceNotifications
         self.optionalMediaProvider = optionalMediaProvider
         self.optionalMotionAllowed = optionalMotionAllowed ?? { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+        self.motionNotificationObject = motionNotificationObject
     }
     func showCover() throws -> NativeCoverReceipt {
         guard !released else { throw CancellationError() }
@@ -1374,6 +1377,16 @@ final class NativeColdPlayer: NSObject, CodexNativePresentation, NSWindowDelegat
         let receipt = try presentation.showColdCover(locale: runtime.systemFallbackLocale(), runNonce: nonce, delegate: self)
         if !released, receipt.drawObserved, receipt.transactionCommitted, let optionalMediaProvider, optionalMotionAllowed() {
             selectedMedia = optionalMediaProvider()
+            if selectedMedia != nil {
+                workspaceObservers.append(workspaceNotifications.addObserver(
+                    forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                    object: motionNotificationObject ?? NSWorkspace.shared, queue: .main) { [weak self] _ in
+                        MainActor.assumeIsolated {
+                            guard let self, !self.released, !self.optionalMotionAllowed() else { return }
+                            self.optionalMedia?.tick()
+                        }
+                    })
+            }
         }
         return receipt
     }

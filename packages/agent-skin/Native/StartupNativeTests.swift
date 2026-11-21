@@ -176,6 +176,7 @@ private final class FakeNativePlayerPresentation: NativePlayerPresentation {
     private(set) var optionalReveals = 0
     private(set) var optionalOpacity: [Double] = []
     private let optionalLayer = CALayer()
+    var optionalTestPlayer: AVPlayer? { (optionalLayer.sublayers?.first as? AVPlayerLayer)?.player }
     var optionalRevealHook: (() -> Void)?
     func revealOptionalMedia() { optionalReveals += 1; optionalRevealHook?() }
     func setOptionalCoverOpacity(_ opacity: Double) { optionalOpacity.append(opacity) }
@@ -6010,7 +6011,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
     _ = NSApplication.shared
     let originalMenu = NSApp.mainMenu
     defer { NSApp.mainMenu = originalMenu }
-    for mode in ["complete", "media-fallback", "media-reduced", "media-complete", "media-expired", "media-late-skip", "media-motion-flip", "media-stage-skip", "media-short-to-canvas", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
+    for mode in ["complete", "media-fallback", "media-reduced", "media-complete", "media-expired", "media-late-skip", "media-motion-flip", "media-hold-motion", "media-stage-skip", "media-short-to-canvas", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
                  "cancel-open", "cancel-task", "short-preflight", "short-cover", "short-attach", "window-close",
                  "host-activation", "interrupt-open", "interrupt-prepare", "interrupt-wait", "space-wait"] {
         let runtime = FakeNativeAppRuntime(arguments: ["skin"], resourceURL: root)
@@ -6024,7 +6025,8 @@ private func nativeColdLaunchChecks() async throws -> Int {
         let transport = PreparedConnectorTransport(world)
         let system = FakeStartupSystem(expectedPID: 4123, ports: [49221])
         let presentation = FakeNativePlayerPresentation()
-        let workspaceNotifications = NotificationCenter()
+        let workspaceNotifications = TrackingWorkspaceNotifications()
+        let motionOrigin = NSObject()
         let unrelated = FakeNativeApplication(pid: 800, bundleIdentifier: "fixture.other", bundleURL: URL(fileURLWithPath: "/Applications/Other.app"))
         presentation.coverValid = mode != "bad-cover"
         presentation.coverHook = {
@@ -6083,13 +6085,16 @@ private func nativeColdLaunchChecks() async throws -> Int {
         let clipLease = NativeMediaLeaseFixture()
         var motionEnabled = mode != "media-reduced"
         if mode == "media-motion-flip" { presentation.optionalRevealHook = { motionEnabled = false } }
+        var heldStart: TimeInterval?
+        var heldFlipSample: TimeInterval?
+        if mode == "media-hold-motion" { world.preparedDisposition = "pending" }
         presentation.acceptsOptionalSurface = mode.hasPrefix("media-")
         let provider: NativeStartupMediaProvider?
         if presentation.acceptsOptionalSurface || mode == "hot" {
             provider = {
                 optionalSelections += 1
                 let configuration: OptionalStartupMedia.Configuration
-                if mode == "media-complete" || mode == "media-motion-flip" {
+                if ["media-complete", "media-motion-flip", "media-hold-motion"].contains(mode) {
                     configuration = .init(timeout: 4, holdAt: 0.35, fadeStart: 0.72, fadeEnd: 1.07)!
                 } else {
                     configuration = .init(timeout: 24, holdAt: 11.3, fadeStart: 12.7, fadeEnd: 13.65)!
@@ -6107,10 +6112,10 @@ private func nativeColdLaunchChecks() async throws -> Int {
                         precondition(clipLease.releases == 1, "Skip must unlink the registered stage before exit")
                         return nil
                     }
-                    let lease = ["media-complete", "media-late-skip", "media-motion-flip"].contains(mode) ? clipLease : nil
+                    let lease = ["media-complete", "media-late-skip", "media-motion-flip", "media-hold-motion"].contains(mode) ? clipLease : nil
                     return NativeStartupMediaSlot(configuration: configuration, clipLease: lease, makeItem: {
                         optionalItemBuilds += 1
-                        if mode == "media-complete" || mode == "media-motion-flip" { return AVPlayerItem(url: syntheticMedia) }
+                        if ["media-complete", "media-motion-flip", "media-hold-motion"].contains(mode) { return AVPlayerItem(url: syntheticMedia) }
                         if mode == "media-expired" {
                             runtime.uptime = 133
                             return AVPlayerItem(url: syntheticMedia)
@@ -6125,7 +6130,8 @@ private func nativeColdLaunchChecks() async throws -> Int {
             sequence.append("cover")
             return NativeColdPlayer(nonce: nonce, expectedApplication: key, runtime: runtime,
                 presentation: realPresentation ?? presentation, workspaceNotifications: workspaceNotifications,
-                optionalMediaProvider: provider, optionalMotionAllowed: { motionEnabled }, event: event)
+                optionalMediaProvider: provider, optionalMotionAllowed: { motionEnabled },
+                motionNotificationObject: motionOrigin, event: event)
         }
         presentation.evaluationHook = { source in
             if source.contains("finishNativeSnapshot") {
@@ -6151,7 +6157,25 @@ private func nativeColdLaunchChecks() async throws -> Int {
                 let observing = NativeStartupEventTransport(base: transport, capture: capture, events: events, now: { runtime.uptime })
                 return StartupConnector(target: target, expectedPort: port, system: system, transport: observing,
                     now: { runtime.uptime }, sleep: { _ in
-                        if ["media-complete", "media-motion-flip"].contains(mode), ProcessInfo.processInfo.systemUptime - fixtureStarted >= 6 {
+                        let now = ProcessInfo.processInfo.systemUptime
+                        if mode == "media-hold-motion", heldFlipSample == nil,
+                           let player = presentation.optionalTestPlayer, player.rate == 0,
+                           player.currentTime().seconds >= 0.35, presentation.optionalReveals == 1 {
+                            if heldStart == nil { heldStart = now }
+                            if let heldStart, now - heldStart >= 0.15 {
+                                heldFlipSample = player.currentTime().seconds
+                                motionEnabled = false
+                                workspaceNotifications.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                                                            object: NSObject())
+                                expect(presentation.optionalTestPlayer != nil && clipLease.releases == 0,
+                                       "an unrelated sender cannot trigger display preference teardown")
+                                workspaceNotifications.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification,
+                                                            object: motionOrigin)
+                                expect(presentation.optionalTestPlayer == nil && clipLease.releases == 1,
+                                       "display preference change releases paused media synchronously without PTS or workspace proof")
+                            }
+                        }
+                        if ["media-complete", "media-motion-flip", "media-hold-motion"].contains(mode), now - fixtureStarted >= 6 {
                             throw StartupFailure(reason: "attach-timeout", message: "fake media completion fixture deadline")
                         }
                         try await Task.sleep(nanoseconds: 1_000_000)
@@ -6199,6 +6223,18 @@ private func nativeColdLaunchChecks() async throws -> Int {
                    presentation.optionalReveals == 1 && presentation.optionalRestores == 1 &&
                    presentation.createdPlayers.isEmpty && presentation.optionalOpacity.isEmpty && clipLease.releases == 1,
                    "Reduce Motion enabled after real first frame releases optional media once without Canvas replay")
+        } else if mode == "media-hold-motion" {
+            expect(heldFlipSample != nil && receipt.presentation == .failed && receipt.reason == "startup-interrupted" &&
+                   receipt.workspace == nil && presentation.createdPlayers.isEmpty && presentation.optionalOpacity.isEmpty,
+                   "motion change in a quiet pending hold never replays Canvas or invents workspace success")
+            expect(workspaceNotifications.removalCount == 3, "all two original observers and the opt-in display observer are removed")
+            motionEnabled = true
+            workspaceNotifications.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: motionOrigin)
+            motionEnabled = false
+            workspaceNotifications.post(name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: motionOrigin)
+            expect(presentation.optionalRestores == 1 && presentation.optionalReveals == 1 && clipLease.releases == 1,
+                   "duplicate or stale preference notices cannot restore, release or replay again")
+            print("Quiet held media released synchronously at \(heldFlipSample!)s without workspace proof")
         } else if mode == "media-stage-skip" {
             expect(receipt.presentation == .skipped && receipt.workspace == nil && clipLease.releases == 1 &&
                    optionalItemBuilds == 0 && presentation.optionalSurfaceMounts == 0,
