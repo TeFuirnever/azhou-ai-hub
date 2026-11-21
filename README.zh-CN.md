@@ -203,7 +203,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 |---|---|---|
 | `super-azhou-info` | `info`、`version` | 只读报告项目、运行时、Git revision 和 dirty state。 |
 | `super-azhou-doctor` | `doctor` | 只读诊断仓库、显式安装 target、可选 Treehouse lease 和宿主陈旧安装迁移。`--verify` 的验证子进程限时 10 分钟，有输出时会报告最后一行。 |
-| `super-azhou-setup` | `setup`、`repair`、`migrate`、`uninstall` | 先 dry-run；只有经过核对的精确计划带 `--apply` 才能修改显式 target。 |
+| `super-azhou-setup` | `setup`、`repair`、`migrate`、`uninstall` | 先 dry-run。安装时绑定已核对的计划；修复、迁移和卸载在执行时重新检查当前状态。 |
 | `super-azhou-verify` | `verify` | 运行可公开复现的仓库完整性 gate，并拒绝输出中损坏或未通过的 Foundation setup JSON 结果。 |
 
 ~~~bash
