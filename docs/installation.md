@@ -52,6 +52,16 @@ python scripts/azhou_hub.py doctor --skill <skill-name> --target "$SKILLS_HOME" 
 
 The four Foundation Skills are portable UX wrappers around a local checkout. They do not bundle the repository CLI or infer a harness home. Invoke them while working in an Azhou AI Hub checkout or provide that checkout path explicitly; the Skill then runs the checkout's `scripts/azhou_hub.py`.
 
+## Check Codex discovery
+
+If an installed Skill is missing in Codex, open a terminal with the same Codex configuration as the project you use. From an Azhou AI Hub checkout, pass the absolute path of that project:
+
+~~~bash
+python scripts/azhou_hub.py doctor --codex-project /absolute/path/to/project --skill super-ask-azhou
+~~~
+
+The check reports whether the installed Codex CLI finds the Skill in that project and whether each listed copy is enabled. It shows the entry path and scope. For a missing Skill, check the project folder and installation scope. For a disabled Skill, enable the intended copy in Codex. If an enabled copy is found, try `$super-ask-azhou` in a new chat in that project to confirm invocation. Add `--target /absolute/path/to/project/.agents/skills` to also check the installed bytes against the checkout.
+
 ## Checkout-assisted setup
 
 Examples invoke the unversioned `python` interpreter (Python ≥3.11 required). If your system only installs a versioned name — common on macOS — substitute it in the examples, or add the unversioned name via `brew install python`.

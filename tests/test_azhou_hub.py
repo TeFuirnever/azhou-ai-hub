@@ -619,6 +619,46 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(0, apply_result)
             self.assertTrue((target / "sample").is_symlink())
 
+    def test_doctor_reports_codex_discovery_at_the_requested_project(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, _ = self._fixture_repo(directory)
+            project = root.resolve()
+            skill_path = str(project / ".agents/skills/sample/SKILL.md")
+            enabled = {"name": "sample", "path": skill_path, "scope": "repo", "enabled": True}
+            for entries, expected_status, expected_detail in (
+                ([enabled], "pass", "enabled copy"),
+                ([{**enabled, "enabled": False}], "fail", "disabled"),
+                ([], "fail", "did not find"),
+                ([enabled, {**enabled, "path": str(project / "other/sample/SKILL.md"), "scope": "user"}],
+                 "warn", "multiple enabled copies"),
+            ):
+                with self.subTest(entries=entries), mock.patch("codex_skill_discovery.read_skills", return_value=entries) as read:
+                    exit_code, payload = self._json_main(
+                        ["doctor", "--codex-project", str(project), "--skill", "sample", "--json"], root=root,
+                    )
+                    read.assert_called_once_with(project, {"sample"})
+                    check = next(row for row in payload["checks"] if row["name"] == "codex:sample")
+                    self.assertEqual(expected_status, check["status"])
+                    self.assertIn(expected_detail, check["details"])
+                    self.assertEqual(int(expected_status == "fail"), exit_code)
+                    self.assertEqual({"project": str(project), "catalog_read": True, "entries": entries},
+                                     payload["codex_discovery"])
+
+    def test_doctor_distinguishes_codex_probe_error_from_missing_skill(self) -> None:
+        from codex_skill_discovery import DiscoveryError
+
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, _ = self._fixture_repo(directory)
+            project = root.resolve()
+            with mock.patch("codex_skill_discovery.read_skills", side_effect=DiscoveryError("Catalog unavailable")):
+                exit_code, payload = self._json_main(
+                    ["doctor", "--codex-project", str(project), "--skill", "sample", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code)
+            self.assertFalse(payload["codex_discovery"]["catalog_read"])
+            self.assertIn({"name": "codex_discovery", "status": "fail", "details": "Catalog unavailable"},
+                          payload["checks"])
+
     def test_doctor_reports_wrong_link_target_as_failure(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "skills"
