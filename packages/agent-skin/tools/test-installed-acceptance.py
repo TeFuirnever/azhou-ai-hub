@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Read-only installed-app checks and an explicit, non-destructive cold-start test.
 
-No existing host is terminated. Missing Dock and cold-start evidence stays pending.
+No existing host is terminated. Dock, startup and wallpaper visuals require separate review.
 These are functional acceptance results, never unit coverage inputs.
 """
 from __future__ import annotations
@@ -145,7 +145,14 @@ print(String(data: data, encoding: .utf8)!)
         cases.append({"id": "FT-COLD", "status": "pending-not-run",
                       "next": "Rerun --cold-start only after the official host has been quit by its user."})
     wallpaper_ok, wallpaper = execute([str(executable), "--wallpaper-status"], out / "wallpaper.log")
-    cases.append({"id": "FT-WALLPAPER", "status": "passed" if wallpaper_ok and verified_wallpaper(wallpaper) else "failed"})
+    wallpaper_status_verified = wallpaper_ok and verified_wallpaper(wallpaper)
+    cases.append({"id": "FT-WALLPAPER",
+                  "status": "pending-visual-review" if wallpaper_status_verified else "failed",
+                  "runtimeStatusVerified": wallpaper_status_verified,
+                  "next": ("Verify the visible wallpaper in both the regular workspace and the Dot central conversation "
+                           "area of this installed candidate, including after switching away and back. "
+                           "Sidebar wallpaper alone is insufficient." if wallpaper_status_verified else
+                           "Inspect wallpaper.log for the failed runtime status check before visual review.")})
     return {"kind": "installed-functional-acceptance", "unitCoverageInput": False,
             "cases": cases, "passed": all(case["status"] == "passed" for case in cases),
             "limitations": ["Finder API evidence does not certify an actual Dock label.",

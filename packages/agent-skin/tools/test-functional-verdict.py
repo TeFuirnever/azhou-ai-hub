@@ -230,6 +230,10 @@ class FunctionalVerdictTests(unittest.TestCase):
                 return mode != "probe-failed", [{"event": "probe", "targetBundleID": "com.openai.codex",
                     "targetPath": "/Applications/Codex.app", "running": [{}] if mode == "running" else []}]
             if "--wallpaper-status" in command:
+                if mode == "wallpaper-failed":
+                    return False, [wallpaper]
+                if mode == "wallpaper-unverified":
+                    return True, [{**wallpaper, "workspaceBackgroundClear": False}]
                 return True, [wallpaper]
             self.assertEqual(command, [str(app / "Contents/MacOS/AzhouCodexStartup")])
             return mode != "launch-failed", launch
@@ -250,12 +254,25 @@ class FunctionalVerdictTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as temporary:
                 result, calls = self.run_installed_check(Path(temporary), main=main)
                 statuses = {case["id"]: case["status"] for case in result["cases"]}
-                self.assertEqual({"FT-INSTALL": "passed", "FT-FINDER": "passed", "FT-WALLPAPER": "passed",
+                self.assertEqual({"FT-INSTALL": "passed", "FT-FINDER": "passed", "FT-WALLPAPER": "pending-visual-review",
                     "FT-DOCK": "pending-visual-review", "FT-COLD": "pending-visual-review"}, statuses)
                 self.assertIs(result["passed"], False)
                 self.assertIs(result["unitCoverageInput"], False)
+                wallpaper = next(case for case in result["cases"] if case["id"] == "FT-WALLPAPER")
+                self.assertIs(wallpaper["runtimeStatusVerified"], True)
+                self.assertIn("Dot", wallpaper["next"])
+                self.assertIn("central conversation", wallpaper["next"])
                 self.assertFalse(any(any(word in argument for word in ("kill", "quit", "terminate"))
                                      for command in calls if command[0] != "xcrun" for argument in command))
+
+    def test_wallpaper_execution_or_status_failure_is_not_a_pending_visual_pass(self):
+        for mode in ("wallpaper-failed", "wallpaper-unverified"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                result, _ = self.run_installed_check(Path(temporary), mode=mode, cold=False)
+                wallpaper = next(case for case in result["cases"] if case["id"] == "FT-WALLPAPER")
+                self.assertEqual("failed", wallpaper["status"])
+                self.assertIs(wallpaper["runtimeStatusVerified"], False)
+                self.assertIs(result["passed"], False)
 
     def test_whole_check_rejects_foreign_hot_incomplete_and_failed_cold_runs(self):
         for mode in ("foreign", "hot", "missing-terminal", "malformed", "launch-failed"):
