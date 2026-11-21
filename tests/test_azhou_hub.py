@@ -141,6 +141,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 "super-i-have-adhd",
                 "super-imagegen",
                 "super-lavish",
+                "super-rederive",
                 "super-repo-pedant",
                 "super-session-insights",
             ],
