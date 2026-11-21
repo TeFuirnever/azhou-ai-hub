@@ -216,6 +216,8 @@ python scripts/azhou_hub.py verify
 
 If Codex cannot find an installed Skill, use Doctor to check discovery for the current project. [Codex discovery guide](docs/installation.md#check-codex-discovery)
 
+Managed uninstall retains a verified receipt of removal. Doctor reports unexpected missing installations as failures.
+
 [Foundation CLI contract](docs/foundations.md)
 
 <picture>

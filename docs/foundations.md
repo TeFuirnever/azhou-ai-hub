@@ -157,7 +157,7 @@ python scripts/azhou_hub.py uninstall \
   --receipt "$RECEIPT" --target "$SKILLS_HOME" --apply --json
 ~~~
 
-`repair` never updates changed source or overwrites drift. `migrate` does not move between harness roots or rename a skill. `uninstall` does not scan by name, accept `--force`, or remove drifted/unowned content. A missing managed artifact is an idempotent no-op.
+`repair` never updates changed source or overwrites drift. `migrate` does not move between harness roots or rename a skill. `uninstall` does not scan by name, accept `--force`, or remove drifted/unowned content. A missing managed artifact is an idempotent no-op. To reinstall after a recorded uninstall, archive the old receipt outside the active receipts directory, then create a new managed setup plan. A successful removal marks its integrity-checked v2 receipt as uninstalled. Doctor verifies that receipt against the same source and an absent destination. An unexpectedly missing active installation remains a failure. To reconcile an older retained v2 receipt after an intentional uninstall, run uninstall without `--apply`, inspect the already-absent result, and rerun with `--apply`. If recording the completed removal fails, uninstall reports partial. When the old active receipt remains in place, Doctor reports it as inconsistent. If another actor moved it, Doctor cannot infer that history from an empty receipt directory. An uninstalled receipt cannot authorize repair or migration.
 
 ## Exit codes and status
 

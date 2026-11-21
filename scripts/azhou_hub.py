@@ -90,9 +90,20 @@ def _receipt_digest(receipt: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
 
-def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
-    path = path.expanduser().resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
+def _write_receipt(
+    path: Path,
+    receipt: dict[str, Any],
+    *,
+    expected_identity: tuple[int, int, int] | None = None,
+    expected_digest: str | None = None,
+    expected_target: Path | None = None,
+) -> None:
+    path = path.expanduser().absolute() if expected_identity is not None else path.expanduser().resolve()
+    if expected_identity is not None:
+        if expected_target is None or _receipt_path_error(path, expected_target):
+            raise PackageError("receipt path changed while uninstall was running")
+    else:
+        path.parent.mkdir(parents=True, exist_ok=True)
     payload = dict(receipt)
     payload["integrity_digest"] = _receipt_digest(payload)
     fd, stage_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -104,6 +115,12 @@ def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
             handle.write(_canonical_json(payload) + b"\n")
             handle.flush()
             os.fsync(handle.fileno())
+        if expected_identity is not None:
+            if _receipt_path_error(path, expected_target) or path.is_symlink() or _path_identity(path) != expected_identity:
+                raise PackageError("receipt changed while uninstall was running")
+            current, error = _load_receipt(path)
+            if error or current is None or current.get("integrity_digest") != expected_digest:
+                raise PackageError("receipt changed while uninstall was running")
         os.replace(stage, path)
     finally:
         try:
@@ -117,7 +134,7 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
         payload = json.loads(path.expanduser().read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         return None, f"cannot read receipt: {exc}"
-    if not isinstance(payload, dict) or payload.get("schema") not in {LEGACY_RECEIPT_SCHEMA, RECEIPT_SCHEMA}:
+    if not isinstance(payload, dict) or payload.get("schema") not in (LEGACY_RECEIPT_SCHEMA, RECEIPT_SCHEMA):
         return None, "receipt_invalid: unsupported receipt schema"
     if payload.get("integrity_digest") != _receipt_digest(payload):
         return None, "receipt_invalid: integrity digest mismatch"
@@ -131,6 +148,10 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
     item = payload["skills"][0]
     if not isinstance(item, dict) or any(not isinstance(item.get(key), str) or not item.get(key) for key in ("name", "source", "source_root", "source_digest", "destination", "installed_digest")):
         return None, "receipt_invalid: malformed skill item"
+    if payload.get("lifecycle_state", "active") not in ("active", "uninstalled"):
+        return None, "receipt_invalid: unsupported lifecycle state"
+    if payload.get("lifecycle_state") == "uninstalled" and payload["schema"] != RECEIPT_SCHEMA:
+        return None, "receipt_invalid: legacy receipt cannot record an uninstall"
     if payload["schema"] == RECEIPT_SCHEMA:
         if _receipt_identity(item.get("installed_identity")) is None:
             return None, "receipt_invalid: malformed installed identity"
@@ -257,7 +278,10 @@ def _doctor_hub_receipts(root: Path, target: Path) -> tuple[str, str]:
         if Path(receipt["source_root"]).resolve() != (root / "skills").resolve():
             return "fail", f"{path.name}: canonical source mismatch"
         state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
-        if state != "current":
+        if receipt.get("lifecycle_state") == "uninstalled":
+            if state != "missing":
+                return "fail", f"{path.name}: uninstalled receipt conflicts with destination or source: {details}"
+        elif state != "current":
             return "fail", f"{path.name}: {details}"
     return "pass", f"{len(managed)} checkout-managed receipt(s) verified in .azhou/hub/receipts"
 
@@ -623,9 +647,15 @@ def setup_skills(
                 row["status"] = "conflict"
                 row["details"] = "managed setup cannot adopt an existing installation without its receipt"
         elif planned_rows and receipt_exists:
+            existing_receipt, receipt_error = _load_receipt(receipt_path)
             for row in planned_rows:
                 row["status"] = "conflict"
-                row["details"] = "managed receipt already exists; use repair or uninstall"
+                if receipt_error:
+                    row["details"] = receipt_error
+                elif existing_receipt is not None and existing_receipt.get("lifecycle_state") == "uninstalled":
+                    row["details"] = "archive the uninstalled receipt outside the active receipts directory before reinstalling"
+                else:
+                    row["details"] = "managed receipt already exists; use repair or uninstall"
         elif current_rows and receipt_exists:
             receipt, receipt_error = _load_receipt(receipt_path)
             if (
@@ -877,6 +907,8 @@ def repair_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bool)
     receipt, error = _load_receipt(receipt_path)
     if error:
         return _lifecycle_report("fail", [], error=error)
+    if receipt.get("lifecycle_state") == "uninstalled":
+        return _lifecycle_report("fail", [], error="receipt records an uninstalled artifact")
     target = target.expanduser().resolve()
     if Path(receipt["target"]).resolve() != target:
         return _lifecycle_report("fail", [], error="receipt_invalid: target mismatch")
@@ -964,6 +996,10 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
     receipt, error = _load_receipt(receipt_path)
     if error:
         return _lifecycle_report("fail", [], error=error)
+    receipt_identity = _path_identity(receipt_path.expanduser())
+    receipt_digest = receipt.get("integrity_digest")
+    if receipt_identity is None or receipt_path.expanduser().is_symlink():
+        return _lifecycle_report("fail", [], error="receipt identity cannot be proven")
     target = target.expanduser().resolve()
     if Path(receipt["target"]).resolve() != target:
         return _lifecycle_report("fail", [], error="receipt_invalid: target mismatch")
@@ -973,6 +1009,8 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
     identities: dict[str, tuple[int, int, int]] = {}
     for item in receipt["skills"]:
         state, details = _receipt_item_state(item, receipt["mode"], target, root)
+        if receipt.get("lifecycle_state") == "uninstalled" and state != "missing":
+            state, details = "conflict", "uninstalled receipt conflicts with destination or source"
         if state == "current":
             identity = _receipt_identity(item.get("installed_identity"))
             if identity is None:
@@ -995,6 +1033,18 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             except (OSError, PackageError) as exc:
                 row["status"], row["details"] = "fail", str(exc)
                 return _lifecycle_report("partial", rows, error="uninstall failed")
+    if receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled":
+        try:
+            state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
+            if state != "missing":
+                raise PackageError(f"uninstall could not confirm absence: {details}")
+            receipt["lifecycle_state"] = "uninstalled"
+            _write_receipt(
+                receipt_path, receipt, expected_identity=receipt_identity,
+                expected_digest=receipt_digest, expected_target=target,
+            )
+        except (OSError, ValueError, PackageError) as exc:
+            return _lifecycle_report("partial", rows, error=f"uninstall receipt update failed: {exc}")
     return _lifecycle_report("pass", rows)
 
 
@@ -1005,6 +1055,8 @@ def migrate_receipt(*, receipt_path: Path, target: Path, root: Path, mode: str, 
     receipt, error = _load_receipt(receipt_path)
     if error:
         return _lifecycle_report("fail", [], error=error)
+    if receipt.get("lifecycle_state") == "uninstalled":
+        return _lifecycle_report("fail", [], error="receipt records an uninstalled artifact")
     target = target.expanduser().resolve()
     if Path(receipt["target"]).resolve() != target:
         return _lifecycle_report("fail", [], error="receipt_invalid: target mismatch")
