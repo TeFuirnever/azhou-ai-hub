@@ -1585,11 +1585,13 @@ class AzhouHubCliTest(unittest.TestCase):
                 args = ["doctor", "--target", str(target), "--skill", "sample", "--json"]
                 exit_code, before = self._json_main(args, root=root)
                 self.assertEqual(0, exit_code, before)
+                receipt_bytes = receipt.read_bytes()
                 exit_code, removed = self._json_main(
                     ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
                 )
                 self.assertEqual(0, exit_code, removed)
-                self.assertEqual("uninstalled", json.loads(receipt.read_text())["lifecycle_state"])
+                self.assertEqual(receipt_bytes, receipt.read_bytes())
+                self.assertEqual("uninstalled", azhou_hub._load_receipt(receipt)[0]["lifecycle_state"])
                 exit_code, after = self._json_main(args, root=root)
                 self.assertEqual(0, exit_code, after)
                 self.assertEqual("pass", next(c for c in after["checks"] if c["name"] == "target:hub-receipts")["status"])
@@ -1620,11 +1622,90 @@ class AzhouHubCliTest(unittest.TestCase):
                 ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
             )
             self.assertEqual(0, exit_code, repaired)
-            self.assertEqual("uninstalled", json.loads(receipt.read_text())["lifecycle_state"])
+            self.assertEqual("uninstalled", azhou_hub._load_receipt(receipt)[0]["lifecycle_state"])
             exit_code, report = self._json_main(
                 ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
             )
             self.assertEqual(0, exit_code, report)
+
+    def test_doctor_rejects_replaced_uninstall_record(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            exit_code, result = self._json_main(
+                ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+            )
+            self.assertEqual(0, exit_code, result)
+            marker = next((receipt.parent.parent / "uninstalled").iterdir())
+            marker.unlink()
+            shutil.copy2(receipt, marker)
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(1, exit_code, report)
+            self.assertIn("does not match receipt", next(c for c in report["checks"] if c["name"] == "target:hub-receipts")["details"])
+
+    def test_doctor_accepts_previous_embedded_uninstall_state(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            shutil.rmtree(target / "sample")
+            payload = json.loads(receipt.read_text())
+            payload["lifecycle_state"] = "uninstalled"
+            payload["integrity_digest"] = azhou_hub._receipt_digest(payload)
+            receipt.write_text(json.dumps(payload))
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(0, exit_code, report)
+            self.assertEqual("pass", next(c for c in report["checks"] if c["name"] == "target:hub-receipts")["status"])
+
+    @unittest.skipUnless(azhou_hub.LINK_SUPPORTS_DIR_FD, "directory handles are unavailable")
+    def test_uninstall_record_creation_does_not_follow_a_redirected_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            records = receipt.parent.parent / "uninstalled"
+            moved = Path(directory) / "moved-records"
+            outside = Path(directory) / "outside"
+            outside.mkdir()
+            link = os.link
+
+            def redirect_before_link(*args, **kwargs):
+                records.rename(moved)
+                records.symlink_to(outside, target_is_directory=True)
+                return link(*args, **kwargs)
+
+            with mock.patch.object(azhou_hub.os, "link", side_effect=redirect_before_link):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertEqual([], list(outside.iterdir()))
+            self.assertTrue(receipt.is_file())
+
+    @unittest.skipUnless(azhou_hub.LINK_SUPPORTS_DIR_FD, "directory handles are unavailable")
+    def test_uninstall_record_directory_creation_does_not_follow_redirected_hub(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            hub = receipt.parent.parent
+            moved = Path(directory) / "moved-hub"
+            outside = Path(directory) / "outside"
+            outside.mkdir()
+            mkdir = os.mkdir
+
+            def redirect_before_creation(path, mode=0o777, *, dir_fd=None):
+                if path == "uninstalled" and dir_fd is not None:
+                    hub.rename(moved)
+                    hub.symlink_to(outside, target_is_directory=True)
+                return mkdir(path, mode, dir_fd=dir_fd)
+
+            with mock.patch.object(azhou_hub.os, "mkdir", side_effect=redirect_before_creation):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertEqual([], list(outside.iterdir()))
+            self.assertTrue((moved / "receipts" / receipt.name).is_file())
 
     def test_doctor_rejects_malformed_lifecycle_state_without_crashing(self) -> None:
         for invalid in ([], {}, None, 1):
@@ -1645,7 +1726,7 @@ class AzhouHubCliTest(unittest.TestCase):
     def test_receipt_write_failure_after_uninstall_reports_partial(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")
-            with mock.patch.object(azhou_hub, "_write_receipt", side_effect=OSError("disk full")):
+            with mock.patch.object(azhou_hub, "_mark_receipt_uninstalled", side_effect=OSError("disk full")):
                 exit_code, result = self._json_main(
                     ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
                 )
@@ -1657,6 +1738,35 @@ class AzhouHubCliTest(unittest.TestCase):
                 ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
             )
             self.assertEqual(1, exit_code, report)
+
+    def test_unavailable_hard_links_leave_receipt_intact_and_report_partial(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            original = receipt.read_bytes()
+            with mock.patch.object(azhou_hub.os, "link", side_effect=OSError("hard links unavailable")):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertEqual(original, receipt.read_bytes())
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(1, exit_code, report)
+
+    @unittest.skipIf(os.name == "nt", "Windows uses its own path guard")
+    def test_unsupported_platform_refuses_before_removing_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            with mock.patch.object(azhou_hub, "LINK_SUPPORTS_DIR_FD", False):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("fail", result["status"])
+            self.assertIn("unavailable", result["error"])
+            self.assertTrue((target / "sample" / "SKILL.md").is_file())
 
     def test_uninstall_does_not_recreate_a_concurrently_archived_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1678,6 +1788,105 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertFalse(receipt.exists())
             self.assertTrue(archive.is_file())
             self.assertNotIn("lifecycle_state", json.loads(archive.read_text()))
+
+    @unittest.skipIf(os.name == "nt", "Windows prevents replacement while record is published")
+    def test_uninstall_never_overwrites_receipt_replaced_at_record_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            archive = Path(directory) / "original.json"
+            original = receipt.read_bytes()
+            link = os.link
+
+            def replace_before_link(*args, **kwargs):
+                receipt.rename(archive)
+                shutil.copy2(archive, receipt)
+                return link(*args, **kwargs)
+
+            with mock.patch.object(azhou_hub.os, "link", side_effect=replace_before_link):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertEqual(original, receipt.read_bytes())
+            self.assertEqual(original, archive.read_bytes())
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(1, exit_code, report)
+            self.assertEqual("fail", next(c for c in report["checks"] if c["name"] == "target:hub-receipts")["status"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows sharing semantics required")
+    def test_windows_publication_blocks_cross_process_directory_and_receipt_renames(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            records = receipt.parent.parent / "uninstalled"
+            original = receipt.read_bytes()
+            link = os.link
+            attempted = []
+
+            def try_redirect_before_link(*args, **kwargs):
+                for path in (receipt, records, receipt.parent.parent):
+                    destination = path.with_name(path.name + "-moved")
+                    command = (
+                        "import json, os, sys\n"
+                        "try: os.rename(sys.argv[1], sys.argv[2])\n"
+                        "except OSError as exc: print(json.dumps({'winerror': exc.winerror})); sys.exit(0)\n"
+                        "sys.exit(9)\n"
+                    )
+                    result = subprocess.run([sys.executable, "-c", command, str(path), str(destination)],
+                                            capture_output=True, text=True, encoding="utf-8", timeout=15)
+                    self.assertEqual(0, result.returncode, f"{path}: {result.stderr}")
+                    self.assertIn(json.loads(result.stdout)["winerror"], (5, 32, 33))
+                    self.assertFalse(destination.exists())
+                    attempted.append(path)
+                return link(*args, **kwargs)
+
+            with mock.patch.object(azhou_hub.os, "link", side_effect=try_redirect_before_link):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(0, exit_code, result)
+            self.assertEqual(3, len(attempted))
+            self.assertEqual(original, receipt.read_bytes())
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(0, exit_code, report)
+            moved = records.with_name("uninstalled-moved")
+            records.rename(moved)
+            moved.rename(records)
+
+    @unittest.skipUnless(os.name == "nt", "Windows CLI acceptance required")
+    def test_windows_cli_managed_install_uninstall_and_doctor(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "project" / ".agents" / "skills"
+            target.mkdir(parents=True)
+            receipt = target / ".azhou" / "hub" / "receipts" / "super-ask-azhou.json"
+
+            def run(*args):
+                process = subprocess.run(
+                    [sys.executable, str(ROOT / "scripts" / "azhou_hub.py"), *map(str, args), "--json"],
+                    capture_output=True, text=True, encoding="utf-8", timeout=60,
+                )
+                self.assertEqual(0, process.returncode, process.stderr + process.stdout)
+                return json.loads(process.stdout)
+
+            setup = ("setup", "--target", target, "--skill", "super-ask-azhou", "--mode", "copy", "--managed", "--receipt", receipt)
+            plan = run(*setup)
+            self.assertFalse((target / "super-ask-azhou").exists())
+            self.assertEqual("pass", run(*setup, "--apply", "--plan-id", plan["planId"])["status"])
+            original = receipt.read_bytes()
+            before = run("doctor", "--target", target, "--skill", "super-ask-azhou")
+            self.assertEqual("healthy", before["status"])
+            uninstall = ("uninstall", "--target", target, "--receipt", receipt)
+            self.assertEqual("dry_run", run(*uninstall)["status"])
+            self.assertEqual("pass", run(*uninstall, "--apply")["status"])
+            self.assertEqual(original, receipt.read_bytes())
+            self.assertFalse((target / "super-ask-azhou").exists())
+            after = run("doctor", "--target", target, "--skill", "super-ask-azhou")
+            self.assertEqual("pass", next(c for c in after["checks"] if c["name"] == "target:hub-receipts")["status"])
+            self.assertEqual("already_absent", run(*uninstall, "--apply")["skills"][0]["status"])
 
     def test_uninstall_reports_partial_if_receipt_becomes_malformed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1858,7 +2067,7 @@ class AzhouHubCliTest(unittest.TestCase):
 
             def swapped_identity(path: Path):
                 nonlocal calls
-                if path == receipt:
+                if path.resolve() != installed.resolve():
                     return real_path_identity(path)
                 calls += 1
                 if calls == 1:

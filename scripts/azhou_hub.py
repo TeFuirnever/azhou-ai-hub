@@ -18,7 +18,7 @@ import tempfile
 import threading
 import time
 import uuid
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from typing import Any, Iterable
 
 SCRIPT_DIRECTORY = Path(__file__).resolve().parent
@@ -37,6 +37,10 @@ DOCTOR_VERIFY_TAIL_BYTES = 8192
 COMMANDS = ["doctor", "info", "setup", "verify", "version"]
 RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v2"
 LEGACY_RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v1"
+LINK_SUPPORTS_DIR_FD = (
+    os.link in os.supports_dir_fd and os.open in os.supports_dir_fd and os.mkdir in os.supports_dir_fd
+    and hasattr(os, "O_DIRECTORY") and hasattr(os, "O_NOFOLLOW")
+)
 IGNORED_PACKAGE_PARTS = {".git", ".omc", ".omx", ".venv", "__pycache__", "node_modules"}
 HOST_CONFIG_SUFFIXES = {".json", ".toml"}
 HOST_SKILL_PATH_PATTERN = re.compile(r"skills/([A-Za-z0-9][A-Za-z0-9_.-]*)/")
@@ -90,20 +94,9 @@ def _receipt_digest(receipt: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
 
-def _write_receipt(
-    path: Path,
-    receipt: dict[str, Any],
-    *,
-    expected_identity: tuple[int, int, int] | None = None,
-    expected_digest: str | None = None,
-    expected_target: Path | None = None,
-) -> None:
-    path = path.expanduser().absolute() if expected_identity is not None else path.expanduser().resolve()
-    if expected_identity is not None:
-        if expected_target is None or _receipt_path_error(path, expected_target):
-            raise PackageError("receipt path changed while uninstall was running")
-    else:
-        path.parent.mkdir(parents=True, exist_ok=True)
+def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
+    path = path.expanduser().resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = dict(receipt)
     payload["integrity_digest"] = _receipt_digest(payload)
     fd, stage_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
@@ -115,12 +108,6 @@ def _write_receipt(
             handle.write(_canonical_json(payload) + b"\n")
             handle.flush()
             os.fsync(handle.fileno())
-        if expected_identity is not None:
-            if _receipt_path_error(path, expected_target) or path.is_symlink() or _path_identity(path) != expected_identity:
-                raise PackageError("receipt changed while uninstall was running")
-            current, error = _load_receipt(path)
-            if error or current is None or current.get("integrity_digest") != expected_digest:
-                raise PackageError("receipt changed while uninstall was running")
         os.replace(stage, path)
     finally:
         try:
@@ -157,7 +144,92 @@ def _load_receipt(path: Path) -> tuple[dict[str, Any] | None, str | None]:
             return None, "receipt_invalid: malformed installed identity"
     elif item.get("installed_identity") != payload["mode"]:
         return None, "receipt_invalid: malformed legacy installed identity"
+    if payload["schema"] == RECEIPT_SCHEMA and payload.get("lifecycle_state") != "uninstalled":
+        target = Path(payload["target"])
+        if not _receipt_path_error(path, target):
+            try:
+                marker = _uninstall_marker(path, payload)
+                if marker.parent.is_symlink():
+                    return None, "receipt_invalid: uninstall records directory is a symlink"
+                if marker.exists() or marker.is_symlink():
+                    if marker.is_symlink() or _path_identity(marker) != _path_identity(path):
+                        return None, "receipt_invalid: uninstall record does not match receipt"
+                    payload["lifecycle_state"] = "uninstalled"
+            except (OSError, ValueError, PackageError, azhou_runtime_state.StateError) as exc:
+                return None, f"receipt_invalid: cannot check uninstall record: {exc}"
     return payload, None
+
+
+def _uninstall_marker(path: Path, receipt: dict[str, Any]) -> Path:
+    identity = _path_identity(path)
+    if identity is None:
+        raise PackageError("receipt identity cannot be proven")
+    name = hashlib.sha256(_canonical_json([path.name, identity, receipt["integrity_digest"]])).hexdigest()
+    try:
+        return azhou_runtime_state.state_path(Path(receipt["target"]), "hub", "uninstalled", name)
+    except azhou_runtime_state.StateError as exc:
+        raise PackageError(str(exc)) from exc
+
+
+def _mark_receipt_uninstalled(path: Path, receipt: dict[str, Any], target: Path, identity: tuple[int, int, int], target_identity: tuple[int, int, int]) -> None:
+    path = path.expanduser().absolute()
+    if _receipt_path_error(path, target) or path.is_symlink() or _path_identity(path) != identity:
+        raise PackageError("receipt changed while uninstall was running")
+    current, error = _load_receipt(path)
+    if error or current is None or current.get("integrity_digest") != receipt.get("integrity_digest"):
+        raise PackageError("receipt changed while uninstall was running")
+    marker = _uninstall_marker(path, receipt)
+    try:
+        if LINK_SUPPORTS_DIR_FD:
+            flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+            with ExitStack() as stack:
+                def open_directory(name: str | Path, *, parent: int | None = None) -> int:
+                    fd = os.open(name, flags, dir_fd=parent)
+                    stack.callback(os.close, fd)
+                    return fd
+                root_fd = open_directory(target)
+                root_stat = os.fstat(root_fd)
+                if (root_stat.st_dev, root_stat.st_ino, root_stat.st_mode) != target_identity:
+                    raise PackageError("target changed while uninstall was running")
+                azhou_fd = open_directory(".azhou", parent=root_fd)
+                hub_fd = open_directory("hub", parent=azhou_fd)
+                src_fd = open_directory("receipts", parent=hub_fd)
+                try:
+                    os.mkdir("uninstalled", mode=0o700, dir_fd=hub_fd)
+                except FileExistsError:
+                    pass
+                dst_fd = open_directory("uninstalled", parent=hub_fd)
+                src_stat, dst_stat = os.fstat(src_fd), os.fstat(dst_fd)
+                src_identity = (src_stat.st_dev, src_stat.st_ino, src_stat.st_mode)
+                dst_identity = (dst_stat.st_dev, dst_stat.st_ino, dst_stat.st_mode)
+                if dst_stat.st_mode & 0o077:
+                    raise PackageError("uninstall records directory is not private")
+                if _path_identity(path.parent) != src_identity or _path_identity(marker.parent) != dst_identity:
+                    raise PackageError("receipt directory changed while uninstall was running")
+                os.link(path.name, marker.name, src_dir_fd=src_fd, dst_dir_fd=dst_fd, follow_symlinks=False)
+        elif os.name == "nt":
+            from azhou_windows_path_guard import PathGuard
+
+            with PathGuard() as guard:
+                guard.hold(path.parent, directory=True)
+                if _receipt_path_error(path, target) or _path_identity(path) != identity or _path_identity(target) != target_identity:
+                    raise PackageError("receipt changed while uninstall was running")
+                azhou_runtime_state.ensure_private_directory(marker.parent, root=target)
+                guard.hold(marker.parent, directory=True)
+                guard.hold(path, directory=False)
+                current, error = _load_receipt(path)
+                if error or current is None or _path_identity(path) != identity or current.get("integrity_digest") != receipt.get("integrity_digest"):
+                    raise PackageError("receipt changed while uninstall was running")
+                os.link(path, marker, follow_symlinks=False)
+        else:
+            raise PackageError("safe uninstall recording is unavailable on this platform")
+    except azhou_runtime_state.StateError as exc:
+        raise PackageError(str(exc)) from exc
+    if _receipt_path_error(path, target) or _path_identity(target) != target_identity or path.is_symlink() or _path_identity(path) != identity or _path_identity(marker) != identity:
+        raise PackageError("receipt changed while uninstall was running")
+    current, error = _load_receipt(path)
+    if error or current is None or current.get("integrity_digest") != receipt.get("integrity_digest") or current.get("lifecycle_state") != "uninstalled":
+        raise PackageError("receipt changed while uninstall was running")
 
 
 def _receipt_path_error(path: Path, target: Path) -> str | None:
@@ -175,7 +247,7 @@ def _receipt_path_error(path: Path, target: Path) -> str | None:
         resolved = raw.resolve(strict=False)
         if resolved.parent != allowed.resolve(strict=False):
             return "receipt path must be directly inside target/.azhou/hub/receipts"
-    except (OSError, azhou_runtime_state.StateError) as exc:
+    except (OSError, ValueError, azhou_runtime_state.StateError) as exc:
         return str(exc)
     return None
 
@@ -997,10 +1069,12 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
     if error:
         return _lifecycle_report("fail", [], error=error)
     receipt_identity = _path_identity(receipt_path.expanduser())
-    receipt_digest = receipt.get("integrity_digest")
     if receipt_identity is None or receipt_path.expanduser().is_symlink():
         return _lifecycle_report("fail", [], error="receipt identity cannot be proven")
     target = target.expanduser().resolve()
+    target_identity = _path_identity(target)
+    if target_identity is None or not stat.S_ISDIR(target_identity[2]):
+        return _lifecycle_report("fail", [], error="target identity cannot be proven")
     if Path(receipt["target"]).resolve() != target:
         return _lifecycle_report("fail", [], error="receipt_invalid: target mismatch")
     if Path(receipt["source_root"]).resolve() != (root / "skills").resolve():
@@ -1022,6 +1096,8 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
         return _lifecycle_report("fail", rows)
     if not apply:
         return _lifecycle_report("dry_run", rows)
+    if receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled" and not LINK_SUPPORTS_DIR_FD and os.name != "nt":
+        return _lifecycle_report("fail", rows, error="safe uninstall recording is unavailable on this platform")
     for row in rows:
         if row["status"] == "current":
             item = Path(row["destination"])
@@ -1038,11 +1114,7 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
             if state != "missing":
                 raise PackageError(f"uninstall could not confirm absence: {details}")
-            receipt["lifecycle_state"] = "uninstalled"
-            _write_receipt(
-                receipt_path, receipt, expected_identity=receipt_identity,
-                expected_digest=receipt_digest, expected_target=target,
-            )
+            _mark_receipt_uninstalled(receipt_path, receipt, target, receipt_identity, target_identity)
         except (OSError, ValueError, PackageError) as exc:
             return _lifecycle_report("partial", rows, error=f"uninstall receipt update failed: {exc}")
     return _lifecycle_report("pass", rows)
