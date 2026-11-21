@@ -39,7 +39,7 @@ Select the skill and harness in one command. For example, run this from the proj
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 ~~~
 
-For a user-wide install, add `--global`. Keep the scope for later updates and removal. This installation has no repository-owned receipt. Verify discovery and invocation in the target harness.
+For a user-wide install, add `--global`. Keep the scope for later updates and removal. This installation has no repository-owned receipt. Open a new session in the target harness and try the [Ask Azhou example](../README.md). Check that the answer recommends the expected skill.
 
 ## Verify what you installed
 
@@ -234,11 +234,17 @@ For Skills CLI installations, use the owning scope and name the skill. Run proje
 
 ~~~bash
 npx skills list --agent codex
+npx skills check --project super-ask-azhou
+~~~
+
+The check reports available updates and local changes without installing anything. Read its output before deciding whether to update. Run the command for the operation you need.
+
+~~~bash
 npx skills update --project super-ask-azhou
 npx skills remove super-ask-azhou
 ~~~
 
-For a user-wide install, add `--global` to `list` and `remove`, and replace `--project` with `--global` in `update`. See the [Skills CLI command reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md). For a Skill shared through `.agents/skills/`, removing it by name from its installation scope also affects other agents that use that copy. Run `list` again after removal. Verify the resulting skill in the harness after updating.
+For a user-wide install, add `--global` to `list` and `remove`, and replace `--project` with `--global` in `check` and `update`. See the [Skills CLI command reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md). For a Skill shared through `.agents/skills/`, removing it by name from its installation scope also affects other agents that use that copy. Run `list` again after removal. Verify the resulting skill in the harness after updating.
 
 For a manual copy, review local changes before replacing the whole skill directory with the intended snapshot. For an unmanaged symlink, update its source checkout and rerun verification.
 

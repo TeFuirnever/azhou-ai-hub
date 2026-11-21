@@ -23,6 +23,27 @@ https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
   <img src="assets/github/readme-banner-install.zh-CN.jpg" alt="安装：一条命令，装一个 skill" width="100%">
 </picture>
 
+在你想使用 Ask Azhou 的项目里执行下面的命令。
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+~~~
+
+在同一项目打开一个新的 Codex 会话，试着问下面的问题。
+
+> `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub Skill？
+
+Ask Azhou 应推荐 `super-archify`。
+
+想检查当前项目里这套 Skill 是否有更新，可以执行下面的命令。
+
+~~~bash
+npx skills check --project super-ask-azhou
+~~~
+
+<details>
+<summary>其他 Skill 安装命令</summary>
+
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
 npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
@@ -31,7 +52,6 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
 npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
@@ -41,6 +61,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
+
+</details>
 
 每个 skill 只选一种安装方式。包管理器安装解析的是可变默认分支；四个 `super-azhou-*` 包仍需要显式本地 checkout。
 

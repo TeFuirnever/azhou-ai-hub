@@ -23,6 +23,27 @@ https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
   <img src="assets/github/readme-banner-install.jpg" alt="Install: one command per skill" width="100%">
 </picture>
 
+In the project where you want to use Ask Azhou, run this command.
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+~~~
+
+Open a new Codex chat in that project and try the following question.
+
+> `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
+
+Look for a recommendation of `super-archify`.
+
+To check for an update to this project installation, run the following command.
+
+~~~bash
+npx skills check --project super-ask-azhou
+~~~
+
+<details>
+<summary>More Skill install commands</summary>
+
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
 npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
@@ -31,7 +52,6 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
 npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
 npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
 npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
 npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
@@ -41,6 +61,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
+
+</details>
 
 Choose one installation method per skill. Package-manager installs resolve the mutable default branch, and the four `super-azhou-*` packages still require an explicit local checkout.
 
