@@ -80,6 +80,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-imagegen/SKILL.md",
     "skills/super-lavish/SKILL.md",
     "skills/super-repo-pedant/SKILL.md",
+    "skills/super-rederive/SKILL.md",
     "skills/super-session-insights/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = set()
@@ -517,6 +518,12 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "每一次生成，都带执行回执。",
         "startup": "🦊 阿舟 · Imagegen 启动（mode=<plain|candidate|export>, scope=<short scope>）",
         "brand_path": "skills/super-imagegen/references/brand-layer.md",
+    },
+    "skills/super-rederive/SKILL.md": {
+        "display_name": "Rederive",
+        "motto": "从问题出发，自己推导设计。",
+        "startup": "🦊 阿舟 · Rederive 启动（mode=<learn|resume>, scope=<repo>）",
+        "brand_path": "skills/super-rederive/references/brand-layer.md",
     },
     "skills/super-i-have-adhd/SKILL.md": {
         "display_name": "i-have-adhd",

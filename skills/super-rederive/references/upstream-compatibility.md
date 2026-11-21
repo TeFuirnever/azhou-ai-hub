@@ -1,0 +1,19 @@
+# Upstream capability and adaptation
+
+The comparison uses [rederive at the pinned commit](https://github.com/EricJujianZou/rederive/blob/f8f4629de73a04ba23f40fe4659b629364fa47e9/skills/rederive/SKILL.md). The package follows its learning method with the boundaries below. Real-host evidence is limited to the opening documented in [provenance](provenance.md).
+
+| Upstream behavior | Hub behavior | Reason and verification |
+|---|---|---|
+| Current repository, local path or Git URL | Same inputs. A URL creates a new clone in the current directory or a user-selected directory. Existing destinations require explicit selection or a different path. | Avoid an automatic pull into a potentially active checkout. The URL flow still needs a real-host check. |
+| `REDERIVE_CLONE_DIR` controls the clone parent | User-selected directory or current directory. | Explicit destination keeps the write understandable across hosts. Environment-variable compatibility has not been implemented. |
+| Read README, history, entry points and import relationships with two included scripts | Read committed Git content and history, use paths and import relationships as leads, and verify the evidence. The adapted upstream scripts ship as references but are not run against the target checkout. | Their worktree reads are not revision-bound. A manually reconstructed map can differ from script output; fidelity on large or non-Git projects is unverified. |
+| Derive the root problem and an ordered map of 5–10 decisions while a background agent works | Derive the root problem and a small ordered map. A background agent is optional when the host and task authorize it; otherwise use one session. | Preserve the learner-led method without requiring delegation or a fixed number of decisions. The real Codex opening was tested with one session. |
+| Ask one question at a time, add one constraint at a time, recognize better solutions | Retained. Answer questions about the context before continuing. | Confirmed in one exploratory human conversation; broader behavior remains unverified. |
+| Offer options when stuck and a sketch after two wrong answers | Offer options when stuck and a plain-text sketch after repeated difficulty. | A host-neutral sketch preserves the help even without Claude artifacts. Exact two-answer behavior is not promised. |
+| Never reveal the answer when asked | Explain or reveal the answer when the learner explicitly asks. | The learner controls how they want to learn. This is an intentional behavioral change. |
+| Offer source paths and symbols after each completed problem | Offer paths and symbols validated at the selected commit, with historical commit attribution only when verified. | Avoid presenting guesses as source evidence. Full-turn code-pointer behavior still needs a real-host check. |
+| Persist `.rederive/map.md` and `.rederive/log.md`; add a Git exclude entry | Chat by default. On request, use private `.azhou/super-rederive/` state in an authorized root. Leave Git configuration and ignore files alone. | Prevent unrequested writes to another repository. Existing `.rederive/` state is not read or migrated automatically. |
+| Resume an existing map; restart by deleting map and log | Preserve existing sessions, create a new session when restarting, and resume at the recorded version. | Keep older learning records recoverable. Persistent resume still needs an end-to-end host check. |
+| Show an end card and generate an X post link | Provide a brief end summary; generate a share draft on request and never post it. | User controls whether private project information is shared. |
+
+This table records intended instruction behavior, not a substitute for an executed compatibility test. No current result demonstrates quality or host parity across the full upstream feature set.
