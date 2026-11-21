@@ -156,9 +156,20 @@ class SkillPackageTest(unittest.TestCase):
 
         shipped = tuple(sorted(path.parent.name for path in ROOT.glob("skills/*/SKILL.md")))
         self.assertEqual(tuple(sorted(path.name for path in SKILL_DIRS)), shipped)
-        claimed = re.findall(r"\b([a-z]+)\s+canonical packages\b", support)
-        self.assertTrue(claimed)
-        self.assertEqual({PACKAGE_COUNT_WORDS[word] for word in claimed}, {len(shipped)})
+        claim_families = (
+            r"\b([a-z]+|\d+) canonical packages\b",
+            r"\bhas ([a-z]+|\d+) packages\b",
+            r"\b([a-z]+|\d+)-package catalog\b",
+            r"\b([a-z]+|\d+) canonical skills\b",
+        )
+        counts = set()
+        for pattern in claim_families:
+            tokens = re.findall(pattern, support)
+            self.assertTrue(tokens, pattern)
+            counts.update(
+                int(token) if token.isdigit() else PACKAGE_COUNT_WORDS[token] for token in tokens
+            )
+        self.assertEqual({len(shipped)}, counts)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)

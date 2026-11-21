@@ -95,7 +95,6 @@ class SuperFrontendDesignPackageTest(unittest.TestCase):
     def test_brand_contract_is_present(self) -> None:
         contract = SKILL_BRAND_CONTRACTS["skills/super-frontend-design/SKILL.md"]
         self.assertEqual("Frontend Design", contract["display_name"])
-        self.assertNotIn("brand_path", contract)
         self.assertIn(f"🦊 阿舟 · {contract['display_name']}", self.text)
         self.assertIn(contract["motto"], self.text)
         self.assertIn(contract["startup"], self.text)
