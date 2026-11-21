@@ -286,7 +286,7 @@ python scripts/azhou_hub.py migrate --receipt "$RECEIPT" --target "$SKILLS_HOME"
 python scripts/azhou_hub.py uninstall --receipt "$RECEIPT" --target "$SKILLS_HOME" --json
 ~~~
 
-A successful managed uninstall keeps its receipt unchanged and records the removal using a hard link under `.azhou/hub/uninstalled/`. Doctor verifies the record and that the target remains absent. The target filesystem must support hard links. A missing Skill can still appear as a warning when specifically selected for installation checks.
+A successful managed uninstall keeps its receipt unchanged and records the removal using a hard link under `.azhou/hub/uninstalled/`. Doctor verifies the record and that the target remains absent. The target filesystem must support hard links. A missing Skill can still appear as a warning when specifically selected for installation checks. If uninstall returns `partial`, stop concurrent changes and inspect the receipt and any reported record manually; do not automatically delete or retry. See the [recovery details](foundations.md#managed-checkout-lifecycle-explicit-opt-in).
 
 Add `--apply` only after reviewing the JSON plan. There is no force overwrite, cross-root migration, hook cleanup or receipt-less adoption.
 

@@ -216,7 +216,7 @@ python scripts/azhou_hub.py verify
 
 如果 Codex 找不到已安装的 Skill，可以用 Doctor 核对它在当前项目是否被发现和启用。[Codex 发现检查](docs/installation.md#check-codex-discovery)
 
-受管卸载会保留原回执和经校验的卸载记录，目标文件系统需支持硬链接。安装意外消失时，Doctor 仍会报错。
+受管卸载会保留原回执和经校验的卸载记录，目标文件系统需支持硬链接。安装意外消失时，Doctor 仍会报错。卸载返回部分完成时，重新操作前请人工检查回执及报告中的记录。
 
 [基础 CLI 合同](docs/foundations.md)
 

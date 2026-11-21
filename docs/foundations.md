@@ -161,6 +161,8 @@ python scripts/azhou_hub.py uninstall \
 
 On POSIX systems, record creation uses directory-relative operations and rejects symbolic links. Windows holds path components open without delete sharing while it creates the record, preventing their rename or replacement during that interval. A conflicting Windows handle can prevent this guard from opening; if the artifact was already removed, uninstall reports partial. Other platforms without either mechanism refuse the uninstall before removal. No mechanism replaces an existing receipt or record. A POSIX directory can still be moved by an uncooperative process while its handle is open; the record may then remain in the moved directory, and a persistent path change is reported as partial. These checks do not coordinate with processes that ignore the mutation lock.
 
+When POSIX record publication is attempted but fails or cannot be verified, the partial JSON result includes `recovery`: the receipt path, expected directory, record name, and observed directory and file identities. On macOS and Linux, it also includes the observed directory path when that path can be verified; it may be `null` elsewhere. A present record may have been created or replaced by another process. The fields are not an atomic snapshot or authorization to mutate: another process can change paths or entries between observations. Stop concurrent changes, recheck the receipt and record without following links, and inspect ownership before deciding whether and how to restore or archive them. Do not automatically delete the record or repeat the uninstall. Human-readable output provides the same warning and observations. A move after the final check may still go undetected.
+
 ## Exit codes and status
 
 | Result | Exit code |

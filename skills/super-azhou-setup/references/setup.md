@@ -42,3 +42,5 @@ For a user-wide installation, add `--global` to `list` and `remove`, and replace
 ## Managed update
 
 The receipt records the source path and digest as well as the installed artifact identity. A changed source is a conflict for repair and uninstall. Before changing the source checkout, use the existing source to inspect the receipt and preview `uninstall`. After an explicitly authorized uninstall succeeds, move the old receipt out of the active receipt directory. Preserve the original source revision and archived receipt. Update the source checkout, run managed `setup` against the same target with a fresh plan, and verify the new bytes with `doctor`. Restore the old revision through the same receipt-owned sequence if rollback is needed. An absent old source or changed installed artifact requires recovery of the exact source or user-owned changes before proceeding.
+
+If uninstall reports `partial`, stop concurrent changes and show any `recovery` fields. The observed path and identities may have changed again. Inspect the receipt and record manually without following links; do not automatically delete the record or repeat the uninstall.
