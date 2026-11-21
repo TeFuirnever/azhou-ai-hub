@@ -19,7 +19,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 NATIVE_INPUTS = ("Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
                  "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
-                 "Native/OptionalStartupAVPlayback.swift",
+                 "Native/OptionalStartupAVPlayback.swift", "Native/OptionalStartupPresentation.swift",
                  "Native/StartupNativeTests.swift", "Native/OptionalStartupMediaTests.swift",
                  "Native/OptionalStartupAVPlaybackTests.swift",
                  "tools/test-startup-native.py",
@@ -227,7 +227,7 @@ def main() -> int:
         "xcrun", "--sdk", "macosx", "swiftc", "-DAGENT_SKIN_NATIVE_EVENT_TESTS", "-target", target,
         "Native/App.swift", "Native/Wallpaper.swift", "Native/SkinHostContract.swift",
         "Native/CodexSkinDriver.swift", "Native/OptionalStartupMedia.swift",
-        "Native/OptionalStartupAVPlayback.swift",
+        "Native/OptionalStartupAVPlayback.swift", "Native/OptionalStartupPresentation.swift",
         "Native/StartupNativeTests.swift", "Native/OptionalStartupMediaTests.swift",
         "Native/OptionalStartupAVPlaybackTests.swift",
         "-o", str(output), "-framework", "AppKit", "-framework", "WebKit",
