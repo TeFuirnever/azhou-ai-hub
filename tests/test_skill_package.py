@@ -35,6 +35,13 @@ SKILL_DIRS = (
     ROOT / "skills" / "super-rederive",
     ROOT / "skills" / "super-frontend-design",
 )
+PACKAGE_COUNT_WORDS = {
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+}
 
 
 class SkillPackageTest(unittest.TestCase):
@@ -147,8 +154,11 @@ class SkillPackageTest(unittest.TestCase):
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
-        self.assertEqual(18, len(SKILL_DIRS))
-        self.assertIn("eighteen canonical packages", support)
+        shipped = tuple(sorted(path.parent.name for path in ROOT.glob("skills/*/SKILL.md")))
+        self.assertEqual(tuple(sorted(path.name for path in SKILL_DIRS)), shipped)
+        claimed = re.findall(r"\b([a-z]+)\s+canonical packages\b", support)
+        self.assertTrue(claimed)
+        self.assertEqual({PACKAGE_COUNT_WORDS[word] for word in claimed}, {len(shipped)})
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
