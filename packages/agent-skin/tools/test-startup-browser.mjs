@@ -161,6 +161,52 @@ async function until(operation, milliseconds = 10000, label = 'condition') {
   throw new Error('Timed out waiting for ' + label + (last ? ': ' + safeError(last) : ''));
 }
 
+// Scope the witness to this synthetic startup, including its transient same-origin frames.
+async function withColdStartupVideoProbe(cdp, operation) {
+  await cdp.call('Network.enable');
+  let registration;
+  let videoRequest;
+  let watcherError;
+  const videoDestination = headers => Object.entries(headers ?? {}).some(([name, value]) =>
+    name.toLowerCase() === 'sec-fetch-dest' && value === 'video');
+  const watchers = [
+    cdp.waitForEvent('Network.requestWillBeSent', ({ request }) => videoDestination(request?.headers), 120000),
+    cdp.waitForEvent('Network.requestWillBeSentExtraInfo', ({ headers }) => videoDestination(headers), 120000),
+  ];
+  for (const watcher of watchers) {
+    watcher.then(() => { videoRequest = true; }, error => { watcherError = error; });
+  }
+  try {
+    registration = await cdp.call('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+      if (window === window.top) window.__fixtureStartupVideoEvidence = new Set();
+      const record = kind => {
+        try { window.top.__fixtureStartupVideoEvidence.add(kind); } catch {}
+      };
+      document.addEventListener('loadstart', event => {
+        if (event.target instanceof HTMLVideoElement) record('video-load');
+      }, true);
+      new MutationObserver(records => {
+        for (const { addedNodes } of records) for (const node of addedNodes) {
+          if (node instanceof HTMLVideoElement || node.querySelector?.('video')) record('video-attachment');
+        }
+      }).observe(document, { childList: true, subtree: true });
+    })()` });
+    return await operation(async () => {
+      const observed = await cdp.evaluate('[...window.__fixtureStartupVideoEvidence].sort()');
+      if (watcherError) throw watcherError;
+      if (videoRequest) observed.push('video-request');
+      assert.deepEqual(observed, [], 'unconfigured startup must not attach or request video');
+      return observed;
+    });
+  } finally {
+    for (const watcher of watchers) watcher.cancel();
+    await Promise.all([
+      cdp.call('Network.disable'),
+      ...(registration ? [cdp.call('Page.removeScriptToEvaluateOnNewDocument', registration)] : []),
+    ]);
+  }
+}
+
 async function check(name, operation) {
   availableChecks.add(name);
   if (onlyChecks && !onlyChecks.has(name)) {
@@ -5641,7 +5687,7 @@ try {
       return { ...applied, released };
     });
     await navigate('/fixture.html?generated-payload=1');
-    await check('generated cold start restores saved wallpaper after natural completion without another save', async () => {
+    await check('generated cold start restores saved wallpaper after natural completion without another save', () => withColdStartupVideoProbe(cdp, async assertNoStartupVideo => {
       const fields = { introTitle: '冷启动恢复', wallpaperStrength: 19 };
       const initial = await awaitGeneratedReady('generated animation is ready before saving cold-start fields');
       const firstURL = await cdp.evaluate('location.href');
@@ -5804,8 +5850,8 @@ try {
         natural: { runId: natural.runId, completion: natural.completion }, held,
         wallpaperWithoutSave: { owner: restored.owner, styleCount: restored.styleCount,
           apiKeys: restored.apiKeys, styleOwner: restored.styleOwner, washStops: restored.washStops },
-        readback, closedWith: canceled.completion };
-    });
+        readback, closedWith: canceled.completion, startupVideo: await assertNoStartupVideo() };
+    }));
     await cdp.call('Storage.clearDataForOrigin', { origin, storageTypes: 'indexeddb' });
     await navigate('/fixture.html?generated-payload=1&hold-shell=1');
     await check('builder-generated wallpaper waits for a late supported shell and remains after animation completion', async () => {
