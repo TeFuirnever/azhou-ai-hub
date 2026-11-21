@@ -90,8 +90,14 @@ def _receipt_digest(receipt: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(payload)).hexdigest()
 
 
-def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
-    path = path.expanduser().resolve()
+def _write_receipt(
+    path: Path,
+    receipt: dict[str, Any],
+    *,
+    expected_identity: tuple[int, int, int] | None = None,
+    expected_digest: str | None = None,
+) -> None:
+    path = path.expanduser().absolute() if expected_identity is not None else path.expanduser().resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = dict(receipt)
     payload["integrity_digest"] = _receipt_digest(payload)
@@ -104,6 +110,16 @@ def _write_receipt(path: Path, receipt: dict[str, Any]) -> None:
             handle.write(_canonical_json(payload) + b"\n")
             handle.flush()
             os.fsync(handle.fileno())
+        if expected_identity is not None:
+            current, error = _load_receipt(path)
+            if (
+                path.is_symlink()
+                or _path_identity(path) != expected_identity
+                or error
+                or current is None
+                or current.get("integrity_digest") != expected_digest
+            ):
+                raise PackageError("receipt changed while uninstall was running")
         os.replace(stage, path)
     finally:
         try:
@@ -630,9 +646,15 @@ def setup_skills(
                 row["status"] = "conflict"
                 row["details"] = "managed setup cannot adopt an existing installation without its receipt"
         elif planned_rows and receipt_exists:
+            existing_receipt, receipt_error = _load_receipt(receipt_path)
             for row in planned_rows:
                 row["status"] = "conflict"
-                row["details"] = "managed receipt already exists; use repair or uninstall"
+                if receipt_error:
+                    row["details"] = receipt_error
+                elif existing_receipt is not None and existing_receipt.get("lifecycle_state") == "uninstalled":
+                    row["details"] = "archive the uninstalled receipt outside the active receipts directory before reinstalling"
+                else:
+                    row["details"] = "managed receipt already exists; use repair or uninstall"
         elif current_rows and receipt_exists:
             receipt, receipt_error = _load_receipt(receipt_path)
             if (
@@ -973,6 +995,10 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
     receipt, error = _load_receipt(receipt_path)
     if error:
         return _lifecycle_report("fail", [], error=error)
+    receipt_identity = _path_identity(receipt_path.expanduser())
+    receipt_digest = receipt.get("integrity_digest")
+    if receipt_identity is None or receipt_path.expanduser().is_symlink():
+        return _lifecycle_report("fail", [], error="receipt identity cannot be proven")
     target = target.expanduser().resolve()
     if Path(receipt["target"]).resolve() != target:
         return _lifecycle_report("fail", [], error="receipt_invalid: target mismatch")
@@ -1012,7 +1038,7 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             if state != "missing":
                 raise PackageError(f"uninstall could not confirm absence: {details}")
             receipt["lifecycle_state"] = "uninstalled"
-            _write_receipt(receipt_path, receipt)
+            _write_receipt(receipt_path, receipt, expected_identity=receipt_identity, expected_digest=receipt_digest)
         except (OSError, ValueError, PackageError) as exc:
             return _lifecycle_report("partial", rows, error=f"uninstall receipt update failed: {exc}")
     return _lifecycle_report("pass", rows)

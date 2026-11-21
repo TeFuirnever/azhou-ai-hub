@@ -1658,6 +1658,41 @@ class AzhouHubCliTest(unittest.TestCase):
             )
             self.assertEqual(1, exit_code, report)
 
+    def test_uninstall_does_not_recreate_a_concurrently_archived_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            archive = Path(directory) / "archived.json"
+            remove = azhou_hub._remove_exact_installation
+
+            def archive_during_removal(*args, **kwargs):
+                result = remove(*args, **kwargs)
+                receipt.rename(archive)
+                return result
+
+            with mock.patch.object(azhou_hub, "_remove_exact_installation", side_effect=archive_during_removal):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertFalse(receipt.exists())
+            self.assertTrue(archive.is_file())
+            self.assertNotIn("lifecycle_state", json.loads(archive.read_text()))
+
+    def test_reinstall_explains_archiving_completed_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            exit_code, result = self._json_main(
+                ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+            )
+            self.assertEqual(0, exit_code, result)
+            exit_code, plan = self._json_main(
+                ["setup", "--managed", "--receipt", str(receipt), "--skill", "sample",
+                 "--target", str(target), "--mode", "copy", "--json"], root=root,
+            )
+            self.assertEqual(1, exit_code, plan)
+            self.assertIn("archive the uninstalled receipt", plan["skills"][0]["details"])
+
     def test_uninstall_refuses_drifted_managed_copy(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")
@@ -1779,8 +1814,12 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertIsNotNone(original_identity)
             calls = 0
 
+            real_path_identity = azhou_hub._path_identity
+
             def swapped_identity(path: Path):
                 nonlocal calls
+                if path == receipt:
+                    return real_path_identity(path)
                 calls += 1
                 if calls == 1:
                     return original_identity
