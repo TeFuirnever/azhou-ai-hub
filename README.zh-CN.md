@@ -12,7 +12,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——16 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——17 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -55,6 +55,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
+npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
 
@@ -66,7 +67,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills.zh-CN-dark.jpg">
-  <img src="assets/github/readme-banner-skills.zh-CN.jpg" alt="16 个 Skill：每个都能独立安装" width="100%">
+  <img src="assets/github/readme-banner-skills.zh-CN.jpg" alt="17 个 Skill：每个都能独立安装" width="100%">
 </picture>
 
 | Skill | 解决的真实任务 | 验证依据 |
@@ -170,13 +171,19 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 
 ![i-have-adhd 效果图](assets/skills/super-i-have-adhd-effect.png)
 
+## Rederive
+
+> 🧩 从问题出发，自己推导设计。
+
+![Rederive 效果图](assets/skills/super-rederive-effect.png)
+
 ## Gh Axi
 
 > ⚙️ 开个 PR、排进队列、绿勾入篮——一次走完整个 GitHub 回合。
 
 ![Gh Axi 效果图](assets/skills/super-gh-axi-effect.png)
 
-<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish、Imagegen、i-have-adhd 与 Gh Axi：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
+<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish、Imagegen、i-have-adhd、Gh Axi 与 Rederive：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust.zh-CN-dark.jpg">

@@ -12,7 +12,7 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 16 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
+<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 17 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
 
 https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
@@ -55,6 +55,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
 npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
 npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
+npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 ~~~
 
@@ -66,7 +67,7 @@ Choose one installation method per skill. Package-manager installs resolve the m
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-skills-dark.jpg">
-  <img src="assets/github/readme-banner-skills.jpg" alt="16 Skills: each one independently installable" width="100%">
+  <img src="assets/github/readme-banner-skills.jpg" alt="17 Skills: each one independently installable" width="100%">
 </picture>
 
 | Skill | Real job | Verification basis |
@@ -170,13 +171,19 @@ In this checkout, ask “Ask Azhou, which skill can help me change old code that
 
 ![i-have-adhd effect preview](assets/skills/super-i-have-adhd-effect.png)
 
+## Rederive
+
+> 🧩 Start with a problem and work out the design.
+
+![Rederive effect preview](assets/skills/super-rederive-effect.png)
+
 ## Gh Axi
 
 > ⚙️ Open the PR, join the queue, land the green check — GitHub work in one pass.
 
 ![Gh Axi effect preview](assets/skills/super-gh-axi-effect.png)
 
-<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify, Lavish, Imagegen, i-have-adhd and Gh Axi: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
+<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify, Lavish, Imagegen, i-have-adhd, Gh Axi and Rederive: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust-dark.jpg">
