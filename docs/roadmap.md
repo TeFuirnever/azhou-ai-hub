@@ -25,6 +25,6 @@ Agent Skin 已在本仓库的 [canonical package](../packages/agent-skin/README.
 - General Hub production install/uninstall 继续沿对应 package 的 destination/state/uninstall contract 推进；不把一次性 handoff 当成通用 lifecycle。
 - Shared character/export logic 只在真实 consumers 需要时考虑；统一 Azhou identity 不要求先建通用 engine。
 - 新 Skills 保持独立安装与现有标准；仅在 downloadable releases 需要时生成 SBOM/provenance artifacts。
-- Repository Markdown 不足时再考虑 documentation site，repository 继续作为 authority。
+- Documentation site 已落地：`site/` 下的 Eleventy 构建经 Pages 部署，内容只从仓库权威源生成；repository 继续作为 authority，Repository Markdown 不足时再考虑扩展。
 
 通过 [skill request form](https://github.com/TeFuirnever/azhou-ai-hub/issues/new?template=skill-request.yml) 或 [Discussions](https://github.com/TeFuirnever/azhou-ai-hub/discussions) 提出后续建议。
