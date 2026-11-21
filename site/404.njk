@@ -1,13 +1,14 @@
 ---
 layout: base.njk
 lang: en
+bodyClass: doc
 title: "Page not found"
 description: "The requested page does not exist on the Azhou AI Hub site."
 permalink: "404.html"
 eleventyExcludeFromCollections: true
 ---
 
-<section>
+<article class="doc-card">
   <h1>Page not found</h1>
   <p>The page you requested does not exist on this site. Try the <a href="{{ '/' | url }}">home page</a>, the <a href="{{ '/skills/' | url }}">skills catalog</a>, or the <a href="{{ '/docs/' | url }}">documentation map</a>.</p>
-</section>
+</article>
