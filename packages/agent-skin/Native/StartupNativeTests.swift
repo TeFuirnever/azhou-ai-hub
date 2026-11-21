@@ -6554,7 +6554,11 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 // Query the WindowServer target, not delivery. No input is posted.
                 // Hold the fixture open across compositor updates; no discard is scheduled.
                 let opaque = waitForHit(windowNumber)
-                expect(opaque == windowNumber, "opaque cold cover is the mouse-down hit target")
+                expect(opaque == windowNumber && !cover.ignoresMouseEvents,
+                    "opaque cold cover is the mouse-down hit target")
+                presentation.setOptionalCoverOpacity(0.5)
+                expect(cover.alphaValue == 0.5 && !cover.ignoresMouseEvents,
+                    "partially faded cover still accepts mouse events")
                 presentation.setOptionalCoverOpacity(0)
                 let transparent = waitForHit(hostNumber)
                 let alphaZero = cover.alphaValue == 0
@@ -6591,9 +6595,15 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     FileHandle.standardError.write(Data((diagnostic + "\n").utf8))
                 }
                 expect(transparentPass, "zero opacity targets the synthetic host before the cold cover is discarded")
+                expect(cover.ignoresMouseEvents, "zero opacity explicitly disables cold cover mouse events")
+                presentation.setOptionalCoverOpacity(0.5)
+                expect(cover.alphaValue == 0.5 && !cover.ignoresMouseEvents,
+                    "raising opacity lets the same cold cover accept mouse events again")
+                presentation.setOptionalCoverOpacity(0)
                 presentation.restoreOptionalMediaCover()
                 let restored = waitForHit(windowNumber)
-                expect(restored == windowNumber, "the restored cold cover is again the mouse-down hit target")
+                expect(restored == windowNumber && cover.alphaValue == 1 && !cover.ignoresMouseEvents,
+                    "the restored cold cover is again the mouse-down hit target")
                 hits = ["opaque": opaque, "transparentBeforeDiscard": transparent, "restored": restored]
             }
             for revealed in [false, true] {
