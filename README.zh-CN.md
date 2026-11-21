@@ -57,6 +57,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
+npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
 ~~~
 
 </details>
@@ -97,6 +98,7 @@ python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-g
 | [Rederive](skills/super-rederive/SKILL.md) | 通过问题和真实约束，自己推导代码设计。 | 基于 Eric Zou 的 MIT 上游固定版本改造。已完成一次探索性练习并观察到 Codex 开场调用，对照学习收益和其他宿主仍待验证。 |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | 为 ADHD 读者塑形输出：下一步动作先行、多步工作编号分步、每回合重述状态、压制岔题；直到读者说出停止短语才解除。 | 在冻结上游 commit <code>1ecea199</code>（MIT）上 adapted 引入：指令正文逐字保留，上游双 SHA-256 钉入 provenance；完整性测试钉住 provenance、许可副本与五条 Azhou 呈现约束。尚无行为 benchmark。 |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | 经 agent 人体工学的封装 CLI 操作 GitHub：issues、PR、堆叠 PR、讨论、CI 运行与触发、release、仓库、label、gist、Projects (v2)、Actions secrets/variables、搜索与原始 API；仓库规则点名了自己的工具时以仓库规则为准。 | 在锁定的上游正式发布 <code>gh-axi-v0.1.51</code>（commit <code>911a0868</code>，[kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi)）上引入：provenance 钉有上游 skill SHA-256、npm integrity 与 tarball 摘要；CLI 经锁定的 <code>npx</code> 基线调用，不 vendor 进仓。完整性测试钉住 provenance 与许可副本。尚无行为 benchmark。 |
+| [Frontend Design](skills/super-frontend-design/SKILL.md) | 为新 UI 或界面改版产出独特、非模板化的视觉设计方向：色板、字体排印、布局，以及避开 AI 默认观感的评审流程。 | 在 anthropics/skills 的钉定 commit 上 faithful 引入：上游指导正文逐字保留，Apache-2.0 许可逐字节 vendored，配 SHA-256 完整性测试。尚无行为 benchmark。 |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try.zh-CN-dark.jpg">

@@ -57,6 +57,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
 npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
+npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
 ~~~
 
 </details>
@@ -97,6 +98,7 @@ The destination must not already contain `super-rederive`; this command does not
 | [Rederive](skills/super-rederive/SKILL.md) | Practice understanding code by re-deriving its design through questions and real constraints. | Adapted from Eric Zou’s MIT-licensed upstream at a pinned commit. One exploratory lesson and a Codex opening were observed; comparative learning benefit and other hosts remain unverified. |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | Shape output for a reader with ADHD: next action first, bounded numbered steps, state restated every turn, tangents suppressed; stays on until the reader's stop phrase. | Adapted from the frozen upstream commit <code>1ecea199</code> (MIT) with the instruction body retained verbatim and both upstream SHA-256 digests pinned; integrity tests pin the provenance, license copy and the five Azhou presentation constraints. No behavior benchmark yet. |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | Run GitHub operations through an agent-ergonomic wrapped CLI: issues, PRs, stacked PRs, discussions, CI runs and dispatch, releases, repos, labels, gists, Projects (v2), Actions secrets/variables, search and raw API, with project rules winning where a repository names its own recipe. | Adopted at the locked upstream release <code>gh-axi-v0.1.51</code> (commit <code>911a0868</code>) from [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi): provenance pins the upstream skill SHA-256, npm integrity and tarball digest; the CLI is invoked through the locked <code>npx</code> baseline and is not vendored. Integrity tests pin the provenance and license copy. No behavior benchmark yet. |
+| [Frontend Design](skills/super-frontend-design/SKILL.md) | Produce a distinctive, non-templated visual design direction for a new UI or a restyle: palette, typography, layout, and the avoid-the-AI-defaults review pass. | Faithfully adopted from anthropics/skills at the pinned commit with the upstream guidance body preserved verbatim, the Apache-2.0 license vendored byte-identical, and SHA-256 integrity tests. No behavior benchmark yet. |
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-try-dark.jpg">

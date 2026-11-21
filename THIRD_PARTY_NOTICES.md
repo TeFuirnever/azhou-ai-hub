@@ -166,6 +166,14 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: generated skill instructions only; no gh-axi application code, `dist/` bundle or runtime assets are vendored. `gh-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y gh-axi@0.1.51` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The wrapped `gh` binary and its authentication stay external and are not redistributed from this repository.
 - Local changes: neutral frontmatter with the invocation translation, locked CLI baseline, Azhou brand protocol and stable receipt, setup/provenance/compatibility records, and explicit authorization checkpoints.
 
+## Frontend Design
+
+`skills/super-frontend-design/` faithfully adopts the `frontend-design` skill from [anthropics/skills](https://github.com/anthropics/skills) at immutable commit [`41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f`](https://github.com/anthropics/skills/commit/41bbe19d1a1a7eaab5e7bb9050a417e5c6cffc8f). Attribution: Anthropic PBC, from anthropics/skills @ 41bbe19d1a1…, Apache-2.0 (wording borrowed from the 2026-11-18 import-review condition-2 template; no prior ruling covers this package — see the [package provenance](skills/super-frontend-design/references/provenance.md)).
+
+- License: [Apache-2.0](LICENSES/Anthropic-Skills-Apache-2.0.txt), vendored byte-identical as the package `LICENSE.txt`
+- Imported boundary: the upstream `SKILL.md` guidance body (intro plus five sections) preserved verbatim, plus the upstream `LICENSE.txt`; the upstream directory carries no copyright header and no NOTICE file, so the license text itself is the only upstream notice
+- Local changes: neutral three-key frontmatter (the upstream host-specific `license:` key is dropped), the `Azhou skill.` description with both upstream trigger sentences retained verbatim, the Azhou identity anchor, brand protocol, boundaries and stable receipt, and the provenance/compatibility/setup records
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.
