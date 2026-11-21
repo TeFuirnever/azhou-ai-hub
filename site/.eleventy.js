@@ -10,6 +10,9 @@ module.exports = function (eleventyConfig) {
   // the required attribution (packages/agent-skin/assets/azhou/NOTICE.md).
   eleventyConfig.addPassthroughCopy({
     "../assets/github/readme-hero.png": "./assets/hero.png",
+    "../assets/site/hero.webp": "./assets/hero.webp",
+    "../assets/site/hero-640.webp": "./assets/hero-640.webp",
+    "./robots.txt": "./robots.txt",
   });
 
   return {

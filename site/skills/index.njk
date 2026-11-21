@@ -15,7 +15,7 @@ permalink: "skills/index.html"
     <li class="card">
       <h2><a href="{{ skill.url }}">{{ skill.name }}</a></h2>
       {%- if skill.invocation %}
-      <p class="invocation">{{ skill.invocation }}</p>
+      <p class="invocation"><code>{{ skill.invocation }}</code></p>
       {%- endif %}
       <p class="desc">{{ skill.description }}</p>
     </li>

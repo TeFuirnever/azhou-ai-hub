@@ -7,10 +7,13 @@ permalink: "index.html"
 ---
 
 <section>
-  <h1>🦊 Azhou AI Hub</h1>
+  <h1><span aria-hidden="true">🦊</span> Azhou AI Hub</h1>
   <p class="tagline"><strong>Agent skills that stay useful after the demo.</strong></p>
   <p class="tagline">Small enough to edit. Strict enough to verify. Neutral enough to run across harnesses.</p>
-  <img class="hero" src="{{ '/assets/hero.png' | url }}" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 16 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%">
+  <picture>
+    <source type="image/webp" srcset="{{ '/assets/hero.webp' | url }}?v=20261121 1280w, {{ '/assets/hero-640.webp' | url }}?v=20261121 640w" sizes="(max-width: 56rem) 100vw, 56rem">
+    <img class="hero" src="{{ '/assets/hero.png' | url }}" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 16 installable skill packages; one deterministic repository gate; human-approved evolution only." width="1280" height="720" decoding="async" fetchpriority="high">
+  </picture>
 </section>
 
 <section>
@@ -25,7 +28,7 @@ permalink: "index.html"
 <section>
   <h2>First install in Codex</h2>
   <p>Have Codex signed in and Node.js with <code>npx</code> available. In a terminal, open the project folder where you want to use Ask Azhou and run this command. It installs into that project.</p>
-  <pre><code>npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
+  <pre class="wrap"><code>npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
   <p>Open a new Codex chat in that project and try the following question:</p>
   <blockquote><p><code>$super-ask-azhou</code> I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?</p></blockquote>
   <p>Look for a recommendation of <code>super-archify</code>. If Ask Azhou is missing, see the <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#first-install-in-codex">first-install guide</a>; for an existing installation, see <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#upgrade-or-uninstall">check, update, or uninstall</a>.</p>
