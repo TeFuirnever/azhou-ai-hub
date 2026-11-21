@@ -1682,6 +1682,31 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual([], list(outside.iterdir()))
             self.assertTrue(receipt.is_file())
 
+    @unittest.skipUnless(azhou_hub.LINK_SUPPORTS_DIR_FD, "directory handles are unavailable")
+    def test_uninstall_record_directory_creation_does_not_follow_redirected_hub(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            hub = receipt.parent.parent
+            moved = Path(directory) / "moved-hub"
+            outside = Path(directory) / "outside"
+            outside.mkdir()
+            mkdir = os.mkdir
+
+            def redirect_before_creation(path, mode=0o777, *, dir_fd=None):
+                if path == "uninstalled" and dir_fd is not None:
+                    hub.rename(moved)
+                    hub.symlink_to(outside, target_is_directory=True)
+                return mkdir(path, mode, dir_fd=dir_fd)
+
+            with mock.patch.object(azhou_hub.os, "mkdir", side_effect=redirect_before_creation):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("partial", result["status"])
+            self.assertEqual([], list(outside.iterdir()))
+            self.assertTrue((moved / "receipts" / receipt.name).is_file())
+
     def test_doctor_rejects_malformed_lifecycle_state_without_crashing(self) -> None:
         for invalid in ([], {}, None, 1):
             with self.subTest(invalid=invalid), tempfile.TemporaryDirectory() as directory:
@@ -1730,6 +1755,19 @@ class AzhouHubCliTest(unittest.TestCase):
             )
             self.assertEqual(1, exit_code, report)
 
+    @unittest.skipIf(os.name == "nt", "Windows uses its own path guard")
+    def test_unsupported_platform_refuses_before_removing_install(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            with mock.patch.object(azhou_hub, "LINK_SUPPORTS_DIR_FD", False):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(1, exit_code, result)
+            self.assertEqual("fail", result["status"])
+            self.assertIn("unavailable", result["error"])
+            self.assertTrue((target / "sample" / "SKILL.md").is_file())
+
     def test_uninstall_does_not_recreate_a_concurrently_archived_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")
@@ -1751,6 +1789,7 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertTrue(archive.is_file())
             self.assertNotIn("lifecycle_state", json.loads(archive.read_text()))
 
+    @unittest.skipIf(os.name == "nt", "Windows prevents replacement while record is published")
     def test_uninstall_never_overwrites_receipt_replaced_at_record_creation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")
@@ -1776,6 +1815,47 @@ class AzhouHubCliTest(unittest.TestCase):
             )
             self.assertEqual(1, exit_code, report)
             self.assertEqual("fail", next(c for c in report["checks"] if c["name"] == "target:hub-receipts")["status"])
+
+    @unittest.skipUnless(os.name == "nt", "Windows sharing semantics required")
+    def test_windows_publication_blocks_cross_process_directory_and_receipt_renames(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            records = receipt.parent.parent / "uninstalled"
+            original = receipt.read_bytes()
+            link = os.link
+            attempted = []
+
+            def try_redirect_before_link(*args, **kwargs):
+                for path in (receipt, records, receipt.parent.parent):
+                    destination = path.with_name(path.name + "-moved")
+                    command = (
+                        "import json, os, sys\n"
+                        "try: os.rename(sys.argv[1], sys.argv[2])\n"
+                        "except OSError as exc: print(json.dumps({'winerror': exc.winerror})); sys.exit(0)\n"
+                        "sys.exit(9)\n"
+                    )
+                    result = subprocess.run([sys.executable, "-c", command, str(path), str(destination)],
+                                            capture_output=True, text=True, timeout=15)
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertIn(json.loads(result.stdout)["winerror"], (5, 32, 33))
+                    self.assertFalse(destination.exists())
+                    attempted.append(path)
+                return link(*args, **kwargs)
+
+            with mock.patch.object(azhou_hub.os, "link", side_effect=try_redirect_before_link):
+                exit_code, result = self._json_main(
+                    ["uninstall", "--receipt", str(receipt), "--target", str(target), "--apply", "--json"], root=root,
+                )
+            self.assertEqual(0, exit_code, result)
+            self.assertEqual(3, len(attempted))
+            self.assertEqual(original, receipt.read_bytes())
+            exit_code, report = self._json_main(
+                ["doctor", "--target", str(target), "--skill", "sample", "--json"], root=root,
+            )
+            self.assertEqual(0, exit_code, report)
+            moved = records.with_name("uninstalled-moved")
+            records.rename(moved)
+            moved.rename(records)
 
     def test_uninstall_reports_partial_if_receipt_becomes_malformed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1956,7 +2036,7 @@ class AzhouHubCliTest(unittest.TestCase):
 
             def swapped_identity(path: Path):
                 nonlocal calls
-                if path == receipt:
+                if path.resolve() != installed.resolve():
                     return real_path_identity(path)
                 calls += 1
                 if calls == 1:
