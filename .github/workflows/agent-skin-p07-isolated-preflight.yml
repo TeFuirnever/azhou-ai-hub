@@ -1,9 +1,9 @@
-name: Agent Skin P07 formal synthetic measurement
+name: Agent Skin P07 legacy repeat diagnostic
 
 on:
   push:
     branches:
-      - codex/agent-skin-p07-isolated-preflight-20261121
+      - codex/agent-skin-p07-legacy-repeat-diagnostic-20261121
 
 permissions:
   contents: read
@@ -11,7 +11,7 @@ permissions:
 jobs:
   measurement:
     runs-on: macos-latest
-    timeout-minutes: 55
+    timeout-minutes: 25
     steps:
       - name: Checkout the matching isolated probe
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -22,7 +22,7 @@ jobs:
       - name: Checkout the pinned evaluator
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 6f604ad2b35b7a5e14958f1404645b2caed5b006
+          ref: ${{ github.sha }}
           path: evaluator
           fetch-depth: 0
           persist-credentials: false
@@ -38,10 +38,11 @@ jobs:
         shell: bash
         working-directory: evaluator
         env:
+          P07_DIAGNOSTIC_HEAD: ${{ github.sha }}
           PYTHONDONTWRITEBYTECODE: "1"
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "6f604ad2b35b7a5e14958f1404645b2caed5b006"
+          test "$(git rev-parse HEAD)" = "$P07_DIAGNOSTIC_HEAD"
           test -z "$(git status --porcelain --untracked-files=all)"
           python -m pip install --only-binary=:all: Pillow==12.3.0
           chrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -56,21 +57,23 @@ jobs:
           python -B "$tool/test-startup-payload-browser.py" --chrome "$chrome" --theme-protocol "$out/registration/train-0.json" --only 'generated measurement scene detects actual image displacement in four conditions' --out "$out/displacement"
           python -c 'import json,sys; expected=json.load(open(sys.argv[1])); actual=json.load(open(sys.argv[2]))["environment"]; assert (actual["browser"],actual["protocolVersion"]) == (expected["browser"],expected["protocolVersion"])' "$out/chrome-identity.json" "$out/displacement/report.json"
           test -z "$(git status --porcelain --untracked-files=all)"
-      - name: Collect fresh training and independent holdout
+      - name: Run one diagnostic-only synthetic session with unchanged assertions
         shell: bash
         working-directory: evaluator
-        timeout-minutes: 45
         env:
           PYTHONDONTWRITEBYTECODE: "1"
+        timeout-minutes: 15
         run: |
-          export P07_EVIDENCE="$RUNNER_TEMP/p07-isolated"
-          export P07_CHROME='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-          bash ../lab/.github/p07/collect.sh
+          set -euo pipefail
+          out="$RUNNER_TEMP/p07-isolated"
+          chrome='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+          printf '%s\n' 'DIAGNOSTIC ONLY: not formal train or holdout input' > "$out/DIAGNOSTIC.txt"
+          python -B packages/agent-skin/tools/test-startup-payload-browser.py --chrome "$chrome" --theme-protocol "$out/registration/train-0.json" --only 'theme readability is pixel bounded through viewport changes and legacy handover' --out "$out/legacy-repeat-diagnostic"
       - name: Retain synthetic evidence, including failed stages
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: agent-skin-p07-formal-measurement
+          name: agent-skin-p07-legacy-repeat-diagnostic
           compression-level: 0
           path: ${{ runner.temp }}/p07-isolated
           retention-days: 5

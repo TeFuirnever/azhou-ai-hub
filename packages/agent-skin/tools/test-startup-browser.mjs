@@ -7161,9 +7161,37 @@ try {
       const legacyWash=await cdp.evaluate("document.documentElement.style.getPropertyValue('--azhou-wallpaper-wash')");
       await cdp.evaluate("document.documentElement.style.setProperty('--azhou-wallpaper-wash','linear-gradient(transparent,transparent)')");
       await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-      const legacyPixels=await capture(before.x+35,before.y+35);
+      const legacyX=before.x+35,legacyY=before.y+35;
+      const legacyFrame=await captureFrame();
+      const legacyPixels=await capture(legacyX,legacyY,legacyFrame);
       await writeFile(join(options.out,'crop-legacy-'+scenario.width+'.png'),Buffer.from(legacyPixels,'base64'));
-      assert.equal(await capture(before.x+35,before.y+35),legacyPixels,'repeat capture is self-consistent');
+      const repeatFrame=await captureFrame();
+      const repeatPixels=await capture(legacyX,legacyY,repeatFrame);
+      // Diagnostic branch only: persist both unchanged first-pair frames before
+      // collecting separate controls. No replacement sample is used for the assertion.
+      if(repeatPixels!==legacyPixels){
+        const id=['legacy-repeat',scenario.width,scenario.height,scenario.dpr,scenario.zoom,scenario.color.slice(1),scenario.trial].join('-');
+        for(const [name,payload] of [['first-full',legacyFrame],['repeat-full',repeatFrame],['first-crop',legacyPixels],['repeat-crop',repeatPixels]]){
+          await writeFile(join(options.out,id+'-'+name+'.png'),Buffer.from(payload,'base64'));
+        }
+        const context=await cdp.evaluate(`(()=>{
+          const root=document.documentElement,main=document.querySelector('[data-app-shell-main-surface]');
+          const state=node=>{
+            const r=node.getBoundingClientRect(),s=getComputedStyle(node);
+            const fields=['backgroundColor','backgroundSize','backgroundPosition','backgroundAttachment','backgroundRepeat','opacity','filter','transform','zoom','mixBlendMode'];
+            return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},paint:Object.fromEntries(fields.map(k=>[k,s[k]])),backgroundImageLength:s.backgroundImage.length};
+          };
+          return {time:performance.now(),viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},root:state(root),body:state(document.body),main:state(main),scroll:main.scrollTop,
+            wash:root.style.getPropertyValue('--azhou-wallpaper-wash'),washPriority:root.style.getPropertyPriority('--azhou-wallpaper-wash'),retained:window.__azhouWallpaper?.owner??null};
+        })()`);
+        const recrop=await capture(legacyX,legacyY,legacyFrame);
+        await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const settledFrame=await captureFrame(),settled=await capture(legacyX,legacyY,settledFrame);
+        await writeFile(join(options.out,id+'-settled-full.png'),Buffer.from(settledFrame,'base64'));
+        await writeFile(join(options.out,id+'-settled-crop.png'),Buffer.from(settled,'base64'));
+        await writeFile(join(options.out,id+'.json'),JSON.stringify({scope:'diagnostic-only, not train/holdout',scenario,crop:{x:legacyX,y:legacyY,width:12,height:12},contextAfterOriginalPair:context,base64:{originalPair:legacyPixels===repeatPixels,sameFrameRecrop:legacyPixels===recrop,settledVsFirst:legacyPixels===settled},pixels:{originalPair:await delta(legacyPixels,repeatPixels),sameFrameRecrop:await delta(legacyPixels,recrop),settledVsFirst:await delta(legacyPixels,settled)}}));
+      }
+      assert.equal(repeatPixels,legacyPixels,'repeat capture is self-consistent');
       const cropGeometry=await cdp.evaluate(`(()=>{const m=document.querySelector('[data-app-shell-main-surface]');const pick=n=>{const s=getComputedStyle(n),r=n.getBoundingClientRect();return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},size:s.backgroundSize,position:s.backgroundPosition,attachment:s.backgroundAttachment,zoom:s.zoom};};return {body:pick(document.body),main:pick(m),viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio}};})()`);
       const cropDifference=await cdp.evaluate(`(async()=>{const read=async src=>{const img=new Image();img.src='data:image/png;base64,'+src;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const ctx=c.getContext('2d');ctx.drawImage(img,0,0);return ctx.getImageData(0,0,c.width,c.height).data;};const a=await read(${JSON.stringify(themePixels)}),b=await read(${JSON.stringify(legacyPixels)});let max=0,total=0,count=0;for(let i=0;i<a.length;i++)if(i%4!==3){const d=Math.abs(a[i]-b[i]);max=Math.max(max,d);total+=d;count++;}return {max,mean:total/count};})()`);
       assert.equal(cropDifference.max,0,'viewport crop pixel delta '+JSON.stringify({cropDifference,cropGeometry,themeGeometry}));
