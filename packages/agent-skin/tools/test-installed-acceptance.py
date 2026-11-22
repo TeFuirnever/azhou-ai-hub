@@ -14,6 +14,7 @@ import runpy
 import subprocess
 import sys
 import time
+from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 BUNDLE_ID = "local.azhou.codex-startup"
@@ -38,12 +39,19 @@ def unique_installation(values: list[dict]) -> bool:
         ("installedProjectAppCount", 1), ("distAppCount", 0), ("registeredProjectPathCount", 1)))
 
 
-def verified_wallpaper(values: list[dict]) -> bool:
+def verified_wallpaper(values: list[dict], *, request_id: str | None = None,
+                       target: tuple[int, str] | None = None) -> bool:
     fields = ("applied", "imageDecoded", "backgroundMatched", "coverMatched", "fixedViewport",
               "rootClear", "workspaceBackgroundClear", "footerBackgroundClear", "footerFadeClear",
               "topFadeClear", "decorationEffectsClear")
     results = [value for value in values if value.get("event") == "wallpaper-result"]
     return len(results) == 1 and all(value.get("state") == "applied"
+               and value.get("action") == "status"
+               and type(value.get("targetPID")) is int and value["targetPID"] > 0
+               and isinstance(value.get("targetPath"), str) and Path(value["targetPath"]).is_absolute()
+               and isinstance(value.get("requestID"), str) and bool(value["requestID"])
+               and (request_id is None or value["requestID"] == request_id)
+               and (target is None or (value["targetPID"], value["targetPath"]) == target)
                and all(value.get(field) is True for field in fields)
                and value.get("verificationIssues") == [] for value in results)
 
@@ -55,9 +63,13 @@ def cold_start_allowed(values: list[dict]) -> bool:
         and probes[0].get("running") == []
 
 
-def cold_start_observed(values: list[dict], expected_launcher_path: str | None = None) -> bool:
-    native = runpy.run_path(str(Path(__file__).with_name("startup_event_verdict.py")))["assess_native_launch"](
+def native_launch_verdict(values: list[dict], expected_launcher_path: str | None) -> dict | None:
+    return runpy.run_path(str(Path(__file__).with_name("startup_event_verdict.py")))["assess_native_launch"](
         values, 0, expected_launcher_path)
+
+
+def cold_start_observed(values: list[dict], expected_launcher_path: str | None = None) -> bool:
+    native = native_launch_verdict(values, expected_launcher_path)
     if native is not None:
         return native["status"] == "native-completed"
     events = {value.get("event") for value in values}
@@ -65,6 +77,28 @@ def cold_start_observed(values: list[dict], expected_launcher_path: str | None =
     return {"launcher-start", "target-opened", "startup-installed", "startup-ready"} <= events \
         and "target-activated" not in events and len(exits) == 1 \
         and exits[0].get("exitCode") == 0 and exits[0].get("outcome") == "startup-ready"
+
+
+def cold_wallpaper_target(launch: list[dict], probe: list[dict],
+                          expected_launcher_path: str) -> tuple[int, str] | None:
+    native = native_launch_verdict(launch, expected_launcher_path)
+    if native is None or native["status"] != "native-completed" or not cold_start_allowed(probe):
+        return None
+    # The native verdict has already verified that exactly one opened PID
+    # matches the terminal receipt and exit. The path comes from the unique
+    # pre-launch resolver, not from an unbound wallpaper response.
+    opened = next(value for value in launch if value["event"] == "target-opened")
+    selected = next(value for value in probe if value.get("event") == "probe")
+    return opened["targetPID"], selected["targetPath"]
+
+
+def observe_wallpaper(executable: Path, log: Path, target: tuple[int, str] | None) -> bool:
+    request_id = str(uuid4())
+    command = [str(executable), "--wallpaper-status", "--request-id", request_id]
+    if target is not None:
+        command.extend(["--target-pid", str(target[0]), "--target-bundle", target[1]])
+    ok, values = execute(command, log)
+    return ok and verified_wallpaper(values, request_id=request_id, target=target)
 
 
 def dock_entries(value: dict, expected_path: Path) -> list[dict]:
@@ -123,6 +157,7 @@ print(String(data: data, encoding: .utf8)!)
     cases.append({"id": "FT-DOCK", "status": "pending-visual-review" if entries else "pending-no-entry",
                   "entries": entries,
                   "next": "Review the actual pinned entry label after an upgrade; metadata alone is insufficient."})
+    target = None
     if cold_start:
         probe_ok, probe = execute([str(executable), "--probe"], out / "cold-probe.log")
         if not installed or not unique_installation(installation) or not probe_ok or not cold_start_allowed(probe):
@@ -135,23 +170,27 @@ print(String(data: data, encoding: .utf8)!)
             cold = launched and cold_start_observed(launch, str(app.resolve()))
             cases.append({"id": "FT-COLD", "status": "pending-visual-review" if cold else "failed",
                           "next": "Review the actual animation and workspace; preserve the event log."})
+            if cold:
+                target = cold_wallpaper_target(launch, probe, str(app.resolve()))
             deadline = time.monotonic() + 65
-            while cold and time.monotonic() < deadline:
-                ok, wallpaper = execute([str(executable), "--wallpaper-status"], out / "wallpaper.log")
-                if ok and verified_wallpaper(wallpaper):
+            poll = 0
+            while target is not None and time.monotonic() < deadline:
+                poll += 1
+                if observe_wallpaper(executable, out / f"wallpaper-poll-{poll:03d}.log", target):
                     break
                 time.sleep(1)
     else:
         cases.append({"id": "FT-COLD", "status": "pending-not-run",
                       "next": "Rerun --cold-start only after the official host has been quit by its user."})
-    wallpaper_ok, wallpaper = execute([str(executable), "--wallpaper-status"], out / "wallpaper.log")
-    wallpaper_status_verified = wallpaper_ok and verified_wallpaper(wallpaper)
+    wallpaper_status_verified = (not cold_start or target is not None) and observe_wallpaper(
+        executable, out / "wallpaper.log", target)
     cases.append({"id": "FT-WALLPAPER",
                   "status": "pending-visual-review" if wallpaper_status_verified else "failed",
                   "runtimeStatusVerified": wallpaper_status_verified,
                   "next": ("Verify the visible wallpaper in both the regular workspace and the Dot central conversation "
                            "area of this installed candidate, including after switching away and back. "
                            "Sidebar wallpaper alone is insufficient." if wallpaper_status_verified else
+                           "No verified cold-launch target to bind the wallpaper status to." if cold_start and target is None else
                            "Inspect wallpaper.log for the failed runtime status check before visual review.")})
     return {"kind": "installed-functional-acceptance", "unitCoverageInput": False,
             "cases": cases, "passed": all(case["status"] == "passed" for case in cases),
