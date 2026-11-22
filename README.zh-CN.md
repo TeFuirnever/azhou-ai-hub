@@ -65,7 +65,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | 任务收尾时对齐文档、规则与交接状态。 | 上游 `neat-freak` 基线（[Khazix-Skills](THIRD_PARTY_NOTICES.md#super-repo-pedant-baseline)）28/28 项能力有账可查；4 个已注册行为 case。 |
 | [Excalidraw Diagram](skills/super-excalidraw-diagram/SKILL.md) | 创建或编辑可继续修改的场景；渲染、检查并交付 CJK 安全的 SVG/PNG。 | 5 个冻结 benchmark case；确定性的风格/场景/重叠 gate。 |
 | [Eli5](skills/super-eli5/SKILL.md) | 把主题讲成一份自包含的 HTML——大图、少字。 | 上游行为句钉定（SHA-256）；尚无行为 benchmark。 |
-| [Ask Azhou](skills/super-ask-azhou/SKILL.md) | 路由：说清意图，得到 skill、模式与边界。 | 带负控的路由图奇偶校验 gate。 |
+| [Ask Azhou](skills/super-ask-azhou/SKILL.md) | 路由：说清意图，得到 skill、模式与边界。 | 带负控的路由图一致性校验 gate。 |
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | 从上游资料起草、校准并评审架构文档。 | 确定性脚手架、收尾门检查器与黄金用例。 |
 | [Session Insights](skills/super-session-insights/SKILL.md) | 从本机会话存储产出事实绑定的使用报告；对已授权材料做反思。 | 合成存储接线套件；反思合同检查。 |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的结构规则改写面向 agent 的英文。 | 上游钉定（SHA-256）；确定性的 `ste-lint.py` gate。 |
