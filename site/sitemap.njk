@@ -5,6 +5,6 @@ eleventyExcludeFromCollections: true
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   {%- for p in collections.all %}
-  <url><loc>https://tefuirnever.github.io/azhou-ai-hub{{ p.url }}</loc></url>
+  <url><loc>{{ site.siteUrl }}{{ p.url }}</loc></url>
   {%- endfor %}
 </urlset>

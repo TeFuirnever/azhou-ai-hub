@@ -12,8 +12,7 @@ const path = require("node:path");
 const matter = require("gray-matter");
 
 const SKILLS_ROOT = path.resolve(__dirname, "..", "..", "skills");
-const GITHUB_TREE_BASE =
-  "https://github.com/TeFuirnever/azhou-ai-hub/tree/main/skills";
+const { treeBase } = require("./site.js");
 
 module.exports = function () {
   const names = fs
@@ -57,7 +56,7 @@ module.exports = function () {
       description: data.description.trim(),
       invocation:
         typeof data.invocation === "string" ? data.invocation.trim() : "",
-      url: `${GITHUB_TREE_BASE}/${name}/`,
+      url: `${treeBase}/skills/${name}/`,
     });
   }
 
