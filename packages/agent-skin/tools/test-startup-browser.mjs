@@ -3207,6 +3207,10 @@ try {
     }
     assert.equal(isNewSettingsRun({phase: 'complete', runId: savedRun.state.runId + 1}, savedRun.state.runId), false);
     assert.equal(isNewSettingsRun(null, savedRun.state.runId), false);
+    for (const phase of ['loading', 'settings']) {
+      assert.equal(isNewSettingsRun({phase, runId: savedRun.state.runId + 1}, savedRun.state.runId), true,
+        'a new settings run can already be ready when the click is sampled');
+    }
     let currentSettingsRunId = savedRun.state.runId;
     let expectedSubtitle = 'Generated fixture only';
     for (let cycle = 2; cycle <= 10; cycle++) {
@@ -3270,18 +3274,19 @@ try {
     assert.equal(lateEntryMetrics?.entryHit, true, 'appearance entry can be clicked before the pending-save check');
     assert.equal(lateEntryMetrics?.buttonHit, true, 'appearance button is the hit target before the pending-save check');
     const lateEntry = await clickAppearanceEntry();
-    assert.equal(lateEntry?.state?.phase, 'loading',
-      'clicking appearance starts a fresh settings run before the pending-save check');
-    assert.ok(lateEntry.state.runId > lateRun,
-      'the pending-save settings run has a newer ID than the prior saved run');
+    assert.ok(isNewSettingsRun(lateEntry?.state, lateRun),
+      'clicking appearance starts a newer loading or already-ready settings run before the pending-save check');
+    const clickedRunId = lateEntry.state.runId;
     const lateSettingsReady = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status(),dialog=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('dialog');
-      return state.phase==='settings'&&state.runId>${lateRun}&&dialog?.open?state:false;
+      return state.phase==='settings'&&state.runId===${clickedRunId}&&dialog?.open?state:false;
     })()`), 10000, 'appearance entry opens settings before the held late background result');
-    const lateSettings = await cdp.evaluate('window.__startupAPI.status()');
-    assert.equal(lateSettings.runId, lateSettingsReady.runId);
+    const lateSettings = lateSettingsReady;
     await cdp.evaluate(`(()=>{
-      const doc=document.querySelector('iframe[aria-label]').contentDocument;
+      const state=window.__startupAPI.status();
+      const doc=document.querySelector('iframe[aria-label]')?.contentDocument;
+      if(state.phase!=='settings'||state.runId!==${clickedRunId}||!doc?.querySelector('dialog')?.open)
+        throw Error('clicked settings run must still own the open dialog before save');
       const subtitle=doc.querySelector('textarea');
       subtitle.value='Late wallpaper test';subtitle.dispatchEvent(new Event('input',{bubbles:true}));
       doc.querySelector('[data-agent-skin-settings] footer button:last-child').click();
