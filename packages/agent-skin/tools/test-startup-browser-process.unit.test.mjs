@@ -23,6 +23,11 @@ test('owned child exit and close are observed once before cleanup', async () => 
   assert.equal(first, second);
   assert.equal(await first, true);
   assert.deepEqual(child.signals, ['SIGTERM']);
+  assert.deepEqual(owner.stopEvidence, {
+    exited: true, closed: true, spawnFailed: false,
+    term: 'observed-exit', kill: 'not-attempted', stdio: 'not-needed',
+    termMs: 10, killMs: 10, closeMs: 30000,
+  });
   assert.deepEqual(owner.state, { exited: true, closed: true, spawnFailed: false });
 });
 
@@ -39,12 +44,45 @@ test('unconfirmed exit, missing close and signal errors cannot authorize cleanup
   const stuck = new Child(), stuckOwner = trackOwnedChild(stuck);
   assert.equal(await stuckOwner.stop({ termMs: 2, killMs: 2 }), false);
   assert.deepEqual(stuck.signals, ['SIGTERM', 'SIGKILL']);
+  assert.deepEqual(stuckOwner.stopEvidence, {
+    exited: false, closed: false, spawnFailed: false,
+    term: 'deadline', kill: 'deadline', stdio: 'not-needed',
+    termMs: 2, killMs: 2, closeMs: 30000,
+  });
   const noClose = new Child(), noCloseOwner = trackOwnedChild(noClose);
   noClose.kill = () => { queueMicrotask(() => noClose.emit('exit', 0, null)); return true; };
   assert.equal(await noCloseOwner.stop({ termMs: 5, killMs: 2, closeMs: 2 }), false);
+  assert.deepEqual(noCloseOwner.stopEvidence, {
+    exited: true, closed: false, spawnFailed: false,
+    term: 'observed-exit', kill: 'not-attempted', stdio: 'deadline',
+    termMs: 5, killMs: 2, closeMs: 2,
+  });
+  noClose.emit('close', 0, null);
+  assert.equal(noCloseOwner.state.closed, true);
+  assert.equal(noCloseOwner.stopEvidence.closed, false, 'late events cannot rewrite the stop receipt');
   const broken = new Child(), brokenOwner = trackOwnedChild(broken);
   broken.kill = () => { throw new Error('signal failed'); };
   await assert.rejects(brokenOwner.stop(), /signal failed/);
+  assert.equal(brokenOwner.stopEvidence.term, 'signal-error');
+  assert.equal(brokenOwner.stopEvidence.exited, false);
+});
+
+test('following TERM deadline, KILL exit and delayed stdio close remain separately observed', async () => {
+  const child = new Child(), owner = trackOwnedChild(child);
+  child.kill = signal => {
+    child.signals.push(signal);
+    if (signal === 'SIGKILL') queueMicrotask(() => {
+      child.emit('exit', null, 'SIGKILL');
+      setImmediate(() => child.emit('close', null, 'SIGKILL'));
+    });
+    return true;
+  };
+  assert.equal(await owner.stop({ termMs: 2, killMs: 20, closeMs: 50 }), true);
+  assert.deepEqual(owner.stopEvidence, {
+    exited: true, closed: true, spawnFailed: false,
+    term: 'deadline', kill: 'observed-exit', stdio: 'observed-close',
+    termMs: 2, killMs: 20, closeMs: 50,
+  });
 });
 
 test('a reported spawn failure without a child PID is safe to recognize', async () => {
@@ -53,6 +91,8 @@ test('a reported spawn failure without a child PID is safe to recognize', async 
   child.emit('error', new Error('spawn failed'));
   assert.equal(await owner.stop({ termMs: 2, killMs: 2 }), true);
   assert.deepEqual(child.signals, []);
+  assert.equal(owner.stopEvidence.spawnFailed, true);
+  assert.equal(owner.stopEvidence.term, 'not-attempted');
 });
 
 test('profile removal rejects replacement and symlink without touching either tree', async () => {
