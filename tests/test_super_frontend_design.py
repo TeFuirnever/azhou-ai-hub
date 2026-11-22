@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import struct
 import unittest
 from pathlib import Path
 
@@ -25,6 +26,11 @@ UPSTREAM_LICENSE_SHA256 = "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e1
 PINNED_SHA256 = {
     "LICENSE.txt": UPSTREAM_LICENSE_SHA256,
 }
+
+SHOWCASE_SHIPPED_SHA256 = "9e4e41a6712bd7f7582e12c928ddcd6f11da24cb9ff4772b50be93f901430dd9"
+SHOWCASE_APPROVED_CANDIDATE_SHA256 = "e276ea480a95d43461ee274cbdcb4c3380bd4f50f56530a3beef0eb1c4ecf2f0"
+SHOWCASE_RUN_ID = "azhou-20261122T101649Z-super-frontend-design-showcase-s33"
+SHOWCASE_LOCAL_RUN_ID = "794e040b2de546d491a53f164b36313f"
 
 UPSTREAM_TRIGGER_SENTENCES = (
     "Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one.",
@@ -163,6 +169,36 @@ class SuperFrontendDesignPackageTest(unittest.TestCase):
             ],
             files,
         )
+
+    def test_showcase_effect_image_is_metadata_sanitized(self) -> None:
+        # The azhou-scenes local candidate pipeline embeds the scene prompt,
+        # local paths and runtime identity in eXIf/iTXt/tEXt chunks; the
+        # published showcase must carry none of them (sanitized before
+        # publishing, 2026-11-22).
+        image = ROOT / "assets" / "skills" / "super-frontend-design-effect.png"
+        self.assertEqual(SHOWCASE_SHIPPED_SHA256, hashlib.sha256(image.read_bytes()).hexdigest())
+        data = image.read_bytes()
+        pos = 8
+        present = []
+        while pos < len(data):
+            length = struct.unpack(">I", data[pos:pos + 4])[0]
+            present.append(data[pos + 4:pos + 8])
+            pos += 12 + length
+        self.assertIn(b"IDAT", present, "the shipped pixel stream must keep its IDAT bytes")
+        self.assertEqual({b"IHDR", b"IDAT", b"IEND"}, set(present))
+
+    def test_provenance_documents_the_sanitized_shipment_and_approved_candidate(self) -> None:
+        provenance = (SKILL_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
+        self.assertIn(SHOWCASE_SHIPPED_SHA256, provenance)
+        self.assertIn(SHOWCASE_APPROVED_CANDIDATE_SHA256, provenance)
+        self.assertIn(SHOWCASE_RUN_ID, provenance)
+        self.assertIn(SHOWCASE_LOCAL_RUN_ID, provenance)
+        self.assertIn("metadata-sanitized", provenance)
+        self.assertIn("byte-identical", provenance)
+        self.assertIn("03-production-alert", provenance)
+        self.assertIn("p0-approval-s33.json", provenance)
+        self.assertIn("up to you, go", provenance)
+        self.assertIn("two seeds (31/33)", provenance)
 
 
 if __name__ == "__main__":
