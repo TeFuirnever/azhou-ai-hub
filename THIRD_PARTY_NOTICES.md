@@ -172,7 +172,7 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 
 - Copyright: Cathryn Lavery, 2025
 - License: [MIT](LICENSES/Diagram-Design-MIT.txt); bundled icon and font notices inside the package under `THIRD_PARTY_LICENSES.md`
-- Imported boundary: the fifty-type diagram pipeline (semantic-pattern selection, three-variant template skins, style-guide gate and profile mechanism), the `.drawio`/Mermaid/`.excalidraw`/PlantUML import extractors, the self-check and geometry verification scripts, SVG/PNG export, and the 70-page reference corpus with 242 example/template assets
+- Imported boundary: the 51-type diagram pipeline (semantic-pattern selection, three-variant template skins, style-guide gate and profile mechanism), the `.drawio`/Mermaid/`.excalidraw`/PlantUML import extractors, the self-check and geometry verification scripts, SVG/PNG export, and the 70-page reference corpus with 242 example/template assets
 - Local changes: frontmatter normalization to the hub contract (the upstream `license` and `metadata.version` keys are recorded in provenance), a compressed frontmatter description with carve sentences naming `super-archify` and `super-excalidraw-diagram`, the Azhou identity anchor, brand protocol and stable receipt, the fail-closed `setup.md` for the Python 3 baseline and the optional Playwright export/preview boundary, and the provenance/compatibility records
 
 ## Public prior art excluded from distribution

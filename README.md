@@ -75,7 +75,7 @@ Every adapted package records its upstream provenance in `skills/<name>/referenc
 | [Rederive](skills/super-rederive/SKILL.md) | Practice understanding code by re-deriving its design. | Pinned upstream (SHA-256); exploratory observation only. |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | Shape output for ADHD readers: next action first, bounded steps. | Frozen upstream (SHA-256); verbatim body; integrity tests. |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | Run GitHub operations through an agent-ergonomic wrapped CLI. | Locked upstream release (SHA-256 + npm pins); integrity tests. |
-| [Diagram Design](skills/super-diagram-design/SKILL.md) | Create branded editor-grade HTML/SVG diagrams across fifty visual types, with .drawio/Mermaid/.excalidraw/PlantUML import. | Vendored upstream (commit pin + per-file SHA-256); packaged `self_check.py` gate. |
+| [Diagram Design](skills/super-diagram-design/SKILL.md) | Create branded editor-grade HTML/SVG diagrams across 51 visual types, with .drawio/Mermaid/.excalidraw/PlantUML import. | Vendored upstream (commit pin + per-file SHA-256); packaged `self_check.py` gate. |
 
 [Per-skill platform view](docs/skill-platform-view.md) · [Evaluation contract](docs/eval-case-contract.md)
 

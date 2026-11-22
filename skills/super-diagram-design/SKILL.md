@@ -1,6 +1,6 @@
 ---
 name: super-diagram-design
-description: "Azhou skill. Renamed from diagram-design (the old name still triggers this skill). Use when a diagram must be created, edited, or exported as a branded, self-contained HTML file with inline SVG — one of fifty visual types including architecture, flowchart, sequence, state machine, ER/data model, timeline, swimlane, quadrant, radar, org chart, tree, Venn, treemap, heatmap, Sankey, fishbone, Wardley map, kanban, user journey, service blueprint, Gantt, UML class, funnel, unit grid, or schedule network diagrams — or when .drawio, Mermaid, .excalidraw, or PlantUML sources must be imported into that pipeline. Interactive diagram-map HTML belongs to super-archify; editable .excalidraw scenes belong to super-excalidraw-diagram."
+description: "Azhou skill. Renamed from diagram-design (the old name still triggers this skill). Use when a diagram must be created, edited, or exported as a branded, self-contained HTML file with inline SVG — one of 51 visual types including architecture, flowchart, sequence, state machine, ER/data model, timeline, swimlane, quadrant, radar, org chart, tree, Venn, treemap, heatmap, Sankey, fishbone, Wardley map, kanban, user journey, service blueprint, Gantt, UML class, funnel, unit grid, or schedule network diagrams — or when .drawio, Mermaid, .excalidraw, or PlantUML sources must be imported into that pipeline. Interactive diagram-map HTML belongs to super-archify; editable .excalidraw scenes belong to super-excalidraw-diagram."
 invocation: model-invoked discipline
 ---
 

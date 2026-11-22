@@ -37,7 +37,7 @@ UPSTREAM_THIRD_PARTY_LICENSES_SHA256 = "ad931154e2f91bf545fc9c442666a2159aa56c0a
 # references/provenance, setup and upstream-compatibility files are not).
 PINNED_SHA256 = {
     "LICENSE": "bb7e12e91fecef43024111123ff784cec6c485585561d8b552557c0173b3ed29",
-    "SKILL.md": "90e76674525c30b0cd8c5a4ff5b45802867c9ad6f260f31bc1abbe2991fb6d02",
+    "SKILL.md": "c483eec39a6cbfbe660a987b9eb68322b6eae1ac715e7b29a446bf686cfac068",
     "THIRD_PARTY_LICENSES.md": "ad931154e2f91bf545fc9c442666a2159aa56c0af3cca0b7246e02c6efeab6ba",
     "assets/example-arc-diagram-dark.html": "acd6b0c9d174b7d915d1e4e1a98a6019c30b02b8e5264f53f4ef2657dcbde77e",
     "assets/example-arc-diagram-full.html": "e785227378c5bde8a09d323ba743cf0f53b8dccb5e029325e99cccaed6a8f669",
