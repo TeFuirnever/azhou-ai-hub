@@ -59,9 +59,9 @@ Every adapted package records its upstream provenance in `skills/<name>/referenc
 | Skill | Real job | Verification basis |
 |---|---|---|
 | [Azhou Info](skills/super-azhou-info/SKILL.md) | Report checkout, runtime, support and provable Git revision facts. | Stable `info`/`version` JSON contracts; read-only checks. |
-| [Azhou Doctor](skills/super-azhou-doctor/SKILL.md) | Diagnose repository, install-target, lease and host-migration health, read-only. | Read-only doctor contract; real Treehouse smoke; fail-closed. |
+| [Azhou Doctor](skills/super-azhou-doctor/SKILL.md) | Diagnose repository, install-target, lease and host-migration health, read-only. | Read-only doctor contract; Treehouse lease smoke contract (subprocess-boundary unit tests); fail-closed. |
 | [Azhou Setup](skills/super-azhou-setup/SKILL.md) | Guide scoped installation, update and removal, including checkout-managed lifecycle. | Dry-run-first setup; mutation lock, identity guards and rollback regressions. |
-| [Azhou Verify](skills/super-azhou-verify/SKILL.md) | Run the public full-repository integrity gate. | Repository policy, unit, benchmark-integrity and whitespace gates. |
+| [Azhou Verify](skills/super-azhou-verify/SKILL.md) | Run the public full-repository integrity gate. | Repository policy, retired-surface reverse scan, unit, package manifest/lifecycle, benchmark-integrity, wiring-integrity and whitespace gates. |
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | At task close, reconcile docs, rules and handoff state. | All 28 capabilities of the upstream `neat-freak` baseline ([Khazix-Skills](THIRD_PARTY_NOTICES.md#super-repo-pedant-baseline)) accounted; 4 registered behavior cases. |
 | [Excalidraw Diagram](skills/super-excalidraw-diagram/SKILL.md) | Create or edit an editable scene; render, inspect, deliver CJK-safe SVG/PNG. | 5 frozen benchmark cases; deterministic style/scene/overlap gates. |
 | [Eli5](skills/super-eli5/SKILL.md) | Explain a topic as one self-contained HTML artifact — big pictures, few words. | Upstream behavior sentence pinned (SHA-256); no behavior benchmark. |
@@ -91,7 +91,7 @@ In the results below, a *hold* is an explicitly flagged unresolved item, and a *
 ## Why trust it
 
 - **Current behavior beats stale prose.** Code, machine configuration and real execution evidence define current truth; unimplemented specs stay visible as reminders.
-- **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite — package, benchmark-integrity, wiring-integrity and repository-policy checks — plus whitespace checks.
+- **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite — repository policy, the retired-surface reverse scan, Hub unit tests, package manifest/lifecycle suites and every registered benchmark-integrity and wiring-integrity suite — plus whitespace checks.
 - **Harness differences stay visible.** The maintained targets are Codex, Claude Code, MiMo Code (`mimo`), DeepSeek Harness (`dsh`) and zcode; other harnesses are temporarily unsupported. See the [support matrix](docs/support-matrix.md) and the [per-skill platform view](docs/skill-platform-view.md).
 - **History cannot silently rewrite a live skill.** Promotion requires the mandated regression cases and deterministic checks to pass, a paired-majority review (an odd number of same-judge paired comparisons, at least three, must prefer the candidate by majority), no safety regression, and human approval bound to the exact diff.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).

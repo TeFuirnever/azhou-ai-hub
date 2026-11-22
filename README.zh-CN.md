@@ -59,9 +59,9 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
 | Skill | 解决的真实任务 | 验证依据 |
 |---|---|---|
 | [Azhou Info](skills/super-azhou-info/SKILL.md) | 汇报 checkout、运行时、支持范围与可证明的 Git revision 事实。 | 稳定的 `info`/`version` JSON 合同；只读检查。 |
-| [Azhou Doctor](skills/super-azhou-doctor/SKILL.md) | 只读诊断仓库、安装 target、lease 与宿主迁移健康。 | 只读 doctor 合同；真实 Treehouse 冒烟；fail-closed。 |
+| [Azhou Doctor](skills/super-azhou-doctor/SKILL.md) | 只读诊断仓库、安装 target、lease 与宿主迁移健康。 | 只读 doctor 合同；Treehouse lease smoke 合同（subprocess 边界单测）；fail-closed。 |
 | [Azhou Setup](skills/super-azhou-setup/SKILL.md) | 引导按范围安装、更新与卸载，含 checkout 受管的生命周期。 | 先 dry-run 的安装；变更锁、身份防护与回滚回归。 |
-| [Azhou Verify](skills/super-azhou-verify/SKILL.md) | 运行公开的全仓完整性 gate。 | 仓库策略、单元、benchmark 完整性与空白检查。 |
+| [Azhou Verify](skills/super-azhou-verify/SKILL.md) | 运行公开的全仓完整性 gate。 | 仓库策略、退役面反向扫描、单元测试、包清单/生命周期、benchmark 完整性、接线完整性与空白检查。 |
 | [Super Repo Pedant](skills/super-repo-pedant/SKILL.md) | 任务收尾时对齐文档、规则与交接状态。 | 上游 `neat-freak` 基线（[Khazix-Skills](THIRD_PARTY_NOTICES.md#super-repo-pedant-baseline)）28/28 项能力有账可查；4 个已注册行为 case。 |
 | [Excalidraw Diagram](skills/super-excalidraw-diagram/SKILL.md) | 创建或编辑可继续修改的场景；渲染、检查并交付 CJK 安全的 SVG/PNG。 | 5 个冻结 benchmark case；确定性的风格/场景/重叠 gate。 |
 | [Eli5](skills/super-eli5/SKILL.md) | 把主题讲成一份自包含的 HTML——大图、少字。 | 上游行为句钉定（SHA-256）；尚无行为 benchmark。 |
@@ -91,7 +91,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
 ## 为什么可信
 
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现的 spec 保留为 reminder。
-- **主张必须有 gate。** 仓库权威 gate 运行完整确定性测试套件——包、benchmark 完整性、接线完整性与仓库策略检查——外加空白检查。
+- **主张必须有 gate。** 仓库权威 gate 运行完整确定性测试套件——仓库策略、退役面反向扫描、Hub 单元测试、包清单/生命周期套件、全部已注册 benchmark 完整性与接线完整性套件——外加空白检查。
 - **宿主差异保持可见。** 当前维护的目标是 Codex、Claude Code、MiMo Code（命令 `mimo`）、DeepSeek Harness（命令 `dsh`）和 zcode；其他 harness 暂不支持。见[支持矩阵](docs/support-matrix.md)与[逐 skill 平台汇总](docs/skill-platform-view.md)。
 - **历史不能静默改写 live skill。** promotion 必须通过规定的回归用例与确定性检查，再经成对评审以多数胜出（奇数次、至少三次的同裁判成对比较须按多数支持候选），无安全回归，并取得绑定到 exact diff 的人类批准。
 - **来源可追溯。** 上游快照、vendored 资产与被排除的无许可 prior art 记录在[第三方声明](THIRD_PARTY_NOTICES.md)。
