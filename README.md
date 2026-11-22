@@ -93,7 +93,7 @@ In the results below, a *hold* is an explicitly flagged unresolved item, and a *
 - **Current behavior beats stale prose.** Code, machine configuration and real execution evidence define current truth; unimplemented specs stay visible as reminders.
 - **Claims have gates.** The authoritative repository gate runs the complete deterministic test suite — package, benchmark-integrity, wiring-integrity and repository-policy checks — plus whitespace checks.
 - **Harness differences stay visible.** The maintained targets are Codex, Claude Code, MiMo Code (`mimo`), DeepSeek Harness (`dsh`) and zcode; other harnesses are temporarily unsupported. See the [support matrix](docs/support-matrix.md) and the [per-skill platform view](docs/skill-platform-view.md).
-- **History cannot silently rewrite a live skill.** Promotion requires the mandated regression cases and deterministic checks to pass, a paired-majority review (at least three same-judge paired comparisons must prefer the candidate), no safety regression, and human approval bound to the exact diff.
+- **History cannot silently rewrite a live skill.** Promotion requires the mandated regression cases and deterministic checks to pass, a paired-majority review (an odd number of same-judge paired comparisons, at least three, must prefer the candidate by majority), no safety regression, and human approval bound to the exact diff.
 - **Sources remain attributable.** Upstream snapshots, vendored assets and excluded unlicensed prior art are recorded in [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ![Azhou AI Hub: the documented verification command and a recorded local result.](assets/github/readme-proof.png)
@@ -126,7 +126,7 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 | Entry | Complete project package | Current boundary |
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **candidate**: native Codex/Claude plugins, a zcode plugin with bundled skills, and shared Skills discovery for MiMo and DeepSeek Harness (the maintainer host's shared-root pstack links were retired on 2026-11-14; serving pstack that way moves to a separately scoped task, and other skills sharing the root are unaffected). Dated evidence and limits: [support matrix](docs/support-matrix.md#optional-integrations). |
-| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | On Codex desktop cold starts it plays a 12-second Azhou startup animation and applies an Azhou wallpaper; an assembled DeepSeek Harness plugin package brings the same appearance to DSH. Current source candidate `0.9.0/build 43`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). |
+| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | On Codex desktop cold starts it plays a 12-second Azhou startup animation and applies an Azhou wallpaper (visual acceptance still pending; tracked in the [support matrix](docs/support-matrix.md#optional-integrations)); an assembled DeepSeek Harness plugin package brings the same appearance to DSH. Current source candidate `0.9.0/build 43`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). |
 
 [Azhou Appearance](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary) accepts user-selected images and Azhou JSON presets. It does not import themes or migrate data from other projects.
 

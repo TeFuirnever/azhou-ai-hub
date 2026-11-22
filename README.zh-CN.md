@@ -93,7 +93,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
 - **现役行为优先。** 代码、机器配置和真实运行证据定义 current truth；未实现的 spec 保留为 reminder。
 - **主张必须有 gate。** 仓库权威 gate 运行完整确定性测试套件——包、benchmark 完整性、接线完整性与仓库策略检查——外加空白检查。
 - **宿主差异保持可见。** 当前维护的目标是 Codex、Claude Code、MiMo Code（命令 `mimo`）、DeepSeek Harness（命令 `dsh`）和 zcode；其他 harness 暂不支持。见[支持矩阵](docs/support-matrix.md)与[逐 skill 平台汇总](docs/skill-platform-view.md)。
-- **历史不能静默改写 live skill。** promotion 必须通过规定的回归用例与确定性检查，再经成对评审以多数胜出（至少三次同裁判成对比较偏向候选），无安全回归，并取得绑定到 exact diff 的人类批准。
+- **历史不能静默改写 live skill。** promotion 必须通过规定的回归用例与确定性检查，再经成对评审以多数胜出（奇数次、至少三次的同裁判成对比较须按多数支持候选），无安全回归，并取得绑定到 exact diff 的人类批准。
 - **来源可追溯。** 上游快照、vendored 资产与被排除的无许可 prior art 记录在[第三方声明](THIRD_PARTY_NOTICES.md)。
 
 ![Azhou AI Hub：公开的验证命令与一次本地验证结果。](assets/github/readme-proof.png)
@@ -126,7 +126,7 @@ python scripts/azhou_hub.py verify
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面冷启动时播放 12 秒阿舟启动动画并应用阿舟壁纸；组装好的 DeepSeek Harness 插件包把同样的外观带到 DSH。当前源码候选为 `0.9.0/build 43`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。 |
+| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面冷启动时播放 12 秒阿舟启动动画并应用阿舟壁纸（视觉验收仍待人工确认；以[支持矩阵](docs/support-matrix.md#optional-integrations)为准）；组装好的 DeepSeek Harness 插件包把同样的外观带到 DSH。当前源码候选为 `0.9.0/build 43`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。 |
 
 [阿舟外观](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary)可选用本机图片和阿舟 JSON 预设，不导入其他项目的主题，也不迁移其他项目的数据。
 
