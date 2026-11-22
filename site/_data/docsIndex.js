@@ -1,12 +1,5 @@
 "use strict";
 
-// Build-time loader for the documentation map. docs/README.md stays the
-// single authority; the site does not mirror any document body, it only
-// re-renders the index table with each relative link rewritten to the
-// versioned blob URL on GitHub.
-//
-// Fail loud: an index row whose links cannot be parsed terminates the build
-// instead of silently losing the rewritten link.
 const fs = require("node:fs");
 const path = require("node:path");
 

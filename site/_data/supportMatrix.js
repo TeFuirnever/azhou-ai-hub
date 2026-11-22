@@ -1,11 +1,5 @@
 "use strict";
 
-// Build-time loader for the support matrix's opening paragraph. The site
-// quotes docs/support-matrix.md verbatim instead of keeping a hand-maintained
-// copy, so a matrix edit cannot leave a stale harness list on the page.
-//
-// Fail loud: a missing heading or paragraph terminates the build instead of
-// silently rendering an empty or stale quote.
 const fs = require("node:fs");
 const path = require("node:path");
 
