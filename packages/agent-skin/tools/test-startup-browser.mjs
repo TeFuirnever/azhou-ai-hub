@@ -7524,6 +7524,119 @@ try {
     assert.deepEqual(restored,[false,'rgb(11, 23, 37)']);
   });
 
+  await check('generated synthetic sidebar masking keeps Dot wallpaper independent', async () => {
+    await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
+    await awaitGeneratedReady('synthetic sidebar fixture installed');
+    await until(()=>cdp.evaluate('window.__azhouWallpaper?.status().applied===true'),10000,'wallpaper applied');
+    await cdp.evaluate("document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()");
+    await until(()=>cdp.evaluate("window.__startupAPI.status().phase==='complete'"),10000,'startup complete');
+
+    const action = script => cdp.evaluate(`(() => { const f=window.__sidebarOpticalFixture; ${script} })()`);
+    await cdp.evaluate(`(() => {
+      const [sidebar,...extraSidebars]=document.querySelectorAll('#root .sidebar');
+      const [main,...extraMains]=document.querySelectorAll('#root [data-app-shell-main-surface]');
+      if(!sidebar||extraSidebars.length||!main||extraMains.length)throw Error('unique fixture sidebar and main required');
+      const dot=document.createElement('section');
+      dot.className='messaging-root messaging-embedded';
+      dot.style.cssText='position:fixed;top:160px;left:480px;width:100px;height:90px;background:rgb(11,23,37)';
+      dot.innerHTML='<div class="workspace"><main class="thread-pane" style="height:90px"></main></div>';
+      const nav=document.createElement('button');
+      nav.dataset.sidebarDestination='builtin:orbit';
+      nav.setAttribute('aria-current','page');
+      nav.style.cssText='position:fixed;left:0;top:0;width:20px;height:20px';
+      document.querySelector('#root').append(nav);
+      main.append(dot);
+      const mask=document.createElement('aside');
+      mask.dataset.fixtureSidebarOpticalMask='';
+      mask.style.cssText='position:fixed;top:160px;left:24px;width:24px;height:24px;z-index:99;pointer-events:none';
+      sidebar.append(mask);
+      const paint=document.createElement('style');
+      paint.textContent='#root .sidebar{background:transparent!important}'
+        +'[data-fixture-sidebar-optical-mask].fixture-opaque{background:rgb(0,255,0)!important}'
+        +'html[data-azhou-wallpaper="active"] body{--azhou-wallpaper-wash:linear-gradient(transparent,transparent)}';
+      document.head.append(paint);
+      const control=document.createElement('style');
+      control.textContent='html[data-azhou-wallpaper="active"] body{background-image:none!important}';
+      document.head.append(control);
+      control.sheet.disabled=true;
+      window.__sidebarOpticalFixture={sidebar,main,dot,nav,mask,paint,control};
+    })()`);
+    const settle=()=>cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+    // Regions are CSS coordinates; both raw rasters come from the same CDP frame.
+    const left={x:28,y:164,width:8,height:8};
+    const center={x:484,y:164,width:12,height:12};
+    const stage=async()=>{
+      await settle();
+      const frame=(await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true})).data;
+      return action(`
+        const boxes=${JSON.stringify({left,center})};
+        const contains=(r,q)=>q.x>=r.left&&q.y>=r.top&&q.x+q.width<=r.right&&q.y+q.height<=r.bottom;
+        const overlaps=(r,q)=>q.x<r.right&&q.y<r.bottom&&q.x+q.width>r.left&&q.y+q.height>r.top;
+        const sidebar=f.sidebar.getBoundingClientRect(),mask=f.mask.getBoundingClientRect(),dot=f.dot.getBoundingClientRect();
+        if(!f.sidebar.contains(f.mask)||!f.main.contains(f.dot)
+          ||!contains(sidebar,boxes.left)||!contains(mask,boxes.left)||overlaps(dot,boxes.left)
+          ||!contains(dot,boxes.center)||overlaps(sidebar,boxes.center)||overlaps(mask,boxes.center)
+          ||getComputedStyle(f.mask).pointerEvents!=='none')
+          throw Error('invalid sidebar or central probe geometry');
+        return (async()=>{
+          const image=new Image(); image.src='data:image/png;base64,${frame}'; await image.decode();
+          const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+          const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
+          const sx=image.width/innerWidth,sy=image.height/innerHeight;
+          const crop=q=>{
+            if(q.x<0||q.y<0||q.x+q.width>innerWidth||q.y+q.height>innerHeight)throw Error('offscreen probe');
+            const x=Math.round(q.x*sx),y=Math.round(q.y*sy);
+            const w=Math.round((q.x+q.width)*sx)-x,h=Math.round((q.y+q.height)*sy)-y;
+            if(w<1||h<1||x+w>image.width||y+h>image.height)throw Error('empty or offscreen physical ROI');
+            return Array.from(ctx.getImageData(x,y,w,h).data);
+          };
+          return {left:crop(boxes.left),center:crop(boxes.center),
+            bodyImage:getComputedStyle(document.body).backgroundImage,
+            sidebarColor:getComputedStyle(f.sidebar).backgroundColor,
+            maskColor:getComputedStyle(f.mask).backgroundColor};
+        })();
+      `);
+    };
+    const owned=()=>action(`const status=window.__startupAPI.status(); return {
+      retained:f.owner===window.__azhouWallpaper&&!!f.owner,
+      applied:window.__azhouWallpaper?.status().applied===true&&status.wallpaper.applied===true,
+      run:status.runId,phase:status.phase,marked:f.dot.hasAttribute('data-azhou-wallpaper-plane'),
+      sidebarMarked:f.sidebar.hasAttribute('data-azhou-wallpaper-plane'),
+      maskMarked:f.mask.hasAttribute('data-azhou-wallpaper-plane'),
+      uniqueDot:document.querySelectorAll('[data-sidebar-destination="builtin:orbit"][aria-current="page"]').length===1,
+      covers:document.querySelectorAll('iframe[aria-label]').length,
+    };`);
+    try {
+      await until(()=>action("return f.dot.hasAttribute('data-azhou-wallpaper-plane')&&window.__azhouWallpaper?.status().applied===true"),10000,'Dot wallpaper admitted');
+      const run=await action('f.owner=window.__azhouWallpaper;return window.__startupAPI.status().runId');
+      const expected={retained:true,applied:true,run,phase:'complete',marked:true,sidebarMarked:false,maskMarked:false,uniqueDot:true,covers:0};
+      const baseline=await stage();
+      assert.ok(baseline.bodyImage.includes('url('),'fixture body paints the real admitted wallpaper image');
+      assert.equal(baseline.sidebarColor,'rgba(0, 0, 0, 0)','fixture sidebar starts transparent');
+      assert.deepEqual(await owned(),expected);
+      await action('f.control.sheet.disabled=false');
+      const noBodyImage=await stage();
+      assert.equal(noBodyImage.bodyImage,'none','negative control suppresses only body imagery');
+      assert.notDeepEqual(noBodyImage.left,baseline.left,'visible sidebar ROI actually depends on wallpaper');
+      assert.notDeepEqual(noBodyImage.center,baseline.center,'visible central ROI actually depends on wallpaper');
+      await action("f.control.sheet.disabled=true;f.mask.classList.add('fixture-opaque')");
+      const opaque=await stage();
+      assert.equal(opaque.bodyImage,baseline.bodyImage);
+      assert.equal(opaque.maskColor,'rgb(0, 255, 0)');
+      assert.ok(opaque.left.every((channel,i)=>channel===(i%2===0?0:255)),'every left pixel is the deliberate opaque mask');
+      assert.notDeepEqual(opaque.left,baseline.left);
+      assert.deepEqual(opaque.center,baseline.center,'left paint cannot modify admitted central wallpaper pixels');
+      assert.deepEqual(await owned(),expected);
+      await action("f.mask.classList.remove('fixture-opaque')");
+      const restored=await stage();
+      assert.deepEqual([restored.left,restored.center],[baseline.left,baseline.center]);
+      assert.deepEqual(await owned(),expected);
+      return {kind:'synthetic-optical-only',left,center,pairedFrames:4};
+    } finally {
+      await action('f.control.remove();f.paint.remove();f.mask.remove();f.dot.remove();f.nav.remove();delete window.__sidebarOpticalFixture');
+    }
+  });
+
   await check('generated Dot wallpaper follows route and shell changes automatically', async () => {
     await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1');
     await awaitGeneratedReady('generated Dot recovery fixture installed');
