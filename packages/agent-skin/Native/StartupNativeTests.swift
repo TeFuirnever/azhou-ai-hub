@@ -1357,6 +1357,7 @@ struct StartupNativeTests {
         checks += try await startupSettingsSnapshotChecks()
         checks += try await startupPreparedConnectorChecks()
         checks += try await nativeColdLaunchChecks()
+        checks += syntheticHostHitAdmissionChecks()
         checks += try await nativeEventContractChecks()
         checks += try await skinHostContractChecks()
         checks += codexLaunchConfigurationChecks()
@@ -6469,6 +6470,36 @@ private func nativeColdWorkspaceChecks(key: HostApplicationKey) throws -> Int {
     return checks
 }
 
+private func syntheticHostHitPoint(in region: NSRect, hostID: Int, lookup: (NSPoint) -> Int) -> NSPoint? {
+    guard hostID > 0, !region.isNull, region.width >= 16, region.height >= 16 else { return nil }
+    let offsets: [(CGFloat, CGFloat)] = [(0.5, 0.5), (0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)]
+    return offsets.map {
+        NSPoint(x: region.minX + region.width * $0.0, y: region.minY + region.height * $0.1)
+    }.first { lookup($0) == hostID }
+}
+
+private func syntheticHostHitAdmissionChecks() -> Int {
+    let region = NSRect(x: 10, y: 20, width: 80, height: 40)
+    let center = NSPoint(x: 50, y: 40)
+    let firstAlternative = NSPoint(x: 30, y: 30)
+    let host = 7
+    var sampled: [NSPoint] = []
+    let selected = syntheticHostHitPoint(in: region, hostID: host) { point in
+        sampled.append(point)
+        return point == firstAlternative ? host : 19
+    }
+    precondition(selected == firstAlternative && sampled == [center, firstAlternative],
+        "host-only calibration picks the first unobstructed interior point")
+    precondition(syntheticHostHitPoint(in: region, hostID: host, lookup: { _ in host }) == center,
+        "an unobstructed midpoint remains the default")
+    precondition(syntheticHostHitPoint(in: region, hostID: host, lookup: { _ in 19 }) == nil,
+        "an obstructed fixture cannot be admitted")
+    precondition(syntheticHostHitPoint(in: .zero, hostID: host, lookup: { _ in host }) == nil &&
+        syntheticHostHitPoint(in: region, hostID: 0, lookup: { _ in 0 }) == nil,
+        "missing drawable geometry or an unassigned fixture ID cannot be admitted")
+    return 4
+}
+
 @MainActor
 private func nativeColdWindowOrderingChecks() throws -> Int {
     var checks = 0
@@ -6510,10 +6541,41 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
     for normalControl in [true, false] {
         // Release the probe's own strong references before observing WindowServer teardown.
         let discarded = try autoreleasepool { () throws -> (cover: Int, host: Int, geometry: Bool, second: Bool, hits: [String: Int]) in
-            let previousWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
             let visible = screen.visibleFrame
             let frame = NSRect(x: visible.midX - 130, y: visible.midY - 80, width: 260, height: 160)
             expect(visible.contains(frame), "graphical desktop contains the synthetic hit-test fixture")
+            let host = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
+            host.isReleasedWhenClosed = false
+            host.isOpaque = true
+            host.backgroundColor = .white
+            defer { host.orderOut(nil); host.close() }
+            guard let hostContent = host.contentView else {
+                preconditionFailure("synthetic host must have drawable content")
+            }
+            let admittedPoint: NSPoint?
+            if normalControl {
+                admittedPoint = nil
+            } else {
+                // Measure the fixture alone, before the cover exists. A cover hit
+                // must never be used to choose, retry or change this point.
+                host.orderFrontRegardless()
+                let zone = host.convertToScreen(hostContent.convert(hostContent.bounds, to: nil))
+                    .intersection(frame).intersection(visible)
+                let deadline = ProcessInfo.processInfo.systemUptime + 2
+                var point: NSPoint?
+                repeat {
+                    point = syntheticHostHitPoint(in: zone, hostID: host.windowNumber) {
+                        NSWindow.windowNumber(at: $0, belowWindowWithWindowNumber: 0)
+                    }
+                    if point == nil { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+                } while point == nil && ProcessInfo.processInfo.systemUptime < deadline
+                host.orderOut(nil)
+                guard let point else {
+                    preconditionFailure("fixture-admission-unavailable: no host-only point has the unfiltered mouse-down hit")
+                }
+                admittedPoint = point
+            }
+            let previousWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
             let presentation = AppKitNativePlayerPresentation(
                 activateApp: { preconditionFailure("cold ordering must not activate") },
                 makeVisible: { _ in preconditionFailure("cold ordering must not select a key window") },
@@ -6527,11 +6589,7 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 preconditionFailure("production cold presentation must own exactly one new window")
             }
             cover.setFrame(frame, display: false)
-            let host = NSWindow(contentRect: frame, styleMask: [.titled], backing: .buffered, defer: false)
-            host.isReleasedWhenClosed = false
-            host.isOpaque = true
-            host.backgroundColor = .white
-            defer { presentation.discardColdPlayer(); host.orderOut(nil); host.close() }
+            defer { presentation.discardColdPlayer() }
             let activeBeforeHostOrder = NSApp.isActive
             expect(!activeBeforeHostOrder, "synthetic host ordering is exercised while the probe is inactive")
             host.orderFrontRegardless()
@@ -6565,9 +6623,6 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     return coverIndex < hostIndex
                 }
                 let ordered = waitForWindows(coverAboveHost, onScreen: true)
-                guard let hostContent = host.contentView else {
-                    preconditionFailure("synthetic host must have drawable content")
-                }
                 let coverDrawable = cover.convertToScreen(content.convert(content.bounds, to: nil))
                 let hostDrawable = host.convertToScreen(hostContent.convert(hostContent.bounds, to: nil))
                 let overlap = coverDrawable.intersection(hostDrawable).intersection(screen.visibleFrame)
@@ -6577,10 +6632,11 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     if hit == hostNumber { return "fixture" }
                     return hit <= 0 ? "none" : "other"
                 }
-                // Fix one point after real ordering settles. Query the unfiltered target; no input is posted.
+                // Recheck actual overlap but always use the same pre-admitted point.
                 let relativeOrder = coverAboveHost(ordered)
-                let canProbe = usableOverlap && relativeOrder
-                let point = canProbe ? NSPoint(x: overlap.midX, y: overlap.midY) : nil
+                let admittedInOverlap = admittedPoint.map { overlap.contains($0) } == true
+                let canProbe = usableOverlap && relativeOrder && admittedInOverlap
+                let point = canProbe ? admittedPoint : nil
                 let opaque = point.map { waitForHit(windowNumber, at: $0) } ?? 0
                 if opaque != windowNumber || cover.ignoresMouseEvents {
                     let foregroundUnchanged = NSWorkspace.shared.frontmostApplication?.processIdentifier == beforePID
@@ -6588,6 +6644,7 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                         "opaque hit=\(canProbe ? hitCategory(opaque) : "not-probed")",
                         "coverOnScreen=\(ordered.contains(windowNumber))", "fixtureOnScreen=\(ordered.contains(hostNumber))",
                         "relativeOrder=\(relativeOrder)", "usableOverlap=\(usableOverlap)",
+                        "admittedInOverlap=\(admittedInOverlap)",
                         "coverFloating=\(cover.level == .floating)", "fixtureNormal=\(host.level == .normal)",
                         "coverVisible=\(cover.isVisible)", "fixtureVisible=\(host.isVisible)",
                         "appActive=\(NSApp.isActive)", "coverKey=\(cover.isKeyWindow)",
