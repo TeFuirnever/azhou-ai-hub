@@ -1,11 +1,5 @@
 "use strict";
 
-// Build-time loader for the support matrix's opening paragraph. The site
-// quotes docs/support-matrix.md verbatim instead of keeping a hand-maintained
-// copy, so a matrix edit cannot leave a stale harness list on the page.
-//
-// Fail loud: a missing heading or paragraph terminates the build instead of
-// silently rendering an empty or stale quote.
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -18,9 +12,6 @@ const SUPPORT_MATRIX = path.resolve(
 );
 const HEADING = "# Support matrix";
 
-// Only the inline constructs the opening paragraph currently uses: bold spans
-// and inline code. Anything else fails loud so a richer paragraph gets an
-// explicit loader update instead of leaking raw markdown to the page.
 function inlineMarkdownToHtml(text) {
   if (/\[[^\]]+\]\([^)]*\)/.test(text) || /(^|\s)_[^_]+_($|\s)/.test(text)) {
     throw new Error(

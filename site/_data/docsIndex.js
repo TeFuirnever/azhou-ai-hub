@@ -1,17 +1,10 @@
 "use strict";
 
-// Build-time loader for the documentation map. docs/README.md stays the
-// single authority; the site does not mirror any document body, it only
-// re-renders the index table with each relative link rewritten to the
-// versioned blob URL on GitHub.
-//
-// Fail loud: an index row whose links cannot be parsed terminates the build
-// instead of silently losing the rewritten link.
 const fs = require("node:fs");
 const path = require("node:path");
+const { blobBase: BLOB_BASE } = require("./site");
 
 const DOCS_INDEX = path.resolve(__dirname, "..", "..", "docs", "README.md");
-const BLOB_BASE = "https://github.com/TeFuirnever/azhou-ai-hub/blob/main";
 const LINK_PATTERN = /\[([^\]]+)\]\(([^)\s]+)\)/g;
 
 function toBlobUrl(target, line) {
