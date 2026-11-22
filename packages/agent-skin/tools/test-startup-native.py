@@ -38,6 +38,7 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
         raise ValueError(f"window probe exited {returncode}")
     rows = [json.loads(line) for line in stdout.splitlines() if line.strip()]
     observations, cleanup = {}, {}
+    skipped_hits: set = set()
     for row in rows:
         if not isinstance(row, dict) or row.get("schema") != "azhou-cold-window-order.v2" \
                 or type(row.get("control")) is not bool:
@@ -53,7 +54,7 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
                     ("coverWindowPresent", False), ("hostWindowPresent", False),
                     ("geometryEmpty", True), ("secondDiscardEmpty", True))):
                 raise ValueError("missing or duplicate owned-window teardown")
-            expected_hits = {} if control else {
+            expected_hits = {} if control or control in skipped_hits else {
                 "opaque": row["coverWindowID"], "transparentBeforeDiscard": row["hostWindowID"],
                 "restored": row["coverWindowID"], "afterDiscard": row["hostWindowID"],
             }
@@ -61,6 +62,10 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
             if not isinstance(hits, dict) or hits != expected_hits or any(type(hit) is not int for hit in hits.values()):
                 raise ValueError("missing or incorrect owned-window mouse-down hit targets")
             cleanup[control] = row
+        elif row.get("event") == "interactive-hit-test-skipped":
+            if row.get("locked") is not True or type(row.get("probePID")) is not int or row["probePID"] <= 0:
+                raise ValueError("interactive hit-test skip must carry a locked console receipt")
+            skipped_hits.add(row.get("control") is True)
         elif row.get("event") == "observation":
             if type(row.get("revealed")) is not bool:
                 raise ValueError("revealed must be boolean")
@@ -97,6 +102,8 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
     if set(observations) != {(control, revealed) for control in (False, True) for revealed in (False, True)} \
             or set(cleanup) != {False, True}:
         raise ValueError("requires four observations and two cleanup records")
+    if skipped_hits and skipped_hits != {False}:
+        raise ValueError("interactive hit-test skip receipt must belong to the production row only")
     for control in (False, True):
         before, after = (observations[(control, revealed)] for revealed in (False, True))
         if any(before[key] != after[key] for key in ("coverWindowID", "hostWindowID", "webViewID")) \

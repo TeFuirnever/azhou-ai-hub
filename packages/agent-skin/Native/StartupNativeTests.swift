@@ -6538,6 +6538,10 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
         return ids
     }
     let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
+    let sessionInfo = CGSessionCopyCurrentDictionary() as? [String: Any]
+    let consoleLocked = sessionInfo?["CGSSessionScreenIsLocked"].map { value in
+        (value as? Int) == 1 || (value as? Bool) == true || (value as? String) == "1"
+    } ?? false
     for normalControl in [true, false] {
         // Release the probe's own strong references before observing WindowServer teardown.
         let discarded = try autoreleasepool { () throws -> (cover: Int, host: Int, geometry: Bool, second: Bool, hits: [String: Int]) in
@@ -6627,7 +6631,16 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 return hit
             }
             var calibratedHitPoint: NSPoint?
-            if !normalControl {
+            var interactiveSkipped = false
+            if !normalControl && consoleLocked {
+                interactiveSkipped = true
+                try emit(["schema": "azhou-cold-window-order.v2", "event": "interactive-hit-test-skipped",
+                    "control": normalControl, "locked": true,
+                    "reason": "console session is locked; interactive hit-tests are unverifiable",
+                    "coverWindowID": windowNumber, "hostWindowID": hostNumber,
+                    "probePID": ProcessInfo.processInfo.processIdentifier])
+            }
+            if !normalControl && !interactiveSkipped {
                 func coverAboveHost(_ ids: [Int]) -> Bool {
                     guard let coverIndex = ids.firstIndex(of: windowNumber),
                           let hostIndex = ids.firstIndex(of: hostNumber) else { return false }
@@ -6765,7 +6778,7 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             expect(!cover.collectionBehavior.contains(.canJoinAllSpaces) && !cover.collectionBehavior.contains(.moveToActiveSpace),
                 "cold window never follows the user to another Space")
             presentation.discardColdPlayer()
-            if !normalControl {
+            if !normalControl && !interactiveSkipped {
                 guard let hitPoint = calibratedHitPoint else {
                     preconditionFailure("discarded cover must reuse the calibrated hit-test point")
                 }
