@@ -46,5 +46,9 @@ jobs:
             paths-ignore:
               - packages/pstack-agent-harness/pstack/**
               - packages/pstack-agent-harness/harness/**
+              # skills/super-diagram-design/** is vendored upstream at the pinned
+              # commit (VENDORED_SKILL_PACKAGES in scripts/check_repository.py);
+              # findings in upstream's own bytes stay upstream's.
+              - skills/super-diagram-design/**
       - name: Analyze
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
