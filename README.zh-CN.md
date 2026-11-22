@@ -183,7 +183,7 @@ python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-g
 
 > 🧩 从问题出发，自己推导设计。
 
-![Rederive 效果图](assets/skills/super-rederive-effect.png)
+![阿舟将拼图放到拼板上，旁边写着“自己推导”和“为什么？”](assets/skills/super-rederive-effect.png)
 
 ## Gh Axi
 
@@ -191,7 +191,7 @@ python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-g
 
 ![Gh Axi 效果图](assets/skills/super-gh-axi-effect.png)
 
-<sub>🦊 效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish、Imagegen、i-have-adhd、Gh Axi 与 Rederive：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。</sub>
+<sub>🦊 除 Rederive 外，效果图由 Azhou Scenes skill 生成。Repo Pedant 与 Excalidraw Diagram：机器颜色门禁已通过；身份、手部和文字仍保留人工复核 checkpoint。Arch Doc、Eli5、Ask Azhou、Session Insights、ASD-STE100、Archify、Lavish、Imagegen、i-have-adhd 与 Gh Axi：人工视觉 P0 已通过；正式色彩门禁仍待在整理区补跑。Rederive：维护者在 GitHub 私有预览后选用该图；独立视觉复核与完整生产审核仍待完成。</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust.zh-CN-dark.jpg">
