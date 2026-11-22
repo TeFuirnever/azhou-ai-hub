@@ -73,6 +73,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-info/SKILL.md",
     "skills/super-azhou-setup/SKILL.md",
     "skills/super-azhou-verify/SKILL.md",
+    "skills/super-diagram-design/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
     "skills/super-gh-axi/SKILL.md",
@@ -468,6 +469,11 @@ SKILL_BRAND_CONTRACTS = {
         "motto": "完整 gate 跑完，结论才成立。",
         "startup": "🦊 阿舟 · Azhou Verify 启动（mode=verify, scope=<checkout>）",
     },
+    "skills/super-diagram-design/SKILL.md": {
+        "display_name": "Diagram Design",
+        "motto": "五十种图，同一套编辑排版纪律。",
+        "startup": "🦊 阿舟 · Diagram Design 启动（mode=<create|edit|import|verify>, scope=<diagram>）",
+    },
     "skills/super-eli5/SKILL.md": {
         "display_name": "Eli5",
         "motto": "把复杂讲给零基础的人，少字，多图。",
@@ -622,6 +628,15 @@ VENDORED_ROOTS = (
     "packages/pstack-agent-harness/pstack/",
     "packages/pstack-agent-harness/components/",
     "packages/pstack-agent-harness/harness/",
+)
+
+# Faithful vendored skill packages adopted wholesale from an upstream
+# repository. Their prose, command spellings and script citations belong to
+# their upstream (same principle as VENDORED_ROOTS), so the Hub
+# command-surface and reference-citation rules do not grade them; the
+# package's own integrity pins live in tests/test_super_diagram_design.py.
+VENDORED_SKILL_PACKAGES = (
+    "skills/super-diagram-design/",
 )
 
 # Skill trees that ship inside an optional package, Hub-authored overlay
@@ -959,6 +974,7 @@ RENAMED_AWAY_SKILLS = {
     "azhou-info": "super-azhou-info",
     "azhou-setup": "super-azhou-setup",
     "azhou-verify": "super-azhou-verify",
+    "diagram-design": "super-diagram-design",
     "eli5": "super-eli5",
     "excalidraw-diagram": "super-excalidraw-diagram",
     "gh-axi": "super-gh-axi",
@@ -984,6 +1000,9 @@ RESIDUE_MIGRATION_SOURCE_PATHS = {
 }
 RESIDUE_PROVENANCE_PATH_PATTERNS = (
     re.compile(r"^skills/[^/]+/references/(provenance|upstream-compatibility|neat-freak-compatibility)\.md$"),
+    # Vendored skill packages keep their upstream license records at the
+    # package root; those records name the upstream as source identity.
+    re.compile(r"^skills/[^/]+/THIRD_PARTY_LICENSES\.md$"),
     re.compile(r"^THIRD_PARTY_NOTICES\.md$"),
     re.compile(r"^tests/archify-vendor-manifest\.json$"),
 )
@@ -1451,6 +1470,8 @@ REFERENCE_SCRIPT_SPAN = re.compile(
 def _reference_script_surface(relative: str) -> bool:
     if not relative.endswith(".md"):
         return False
+    if relative.startswith(VENDORED_SKILL_PACKAGES):
+        return False
     if any(segment in f"/{relative}" for segment in REFERENCE_SCRIPT_EXCLUDED_SEGMENTS):
         return False
     if relative.startswith(REFERENCE_DOC_DIRECTORIES):
@@ -1520,6 +1541,7 @@ def check_command_surface(files: list[Path], root: Path) -> list[str]:
         in_scope = relative in COMMAND_SURFACE_FILES or (
             relative.startswith(COMMAND_SURFACE_DIRECTORIES)
             and not relative.startswith(COMMAND_SURFACE_EXCLUDED_DIRECTORIES)
+            and not relative.startswith(VENDORED_SKILL_PACKAGES)
             and "/references/upstream/" not in f"/{relative}"
         )
         if path.suffix.lower() != ".md" or not in_scope:

@@ -75,6 +75,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
 | [Rederive](skills/super-rederive/SKILL.md) | 通过重新推导设计来练习理解代码。 | 上游钉定（SHA-256）；仅探索性观察。 |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | 为 ADHD 读者塑形输出：下一步动作先行、步骤有界。 | 冻结上游（SHA-256）；正文逐字保留；完整性测试。 |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | 经 agent 人体工学的封装 CLI 运行 GitHub 操作。 | 锁定的上游发布（SHA-256 + npm 钉定）；完整性测试。 |
+| [Diagram Design](skills/super-diagram-design/SKILL.md) | 五十种视觉类型下创建品牌化、编辑级的 HTML/SVG 图表，支持 .drawio/Mermaid/.excalidraw/PlantUML 导入。 | 上游 vendored（commit 钉定 + 逐文件 SHA-256）；包内 `self_check.py` 门禁。 |
 
 [逐 skill 平台汇总](docs/skill-platform-view.md) · [评测合同](docs/eval-case-contract.md)
 
@@ -170,7 +171,7 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 
 ## 开发
 
-在 Codex 中，`$refactoring` 把重构指南落到一次改动上，`$release-it` 评审故障恢复；14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库放在 `.agents/skills/` 下——属于项目本地内容，不在 `skills/` 的 17 个可安装包之列——按需读取。
+在 Codex 中，`$refactoring` 把重构指南落到一次改动上，`$release-it` 评审故障恢复；14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库放在 `.agents/skills/` 下——属于项目本地内容，不在 `skills/` 的 18 个可安装包之列——按需读取。
 
 仓库级 gate 只需要 Python 3.11+：
 

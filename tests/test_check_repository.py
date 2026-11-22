@@ -836,6 +836,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-azhou-info" / "SKILL.md",
                 root / "skills" / "super-azhou-setup" / "SKILL.md",
                 root / "skills" / "super-azhou-verify" / "SKILL.md",
+                root / "skills" / "super-diagram-design" / "SKILL.md",
                 root / "skills" / "super-repo-pedant" / "SKILL.md",
                 root / "skills" / "super-rederive" / "SKILL.md",
                 root / "skills" / "super-eli5" / "SKILL.md",

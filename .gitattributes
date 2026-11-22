@@ -7,6 +7,7 @@ skills/excalidraw-diagram/references/libraries/** linguist-vendored
 skills/excalidraw-diagram/references/uv.lock linguist-generated
 skills/excalidraw-diagram/scripts/package-lock.json linguist-generated
 benchmarks/**/fixtures/** linguist-generated
+skills/super-diagram-design/** -text
 *.woff2 binary
 *.png binary
 *.gz binary
