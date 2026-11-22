@@ -1,14 +1,20 @@
 ---
 layout: base.njk
 lang: en
+bodyClass: doc
 title: "Docs"
 description: "The documentation map of the Azhou AI Hub; documents stay versioned in the repository."
 permalink: "docs/index.html"
 ---
 
-<section>
+<article class="doc-card">
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <a href="{{ '/' | url }}">azhou-ai-hub</a>
+    <span aria-hidden="true">/</span>
+    <span aria-current="page">Docs</span>
+  </nav>
   <h1>Docs</h1>
-  <p>This page mirrors the docs index only. The documents stay versioned in the repository and every link points there, so the site never drifts from the authoritative text.</p>
+  <p class="doc-lede">This page mirrors the docs index only. The documents stay versioned in the repository and every link points there, so the site never drifts from the authoritative text.</p>
   <ul class="doclist">
     {%- for row in docsIndex %}
     <li>
@@ -19,4 +25,5 @@ permalink: "docs/index.html"
     </li>
     {%- endfor %}
   </ul>
-</section>
+  <p class="doc-source">Mirrored from <code>docs/README.md</code> at build time · <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/README.md">view the source</a></p>
+</article>
