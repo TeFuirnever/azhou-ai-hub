@@ -129,6 +129,12 @@ def _ordering_attempt(output: Path, evidence: Path, source_before: dict, binary_
         report["returncode"] = run.returncode
         report["observations"] = validate_window_observations(stdout, run.returncode)
         report["passed"] = True
+        if any(row.get("event") == "interactive-hit-test-skipped" for row in report["observations"]):
+            # Incomplete coverage receipt: hit-target assertions were skipped on a
+            # locked console. The run is green, but consumers must be able to tell
+            # it apart from a fully verified run.
+            report["interactiveHitTests"] = "skipped"
+            report["lockedSession"] = True
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         if isinstance(error, subprocess.TimeoutExpired):
             stdout = error.stdout or ""
