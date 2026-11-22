@@ -176,6 +176,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the upstream `SKILL.md` guidance body (intro plus five sections) preserved verbatim, plus the upstream `LICENSE.txt`; the upstream directory carries no copyright header and no NOTICE file, so the license text itself is the only upstream notice
 - Local changes: neutral three-key frontmatter (the upstream host-specific `license:` key is dropped), the `Azhou skill.` description with both upstream trigger sentences retained verbatim, the Azhou identity anchor, brand protocol, boundaries and stable receipt, and the provenance/compatibility/setup records
 
+## Diagram Design
+
+`skills/super-diagram-design/` imports the `diagram-design` skill package from [cathrynlavery/diagram-design](https://github.com/cathrynlavery/diagram-design) at immutable commit [`d7b0176d7e60c6f2ff54067991491ac7622c81fb`](https://github.com/cathrynlavery/diagram-design/commit/d7b0176d7e60c6f2ff54067991491ac7622c81fb) (upstream frontmatter metadata version `"2.6"`; the upstream published no tag or release as of 2026-11-22, so the pin is the `main` tip recorded that day). The upstream skill body, reference corpus, example/template assets, packaged scripts, `LICENSE` and `THIRD_PARTY_LICENSES.md` are vendored from the pinned commit; the bundled third-party icon and font notices stay inside the package under `skills/super-diagram-design/THIRD_PARTY_LICENSES.md`.
+
+- Copyright: Cathryn Lavery, 2025
+- License: [MIT](LICENSES/Diagram-Design-MIT.txt); bundled icon and font notices inside the package under `THIRD_PARTY_LICENSES.md`
+- Imported boundary: the 51-type diagram pipeline (semantic-pattern selection, three-variant template skins, style-guide gate and profile mechanism), the `.drawio`/Mermaid/`.excalidraw`/PlantUML import extractors, the self-check and geometry verification scripts, SVG/PNG export, and the 70-page reference corpus with 242 example/template assets
+- Local changes: frontmatter normalization to the hub contract (the upstream `license` and `metadata.version` keys are recorded in provenance), a compressed frontmatter description with carve sentences naming `super-archify` and `super-excalidraw-diagram`, the Azhou identity anchor, brand protocol and stable receipt, the fail-closed `setup.md` for the Python 3 baseline and the optional Playwright export/preview boundary, and the provenance/compatibility records
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.

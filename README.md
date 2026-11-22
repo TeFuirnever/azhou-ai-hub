@@ -62,6 +62,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
 npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
 npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
+npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
 ~~~
 
 Choose one installation method per skill ([one-path rule](docs/installation.md#one-path-rule)). A package-manager install resolves the mutable default branch and carries no Hub receipt. The four `super-azhou-*` packages are thin wrappers: the npx command installs the Skill, but invoking it runs the Foundation CLI (`scripts/azhou_hub.py`) from a checkout of this repository, so that checkout must still be on disk (clone it once).
@@ -93,6 +94,7 @@ Every adapted package records its upstream provenance in `skills/<name>/referenc
 | [Rederive](skills/super-rederive/SKILL.md) | Practice understanding code by re-deriving its design. | Pinned upstream (SHA-256); exploratory observation only. |
 | [i-have-adhd](skills/super-i-have-adhd/SKILL.md) | Shape output for ADHD readers: next action first, bounded steps. | Frozen upstream (SHA-256); verbatim body; integrity tests. |
 | [Gh Axi](skills/super-gh-axi/SKILL.md) | Run GitHub operations through an agent-ergonomic wrapped CLI. | Locked upstream release (SHA-256 + npm pins); integrity tests. |
+| [Diagram Design](skills/super-diagram-design/SKILL.md) | Create branded editor-grade HTML/SVG diagrams across 51 visual types, with .drawio/Mermaid/.excalidraw/PlantUML import. | Vendored upstream (commit pin + per-file SHA-256); packaged `self_check.py` gate. |
 | [Frontend Design](skills/super-frontend-design/SKILL.md) | Produce a distinctive, non-templated visual design direction for a new UI or a restyle: palette, typography, layout, and the avoid-the-AI-defaults review pass. | Faithfully adopted from anthropics/skills at the pinned commit with the upstream guidance body preserved verbatim, the Apache-2.0 license vendored byte-identical, and SHA-256 integrity tests. No behavior benchmark yet. |
 
 [Per-skill platform view](docs/skill-platform-view.md) · [Evaluation contract](docs/eval-case-contract.md)
@@ -189,7 +191,7 @@ The [Azhou Skill Standard](docs/skill-standard.md) is the single project authori
 
 ## Develop
 
-In Codex, `$refactoring` applies refactoring guidance to a change and `$release-it` reviews failure recovery; the 14 [book-inspired skills](THIRD_PARTY_NOTICES.md#agent-rules-books) ship with the repository under `.agents/skills/` — project-local, not among the 18 installable packages under `skills/` — and load their rules on demand.
+In Codex, `$refactoring` applies refactoring guidance to a change and `$release-it` reviews failure recovery; the 14 [book-inspired skills](THIRD_PARTY_NOTICES.md#agent-rules-books) ship with the repository under `.agents/skills/` — project-local, not among the 19 installable packages under `skills/` — and load their rules on demand.
 
 Python 3.11+ is enough for the repository gate:
 

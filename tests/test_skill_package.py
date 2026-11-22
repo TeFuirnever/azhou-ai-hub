@@ -33,6 +33,7 @@ SKILL_DIRS = (
     ROOT / "skills" / "super-session-insights",
     ROOT / "skills" / "super-asd-ste100",
     ROOT / "skills" / "super-rederive",
+    ROOT / "skills" / "super-diagram-design",
     ROOT / "skills" / "super-frontend-design",
 )
 PACKAGE_COUNT_WORDS = {
