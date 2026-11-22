@@ -8099,6 +8099,45 @@ try {
     await until(()=>settled(true),10000,'removing the protected role recovers paint');
     await action("f.nav.removeAttribute('aria-current')");
     await until(()=>settled(false),10000,'leaving Dot restores native paint');
+    // A settled run and Blob URL can stay the same even across workspace retirement.
+    // Trace the marker's old values to catch a remove/reapply in one observer batch.
+    const baseline = await action(`
+      const root=document.documentElement, marker='data-azhou-wallpaper';
+      const before=window.__azhouWallpaper, status=before.status();
+      const oldValues=[];
+      const record=records=>oldValues.push(...records.map(item=>item.oldValue));
+      const observer=new MutationObserver(record);
+      observer.observe(root,{attributes:true,attributeFilter:[marker],attributeOldValue:true});
+      f.retirementProbe={before,oldValues,observer,record,marker};
+      f.main.classList.add('fixture-neutral-active-main-change');
+      return {epoch:status.workspaceEpoch,applied:status.applied};
+    `);
+    assert.equal(baseline.applied,true);
+    assert.ok(Number.isSafeInteger(baseline.epoch),'retirement baseline has a workspace epoch');
+    try {
+      await until(()=>action(`
+        const next=window.__azhouWallpaper,p=f.retirementProbe;
+        return !!next&&next!==p.before&&document.documentElement.getAttribute(p.marker)==='active';
+      `),10000,'observed shell-class mutation replaces wallpaper without a status-triggered refresh');
+      const retirement = await action(`
+        const p=f.retirementProbe, root=document.documentElement;
+        p.record(p.observer.takeRecords());
+        const trace=[...p.oldValues,root.getAttribute(p.marker)];
+        const prior=p.before.status(), next=window.__azhouWallpaper.status(), startup=window.__startupAPI.status();
+        const first=trace.indexOf('active'), removed=trace.indexOf(null,first+1);
+        return {trace,removedAndRestored:first>=0&&removed>first&&trace.indexOf('active',removed+1)>removed,
+          priorDisposed:prior.reason==='disposed',epoch:next.workspaceEpoch,applied:next.applied,
+          sameRun:startup.runId===f.runId,sameScene:f.scene===root.style.getPropertyValue('--azhou-wallpaper-image'),
+          covers:document.querySelectorAll('iframe[aria-label]').length};
+      `);
+      assert.equal(retirement.removedAndRestored,true,'activation was removed and restored: '+JSON.stringify(retirement.trace));
+      assert.equal(retirement.priorDisposed,true,'the previous wallpaper owner is retired');
+      assert.ok(Number.isSafeInteger(retirement.epoch)&&retirement.epoch>baseline.epoch,'replacement owns a newer workspace epoch');
+      assert.deepEqual([retirement.applied,retirement.sameRun,retirement.sameScene,retirement.covers],[true,true,true,0],
+        'retirement can recover the same scene in the same startup run without replay');
+    } finally {
+      await action('f.retirementProbe.observer.disconnect();delete f.retirementProbe');
+    }
     const retained = await action(`
       const root = document.documentElement;
       const state = window.__startupAPI.status();
