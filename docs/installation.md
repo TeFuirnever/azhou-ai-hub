@@ -61,6 +61,16 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 
 See [First install in Codex](#first-install-in-codex) for the target, first invocation, and troubleshooting steps. Skills CLI installations use the selected scope and carry no Hub receipt.
 
+## Alternate installer
+
+If the repository download fails, Codex users can install Rederive into the current project with the bundled skill installer and a sparse Git checkout:
+
+~~~bash
+python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-rederive --method git --dest "$PWD/.agents/skills"
+~~~
+
+The destination must not already contain `super-rederive`; this command does not update an existing install.
+
 ## Verify what you installed
 
 Package-manager installs resolve the mutable default branch and carry no repository receipt, so verify the installed content instead of trusting the install step.
