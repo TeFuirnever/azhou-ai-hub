@@ -7556,7 +7556,8 @@ try {
         +'html[data-azhou-wallpaper="active"] body{--azhou-wallpaper-wash:linear-gradient(transparent,transparent)}';
       document.head.append(paint);
       const control=document.createElement('style');
-      control.textContent='html[data-azhou-wallpaper="active"] body{background-image:none!important}';
+      // Outrank the renderer's equally-important body rule regardless of stylesheet insertion order.
+      control.textContent='html[data-azhou-wallpaper="active"] body:not([data-fixture-sidebar-control-exempt]){background-image:none!important}';
       document.head.append(control);
       control.sheet.disabled=true;
       window.__sidebarOpticalFixture={sidebar,main,dot,nav,mask,paint,control};
@@ -7568,34 +7569,50 @@ try {
     const stage=async()=>{
       await settle();
       const frame=(await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true})).data;
-      return action(`
-        const boxes=${JSON.stringify({left,center})};
-        const contains=(r,q)=>q.x>=r.left&&q.y>=r.top&&q.x+q.width<=r.right&&q.y+q.height<=r.bottom;
-        const overlaps=(r,q)=>q.x<r.right&&q.y<r.bottom&&q.x+q.width>r.left&&q.y+q.height>r.top;
-        const sidebar=f.sidebar.getBoundingClientRect(),mask=f.mask.getBoundingClientRect(),dot=f.dot.getBoundingClientRect();
-        if(!f.sidebar.contains(f.mask)||!f.main.contains(f.dot)
-          ||!contains(sidebar,boxes.left)||!contains(mask,boxes.left)||overlaps(dot,boxes.left)
-          ||!contains(dot,boxes.center)||overlaps(sidebar,boxes.center)||overlaps(mask,boxes.center)
-          ||getComputedStyle(f.mask).pointerEvents!=='none')
-          throw Error('invalid sidebar or central probe geometry');
-        return (async()=>{
-          const image=new Image(); image.src='data:image/png;base64,${frame}'; await image.decode();
-          const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
-          const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
-          const sx=image.width/innerWidth,sy=image.height/innerHeight;
-          const crop=q=>{
-            if(q.x<0||q.y<0||q.x+q.width>innerWidth||q.y+q.height>innerHeight)throw Error('offscreen probe');
-            const x=Math.round(q.x*sx),y=Math.round(q.y*sy);
-            const w=Math.round((q.x+q.width)*sx)-x,h=Math.round((q.y+q.height)*sy)-y;
-            if(w<1||h<1||x+w>image.width||y+h>image.height)throw Error('empty or offscreen physical ROI');
-            return Array.from(ctx.getImageData(x,y,w,h).data);
-          };
-          return {left:crop(boxes.left),center:crop(boxes.center),
-            bodyImage:getComputedStyle(document.body).backgroundImage,
-            sidebarColor:getComputedStyle(f.sidebar).backgroundColor,
-            maskColor:getComputedStyle(f.mask).backgroundColor};
-        })();
-      `);
+      const target=await cdp.call('Runtime.evaluate',{expression:'window.__sidebarOpticalFixture',returnByValue:false});
+      const objectId=target.result?.objectId;
+      assert.ok(objectId,'isolated sidebar fixture object');
+      try {
+        const sample=await cdp.call('Runtime.callFunctionOn',{
+          objectId,arguments:[{value:frame},{value:{left,center}}],awaitPromise:true,returnByValue:true,
+          functionDeclaration:`async function (frame, boxes) {
+            const f=this;
+            const contains=(r,q)=>q.x>=r.left&&q.y>=r.top&&q.x+q.width<=r.right&&q.y+q.height<=r.bottom;
+            const overlaps=(r,q)=>q.x<r.right&&q.y<r.bottom&&q.x+q.width>r.left&&q.y+q.height>r.top;
+            const sidebar=f.sidebar.getBoundingClientRect(),mask=f.mask.getBoundingClientRect(),dot=f.dot.getBoundingClientRect();
+            if(!f.sidebar.contains(f.mask)||!f.main.contains(f.dot)
+              ||!contains(sidebar,boxes.left)||!contains(mask,boxes.left)||overlaps(dot,boxes.left)
+              ||!contains(dot,boxes.center)||overlaps(sidebar,boxes.center)||overlaps(mask,boxes.center)
+              ||getComputedStyle(f.mask).pointerEvents!=='none')
+              throw Error('invalid sidebar or central probe geometry');
+            const image=new Image(); image.src='data:image/png;base64,'+frame; await image.decode();
+              const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+              const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0);
+              const sx=image.width/innerWidth,sy=image.height/innerHeight;
+              const crop=q=>{
+                if(q.x<0||q.y<0||q.x+q.width>innerWidth||q.y+q.height>innerHeight)throw Error('offscreen probe');
+                const x=Math.round(q.x*sx),y=Math.round(q.y*sy);
+                const w=Math.round((q.x+q.width)*sx)-x,h=Math.round((q.y+q.height)*sy)-y;
+                if(w<1||h<1||x+w>image.width||y+h>image.height)throw Error('empty or offscreen physical ROI');
+                return Array.from(ctx.getImageData(x,y,w,h).data);
+              };
+              return {left:crop(boxes.left),center:crop(boxes.center),
+                bodyImage:getComputedStyle(document.body).backgroundImage,
+            controlMatches:document.body.matches(f.control.sheet.cssRules[0].selectorText),
+            controlDisabled:f.control.sheet.disabled,
+            bodyInlinePriority:document.body.style.getPropertyPriority('background-image'),
+                sidebarColor:getComputedStyle(f.sidebar).backgroundColor,
+                maskColor:getComputedStyle(f.mask).backgroundColor};
+          }`,
+        });
+        if(sample.exceptionDetails) throw Error(sample.exceptionDetails.exception?.description || sample.exceptionDetails.text);
+        const result=sample.result?.value;
+        assert.ok(Array.isArray(result?.left)&&result.left.length>0&&Array.isArray(result.center)&&result.center.length>0,
+          'both fixture regions returned pixel data');
+        return result;
+      } finally {
+        await cdp.call('Runtime.releaseObject',{objectId});
+      }
     };
     const owned=()=>action(`const status=window.__startupAPI.status(); return {
       retained:f.owner===window.__azhouWallpaper&&!!f.owner,
@@ -7616,7 +7633,10 @@ try {
       assert.deepEqual(await owned(),expected);
       await action('f.control.sheet.disabled=false');
       const noBodyImage=await stage();
-      assert.equal(noBodyImage.bodyImage,'none','negative control suppresses only body imagery');
+      assert.equal(noBodyImage.controlMatches,true,'fixture control selector matches the wallpaper body');
+      assert.equal(noBodyImage.controlDisabled,false,'fixture control stylesheet is enabled');
+      assert.ok(noBodyImage.bodyImage==='none',
+        'negative control must suppress only body imagery; inline priority: '+(noBodyImage.bodyInlinePriority||'none'));
       assert.notDeepEqual(noBodyImage.left,baseline.left,'visible sidebar ROI actually depends on wallpaper');
       assert.notDeepEqual(noBodyImage.center,baseline.center,'visible central ROI actually depends on wallpaper');
       await action("f.control.sheet.disabled=true;f.mask.classList.add('fixture-opaque')");
