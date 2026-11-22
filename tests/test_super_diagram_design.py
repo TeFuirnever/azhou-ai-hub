@@ -300,7 +300,7 @@ PINNED_SHA256 = {
     "references/profiles.md": "8afea09015a456b218287f08a2e9ac44bb50f6a9ebd2a7c1487bd774e89f9016",
     "references/provenance.md": "50346d546b9044bb223f2e1c5b32a85a2b02afed6c1135ddd177fe3291f24f0e",
     "references/semantic-patterns.md": "be3e828fbbf0479f2cd651dc08413481ba695eb9f249a5cf9af72b7860e364db",
-    "references/setup.md": "73b6f983fc0d8b93e1fe4e7b6f99480021bba3f498aa416f3a2de3cda7802cef",
+    "references/setup.md": "809f5c2b49b077ec7201daa401547e26ee5177cda8b3da9d49a2cf7d85e58378",
     "references/style-guide.md": "320881ec802004384c09ce4f4f087b9242d926b08071d6b908160e14c707d155",
     "references/type-architecture-delta.md": "e5813f26e1fb924863efe70db36f112e1b9570e47335d7f6fa6e46473136e4e5",
     "references/type-architecture.md": "28260c9c0a72fe17ddf6eed7b1fff01c04f58f62bbb7147c45372574c9e38eea",
