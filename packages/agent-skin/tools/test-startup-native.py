@@ -136,7 +136,7 @@ def _ordering_attempt(output: Path, evidence: Path, source_before: dict, binary_
             if report["sourceAfter"] != source_before or report["binaryAfter"] != binary_before:
                 raise ValueError("native source or binary changed during verification")
         except (OSError, ValueError) as error:
-            report.update(passed=False, error=str(error))
+            report.update(passed=False, error=str(error), integrityViolation=True)
         report["finishedAt"] = datetime.now(timezone.utc).isoformat()
         evidence.mkdir(parents=True, exist_ok=True)
         (evidence / "stdout.jsonl").write_text(stdout, encoding="utf-8")
@@ -151,8 +151,13 @@ def window_ordering_checks(output: Path, out: Path, source_before: dict, binary_
     # A signal death gets exactly one re-run on a fresh probe process after a
     # settle delay; both attempts stay in evidence and a real regression fails
     # both attempts.
+    retry_evidence = out.with_name(out.name + "-attempt1")
+    if os.path.lexists(retry_evidence):
+        print(f"FAILED: retry evidence path already exists: {retry_evidence}", file=sys.stderr)
+        return 1
     report, stdout, stderr = _ordering_attempt(output, out, source_before, binary_before)
-    if not report["passed"] and report.get("returncode") is not None and report["returncode"] < 0:
+    if not report["passed"] and not report.get("integrityViolation") \
+            and report.get("returncode") is not None and report["returncode"] < 0:
         first = {"passed": report["passed"], "returncode": report["returncode"], "error": report.get("error")}
         time.sleep(5)
         retry_evidence = out.with_name(out.name + "-attempt1")
