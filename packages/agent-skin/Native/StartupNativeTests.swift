@@ -6538,6 +6538,10 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
         return ids
     }
     let delegate = AppDelegate(runtime: FakeNativeAppRuntime(arguments: ["skin", "--preview"]))
+    let sessionInfo = CGSessionCopyCurrentDictionary() as? [String: Any]
+    let consoleLocked = sessionInfo?["CGSSessionScreenIsLocked"].map { value in
+        (value as? Int) == 1 || (value as? Bool) == true || (value as? String) == "1"
+    } ?? false
     for normalControl in [true, false] {
         // Release the probe's own strong references before observing WindowServer teardown.
         let discarded = try autoreleasepool { () throws -> (cover: Int, host: Int, geometry: Bool, second: Bool, hits: [String: Int]) in
@@ -6555,6 +6559,14 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             let admittedPoint: NSPoint?
             if normalControl {
                 admittedPoint = nil
+            } else if consoleLocked {
+                // A locked console's fullscreen loginwindow shield wins every
+                // unfiltered hit query, so admission cannot be verified. Use the
+                // geometric host-zone center; the interactive phase skips with
+                // its receipt because hit queries are unverifiable here.
+                let zone = host.convertToScreen(hostContent.convert(hostContent.bounds, to: nil))
+                    .intersection(frame).intersection(visible)
+                admittedPoint = NSPoint(x: zone.midX, y: zone.midY)
             } else {
                 // Measure the fixture alone, before the cover exists. A cover hit
                 // must never be used to choose, retry or change this point.
@@ -6613,10 +6625,30 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     RunLoop.main.run(until: Date().addingTimeInterval(0.01))
                     hit = NSWindow.windowNumber(at: hitPoint, belowWindowWithWindowNumber: 0)
                 }
+                if hit != expected {
+                    if let rows = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] {
+                        for row in rows where (row[kCGWindowNumber as String] as? Int) == hit {
+                            let owner = row[kCGWindowOwnerPID as String] ?? -1
+                            let name = row[kCGWindowOwnerName as String] ?? "?"
+                            let bounds = row[kCGWindowBounds as String] ?? "?"
+                            let layer = row[kCGWindowLayer as String] ?? -1
+                            FileHandle.standardError.write(Data("hit-target-forensics hit=\(hit) ownerPID=\(owner) ownerName=\(name) layer=\(layer) bounds=\(bounds) at=\(hitPoint)\n".utf8))
+                        }
+                    }
+                }
                 return hit
             }
             var calibratedHitPoint: NSPoint?
-            if !normalControl {
+            var interactiveSkipped = false
+            if !normalControl && consoleLocked {
+                interactiveSkipped = true
+                try emit(["schema": "azhou-cold-window-order.v2", "event": "interactive-hit-test-skipped",
+                    "control": normalControl, "locked": true,
+                    "reason": "console session is locked; interactive hit-tests are unverifiable",
+                    "coverWindowID": windowNumber, "hostWindowID": hostNumber,
+                    "probePID": ProcessInfo.processInfo.processIdentifier])
+            }
+            if !normalControl && !interactiveSkipped {
                 func coverAboveHost(_ ids: [Int]) -> Bool {
                     guard let coverIndex = ids.firstIndex(of: windowNumber),
                           let hostIndex = ids.firstIndex(of: hostNumber) else { return false }
@@ -6637,8 +6669,8 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 let admittedInOverlap = admittedPoint.map { overlap.contains($0) } == true
                 let canProbe = usableOverlap && relativeOrder && admittedInOverlap
                 let point = canProbe ? admittedPoint : nil
-                let opaque = point.map { waitForHit(windowNumber, at: $0) } ?? 0
-                if opaque != windowNumber || cover.ignoresMouseEvents {
+                let opaque = (point != nil && !interactiveSkipped) ? waitForHit(windowNumber, at: point!) : 0
+                if !interactiveSkipped && (opaque != windowNumber || cover.ignoresMouseEvents) {
                     let foregroundUnchanged = NSWorkspace.shared.frontmostApplication?.processIdentifier == beforePID
                     let diagnostic = [
                         "opaque hit=\(canProbe ? hitCategory(opaque) : "not-probed")",
@@ -6657,17 +6689,19 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 }
                 calibratedHitPoint = hitPoint
                 expect(!cover.ignoresMouseEvents, "opaque cold cover accepts mouse events")
-                expect(opaque == windowNumber, "opaque cold cover is the mouse-down hit target")
+                if !interactiveSkipped {
+                    expect(opaque == windowNumber, "opaque cold cover is the mouse-down hit target")
+                }
                 presentation.setOptionalCoverOpacity(0.5)
                 expect(cover.alphaValue == 0.5 && !cover.ignoresMouseEvents,
                     "partially faded cover still accepts mouse events")
                 presentation.setOptionalCoverOpacity(0)
-                let transparent = waitForHit(hostNumber, at: hitPoint)
+                let transparent = interactiveSkipped ? 0 : waitForHit(hostNumber, at: hitPoint)
                 let alphaZero = cover.alphaValue == 0
                 let oldIDInOptionAll = windowIDs(onScreen: false).contains(windowNumber)
                 let modelWindowIDStable = cover.windowNumber == windowNumber
-                let transparentPass = transparent == hostNumber && alphaZero && oldIDInOptionAll && modelWindowIDStable
-                if !transparentPass {
+                let transparentPass = !interactiveSkipped && transparent == hostNumber && alphaZero && oldIDInOptionAll && modelWindowIDStable
+                if !transparentPass && !interactiveSkipped {
                     // Preserve the primary observation before any diagnostic-only changes.
                     let ownerAlive = NSApp.windows.contains { $0 === cover } && cover.delegate === delegate
                     let fixtureVisible = host.isVisible && host.frame.contains(hitPoint)
@@ -6691,17 +6725,21 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     ].joined(separator: " ")
                     FileHandle.standardError.write(Data((diagnostic + "\n").utf8))
                 }
-                expect(transparentPass, "zero opacity targets the synthetic host before the cold cover is discarded")
+                if !interactiveSkipped {
+                    expect(transparentPass, "zero opacity targets the synthetic host before the cold cover is discarded")
+                }
                 expect(cover.ignoresMouseEvents, "zero opacity explicitly disables cold cover mouse events")
                 presentation.setOptionalCoverOpacity(0.5)
                 expect(cover.alphaValue == 0.5 && !cover.ignoresMouseEvents,
                     "raising opacity lets the same cold cover accept mouse events again")
                 presentation.setOptionalCoverOpacity(0)
                 presentation.restoreOptionalMediaCover()
-                let restored = waitForHit(windowNumber, at: hitPoint)
-                expect(restored == windowNumber && cover.alphaValue == 1 && !cover.ignoresMouseEvents,
-                    "the restored cold cover is again the mouse-down hit target")
-                hits = ["opaque": opaque, "transparentBeforeDiscard": transparent, "restored": restored]
+                let restored = interactiveSkipped ? 0 : waitForHit(windowNumber, at: hitPoint)
+                if !interactiveSkipped {
+                    expect(restored == windowNumber && cover.alphaValue == 1 && !cover.ignoresMouseEvents,
+                        "the restored cold cover is again the mouse-down hit target")
+                }
+                hits = interactiveSkipped ? [:] : ["opaque": opaque, "transparentBeforeDiscard": transparent, "restored": restored]
             }
             for revealed in [false, true] {
                 if revealed {
@@ -6754,7 +6792,7 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
             expect(!cover.collectionBehavior.contains(.canJoinAllSpaces) && !cover.collectionBehavior.contains(.moveToActiveSpace),
                 "cold window never follows the user to another Space")
             presentation.discardColdPlayer()
-            if !normalControl {
+            if !normalControl && !interactiveSkipped {
                 guard let hitPoint = calibratedHitPoint else {
                     preconditionFailure("discarded cover must reuse the calibrated hit-test point")
                 }

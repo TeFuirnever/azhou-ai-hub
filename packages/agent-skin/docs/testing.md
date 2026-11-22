@@ -70,7 +70,7 @@ python3 -B tools/test-startup-payload-browser.py --native-window-ordering --out 
 
 每次使用新的输出目录；工具拒绝已存在的目录及符号链接，保留失败运行供复核。默认 `test-startup-native.py` 只运行协议、握手和表达式检查；真实窗口探针必须显式启用，不进入 UT 覆盖率。
 
-原生功能报告必须包含四组唯一的窗口观测与两组释放观测，并绑定编译输入和二进制摘要。窗口标识、前台 PID 和 WindowServer 排序必须实际可读；缺少桌面或观测、空输出、仅有成功摘要、重复/矛盾记录、非零退出和源码漂移均不能通过。生成载荷浏览器报告也须包含实际通过的必需用例，不能仅凭子进程退出码放行。CI 保留隔离夹具的报告和原始输出，不上传本机录屏。
+原生功能报告必须包含四组唯一的窗口观测与两组释放观测，并绑定编译输入和二进制摘要。窗口标识、前台 PID 和 WindowServer 排序必须实际可读；缺少桌面或观测、空输出、仅有成功摘要、重复/矛盾记录、非零退出和源码漂移均不能通过。仅探针信号死亡（负返回码）例外：一次信号死亡不构成裁决，settle 5 秒后以全新探针进程恰好重试一次；首轮证据整体保全到名加 `-attempt1` 后缀的同级目录，最终 `report.json` 以 `attempts` 回执记录两次摘要。两次信号死亡或任何非信号失败仍不通过。生成载荷浏览器报告也须包含实际通过的必需用例，不能仅凭子进程退出码放行。CI 保留隔离夹具的报告和原始输出，不上传本机录屏。
 
 | 反复出现的漏测 | 固定看护 |
 |---|---|
@@ -81,7 +81,7 @@ python3 -B tools/test-startup-payload-browser.py --native-window-ordering --out 
 | 子进程什么也没测却返回 0，或复用旧报告 | 严格观测集合、必需浏览器用例、新证据目录、输入摘要前后比对 |
 | 技术检查通过就宣称肉眼体验正常 | `test-functional-verdict.py` 保证完整技术成功仍为 `pending-visual-review`，整体不通过 |
 
-仓库 UT `tests/test_agent_skin_native_window_guard.py` 看护功能运行器和证据边界；包级 `test-functional-verdict.py` 看护安装验收。DSH 的 document gate、取消、迟到存储结果与正常清理继续由 `startup.test.mjs` 和生成载荷浏览器用例覆盖；真实 DSH 桌面首帧仍按同版安装证据单独验收。
+仓库 UT `tests/test_agent_skin_native_window_guard.py` 看护功能运行器的证据校验、拒绝与保留边界，不含信号死亡重试的 `attempts` 回执和 `-attempt1` 证据搬迁；包级 `test-functional-verdict.py` 看护安装验收。DSH 的 document gate、取消、迟到存储结果与正常清理继续由 `startup.test.mjs` 和生成载荷浏览器用例覆盖；真实 DSH 桌面首帧仍按同版安装证据单独验收。
 
 ## 实机执行与保留项
 
