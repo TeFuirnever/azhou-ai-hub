@@ -6487,7 +6487,15 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
         guard let rows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
             preconditionFailure("WindowServer observations are unavailable")
         }
-        return rows.compactMap { $0[kCGWindowNumber as String] as? Int }
+        // Scope to this process: a global window number is reused by WindowServer
+        // as soon as any process creates a window, which turned absence checks
+        // into false positives under real mouse-probe window churn.
+        let processID = getpid()
+        return rows.compactMap { row in
+            guard let owner = row[kCGWindowOwnerPID as String] as? Int32, owner == processID,
+                  let number = row[kCGWindowNumber as String] as? Int else { return nil }
+            return number
+        }
     }
     func waitForWindows(_ condition: ([Int]) -> Bool, onScreen: Bool) -> [Int] {
         let deadline = Date().addingTimeInterval(3)
