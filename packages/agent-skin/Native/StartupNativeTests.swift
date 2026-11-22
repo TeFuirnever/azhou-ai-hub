@@ -6575,6 +6575,25 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                 let point = canProbe ? NSPoint(x: overlap.midX, y: overlap.midY) : nil
                 let opaque = point.map { waitForHit(windowNumber, at: $0) } ?? 0
                 if opaque != windowNumber || cover.ignoresMouseEvents {
+                    if let point, hitCategory(opaque) == "other" {
+                        // Same point, no run-loop wait. The observations are not atomic.
+                        let topBefore = NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0)
+                        let below: Int? = topBefore == opaque
+                            ? NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: opaque) : nil
+                        let topAfter = NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0)
+                        let topStable = topBefore == opaque && topAfter == opaque
+                        let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+                            as? [[String: Any]]
+                        let ids = rows?.compactMap { $0[kCGWindowNumber as String] as? Int }
+                        func above(_ a: Int, _ b: Int) -> String {
+                            guard let first = ids?.firstIndex(of: a), let second = ids?.firstIndex(of: b) else { return "unknown" }
+                            return first < second ? "yes" : "no"
+                        }
+                        let stack = "opaque hit-stack topBefore=\(hitCategory(topBefore)) below=\(below.map(hitCategory) ?? "not-probed")"
+                            + " topAfter=\(hitCategory(topAfter)) topStable=\(topStable)"
+                            + " otherAboveCover=\(above(opaque, windowNumber)) coverAboveFixture=\(above(windowNumber, hostNumber))"
+                        FileHandle.standardError.write(Data((stack + "\n").utf8))
+                    }
                     let foregroundUnchanged = NSWorkspace.shared.frontmostApplication?.processIdentifier == beforePID
                     let diagnostic = [
                         "opaque hit=\(canProbe ? hitCategory(opaque) : "not-probed")",
