@@ -1,0 +1,39 @@
+name: Agent Skin Appearance same-run check
+
+on:
+  push:
+    branches:
+      - codex/agent-skin-appearance-same-run-20261122
+
+permissions:
+  contents: read
+
+jobs:
+  appearance:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+      - run: |
+          python -m pip install --only-binary=:all: Pillow==12.3.0
+      - name: Verify the Appearance settings lifecycle in an owned fixture
+        working-directory: packages/agent-skin
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          EXPECTED_HEAD: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          python -B tools/test-startup-payload-browser.py --only 'real settings UI saves without replay and keeps conflict, preview, apply and disposal behavior' --out "$RUNNER_TEMP/agent-skin-appearance-evidence"
+      - name: Retain synthetic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: agent-skin-appearance-same-run
+          path: ${{ runner.temp }}/agent-skin-appearance-evidence
+          retention-days: 5

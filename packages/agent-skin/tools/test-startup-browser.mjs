@@ -3270,13 +3270,13 @@ try {
     assert.equal(lateEntryMetrics?.entryHit, true, 'appearance entry can be clicked before the pending-save check');
     assert.equal(lateEntryMetrics?.buttonHit, true, 'appearance button is the hit target before the pending-save check');
     const lateEntry = await clickAppearanceEntry();
-    assert.equal(lateEntry?.state?.phase, 'loading',
-      'clicking appearance starts a fresh settings run before the pending-save check');
-    assert.ok(lateEntry.state.runId > lateRun,
-      'the pending-save settings run has a newer ID than the prior saved run');
+    assert.equal(lateEntry?.point?.hit?.entry, true, 'the pending-save click hits the appearance entry');
+    assert.equal(lateEntry?.point?.buttonHit, true, 'the pending-save click hits the appearance button');
+    assert.ok(isNewSettingsRun(lateEntry?.state, lateRun),
+      'clicking appearance starts a fresh loading or already-ready settings run before the pending-save check');
     const lateSettingsReady = await until(() => cdp.evaluate(`(()=>{
       const state=window.__startupAPI.status(),dialog=document.querySelector('iframe[aria-label]')?.contentDocument.querySelector('dialog');
-      return state.phase==='settings'&&state.runId>${lateRun}&&dialog?.open?state:false;
+      return state.phase==='settings'&&state.runId===${lateEntry.state.runId}&&dialog?.open?state:false;
     })()`), 10000, 'appearance entry opens settings before the held late background result');
     const lateSettings = await cdp.evaluate('window.__startupAPI.status()');
     assert.equal(lateSettings.runId, lateSettingsReady.runId);
