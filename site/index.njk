@@ -1,42 +1,62 @@
 ---
 layout: base.njk
 lang: en
+bodyClass: landing
 title: "Agent skills that stay useful after the demo"
 description: "Azhou AI Hub: installable agent skill packages, one deterministic repository gate, human-approved evolution only."
 permalink: "index.html"
 ---
 
-<section>
-  <h1><span aria-hidden="true">🦊</span> Azhou AI Hub</h1>
-  <p class="tagline"><strong>Agent skills that stay useful after the demo.</strong></p>
-  <p class="tagline">Small enough to edit. Strict enough to verify. Neutral enough to run across harnesses.</p>
-  <picture>
-    <source type="image/webp" srcset="{{ '/assets/hero.webp' | url }}?v=20261122 1280w, {{ '/assets/hero-640.webp' | url }}?v=20261122 640w" sizes="(max-width: 56rem) 100vw, 56rem">
-    <img class="hero" src="{{ '/assets/hero.png' | url }}" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 17 installable skill packages; one deterministic repository gate; human-approved evolution only." width="1280" height="720" decoding="async" fetchpriority="high">
-  </picture>
+<section class="band">
+  <div class="wrap">
+    <h1>Agent skills that stay useful after the demo.</h1>
+    <p class="lede">Small enough to edit. Strict enough to verify. Neutral enough to run across harnesses.</p>
+    <p class="chips">
+      <span class="chip">{{ skills.length }} installable skill packages</span>
+      <span class="chip">one deterministic repository gate</span>
+      <span class="chip">human-approved evolution only</span>
+    </p>
+    <p class="cta">
+      <a class="btn btn-primary" href="{{ '/skills/' | url }}">Browse the skills</a>
+      <a class="btn btn-outline" href="{{ '/docs/' | url }}">Read the docs</a>
+    </p>
+    <picture>
+      <source type="image/webp" srcset="{{ '/assets/hero.webp' | url }}?v=20261122 1280w, {{ '/assets/hero-640.webp' | url }}?v=20261122 640w" sizes="(max-width: 1168px) calc(100vw - 48px), 1072px">
+      <img class="hero" src="{{ '/assets/hero.png' | url }}" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 17 installable skill packages; one deterministic repository gate; human-approved evolution only." width="1280" height="720" decoding="async" fetchpriority="high">
+    </picture>
+  </div>
 </section>
 
-<section>
-  <h2>Explore</h2>
-  <ul class="navcards">
-    <li class="card"><a href="{{ '/skills/' | url }}">Skills</a> — the catalog of installable skill packages, generated from each package's SKILL.md at build time.</li>
-    <li class="card"><a href="{{ '/docs/' | url }}">Docs</a> — the documentation map; documents stay versioned in the repository.</li>
-    <li class="card"><a href="{{ '/support/' | url }}">Support</a> — the maintained agent-harness set, with deep links into the support matrix.</li>
-  </ul>
+<section class="sec">
+  <div class="wrap">
+    <h2>Explore</h2>
+    <ul class="cardgrid">
+      <li><a class="gcard" href="{{ '/skills/' | url }}"><span class="gcard-t">Skills</span><span class="gcard-d">The catalog of installable skill packages, generated from each package's SKILL.md at build time.</span></a></li>
+      <li><a class="gcard" href="{{ '/docs/' | url }}"><span class="gcard-t">Docs</span><span class="gcard-d">The documentation map; documents stay versioned in the repository.</span></a></li>
+      <li><a class="gcard" href="{{ '/support/' | url }}"><span class="gcard-t">Support</span><span class="gcard-d">The maintained agent-harness set, with deep links into the support matrix.</span></a></li>
+    </ul>
+  </div>
 </section>
 
-<section>
-  <h2>First install in Codex</h2>
-  <p>Have Codex signed in and Node.js with <code>npx</code> available. In a terminal, open the project folder where you want to use Ask Azhou and run this command. It installs into that project.</p>
-  <pre class="wrap"><code>npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
-  <p>Open a new Codex chat in that project and try the following question:</p>
-  <blockquote><p><code>$super-ask-azhou</code> I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?</p></blockquote>
-  <p>Look for a recommendation of <code>super-archify</code>. If Ask Azhou is missing, see the <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#first-install-in-codex">first-install guide</a>; for an existing installation, see <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#upgrade-or-uninstall">check, update, or uninstall</a>.</p>
+<section class="sec sec-alt">
+  <div class="wrap">
+    <h2>First install in Codex</h2>
+    <div class="callout note">
+      <p>Have Codex signed in and Node.js with <code>npx</code> available. In a terminal, open the project folder where you want to use Ask Azhou and run this command; it installs into that project.</p>
+    </div>
+    <pre class="wrap-text"><code>npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
+    <aside class="toolbar-callout" aria-label="Try it in a new chat">
+      <p class="tc-title">Try it in a new Codex chat</p>
+      <p><code>$super-ask-azhou</code> I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?</p>
+      <p class="tc-foot">Look for a recommendation of <code>super-archify</code>. If Ask Azhou is missing, see the <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#first-install-in-codex">first-install guide</a>; for an existing installation, see <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#upgrade-or-uninstall">check, update, or uninstall</a>.</p>
+    </aside>
+  </div>
 </section>
 
-<section>
-  <h2>One architecture</h2>
-  <pre class="arch" tabindex="0" role="region" aria-label="Architecture diagram">docs/skill-standard.md ── governs ──&gt; skills/&lt;name&gt;/       installable runtime
+<section class="sec">
+  <div class="wrap">
+    <h2>One architecture</h2>
+    <pre class="arch" tabindex="0" role="region" aria-label="Architecture diagram">docs/skill-standard.md ── governs ──&gt; skills/&lt;name&gt;/       installable runtime
           │                              │
           ├── allocates ─────────────&gt; .azhou/&lt;name&gt;/      private runtime state
           ├── governs ───────────────&gt; tests/              deterministic proof
@@ -44,5 +64,6 @@ permalink: "index.html"
 
 history signals ──&gt; isolated candidate ──&gt; paired review ──&gt; human promotion
                          never writes the live skill directly</pre>
-  <p>The <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/skill-standard.md">Azhou Skill Standard</a> is the single project authority. <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/architecture.md">Architecture</a> explains the boundaries; <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/GOVERNANCE.md">governance</a> explains decisions.</p>
+    <p>The <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/skill-standard.md">Azhou Skill Standard</a> is the single project authority. <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/architecture.md">Architecture</a> explains the boundaries; <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/GOVERNANCE.md">governance</a> explains decisions.</p>
+  </div>
 </section>
