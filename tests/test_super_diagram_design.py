@@ -388,8 +388,11 @@ class SuperDiagramDesignPackageTest(unittest.TestCase):
             self.assertEqual(expected, hashlib.sha256(data).hexdigest(), relative)
 
     def test_package_file_whitelist_is_exhaustive(self) -> None:
+        # git-ignored bytecode caches are import side effects, not shipped files
         shipped = sorted(
-            p.relative_to(SKILL_DIR).as_posix() for p in SKILL_DIR.rglob("*") if p.is_file()
+            p.relative_to(SKILL_DIR).as_posix()
+            for p in SKILL_DIR.rglob("*")
+            if p.is_file() and "__pycache__" not in p.relative_to(SKILL_DIR).parts
         )
         self.assertEqual(len(PINNED_SHA256), len(shipped))
         self.assertEqual(set(PINNED_SHA256), set(shipped))
