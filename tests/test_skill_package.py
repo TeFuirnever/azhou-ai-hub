@@ -183,6 +183,19 @@ class SkillPackageTest(unittest.TestCase):
                 int(token) if token.isdigit() else PACKAGE_COUNT_WORDS[token] for token in tokens
             )
         self.assertEqual({len(shipped)}, counts)
+        for pattern, relative in (
+            (r"\b([a-z]+|\d+) installable packages\b", "README.md"),
+            (r"([0-9一二三四五六七八九十百]+)\s*个可安装包", "README.zh-CN.md"),
+        ):
+            tokens = re.findall(pattern, (ROOT / relative).read_text(encoding="utf-8").lower())
+            self.assertTrue(tokens, pattern)
+            self.assertEqual(
+                {len(shipped)},
+                {
+                    int(token) if token.isdigit() else PACKAGE_COUNT_WORDS[token]
+                    for token in tokens
+                },
+            )
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
