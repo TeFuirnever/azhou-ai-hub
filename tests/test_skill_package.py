@@ -32,7 +32,21 @@ SKILL_DIRS = (
     ROOT / "skills" / "super-gh-axi",
     ROOT / "skills" / "super-session-insights",
     ROOT / "skills" / "super-asd-ste100",
+    ROOT / "skills" / "super-rederive",
+    ROOT / "skills" / "super-frontend-design",
 )
+PACKAGE_COUNT_WORDS = {
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+    "十六": 16,
+    "十七": 17,
+    "十八": 18,
+    "十九": 19,
+    "二十": 20,
+}
 
 
 class SkillPackageTest(unittest.TestCase):
@@ -143,13 +157,65 @@ class SkillPackageTest(unittest.TestCase):
         self.assertRegex(changelog.lower(), r"draft|unpublished")
 
     def test_public_support_contract_separates_package_and_host_evidence(self) -> None:
-        support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
+        support = "\n".join(
+            (ROOT / relative).read_text(encoding="utf-8").lower()
+            for relative in (
+                "docs/support-matrix.md",
+                "docs/integrations.md",
+                "docs/skill-standard.md",
+            )
+        )
 
-        self.assertEqual(16, len(SKILL_DIRS))
-        self.assertIn("seventeen canonical packages", support)
+        shipped = tuple(sorted(path.parent.name for path in ROOT.glob("skills/*/SKILL.md")))
+        self.assertEqual(tuple(sorted(path.name for path in SKILL_DIRS)), shipped)
+        claim_families = (
+            r"\b([a-z]+|\d+) canonical packages\b",
+            r"\bhas ([a-z]+|\d+) packages\b",
+            r"\b([a-z]+|\d+)-package catalog\b",
+            r"\b([a-z]+|\d+) canonical skills\b",
+            r"全部\s*([0-9一二三四五六七八九十百]+)\s*个\s*canonical\s+skills?\b",
+        )
+        counts = set()
+        for pattern in claim_families:
+            tokens = re.findall(pattern, support)
+            self.assertTrue(tokens, pattern)
+            counts.update(
+                int(token) if token.isdigit() else PACKAGE_COUNT_WORDS[token] for token in tokens
+            )
+        self.assertEqual({len(shipped)}, counts)
+        for pattern, relative in (
+            (r"\b([a-z]+|\d+) installable packages\b", "README.md"),
+            (r"([0-9一二三四五六七八九十百]+)\s*个可安装包", "README.zh-CN.md"),
+        ):
+            tokens = re.findall(pattern, (ROOT / relative).read_text(encoding="utf-8").lower())
+            self.assertTrue(tokens, pattern)
+            self.assertEqual(
+                {len(shipped)},
+                {
+                    int(token) if token.isdigit() else PACKAGE_COUNT_WORDS[token]
+                    for token in tokens
+                },
+            )
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
+
+    def test_public_install_and_catalog_enumerations_match_the_shipped_tree(self) -> None:
+        shipped = sorted(path.parent.name for path in ROOT.glob("skills/*/SKILL.md"))
+        for relative in ("docs/installation.md", "README.md", "README.zh-CN.md"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            enumerated = re.findall(
+                r"^npx skills add TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+)", text, re.MULTILINE
+            )
+            self.assertEqual(shipped, sorted(enumerated), relative)
+            every = re.findall(r"npx skills add TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+)", text)
+            self.assertEqual(shipped, sorted(set(every)), relative)
+        for relative in ("README.md", "README.zh-CN.md"):
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            rows = re.findall(
+                r"^\| \[[^]]+\]\(skills/([a-z0-9-]+)/SKILL\.md\)", text, re.MULTILINE
+            )
+            self.assertEqual(shipped, sorted(rows), relative)
 
     def test_public_provenance_contract_stays_reproducible(self) -> None:
         notices = (ROOT / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")

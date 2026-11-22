@@ -137,6 +137,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 *AZHOU_SKILL_NAMES,
                 "super-eli5",
                 "super-excalidraw-diagram",
+                "super-frontend-design",
                 "super-gh-axi",
                 "super-i-have-adhd",
                 "super-imagegen",
