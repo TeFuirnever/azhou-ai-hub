@@ -146,9 +146,36 @@ class FunctionalVerdictTests(unittest.TestCase):
         root = os.environ.get("AZHOU_AGENT_SKIN_NATIVE_EVENT_SAMPLES")
         if not root:
             self.skipTest("native producer sample directory not supplied")
+        samples = Path(root)
+
+        def read_sample(name):
+            return acceptance.records((samples / f"{name}.jsonl").read_text(encoding="utf-8"))
+
+        launcher = "/Applications/Agent Skin.app"
+        probe = read_sample("probe-success")
+        target = (2170, "/Applications/Codex.app")
         for end in ("completed", "skipped", "interrupted", "failed"):
-            values = acceptance.records((Path(root) / f"native-{end}.jsonl").read_text(encoding="utf-8"))
-            self.assertEqual(end == "completed", acceptance.cold_start_observed(values))
+            with self.subTest(end=end):
+                values = read_sample(f"native-{end}")
+                self.assertEqual(end == "completed", acceptance.cold_start_observed(values, launcher))
+                self.assertEqual(target if end == "completed" else None,
+                                 acceptance.cold_wallpaper_target(values, probe, launcher))
+
+        completed = read_sample("native-completed")
+        self.assertIsNone(acceptance.cold_wallpaper_target(completed, read_sample("probe-failure"), launcher))
+        bound = acceptance.cold_wallpaper_target(completed, probe, launcher)
+        request = "native-sample-final"
+        status = dict.fromkeys(("applied", "imageDecoded", "backgroundMatched", "coverMatched", "fixedViewport",
+                                "rootClear", "workspaceBackgroundClear", "footerBackgroundClear", "footerFadeClear",
+                                "topFadeClear", "decorationEffectsClear"), True)
+        status.update(event="wallpaper-result", state="applied", action="status", targetPID=target[0],
+                      targetPath=target[1], requestID=request, verificationIssues=[])
+        self.assertTrue(acceptance.verified_wallpaper([status], request_id=request, target=bound))
+        for field, wrong in (("targetPID", 2171), ("targetPath", "/Applications/Other.app"),
+                             ("action", "retry"), ("requestID", "earlier-poll")):
+            with self.subTest(field=field):
+                self.assertFalse(acceptance.verified_wallpaper([{**status, field: wrong}],
+                                                              request_id=request, target=bound))
 
     def test_native_verdict_is_a_fingerprinted_canonical_tool(self):
         manifest = json.loads((Path(__file__).resolve().parents[1] / "hub-package.json").read_text(encoding="utf-8"))
