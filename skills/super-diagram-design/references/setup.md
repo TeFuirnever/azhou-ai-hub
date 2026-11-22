@@ -5,7 +5,7 @@
 | Dependency | Required for | Minimum version | Install / verification |
 |---|---|---|---|
 | Python 3 | all eight packaged scripts | 3.11 (the repository-gate baseline; seven of the eight scripts use only the standard library, and export_png.py additionally needs Playwright) | present on the checkout host; verify with `python scripts/self_check.py --help` exiting 0 |
-| Playwright with a Chromium build (optional) | `scripts/export_png.py` rasterization and the optional render-and-look browser preview | current Playwright release | `pip install playwright` then `playwright install chromium`; verify with `python scripts/export_png.py --help` exiting 0 |
+| Playwright with a Chromium build (optional) | `scripts/export_png.py` rasterization and the optional render-and-look browser preview | current Playwright release | `pip install playwright` then `playwright install chromium`; `python scripts/export_png.py --help` exiting 0 confirms the Playwright package imports; run one real export to confirm the Chromium build |
 
 Everything else is dependency-free: `self_check.py`, `verify_geometry.py`, `export_svg.py` and the four import extractors (`drawio_extract.py`, `excalidraw_extract.py`, `mermaid_extract.py`, `plantuml_extract.py`) run on the Python standard library alone.
 

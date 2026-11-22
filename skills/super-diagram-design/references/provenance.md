@@ -49,5 +49,5 @@ On platforms without `shasum` (e.g. Windows), the standard-library equivalent:
 ```bash
 git clone https://github.com/cathrynlavery/diagram-design /tmp/diagram-design-src
 git -C /tmp/diagram-design-src checkout d7b0176d7e60c6f2ff54067991491ac7622c81fb
-python -c "import hashlib; print(hashlib.sha256(open('/tmp/diagram-design-src/skills/diagram-design/SKILL.md','rb').read()).hexdigest())"
+python -c "import hashlib; [print(hashlib.sha256(open(p,'rb').read()).hexdigest()) for p in ('/tmp/diagram-design-src/skills/diagram-design/SKILL.md','/tmp/diagram-design-src/LICENSE')]"
 ```

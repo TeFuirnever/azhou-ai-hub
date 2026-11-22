@@ -24,20 +24,18 @@ ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / "skills" / "super-diagram-design"
 SKILL = SKILL_DIR / "SKILL.md"
 
-UPSTREAM_COMMIT = "d7b0176d7e60c6f2ff54067991491ac7622c81fb"
-UPSTREAM_SKILL_SHA256 = "0f8159717762225aad4f8aec9162ffecd1ad19f12f41157c5874dfc047017cc1"
 UPSTREAM_LICENSE_SHA256 = "bb7e12e91fecef43024111123ff784cec6c485585561d8b552557c0173b3ed29"
-UPSTREAM_THIRD_PARTY_LICENSES_SHA256 = "ad931154e2f91bf545fc9c442666a2159aa56c0af3cca0b7246e02c6efeab6ba"
 
 # One pin per shipped package file. Every vendored file's pin is the upstream
-# byte digest at UPSTREAM_COMMIT, with two groups of exceptions: SKILL.md's
+# byte digest at the immutable provenance commit recorded in
+# references/provenance.md, with two groups of exceptions: SKILL.md's
 # pin is the landed packaged bytes (upstream body plus the recorded packaging
-# increments; the unmodified upstream digest is UPSTREAM_SKILL_SHA256), and
+# increments; the unmodified upstream digest is recorded there too), and
 # the hub-authored records (THIRD_PARTY_LICENSES.md is upstream, the three
 # references/provenance, setup and upstream-compatibility files are not).
 PINNED_SHA256 = {
     "LICENSE": "bb7e12e91fecef43024111123ff784cec6c485585561d8b552557c0173b3ed29",
-    "SKILL.md": "c483eec39a6cbfbe660a987b9eb68322b6eae1ac715e7b29a446bf686cfac068",
+    "SKILL.md": "cb2e0139339802a937c730209686699813760aeffd24acbffc91a649bf1a5dc1",
     "THIRD_PARTY_LICENSES.md": "ad931154e2f91bf545fc9c442666a2159aa56c0af3cca0b7246e02c6efeab6ba",
     "assets/example-arc-diagram-dark.html": "acd6b0c9d174b7d915d1e4e1a98a6019c30b02b8e5264f53f4ef2657dcbde77e",
     "assets/example-arc-diagram-full.html": "e785227378c5bde8a09d323ba743cf0f53b8dccb5e029325e99cccaed6a8f669",
@@ -298,9 +296,9 @@ PINNED_SHA256 = {
     "references/primitive-terminal.md": "7b52c2fb229c822a60b0061caa64ae6a68aacd4f1c22a1a98d1d0eaaa2333b55",
     "references/primitives-core.md": "601305baed49217870dda15a0ebc879a6a560608cb63fe2108aaebee1abefbc9",
     "references/profiles.md": "8afea09015a456b218287f08a2e9ac44bb50f6a9ebd2a7c1487bd774e89f9016",
-    "references/provenance.md": "50346d546b9044bb223f2e1c5b32a85a2b02afed6c1135ddd177fe3291f24f0e",
+    "references/provenance.md": "6a3ecc1b0851d926118c925faa1975f9a3cba48bd90977683658e9cf0e417950",
     "references/semantic-patterns.md": "be3e828fbbf0479f2cd651dc08413481ba695eb9f249a5cf9af72b7860e364db",
-    "references/setup.md": "809f5c2b49b077ec7201daa401547e26ee5177cda8b3da9d49a2cf7d85e58378",
+    "references/setup.md": "838695a9552f42a9ca8d865d07afa2c76859d7b46b7783f74017d0ff25bddd54",
     "references/style-guide.md": "320881ec802004384c09ce4f4f087b9242d926b08071d6b908160e14c707d155",
     "references/type-architecture-delta.md": "e5813f26e1fb924863efe70db36f112e1b9570e47335d7f6fa6e46473136e4e5",
     "references/type-architecture.md": "28260c9c0a72fe17ddf6eed7b1fff01c04f58f62bbb7147c45372574c9e38eea",
