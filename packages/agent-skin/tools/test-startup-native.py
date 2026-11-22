@@ -167,7 +167,6 @@ def window_ordering_checks(output: Path, out: Path, source_before: dict, binary_
     return 0 if report["passed"] else 1
 
 
-
 def handshake_checks(output: Path) -> None:
     """The real Foundation WebSocket client must preserve handshake distinctions."""
     class HandshakeHandler(http.server.BaseHTTPRequestHandler):

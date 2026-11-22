@@ -81,7 +81,7 @@ python3 -B tools/test-startup-payload-browser.py --native-window-ordering --out 
 | 子进程什么也没测却返回 0，或复用旧报告 | 严格观测集合、必需浏览器用例、新证据目录、输入摘要前后比对 |
 | 技术检查通过就宣称肉眼体验正常 | `test-functional-verdict.py` 保证完整技术成功仍为 `pending-visual-review`，整体不通过 |
 
-仓库 UT `tests/test_agent_skin_native_window_guard.py` 看护功能运行器和证据边界；包级 `test-functional-verdict.py` 看护安装验收。DSH 的 document gate、取消、迟到存储结果与正常清理继续由 `startup.test.mjs` 和生成载荷浏览器用例覆盖；真实 DSH 桌面首帧仍按同版安装证据单独验收。
+仓库 UT `tests/test_agent_skin_native_window_guard.py` 看护功能运行器的证据校验、拒绝与保留边界，不含信号死亡重试的 `attempts` 回执和 `-attempt1` 证据搬迁；包级 `test-functional-verdict.py` 看护安装验收。DSH 的 document gate、取消、迟到存储结果与正常清理继续由 `startup.test.mjs` 和生成载荷浏览器用例覆盖；真实 DSH 桌面首帧仍按同版安装证据单独验收。
 
 ## 实机执行与保留项
 

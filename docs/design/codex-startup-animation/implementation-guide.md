@@ -56,10 +56,10 @@ Builder沿用H `build-wallpaper.py`的约束：只处理受控的单入口自包
 
 | 预计命令 | 测试面 | Owner / 依赖 |
 |---|---|---|
-| `node --test packages/codex-startup-animation/tools/startup.test.mjs` | controller消息、clock、Settings、包装后payload，模拟宿主 | B/C/D；Node仅开发测试依赖 |
-| `python -B packages/codex-startup-animation/tools/test-startup-build.py` | builder资源/摘要、篡改反例、版本一致 | E；标准库fixture，图像部分按macOS条件运行 |
-| `python -B packages/codex-startup-animation/tools/test-startup-native.py` | Swift编译后的validator/transport测试可执行程序，不接真实Codex | A；测试时注入fake transport/目标信息 |
-| `node packages/codex-startup-animation/tools/test-startup-browser.mjs` | 独立临时Chrome profile，真实iframe/IDB/CSP与包装产物 | B–E；只连模拟宿主 |
+| `node --test packages/agent-skin/tools/startup.test.mjs` | controller消息、clock、Settings、包装后payload，模拟宿主 | B/C/D；Node仅开发测试依赖 |
+| `python -B packages/agent-skin/tools/test-startup-build.py` | builder资源/摘要、篡改反例、版本一致 | E；标准库fixture，图像部分按macOS条件运行 |
+| `python -B packages/agent-skin/tools/test-startup-native.py` | Swift编译后的validator/transport测试可执行程序，不接真实Codex | A；测试时注入fake transport/目标信息 |
+| `node packages/agent-skin/tools/test-startup-browser.mjs` | 独立临时Chrome profile，真实iframe/IDB/CSP与包装产物 | B–E；只连模拟宿主 |
 
 新用例必须接到现有verify或对应macOS CI leg，不能只把测试文件提交。现有Linux标准库门不强制装AppKit/Pillow/浏览器。Swift编译、浏览器与真实宿主分别报告条件；被跳过的关键macOS测试仍阻断生产门。
 
