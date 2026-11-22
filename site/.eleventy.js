@@ -1,9 +1,7 @@
 "use strict";
 
-// Static documentation site for the Azhou AI Hub repository.
-// The pathPrefix is a hard-coded assumption: this is a project site served
-// at https://tefuirnever.github.io/azhou-ai-hub/. If the repository is
-// renamed or moves to a user site, update pathPrefix in the same change.
+const site = require("./_data/site.js");
+
 module.exports = function (eleventyConfig) {
   // Reuse the repository's own hero asset without duplicating its bytes in
   // the site tree; the shared footer carries the artwork license line and
@@ -12,11 +10,16 @@ module.exports = function (eleventyConfig) {
     "../assets/github/readme-hero.png": "./assets/hero.png",
     "../assets/site/hero.webp": "./assets/hero.webp",
     "../assets/site/hero-640.webp": "./assets/hero-640.webp",
+    "../assets/skills/super-archify-effect.png": "./assets/skills/super-archify-effect.png",
+    "../assets/skills/super-eli5-effect.png": "./assets/skills/super-eli5-effect.png",
+    "../assets/skills/super-excalidraw-diagram-effect.png": "./assets/skills/super-excalidraw-diagram-effect.png",
+    "../benchmarks/super-excalidraw-diagram/ordinary-model-floor/fixtures/reference/reference.architecture.excalidraw": "./showcase/demos/reference.architecture.excalidraw",
+    "./showcase/demos": "./showcase/demos",
     "./robots.txt": "./robots.txt",
   });
 
   return {
-    pathPrefix: "/azhou-ai-hub/",
+    pathPrefix: site.pathPrefix,
     templateFormats: ["njk"],
     dir: {
       input: "./",

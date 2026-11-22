@@ -11,7 +11,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const DOCS_INDEX = path.resolve(__dirname, "..", "..", "docs", "README.md");
-const BLOB_BASE = "https://github.com/TeFuirnever/azhou-ai-hub/blob/main";
+const { blobBase } = require("./site.js");
 const LINK_PATTERN = /\[([^\]]+)\]\(([^)\s]+)\)/g;
 
 function toBlobUrl(target, line) {
@@ -27,7 +27,7 @@ function toBlobUrl(target, line) {
     );
   }
   const repoPath = path.posix.normalize(path.posix.join("docs", filePart));
-  return `${BLOB_BASE}/${repoPath}${anchor}`;
+  return `${blobBase}/${repoPath}${anchor}`;
 }
 
 module.exports = function () {
