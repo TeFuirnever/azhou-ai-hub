@@ -5,9 +5,9 @@ This map records the imported upstream `diagram-design` baseline at commit `d7b0
 | Upstream capability | Local status | Evidence / difference |
 |---|---|---|
 | Upstream package identity (`diagram-design`) | locally branded | the upstream name remains source identity; local frontmatter and folder are `super-diagram-design` under the Hub canonical naming contract |
-| Description trigger surface (fifty visual types, HTML/SVG/PNG output, the four import stacks, lifecycle phase maps, block decomposition trees, onboarding guidance) | adapted | the enumeration is compressed to representative types with the fifty-type count and every trigger class kept, `Use when` names the import surface, and the carve sentences name `super-archify` and `super-excalidraw-diagram` |
+| Description trigger surface (51 visual types, HTML/SVG/PNG output, the four import stacks, lifecycle phase maps, block decomposition trees, onboarding guidance) | adapted | the enumeration is compressed to representative types with the 51-type count and every trigger class kept, `Use when` names the import surface, and the carve sentences name `super-archify` and `super-excalidraw-diagram` |
 | Style-guide gate and `.diagram-design` profile resolution | preserved verbatim | `SKILL.md` section 0, `references/profiles.md` |
-| Fifty-type catalog with the semantic-pattern → visual-type selection layer | preserved verbatim | `SKILL.md` sections 1-3 |
+| Visual-type catalog with the semantic-pattern → visual-type selection layer | preserved verbatim | `SKILL.md` sections 1-3 |
 | Universal anti-patterns, design system, SVG primitives, layout and spacing, summary card pattern, checklist, templates and variants | preserved verbatim | `SKILL.md` sections 4-10 |
 | `.drawio` / Mermaid / `.excalidraw` / PlantUML import procedures | preserved verbatim | `SKILL.md` section 11 |
 | Output contract (self-contained HTML, accessible-SVG rules, manual-only export) | preserved verbatim | `SKILL.md` section 12 |

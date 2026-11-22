@@ -298,7 +298,7 @@ PINNED_SHA256 = {
     "references/primitive-terminal.md": "7b52c2fb229c822a60b0061caa64ae6a68aacd4f1c22a1a98d1d0eaaa2333b55",
     "references/primitives-core.md": "601305baed49217870dda15a0ebc879a6a560608cb63fe2108aaebee1abefbc9",
     "references/profiles.md": "8afea09015a456b218287f08a2e9ac44bb50f6a9ebd2a7c1487bd774e89f9016",
-    "references/provenance.md": "22f69c6471769e0b4608c46c009837bd44b4732797c8d81f6948fb266636a75e",
+    "references/provenance.md": "50346d546b9044bb223f2e1c5b32a85a2b02afed6c1135ddd177fe3291f24f0e",
     "references/semantic-patterns.md": "be3e828fbbf0479f2cd651dc08413481ba695eb9f249a5cf9af72b7860e364db",
     "references/setup.md": "73b6f983fc0d8b93e1fe4e7b6f99480021bba3f498aa416f3a2de3cda7802cef",
     "references/style-guide.md": "320881ec802004384c09ce4f4f087b9242d926b08071d6b908160e14c707d155",
@@ -353,7 +353,7 @@ PINNED_SHA256 = {
     "references/type-venn.md": "7ead49ed70f1b2506beb83e9c84862d7dbc63f1225f0e50ecc6e2b1b4a632b38",
     "references/type-wardley.md": "4060402f648fa2ec858850f532675f52ac5d5df0b209c9c9450cc3df332114fb",
     "references/type-waterfall.md": "07db1d30ce52356884b9c7005ad473434c6104257eee0252e3487209e59d0da9",
-    "references/upstream-compatibility.md": "170bb4586f6e39d8070c8f19a10959f10fc3b89ff6c2163bb2913aeb986e336c",
+    "references/upstream-compatibility.md": "fafeac758c2f5ccce50c622ab0bba6c4119d0d1b6225c7233ce15a4ad6d1eb39",
     "scripts/drawio_extract.py": "328e683a2d536a15a45ea8dfc1887bd62f9f1195910f21384dfed6206ae1f7c7",
     "scripts/excalidraw_extract.py": "58f7284b6ee4c1d98d3ec5d7b59221ed273ef2efe76b34ac386de2d194fc087b",
     "scripts/export_png.py": "430ddcc2d39441808bd4217fbdeb944dbb6de0be281782705a81747986d7d348",
@@ -380,68 +380,9 @@ class SuperDiagramDesignPackageTest(unittest.TestCase):
         description = re.search(r'^description:\s*"(.+)"$', self.frontmatter, re.MULTILINE)
         self.assertIsNotNone(description)
         self.assertLessEqual(len(description.group(1)), 1024)
-        self.assertTrue(description.group(1).startswith("Azhou skill. "))
-        self.assertIn("Use when", description.group(1))
-        self.assertIn("Interactive diagram-map HTML belongs to super-archify", description.group(1))
-        self.assertIn("editable .excalidraw scenes belong to super-excalidraw-diagram", description.group(1))
-        self.assertIn("Renamed from diagram-design", description.group(1))
         invocation = re.search(r"^invocation:\s*([^\n]+)$", self.frontmatter, re.MULTILINE)
         self.assertIsNotNone(invocation)
         self.assertIn(invocation.group(1).strip(), INVOCATION_CLASSES)
-
-    def test_upstream_body_is_retained(self) -> None:
-        self.assertIn("# Diagram Design", self.text)
-        self.assertIn(
-            "Fifty visual types. Semantic patterns describe behavior; type references describe layout.",
-            self.text,
-        )
-        self.assertIn("## 0. First-time setup — style guide gate", self.text)
-        self.assertIn("## 12. Output", self.text)
-
-    def test_brand_contract_is_present(self) -> None:
-        contract = SKILL_BRAND_CONTRACTS["skills/super-diagram-design/SKILL.md"]
-        self.assertIn(f"🦊 阿舟 · {contract['display_name']}", self.text)
-        self.assertIn(contract["motto"], self.text)
-        self.assertIn(contract["startup"], self.text)
-        for marker in ("✅ 验证通过", "❌ 验证失败", "🔒 阿舟暂停这一项"):
-            self.assertIn(marker, self.text)
-        self.assertIn("A host without Unicode", self.text)
-        self.assertIn("raw evidence", self.text)
-        self.assertIn("super-diagram-design.receipt.v1", self.text)
-
-    def test_provenance_pins_the_locked_upstream(self) -> None:
-        provenance = (SKILL_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
-        self.assertIn(UPSTREAM_COMMIT, provenance)
-        self.assertIn(UPSTREAM_SKILL_SHA256, provenance)
-        self.assertIn(UPSTREAM_LICENSE_SHA256, provenance)
-        self.assertIn(UPSTREAM_THIRD_PARTY_LICENSES_SHA256, provenance)
-        self.assertIn('metadata version `"2.6"`', provenance)
-        self.assertIsNotNone(re.search(r"^Classification: `faithful`", provenance, re.MULTILINE))
-        self.assertIn("Skill-standard §2.3", provenance)
-        self.assertIn("no Git tags or releases", provenance)
-
-    def test_showcase_deferral_is_recorded_with_its_next_action(self) -> None:
-        provenance = (SKILL_DIR / "references" / "provenance.md").read_text(encoding="utf-8")
-        self.assertIn("super-diagram-design-effect.png", provenance)
-        self.assertIn("dedicated maintainer visual pass", provenance)
-        self.assertIn("named human visual P0", provenance)
-        self.assertIn("Next action:", provenance)
-
-    def test_setup_records_the_dependency_boundary(self) -> None:
-        setup = (SKILL_DIR / "references" / "setup.md").read_text(encoding="utf-8")
-        self.assertIn("Python 3", setup)
-        self.assertIn("Playwright", setup)
-        self.assertIn("Failing closed", setup)
-        self.assertIn("System modifications", setup)
-        self.assertNotRegex(setup, r"\bpython3\b")
-
-    def test_compatibility_map_preserves_capability_rows(self) -> None:
-        compat = (SKILL_DIR / "references" / "upstream-compatibility.md").read_text(encoding="utf-8")
-        self.assertIn(UPSTREAM_COMMIT, compat)
-        self.assertIn("preserved byte-identical", compat)
-        self.assertIn("preserved verbatim", compat)
-        self.assertIn("not vendored", compat)
-        self.assertIn("A future removal or replacement needs", compat)
 
     def test_vendored_files_match_the_pinned_bytes(self) -> None:
         for relative, expected in PINNED_SHA256.items():

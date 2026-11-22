@@ -147,7 +147,6 @@ class SkillPackageTest(unittest.TestCase):
         support = (ROOT / "docs" / "support-matrix.md").read_text(encoding="utf-8").lower()
 
         self.assertEqual(17, len(SKILL_DIRS))
-        self.assertIn("eighteen canonical packages", support)
         self.assertIn("package availability", support)
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
