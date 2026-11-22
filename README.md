@@ -183,7 +183,7 @@ In this checkout, ask “Ask Azhou, which skill can help me change old code that
 
 > 🧩 Start with a problem and work out the design.
 
-![Rederive effect preview](assets/skills/super-rederive-effect.png)
+![Azhou placing a puzzle piece on a board, beside the Chinese text “derive it yourself” and “why?”](assets/skills/super-rederive-effect.png)
 
 ## Gh Axi
 
@@ -191,7 +191,7 @@ In this checkout, ask “Ask Azhou, which skill can help me change old code that
 
 ![Gh Axi effect preview](assets/skills/super-gh-axi-effect.png)
 
-<sub>🦊 Effect previews generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify, Lavish, Imagegen, i-have-adhd, Gh Axi and Rederive: human visual P0 approved; the formal colour gate still awaits the governed workspace audit.</sub>
+<sub>🦊 Effect previews except Rederive were generated with the Azhou Scenes skill. Repo Pedant and Excalidraw Diagram: machine colour gate passed; final identity, hand and text review remains a human checkpoint. Arch Doc, Eli5, Ask Azhou, Session Insights, ASD-STE100, Archify, Lavish, Imagegen, i-have-adhd, and Gh Axi: human visual P0 approved; the formal colour gate still awaits the governed workspace audit. Rederive: the maintainer selected the image after a private GitHub preview; independent visual review and the full production audit remain pending.</sub>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-trust-dark.jpg">

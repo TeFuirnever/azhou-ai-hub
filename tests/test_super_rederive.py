@@ -29,7 +29,7 @@ class SuperRederiveTest(unittest.TestCase):
         path = ROOT / "assets" / "skills" / "super-rederive-effect.png"
         data = path.read_bytes()
         self.assertEqual(
-            "63ca128fbed8b5f31dd969572dbb30eb9f3ac4fb655cba5588830a7729de9621",
+            "9357f11b9e08393a6759abfd5762074099ffa77712e95f6944c5e660c7f51896",
             hashlib.sha256(data).hexdigest(),
         )
         self.assertEqual(b"\x89PNG\r\n\x1a\n", data[:8])
