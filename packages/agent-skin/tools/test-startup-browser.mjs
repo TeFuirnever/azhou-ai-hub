@@ -430,6 +430,41 @@ try {
     const outerWindow = window;
     const url = new URL(location.href);
     if (url.searchParams.has('initial-light-theme')) document.documentElement.dataset.theme = 'light';
+    const coldDot = url.searchParams.get('cold-dot');
+    if (['scoped', 'unscoped'].includes(coldDot)) {
+      const sidebar = document.querySelector('.sidebar');
+      const main = document.querySelector('[data-app-shell-main-surface]');
+      sidebar.id = 'app-shell-sidebar';
+      const navRoot = sidebar.appendChild(document.createElement('div'));
+      navRoot.setAttribute('data-sidebar-navigation-root', '');
+      const nav = navRoot.appendChild(document.createElement('nav'));
+      nav.setAttribute('role', 'navigation');
+      const group = nav.appendChild(document.createElement('div'));
+      group.className = 'group/nav-list';
+      const row = (coldDot === 'scoped' ? group : document.querySelector('#root'))
+        .appendChild(document.createElement('button'));
+      row.style.cssText = 'position:fixed;left:4px;top:4px;width:20px;height:20px';
+      row.dataset.sidebarDestination = 'builtin:orbit:cold-fixture';
+      row.setAttribute('aria-current', 'page');
+      const room = main.appendChild(document.createElement('div'));
+      room.className = 'h-full min-h-0';
+      room.innerHTML = '<div class="relative flex h-full min-h-0 flex-col"><div class="relative min-h-0 flex-1">'
+        + '<section class="messaging-root messaging-embedded" style="position:fixed;top:160px;left:480px;width:100px;height:90px;background:rgb(97,45,62)">'
+        + '<div class="workspace"><main class="thread-pane" style="height:90px;position:relative;background:rgb(97,45,62)">'
+        + '<div class="messaging-root messaging-embedded" style="position:absolute;inset:0;background:rgb(97,45,62)">'
+        + '<div class="thread-pane flex-1" style="height:100%;background:rgb(97,45,62)"></div>'
+        + '</div></main></div></section></div></div>';
+      const paint = document.createElement('style');
+      paint.textContent = '#root .sidebar{background:transparent!important}'
+        + 'html[data-azhou-wallpaper="active"] body{--azhou-wallpaper-wash:linear-gradient(transparent,transparent)}';
+      document.head.append(paint);
+      const suppress = document.createElement('style');
+      suppress.textContent = 'html[data-azhou-wallpaper="active"] body:not([data-fixture-cold-dot-exempt]){background-image:none!important}';
+      document.head.append(suppress);
+      suppress.sheet.disabled = true;
+      outerWindow.__fixtureColdDot = {room, sidebar, row, suppress,
+        planes: Array.from(room.querySelectorAll('.messaging-root, .thread-pane'))};
+    }
     if (url.searchParams.has('home-nav-fixture')) {
       const sidebar = document.querySelector('.sidebar');
       const shell = document.querySelector('[data-app-shell-frame]');
@@ -7656,9 +7691,135 @@ try {
       const restored=await stage();
       assert.deepEqual([restored.left,restored.center],[baseline.left,baseline.center]);
       assert.deepEqual(await owned(),expected);
-      return {kind:'synthetic-optical-only',left,center,pairedFrames:4};
+      // Exercise real lifecycle of this disposable Chromium tab, not a macOS App switch.
+      await cdp.call('Page.bringToFront');
+      await until(()=>cdp.evaluate("document.visibilityState==='visible'&&document.hasFocus()"),
+        5000,'synthetic browser fixture is foreground before tab switch');
+      await action(`
+        const root=document.documentElement,marker='data-azhou-wallpaper';
+        const lifecycle=[],activation=[];
+        const record=e=>lifecycle.push({event:e.type,visibility:document.visibilityState,
+          focus:document.hasFocus(),sameOwner:window.__azhouWallpaper===f.owner});
+        const drain=records=>activation.push(...records.map(r=>r.oldValue));
+        const observer=new MutationObserver(drain);
+        observer.observe(root,{attributes:true,attributeFilter:[marker],attributeOldValue:true});
+        document.addEventListener('visibilitychange',record);
+        window.addEventListener('blur',record);
+        window.addEventListener('focus',record);
+        f.tabTrace={lifecycle,activation,observer,record,drain,marker};
+      `);
+      let awayTarget;
+      let tabLifecycle;
+      try {
+        ({targetId:awayTarget}=await cdp.call('Target.createTarget',{url:'about:blank',background:true}));
+        await cdp.call('Target.activateTarget',{targetId:awayTarget});
+        await until(()=>cdp.evaluate("document.visibilityState==='hidden'&&!document.hasFocus()"),
+          5000,'disposable fixture lost actual tab focus and visibility');
+        const away = await action(`
+          return {sameOwner:window.__azhouWallpaper===f.owner,
+            marker:document.documentElement.getAttribute(f.tabTrace.marker)};
+        `);
+        assert.deepEqual(away,{sameOwner:true,marker:'active'});
+        await cdp.call('Page.bringToFront');
+        await until(()=>cdp.evaluate("document.visibilityState==='visible'&&document.hasFocus()"),
+          5000,'disposable fixture regained actual tab focus and visibility');
+        tabLifecycle=await action(`
+          const trace=f.tabTrace;
+          trace.drain(trace.observer.takeRecords());
+          return {events:trace.lifecycle,activation:[...trace.activation,document.documentElement.getAttribute(trace.marker)],
+            sameOwner:window.__azhouWallpaper===f.owner};
+        `);
+        const hidden = tabLifecycle.events.findIndex(e=>e.event==='visibilitychange'&&e.visibility==='hidden');
+        assert.ok(hidden>=0&&tabLifecycle.events.slice(hidden+1).some(e=>e.event==='visibilitychange'&&e.visibility==='visible'),
+          'expected actual hidden-to-visible tab transition');
+        assert.ok(tabLifecycle.sameOwner&&tabLifecycle.events.every(e=>e.sameOwner)
+          &&tabLifecycle.activation.every(value=>value==='active'),'tab lifecycle did not retire wallpaper');
+      } finally {
+        try {
+          await action(`
+          const trace=f.tabTrace;
+          trace.observer.disconnect();
+          document.removeEventListener('visibilitychange',trace.record);
+          window.removeEventListener('blur',trace.record);
+          window.removeEventListener('focus',trace.record);
+          delete f.tabTrace;
+          `);
+        } finally {
+          try { if(awayTarget)await cdp.call('Target.closeTarget',{targetId:awayTarget}); }
+          finally { await cdp.call('Page.bringToFront'); }
+        }
+      }
+      const afterTab=await stage();
+      assert.deepEqual([afterTab.left,afterTab.center],[baseline.left,baseline.center]);
+      assert.deepEqual(await owned(),expected);
+      return {kind:'synthetic-optical-and-tab-lifecycle',left,center,pairedFrames:5,tabLifecycle};
     } finally {
       await action('f.control.remove();f.paint.remove();f.mask.remove();f.dot.remove();f.nav.remove();delete window.__sidebarOpticalFixture');
+    }
+  });
+
+  await check('generated first exposed Dot proves central paint only for the preseeded scoped profile', async () => {
+    // Inspect two regions of one compositor frame, not background computed style alone.
+    const measure = async () => {
+      const frame = (await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true})).data;
+      const target = await cdp.call('Runtime.evaluate',{expression:'window.__fixtureColdDot',returnByValue:false});
+      const objectId = target.result?.objectId;
+      assert.ok(objectId, 'preseeded Dot fixture exists');
+      try {
+        const result = await cdp.call('Runtime.callFunctionOn',{
+          objectId,arguments:[{value:frame}],awaitPromise:true,returnByValue:true,
+          functionDeclaration:`async function (frame) {
+            const im=new Image(); im.src='data:image/png;base64,'+frame; await im.decode();
+            const canvas=document.createElement('canvas'); canvas.width=im.width; canvas.height=im.height;
+            const ctx=canvas.getContext('2d'); ctx.drawImage(im,0,0);
+            const sx=im.width/innerWidth, sy=im.height/innerHeight;
+            const crop=(x,y,w,h)=>Array.from(ctx.getImageData(Math.round(x*sx),Math.round(y*sy),
+              Math.round((x+w)*sx)-Math.round(x*sx),Math.round((y+h)*sy)-Math.round(y*sy)).data);
+            const intersects=(node,x,y,w,h)=>{
+              const r=node.getBoundingClientRect();
+              return r.left<=x&&r.top<=y&&r.right>=x+w&&r.bottom>=y+h;
+            };
+            if(!intersects(this.sidebar,28,164,8,8)||!this.planes.every(node=>intersects(node,484,164,12,12)))
+              throw Error('cold Dot fixture crop is not in its expected paint plane');
+            return {left:crop(28,164,8,8),center:crop(484,164,12,12),marks:this.planes.map(node=>
+              node.hasAttribute('data-azhou-wallpaper-plane')),bodyImage:getComputedStyle(document.body).backgroundImage};
+          }`,
+        });
+        if(result.exceptionDetails) throw Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
+        return result.result?.value;
+      } finally { await cdp.call('Runtime.releaseObject',{objectId}); }
+    };
+    for (const admitted of [true,false]) {
+      await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&cold-dot='+(admitted?'scoped':'unscoped'));
+      const run=await awaitGeneratedReady('generated startup ready over a preseeded Dot room');
+      await until(()=>cdp.evaluate("document.documentElement.getAttribute('data-azhou-wallpaper')==='active'"),
+        10000,'initial wallpaper already active before Skip');
+      await cdp.evaluate("document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()");
+      // Do not wait for Dot admission or read status (which can drive reconciliation) before the first capture.
+      await until(()=>cdp.evaluate("!document.querySelector('iframe[aria-label]')"),5000,'cold cover removed');
+      const exposed=await measure();
+      const final=await cdp.evaluate('window.__startupAPI.status()');
+      assert.equal(final.phase,'complete');
+      assert.equal(final.completion?.cause,'skip');
+      assert.equal(final.runId,run.runId,'only the original startup run exposed the room');
+      assert.ok(exposed.bodyImage.includes('url('),'original startup wallpaper is present');
+      assert.deepEqual(exposed.marks,[admitted,true,admitted,admitted],
+        'generic thread paint is admitted in both rows, but Dot root and helper require the scoped profile');
+      try {
+        await cdp.evaluate('window.__fixtureColdDot.suppress.sheet.disabled=false');
+        await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const withoutImage=await measure();
+        assert.equal(withoutImage.bodyImage,'none','test-only negative control removes the body image');
+        assert.deepEqual(withoutImage.marks,exposed.marks);
+        assert.notDeepEqual(withoutImage.left,exposed.left,'same-frame left control depends on wallpaper');
+        if(admitted) assert.notDeepEqual(withoutImage.center,exposed.center,'first exposed admitted center carries wallpaper pixels');
+        else {
+          assert.deepEqual(withoutImage.center,exposed.center,'denied center never depends on wallpaper despite visible left');
+          assert.ok(exposed.center.every((c,i)=>c===[97,45,62,255][i%4]),'denied first center is exact native fixture paint');
+        }
+      } finally {
+        await cdp.evaluate('window.__fixtureColdDot.suppress.sheet.disabled=true');
+      }
     }
   });
 
