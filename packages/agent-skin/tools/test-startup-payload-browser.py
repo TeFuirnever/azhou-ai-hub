@@ -162,13 +162,16 @@ def main() -> int:
                 return emitted.returncode
             environment = os.environ.copy()
             environment["AZHOU_AGENT_SKIN_NATIVE_EVENT_SAMPLES"] = str(samples)
-            assessment_test = REPOSITORY_ROOT / "tests/test_agent_skin_native_event_assessment.py"
-            assessed = subprocess.run(
-                [sys.executable, "-B", str(assessment_test)], cwd=REPOSITORY_ROOT,
-                env=environment, check=False,
-            )
-            if assessed.returncode:
-                return assessed.returncode
+            for assessment_test, cwd in (
+                (REPOSITORY_ROOT / "tests/test_agent_skin_native_event_assessment.py", REPOSITORY_ROOT),
+                (PACKAGE / "tools/test-functional-verdict.py", PACKAGE),
+            ):
+                assessed = subprocess.run(
+                    [sys.executable, "-B", str(assessment_test)], cwd=cwd,
+                    env=environment, check=False,
+                )
+                if assessed.returncode:
+                    return assessed.returncode
         browser_test = root / "tools/test-startup-browser.mjs"
         command = [node, str(browser_test), "--generated-payload", str(payload), "--out", str(args.out)]
         if args.chrome:
