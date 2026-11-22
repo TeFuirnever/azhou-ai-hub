@@ -7092,16 +7092,57 @@ try {
       assert.notEqual(samples[0].inside,samples[1].inside);assert.notEqual(samples[1].inside,samples[2].inside);
       await cdp.evaluate('window.__themeApply(0)');
       const boundary=samples[0].geometry;
-      const boundaryBefore=await capture(boundary.x+5,boundary.y-2);
+      const boundaryROI={x:boundary.x+5,y:boundary.y-2,width:12,height:12};
+      const boundarySamples={};
+      const captureBoundary=async stage=>{
+        const frame=await captureFrame();
+        const roi=await capture(boundaryROI.x,boundaryROI.y,frame);
+        boundarySamples[stage]={frame,roi};
+        return roi;
+      };
+      const retainBoundaryFailure=async (failure,clipFault,restoration)=>{
+        try {
+          const prefix='clip-fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'-'+failure;
+          const captures={};
+          for(const [stage,{frame,roi}] of Object.entries(boundarySamples)) {
+            const raw=Buffer.from(frame,'base64');
+            const width=raw.readUInt32BE(16),height=raw.readUInt32BE(20);
+            const sx=width/scenario.width,sy=height/scenario.height;
+            const rawFile=prefix+'-'+stage+'-raw.png',roiFile=prefix+'-'+stage+'-roi.png';
+            captures[stage]={raw:rawFile,roi:roiFile,viewport:{width,height},pixelROI:{
+              x:Math.round(boundaryROI.x*sx),y:Math.round(boundaryROI.y*sy),
+              width:Math.round(boundaryROI.width*sx),height:Math.round(boundaryROI.height*sy),
+            }};
+            await writeFile(join(options.out,rawFile),raw);
+            await writeFile(join(options.out,roiFile),Buffer.from(roi,'base64'));
+          }
+          const postFailure=await cdp.evaluate(`(()=>{const state=window.__themeEvidence(),owner=window.__azhouWallpaper;return {
+            owner:owner?.owner??null,applied:state.status?.applied===true,imageDecoded:state.status?.imageDecoded===true,
+            documentToken:state.documentToken,workspaceEpoch:state.workspaceEpoch,geometry:state.geometry,wash:state.wash,
+          };})()`).then(state=>({...state,washMatchesOriginal:state.wash===injected.before}),
+            error=>({error:String(error)}));
+          await writeFile(join(options.out,prefix+'-manifest.json'),JSON.stringify({
+            schema:1,scenario,boundary,cssROI:boundaryROI,captures,failure,clipFault,restoration,postFailure,
+          }));
+        } catch(error) {
+          // Evidence collection must not replace the original strict assertion.
+          console.error('Failed to retain boundary control diagnostics:',error);
+        }
+      };
+      const boundaryBefore=await captureBoundary('before');
       const injected=await cdp.evaluate(`(async()=>{const root=document.documentElement,before=root.style.getPropertyValue('--azhou-wallpaper-wash');const svg=decodeURIComponent(JSON.parse(before.slice(4,-1)).split(',')[1]);const d=new DOMParser().parseFromString(svg,'image/svg+xml');for(const r of [d.querySelector('mask rect[fill="black"]'),d.documentElement.lastElementChild])r.setAttribute('y',Number(r.getAttribute('y'))+1);const source='data:image/svg+xml,'+encodeURIComponent(new XMLSerializer().serializeToString(d));const image=new Image();image.src=source;await image.decode();image.src='';const after='url('+JSON.stringify(source)+')';root.style.setProperty('--azhou-wallpaper-wash',after);return {before,after};})()`);
       await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-      const boundaryAfter=await capture(boundary.x+5,boundary.y-2);
+      const boundaryAfter=await captureBoundary('displaced');
       const clipFault=await delta(boundaryBefore,boundaryAfter);
       await writeFile(join(options.out,'clip-fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'.json'),JSON.stringify({clipFault,injected}));
+      if (!(clipFault.max>1)) await retainBoundaryFailure('displacement',clipFault,null);
       assert.ok(clipFault.max>1,'actual one-pixel clip displacement must be detected '+JSON.stringify({clipFault,injected}));
       await cdp.evaluate('document.documentElement.style.setProperty("--azhou-wallpaper-wash",'+JSON.stringify(injected.before)+')');
       await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-      assert.equal((await delta(boundaryBefore,await capture(boundary.x+5,boundary.y-2))).max,0);
+      const boundaryRestored=await captureBoundary('restored');
+      const restoration=await delta(boundaryBefore,boundaryRestored);
+      if (restoration.max!==0) await retainBoundaryFailure('restoration',clipFault,restoration);
+      assert.equal(restoration.max,0);
       await cdp.evaluate(`window.__themeFaultOwner=window.__azhouWallpaper;window.__themeFaultObservation=()=>{
         const owner=window.__themeFaultOwner,status=owner?.status();
         if(!owner||owner!==window.__azhouWallpaper||status?.reason==='disposed'||status?.imageDecoded!==true)throw Error('fault control owner invalid');
