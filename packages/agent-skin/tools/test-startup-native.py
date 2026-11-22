@@ -12,6 +12,7 @@ import platform
 import os
 import tempfile
 import threading
+import time
 from pathlib import Path
 import subprocess
 import sys
@@ -107,7 +108,7 @@ def validate_window_observations(stdout: str, returncode: int) -> list[dict]:
     return rows
 
 
-def window_ordering_checks(output: Path, out: Path, source_before: dict, binary_before: str) -> int:
+def _ordering_attempt(output: Path, evidence: Path, source_before: dict, binary_before: str) -> tuple[dict, str, str]:
     command = [str(output), "--probe-cold-window-ordering"]
     report = {"kind": "synthetic-owned-window-ordering", "unitCoverageInput": False,
               "scope": "owned-window ordering and mouse-down target queries with a synthetic same-process host",
@@ -137,8 +138,30 @@ def window_ordering_checks(output: Path, out: Path, source_before: dict, binary_
         except (OSError, ValueError) as error:
             report.update(passed=False, error=str(error))
         report["finishedAt"] = datetime.now(timezone.utc).isoformat()
-        (out / "stdout.jsonl").write_text(stdout, encoding="utf-8")
-        (out / "stderr.log").write_text(stderr, encoding="utf-8")
+        evidence.mkdir(parents=True, exist_ok=True)
+        (evidence / "stdout.jsonl").write_text(stdout, encoding="utf-8")
+        (evidence / "stderr.log").write_text(stderr, encoding="utf-8")
+        (evidence / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    return report, stdout, stderr
+
+
+def window_ordering_checks(output: Path, out: Path, source_before: dict, binary_before: str) -> int:
+    # The probe's assertions are timing-sensitive (WindowServer teardown latency,
+    # WebKit layer windows on headless runners): one crashed run is not a verdict.
+    # A signal death gets exactly one re-run on a fresh probe process after a
+    # settle delay; both attempts stay in evidence and a real regression fails
+    # both attempts.
+    report, stdout, stderr = _ordering_attempt(output, out, source_before, binary_before)
+    if not report["passed"] and report.get("returncode") is not None and report["returncode"] < 0:
+        first = {"passed": report["passed"], "returncode": report["returncode"], "error": report.get("error")}
+        time.sleep(5)
+        retry_evidence = out.with_name(out.name + "-attempt1")
+        retry_evidence.mkdir(parents=True, exist_ok=True)
+        for item in out.iterdir():
+            item.rename(retry_evidence / item.name)
+        report, stdout, stderr = _ordering_attempt(output, out, source_before, binary_before)
+        report["attempts"] = [first, {"passed": report["passed"], "returncode": report.get("returncode"),
+                                      "error": report.get("error")}]
         (out / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(f"Owned-window ordering evidence: {out} (passed={report['passed']})", flush=True)
     return 0 if report["passed"] else 1

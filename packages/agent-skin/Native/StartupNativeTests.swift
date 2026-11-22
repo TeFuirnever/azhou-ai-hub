@@ -6613,6 +6613,17 @@ private func nativeColdWindowOrderingChecks() throws -> Int {
                     RunLoop.main.run(until: Date().addingTimeInterval(0.01))
                     hit = NSWindow.windowNumber(at: hitPoint, belowWindowWithWindowNumber: 0)
                 }
+                if hit != expected {
+                    if let rows = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] {
+                        for row in rows where (row[kCGWindowNumber as String] as? Int) == hit {
+                            let owner = row[kCGWindowOwnerPID as String] ?? -1
+                            let name = row[kCGWindowOwnerName as String] ?? "?"
+                            let bounds = row[kCGWindowBounds as String] ?? "?"
+                            let layer = row[kCGWindowLayer as String] ?? -1
+                            FileHandle.standardError.write(Data("hit-target-forensics hit=\(hit) ownerPID=\(owner) ownerName=\(name) layer=\(layer) bounds=\(bounds) at=\(hitPoint)\n".utf8))
+                        }
+                    }
+                }
                 return hit
             }
             var calibratedHitPoint: NSPoint?
