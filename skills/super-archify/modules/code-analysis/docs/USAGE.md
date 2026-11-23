@@ -27,7 +27,7 @@ This layer performs no new extraction or repository traversal. Reading is bounde
 
 In PR mode, short file/function addition and removal counts follow the original module labels, with detailed counts available on hover. Change badges (+/−/◇) open the captured source; grey dashed spikes show merge-base complexity alongside the current spikes. Removed functions can be marked against a surviving file; deleted files/modules remain in the change list. These annotations do not appear in ordinary repository analysis. A same-metric source edit can have a change badge without implying increased complexity or changed behavior.
 
-From the `archify/` package directory inside the Archify repository:
+From the Archify package directory:
 
 ```sh
 node bin/archify.mjs start "/path/to/project" --locale zh-CN
@@ -374,7 +374,7 @@ then enable it in the existing analysis config:
 }
 ```
 
-Run from the `archify/` package directory:
+Run from the Archify package directory:
 
 ```sh
 node bin/archify.mjs code-analysis check /path/to/project --language ts --config analysis.config.json --out out/analysis --json

@@ -1,6 +1,6 @@
 # Java source analysis
 
-From the `archify/` package directory:
+From the Archify package directory:
 
 ```sh
 node bin/archify.mjs code-analysis check /path/to/java-repo --language java --out out/java

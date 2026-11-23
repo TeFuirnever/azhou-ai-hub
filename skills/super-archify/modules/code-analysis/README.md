@@ -89,7 +89,7 @@ analysis adapters: `ts` covers JavaScript and TypeScript, alongside `py`, `java`
 both source locations, scan coverage, baselines and AI task evidence. It is
 disabled by default and does not replace dependency or function analysis.
 
-From the `archify/` package directory:
+From the Archify package directory:
 
 ```sh
 node bin/archify.mjs code-analysis serve /path/to/repo --ir architecture.json --out out/analysis --language py

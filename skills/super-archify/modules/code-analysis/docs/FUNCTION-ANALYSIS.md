@@ -143,7 +143,7 @@ A single run is neither independent validation nor an accuracy/cost benchmark.
 A semantic explanation does not authorize implementing its proposed changes.
 
 For saved Python/Java/C/C++ questions, pass the existing analysis directory and a unique
-captured function qualname. For example, from `archify/`:
+captured function qualname. For example, from the Archify package directory:
 
 ```sh
 node bin/archify.mjs code-analysis task /path/to/python-analysis \
@@ -159,8 +159,8 @@ object, and a Java type edge does not prove a runtime provider or call target.
 
 ## Change questions
 
-For two existing source roots, prepare a fresh pair from the `archify/`
-package directory:
+For two existing source roots, prepare a fresh pair from the
+Archify package directory:
 
 ```sh
 node bin/archify.mjs code-analysis task \

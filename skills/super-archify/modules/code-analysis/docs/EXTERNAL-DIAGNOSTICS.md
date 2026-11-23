@@ -21,7 +21,7 @@ Add sources to the same analysis configuration used by `check` or `serve`:
 }
 ```
 
-From Archify's `archify/` package directory:
+From the Archify package directory:
 
 ```sh
 node bin/archify.mjs code-analysis check /path/to/repo --language ts --config /path/to/repo/analysis.config.json --out /path/to/repo/.analysis --json
