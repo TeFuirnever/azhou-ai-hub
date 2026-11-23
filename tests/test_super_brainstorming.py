@@ -119,7 +119,7 @@ class SuperBrainstormingPackageTest(unittest.TestCase):
 
     def test_package_file_set_is_exhaustive(self) -> None:
         present = {
-            str(path.relative_to(PACKAGE))
+            path.relative_to(PACKAGE).as_posix()
             for path in PACKAGE.rglob("*")
             if path.is_file()
         }
