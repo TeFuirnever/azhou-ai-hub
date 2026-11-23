@@ -1,7 +1,14 @@
 "use strict";
 
+const githubUrl = "https://github.com/TeFuirnever/azhou-ai-hub";
+const siteUrl = "https://tefuirnever.github.io/azhou-ai-hub";
+
 module.exports = {
-  githubUrl: "https://github.com/TeFuirnever/azhou-ai-hub",
+  githubUrl,
+  siteUrl,
+  blobBase: `${githubUrl}/blob/main`,
+  skillsTreeBase: `${githubUrl}/tree/main/skills`,
+  pathPrefix: `${siteUrl.replace(/^https?:\/\/[^/]+/, "")}/`,
   labels: {
     en: {
       home: "Home",
