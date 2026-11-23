@@ -462,7 +462,7 @@ try {
       suppress.textContent = 'html[data-azhou-wallpaper="active"] body:not([data-fixture-cold-dot-exempt]){background-image:none!important}';
       document.head.append(suppress);
       suppress.sheet.disabled = true;
-      outerWindow.__fixtureColdDot = {room, sidebar, row, suppress,
+      outerWindow.__fixtureColdDot = {room, sidebar, row, suppress, frameCount:0, firstFrame:null,
         planes: Array.from(room.querySelectorAll('.messaging-root, .thread-pane'))};
     }
     if (url.searchParams.has('home-nav-fixture')) {
@@ -601,6 +601,11 @@ try {
       Node.prototype.appendChild = function (node) {
         const result = nativeAppendChild.call(this, node);
         if (node?.tagName !== 'IFRAME' || !node.hasAttribute('aria-label')) return result;
+        if (outerWindow.__fixtureColdDot && this === document.body) {
+          const probe = outerWindow.__fixtureColdDot;
+          probe.frameCount++;
+          if (probe.frameCount === 1) probe.firstFrame = node;
+        }
         const frameWindow = node.contentWindow;
         if (!frameWindow?.HTMLImageElement) return result;
         const originalDecode = frameWindow.HTMLImageElement.prototype.decode;
@@ -7782,26 +7787,45 @@ try {
             if(!intersects(this.sidebar,28,164,8,8)||!this.planes.every(node=>intersects(node,484,164,12,12)))
               throw Error('cold Dot fixture crop is not in its expected paint plane');
             return {left:crop(28,164,8,8),center:crop(484,164,12,12),marks:this.planes.map(node=>
-              node.hasAttribute('data-azhou-wallpaper-plane')),bodyImage:getComputedStyle(document.body).backgroundImage};
+              node.hasAttribute('data-azhou-wallpaper-plane')),bodyImage:getComputedStyle(document.body).backgroundImage,
+              sameOwner:this.wallpaperOwner===Object.getOwnPropertyDescriptor(window,'__azhouWallpaper')?.value,
+              active:document.documentElement.getAttribute('data-azhou-wallpaper')==='active'};
           }`,
         });
         if(result.exceptionDetails) throw Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
         return result.result?.value;
       } finally { await cdp.call('Runtime.releaseObject',{objectId}); }
     };
+    const rows=[];
     for (const admitted of [true,false]) {
       await navigateFreshRecoveryFixture('/fixture.html?generated-payload=1&cold-dot='+(admitted?'scoped':'unscoped'));
-      const run=await awaitGeneratedReady('generated startup ready over a preseeded Dot room');
-      await until(()=>cdp.evaluate("document.documentElement.getAttribute('data-azhou-wallpaper')==='active'"),
-        10000,'initial wallpaper already active before Skip');
-      await cdp.evaluate("document.querySelector('iframe[aria-label]').contentDocument.querySelector('[data-agent-skin-skip]').click()");
+      // The packaged player marks this stage prewarmed immediately before sending ready.
+      // Observe and click only the actual first play frame, without calling status().
+      await until(()=>cdp.evaluate(`(()=>{
+        const probe=window.__fixtureColdDot;
+        const frames=document.querySelectorAll('iframe[aria-label]');
+        const frame=probe?.firstFrame;
+        const stage=frame?.contentDocument?.querySelector('[data-agent-skin-stage][data-prewarmed="true"]');
+        const skip=stage?.querySelector('[data-agent-skin-skip]');
+        const startup=Object.getOwnPropertyDescriptor(window,'__azhouStartup')?.value;
+        const wallpaper=Object.getOwnPropertyDescriptor(window,'__azhouWallpaper')?.value;
+        if(probe?.frameCount!==1||frames.length!==1||frames[0]!==frame
+          ||!skip||skip.disabled||!startup||startup!==window.__startupAPI||!wallpaper
+          ||document.documentElement.getAttribute('data-azhou-wallpaper')!=='active') return false;
+        probe.clickedController=startup;
+        probe.wallpaperOwner=wallpaper;
+        skip.click();
+        return true;
+      })()`),20000,'prewarmed first generated play frame can expose the cold Dot room');
       // Do not wait for Dot admission or read status (which can drive reconciliation) before the first capture.
-      await until(()=>cdp.evaluate("!document.querySelector('iframe[aria-label]')"),5000,'cold cover removed');
+      await until(()=>cdp.evaluate(`(()=>{
+        const probe=window.__fixtureColdDot;
+        return !document.querySelector('iframe[aria-label]')
+          &&probe.wallpaperOwner===Object.getOwnPropertyDescriptor(window,'__azhouWallpaper')?.value
+          &&document.documentElement.getAttribute('data-azhou-wallpaper')==='active';
+      })()`),5000,'cold cover removed with the admitted wallpaper owner retained');
       const exposed=await measure();
-      const final=await cdp.evaluate('window.__startupAPI.status()');
-      assert.equal(final.phase,'complete');
-      assert.equal(final.completion?.cause,'skip');
-      assert.equal(final.runId,run.runId,'only the original startup run exposed the room');
+      assert.ok(exposed.sameOwner&&exposed.active,'first capture still has the admitted wallpaper owner');
       assert.ok(exposed.bodyImage.includes('url('),'original startup wallpaper is present');
       assert.deepEqual(exposed.marks,[admitted,true,admitted,admitted],
         'generic thread paint is admitted in both rows, but Dot root and helper require the scoped profile');
@@ -7809,6 +7833,7 @@ try {
         await cdp.evaluate('window.__fixtureColdDot.suppress.sheet.disabled=false');
         await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
         const withoutImage=await measure();
+        assert.ok(withoutImage.sameOwner&&withoutImage.active,'image-off control retains the same owner');
         assert.equal(withoutImage.bodyImage,'none','test-only negative control removes the body image');
         assert.deepEqual(withoutImage.marks,exposed.marks);
         assert.notDeepEqual(withoutImage.left,exposed.left,'same-frame left control depends on wallpaper');
@@ -7820,7 +7845,31 @@ try {
       } finally {
         await cdp.evaluate('window.__fixtureColdDot.suppress.sheet.disabled=true');
       }
+      await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      const restored=await measure();
+      assert.ok(restored.sameOwner&&restored.active,'restored reference retains the same wallpaper owner');
+      assert.equal(restored.bodyImage,exposed.bodyImage,'restored reference has the same body wallpaper');
+      assert.deepEqual(restored.marks,exposed.marks);
+      assert.deepEqual([exposed.left,exposed.center],[restored.left,restored.center],
+        'first sampled pixels exactly match the settled restored reference');
+      const final=await cdp.evaluate(`(()=>{
+        const probe=window.__fixtureColdDot;
+        return {frames:probe.frameCount,firstRemoved:!probe.firstFrame.isConnected,
+          sameController:probe.clickedController===window.__startupAPI
+            &&probe.clickedController===Object.getOwnPropertyDescriptor(window,'__azhouStartup')?.value,
+          status:window.__startupAPI.status()};
+      })()`);
+      assert.deepEqual([final.frames,final.firstRemoved,final.sameController],[1,true,true],
+        'only the original play frame and controller exposed the room');
+      assert.equal(final.status.phase,'complete');
+      assert.deepEqual(final.status.completion,{cause:'skip',beforeReady:false},
+        'the controller accepted ready from the same play frame before Skip');
+      assert.equal(final.status.runId,1,'fresh packaged payload exposed its first startup run');
+      assert.equal(await cdp.evaluate(`window.__fixtureColdDot.wallpaperOwner
+        ===Object.getOwnPropertyDescriptor(window,'__azhouWallpaper')?.value`),true,'late status did not replace the sampled owner');
+      rows.push({admitted,marks:exposed.marks,restoredPixelsExact:true});
     }
+    return {kind:'synthetic-first-post-skip-sample',rows};
   });
 
   await check('generated Dot wallpaper follows route and shell changes automatically', async () => {
