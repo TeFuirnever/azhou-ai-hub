@@ -185,6 +185,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the 51-type diagram pipeline (semantic-pattern selection, three-variant template skins, style-guide gate and profile mechanism), the `.drawio`/Mermaid/`.excalidraw`/PlantUML import extractors, the self-check and geometry verification scripts, SVG/PNG export, and the 70-page reference corpus with 242 example/template assets
 - Local changes: frontmatter normalization to the hub contract (the upstream `license` and `metadata.version` keys are recorded in provenance), a compressed frontmatter description with carve sentences naming `super-archify` and `super-excalidraw-diagram`, the Azhou identity anchor, brand protocol and stable receipt, the fail-closed `setup.md` for the Python 3 baseline and the optional Playwright export/preview boundary, and the provenance/compatibility records
 
+## Brainstorming
+
+`skills/super-brainstorming/` adapts the `brainstorming` skill from [obra/superpowers](https://github.com/obra/superpowers) at immutable tag [`v7.0.2`](https://github.com/obra/superpowers/releases/tag/v7.0.2) (commit [`22f0b463e7a5e579904dd6211a520321035526f7`](https://github.com/obra/superpowers/commit/22f0b463e7a5e579904dd6211a520321035526f7)). The upstream instruction body is retained verbatim outside six recorded deltas and hash-locked for reproducibility (see the [package provenance](skills/super-brainstorming/references/provenance.md)).
+
+- Copyright: Jesse Vincent, 2025
+- License: [MIT](LICENSES/Obra-Superpowers-MIT.txt), vendored byte-identical as the package `LICENSE`
+- Imported boundary: the eight upstream `skills/brainstorming/` files (instruction body, builder-check prompt, visual-companion guide, companion server scripts); the rest of the upstream plugin ecosystem (installer, sibling skills such as the planning skill, plugin manifests) is not vendored
+- Local changes: neutral three-key frontmatter with all upstream trigger sentences kept verbatim, the planning handoff unbound from the upstream sibling skill, a neutral design-doc location, branding/telemetry flipped from opt-out to opt-in, a harness note and a builder-check provenance clause, and the Azhou brand protocol and provenance/setup/compatibility records
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.

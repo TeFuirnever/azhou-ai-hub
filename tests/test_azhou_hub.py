@@ -135,6 +135,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 "super-asd-ste100",
                 "super-ask-azhou",
                 *AZHOU_SKILL_NAMES,
+                "super-brainstorming",
                 "super-diagram-design",
                 "super-eli5",
                 "super-excalidraw-diagram",
