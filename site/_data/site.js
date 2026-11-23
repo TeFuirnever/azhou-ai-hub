@@ -1,14 +1,15 @@
 "use strict";
 
-const githubUrl = "https://github.com/TeFuirnever/azhou-ai-hub";
-const siteUrl = "https://tefuirnever.github.io/azhou-ai-hub";
+const REPO_NAME = "azhou-ai-hub";
+const githubUrl = `https://github.com/TeFuirnever/${REPO_NAME}`;
+const siteUrl = `https://tefuirnever.github.io/${REPO_NAME}`;
 
 module.exports = {
   githubUrl,
   siteUrl,
   blobBase: `${githubUrl}/blob/main`,
-  skillsTreeBase: `${githubUrl}/tree/main/skills`,
-  pathPrefix: `${siteUrl.replace(/^https?:\/\/[^/]+/, "")}/`,
+  treeBase: `${githubUrl}/tree/main`,
+  pathPrefix: `/${REPO_NAME}/`,
   labels: {
     en: {
       home: "Home",
