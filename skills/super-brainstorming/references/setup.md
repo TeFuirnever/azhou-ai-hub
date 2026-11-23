@@ -18,7 +18,7 @@ node --check skills/super-brainstorming/scripts/server.cjs
 
 ## Network boundary
 
-- **No external network request by default.** Branding and telemetry are off unless one of `SUPERPOWERS_ENABLE_TELEMETRY` or `ENABLE_TELEMETRY` is set truthy; the switches are read once at server startup, so set them before launching the server. When enabled, the page header fetches the upstream brand logo and links the upstream repository (this package's delta flips the upstream default from on to off).
+- **No external network request from the companion's own chrome by default.** Branding and telemetry are off unless one of `SUPERPOWERS_ENABLE_TELEMETRY` or `ENABLE_TELEMETRY` is set truthy; the switches are read once at server startup, so set them before launching the server. When enabled, the page header fetches the upstream brand logo and links the upstream repository (this package's delta flips the upstream default from on to off). The opt-in brand header also resolves a version string from a manifest near the install root when one is present and sends it to the brand image host as a cache-buster; in this repository layout the lookup misses and renders `unknown`. Page content authored during a session may still load remote assets, as the guide suggests.
 - The server binds `127.0.0.1` unless `BRAINSTORM_HOST` says otherwise. Every request is gated by the per-session key carried in the URL (`?key=…`), so only someone holding the full URL can read or inject screen content.
 
 ## Session state and sensitive files
