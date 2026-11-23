@@ -149,9 +149,9 @@
       "regression": "stable-receipt"
     }
   ],
-  "baseline_release": "v1.2.2",
-  "baseline_skill_version": "3.1.1",
-  "baseline_commit": "71cd50ffe1f1f4d400b54be967dc6b59379aff8f",
-  "verified_at": "2026-11-18",
+  "baseline_release": "v1.3.1",
+  "baseline_skill_version": "4.0.0",
+  "baseline_commit": "76fc0f8e8245b40a809d8eed89b27f04cbcf81bb",
+  "verified_at": "2026-11-23",
   "claim_limit": "28 existing capability dispositions plus documented stable deltas; not a measured model-quality gain"
 }

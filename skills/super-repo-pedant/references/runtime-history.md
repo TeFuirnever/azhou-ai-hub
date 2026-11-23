@@ -25,7 +25,7 @@ Use concrete candidates to avoid under-discovery, then verify current existence 
 
 For skill discovery, inspect the active host rather than assuming every candidate is loaded: Codex may use `~/.agents/skills/`, ancestor `.agents/skills/`, managed `/etc/codex/skills/`, built-ins or `$CODEX_HOME/plugins/cache/`; legacy `$CODEX_HOME/skills/` needs current-version verification. Claude uses its `.claude/skills/` and plugin discovery; a shared directory alone is not proof of Claude discovery. Compare realpaths and registration without installing, relinking or editing other packages. Existing package ownership, including pstack, remains outside this discovery-only operation.
 
-These candidates were reconciled against the `neat-freak` 3.1.1 source in repository release `v1.2.2` (`71cd50ffe1f1f4d400b54be967dc6b59379aff8f`). They are not a promise of support for all current hosts. Host-generated memory follows [knowledge-surfaces.md](knowledge-surfaces.md).
+These candidates were reconciled against the `neat-freak` 4.0.0 source in repository release `v1.3.1` (`76fc0f8e8245b40a809d8eed89b27f04cbcf81bb`; previously 3.1.1 / v1.2.2 at `71cd50ffe1f1f4d400b54be967dc6b59379aff8f`). They are not a promise of support for all current hosts. Host-generated memory follows [knowledge-surfaces.md](knowledge-surfaces.md).
 
 Use repeated `--runtime` flags for a subset or `--runtime all` for all three. `--limit` applies per runtime so a runtime with many matches cannot starve another.
 

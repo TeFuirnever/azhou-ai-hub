@@ -552,11 +552,11 @@ SKILL_BRAND_CONTRACTS = {
 }
 
 BASELINE_HASHES = {
-    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "1d5203e3ed52d8c5f57e4b44a3cc70b11be1891abde8ae865eeeed12682bd39e",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md": "bcf5138f079cde8368d28c8011eee1f43b8fe2df86cc1754690a3e6c802e2c60",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md": "696233e82288514b944f888e7ee09f922b00dd1af9f9797fc0b95099639dd383",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/governance.md": "b77224988faceadd5d0e67f97202565964fa8bdebd45f56fb2d7500974c3f03a",
-    "benchmarks/super-repo-pedant/upstream/neat-freak/references/verification.md": "62881879bc01ec24d92534f67f80e34d7734c8405c7178b10eff7bc018681652",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/SKILL.snapshot.md": "2d5b6fbca41b76d8473a21c9c898ef9b6a1cab42fb5b9021fe6e162cad5d046e",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/agent-paths.md": "706fa70f516586fb1d985af377ce36ce18d3ae22f4afd53de7a2bb14573d1ae3",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/sync-matrix.md": "e1e7b0681723dc5027587c344c7521eb2f2061102a2fb90f6515fda478dedd4d",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/governance.md": "6ba61a314f921813c92abfa08128d4194f914cfb97f84d3ad25be4259959c787",
+    "benchmarks/super-repo-pedant/upstream/neat-freak/references/verification.md": "39644c1b730e4574e91444ac6e60ee6a14630d6a80a5b455e8ef0c930c06b66f",
 }
 
 
