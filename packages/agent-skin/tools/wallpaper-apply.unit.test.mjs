@@ -12,6 +12,7 @@ function createHost({ shell = false, observer = true, observeThrows = false, dig
   const observers = [];
   const timers = [];
   const attributes = new Set();
+  const { promise: shellWaiting, resolve: markShellWaiting } = Promise.withResolvers();
   let rootPresent = shell;
   const applicationRoot = {
     querySelector(selector) {
@@ -46,6 +47,7 @@ function createHost({ shell = false, observer = true, observeThrows = false, dig
     setTimeout(callback, delay) {
       const timer = { callback, delay, cleared: false, fire() { callback(); } };
       timers.push(timer);
+      markShellWaiting();
       return timer;
     },
     clearTimeout(timer) { if (timer) timer.cleared = true; },
@@ -53,6 +55,12 @@ function createHost({ shell = false, observer = true, observeThrows = false, dig
   if (observer) host.MutationObserver = Observer;
   return {
     host, observers, timers, applicationRoot,
+    async waitForShell(pending) {
+      // Real WebCrypto can finish after an arbitrary number of event-loop turns.
+      await Promise.race([shellWaiting, pending.then(() => assert.fail('wallpaper completed before its shell wait'))]);
+      assert.equal(observers.length, 1);
+      assert.equal(timers.length, 1);
+    },
     mountRoot() { rootPresent = true; },
     setAttribute(name) { attributes.add(name); },
   };
@@ -145,7 +153,7 @@ test('the image digest and appearance use one snapshot during asynchronous prepa
     const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
     const input = { ...VALUE };
     const pending = apply(input);
-    await waitFor(() => fixture.observers.length === 1);
+    await fixture.waitForShell(pending);
     Object.assign(input, { image: 'data:image/png;base64,AQ==', strength: 72, surface: 'white' });
     fixture.mountRoot();
     fixture.setAttribute('data-app-shell-frame');
@@ -167,7 +175,7 @@ test('a late attribute-based shell is awaited without expiring a naturally compl
   const isCurrent = () => playback !== 'cancelled';
   const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '.wallpaper{}' }, fixture.host);
   const pending = apply(VALUE, isCurrent);
-  await waitFor(() => fixture.observers.length === 1 && fixture.timers.length === 1);
+  await fixture.waitForShell(pending);
   const [observer] = fixture.observers;
   const [timer] = fixture.timers;
   assert.equal(observer.target, fixture.host.document.documentElement);
@@ -223,7 +231,7 @@ test('a cold shell timeout clears its timer and disconnects its observer', async
   const renderer = rendererRecorder();
   const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
   const pending = apply(VALUE);
-  await waitFor(() => fixture.observers.length === 1 && fixture.timers.length === 1);
+  await fixture.waitForShell(pending);
   const [observer] = fixture.observers;
   const [timer] = fixture.timers;
 
@@ -248,7 +256,7 @@ test('an aborted wallpaper restore disconnects its shell observer and clears its
   };
   const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
   const pending = apply(VALUE, () => true, signal);
-  await waitFor(() => fixture.observers.length === 1 && fixture.timers.length === 1);
+  await fixture.waitForShell(pending);
   signal.aborted = true;
   for (const listener of [...listeners]) listener();
   assert.deepEqual(await pending, { applied: false, reason: 'operation-cancelled', imageDecoded: false });
@@ -290,7 +298,7 @@ test('cancellation is checked before digest, after digest, and while awaiting th
     let current = true;
     const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
     const pending = apply(VALUE, () => current);
-    await waitFor(() => fixture.observers.length === 1 && fixture.timers.length === 1);
+    await fixture.waitForShell(pending);
     current = false;
     fixture.observers[0].trigger();
     assert.deepEqual(await pending, { applied: false, reason: 'operation-cancelled', imageDecoded: false });
@@ -305,7 +313,7 @@ test('cancellation is checked before digest, after digest, and while awaiting th
     let current = true;
     const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '' }, fixture.host);
     const pending = apply(VALUE, () => current);
-    await waitFor(() => fixture.observers.length === 1);
+    await fixture.waitForShell(pending);
     fixture.mountRoot();
     fixture.setAttribute('data-app-shell-frame');
     fixture.setAttribute('data-app-shell-main-surface');
@@ -427,7 +435,7 @@ test('a changing host adapter cannot cross the asynchronous apply boundary', asy
     const adapter = adapterFor(() => ready ? 'ready' : null);
     const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
     const pending = apply(VALUE);
-    await waitFor(() => fixture.observers.length === 1);
+    await fixture.waitForShell(pending);
     adapter.wallpaper.surfaces = () => ['foreign']; ready = true; fixture.observers[0].trigger();
     assert.deepEqual(await pending, unsupported);
     assert.equal(renderer.calls.length, 0);
@@ -439,7 +447,7 @@ test('a changing host adapter cannot cross the asynchronous apply boundary', asy
     const adapter = adapterFor(() => null);
     const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
     const pending = apply(VALUE);
-    await waitFor(() => fixture.timers.length === 1);
+    await fixture.waitForShell(pending);
     fixture.timers[0].fire();
     adapter.wallpaper.css = 'foreign';
     assert.deepEqual(await pending, unsupported);
@@ -458,7 +466,7 @@ test('a changing host adapter cannot cross the asynchronous apply boundary', asy
     const adapter = adapterFor(() => ready ? 'ready' : null);
     const apply = createWallpaperApplicator(renderer.installRenderer, { version: '1', css: '', pageAdapter: adapter }, fixture.host);
     const pending = apply(VALUE);
-    await waitFor(() => fixture.observers.length === 1);
+    await fixture.waitForShell(pending);
     adapter.wallpaper.attributes.observeFilter.push('foreign');
     assert.deepEqual(fixture.observers[0].options.attributeFilter, ['class']);
     ready = true; fixture.observers[0].trigger();
