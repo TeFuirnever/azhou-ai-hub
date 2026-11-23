@@ -490,6 +490,28 @@ console.log(JSON.stringify({sites:4,hostile:hostile.length,allowed:12,passed:tru
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual({"sites": 4, "hostile": 13, "allowed": 12, "passed": True}, json.loads(result.stdout))
 
+    def test_drilldown_anchor_emission_refuses_unsafe_schemes(self) -> None:
+        program = r"""
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+const {wrapSingleChildAnchor} = await import(pathToFileURL(path.join(process.argv[1], 'renderers/shared/cli.mjs')));
+const markup = '<g id="n"><rect width="4" height="4"/></g>';
+const wrapped = wrapSingleChildAnchor(markup, [{ href: 'child.html#focus=n', label: 'Child' }]);
+if (!wrapped.includes('class="archify-drilldown-link"') || !wrapped.includes('href="child.html#focus=n"')) throw new Error('legal sibling target must keep its anchor');
+const hostile = ['javascript:alert(1)', 'JavaScript:alert(1)', 'data:text/html,<script>alert(1)</script>', 'vbscript:msgbox(1)', '//example.invalid/x.html', 'https://example.invalid/x.html', 'sub/dir.html', '../up.html'];
+let rejected = 0;
+for (const href of hostile) {
+  if (wrapSingleChildAnchor(markup, [{ href, label: 'X' }]) === markup) rejected += 1;
+}
+console.log(JSON.stringify({ wrapped: true, rejected, expected: hostile.length, passed: rejected === hostile.length }));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual({"wrapped": True, "rejected": 8, "expected": 8, "passed": True}, json.loads(result.stdout))
+
     def test_analysis_client_renders_repository_payloads_as_text(self) -> None:
         program = r"""
 import assert from 'node:assert/strict';

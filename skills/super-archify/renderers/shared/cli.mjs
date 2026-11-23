@@ -525,6 +525,7 @@ export function resolveNodeDrilldowns(node = {}) {
 export function wrapSingleChildAnchor(markup, targets) {
   if (!Array.isArray(targets) || targets.length !== 1) return markup;
   const target = targets[0];
+  if (!isSiblingHtmlHref(target.href)) return markup;
   return `<a class="archify-drilldown-link" data-archify-drilldown="1" href="${esc(target.href)}" aria-label="${esc(target.label)}">\n        ${markup}\n        </a>`;
 }
 

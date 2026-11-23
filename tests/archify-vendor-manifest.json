@@ -472,7 +472,7 @@
     "references/delivery-contract.md": "418250feeb9a4d3e172e954822c16f7d02c9b1733fd06cfdaf41ac8f6ad1369c",
     "references/explainer-authoring.md": "cdc159e11582a516fa023bb2e57aabc4c280f3d9ea76183761e52dcd58e0e79e",
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
-    "references/provenance.md": "1b05b26fd3aeab649d003e3f099a9662e116bfb8b7c2fdbf76b9cbcc4230525e",
+    "references/provenance.md": "20b8138300fcd6ed3c3cd5d899b3da2e2e9ecf084e663a342e17d2244a5048c3",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
     "references/setup.md": "a33984b89461b782acd2062f50e37d1b347febe80b9acfb98cde1dc8b15d2663",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
@@ -510,7 +510,7 @@
     "renderers/shared/automatic-labels.mjs": "b0c0d6c6a06e1ef3e29d008f3df3c4e6d66d51775001b024bf1af23623988f12",
     "renderers/shared/brand-marks.mjs": "1a2c9891568c9d9a24323b1e7c9614136b6a75e9c5f8d8529836424de60cbfed",
     "renderers/shared/change-marks.mjs": "3ab68d0fa299e64500eec209d46c546faebed56fcd478f3b706474971a90229d",
-    "renderers/shared/cli.mjs": "09800e29a6ce5860490583778e5758a069f063e4af28b4a82997fcf696afc052",
+    "renderers/shared/cli.mjs": "47605013910ea672df908709bcc941b7a965f38c0b284583b391cffd0d92a525",
     "renderers/shared/desktop-readability.mjs": "55ee7aba702d7883a08b6e54b39b00d5a17918a0c6bcf0c0fea19034f4de8990",
     "renderers/shared/diagnostics.mjs": "0e3d6bf4ec836866ed517897f24c6b86f89d6bf279d58876876c4c8b3462287d",
     "renderers/shared/engineering-profiles.mjs": "7e99f9d5423f66cc9ab6224da56dc2d5aa6c6faec29178034794e9db6b5b2889",
@@ -4541,7 +4541,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "d356702ce287ca8cee85eba9a98398a2b38da58ec766d096af3cdf4eb31d2e91",
-      "packaged_sha256": "1b05b26fd3aeab649d003e3f099a9662e116bfb8b7c2fdbf76b9cbcc4230525e",
+      "packaged_sha256": "20b8138300fcd6ed3c3cd5d899b3da2e2e9ecf084e663a342e17d2244a5048c3",
       "path": "references/provenance.md",
       "target_sha256": null
     },
@@ -4849,12 +4849,12 @@
     },
     {
       "base_sha256": "9df5e6efb3dddc50b72d0daf3ca9d2b611bab31c5f1076f6769bd94999c5688c",
-      "disposition": "replay_local_packaging_delta",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": "c0c3b657589722e42acd12331d5a425d8ab399a7b6bf9d7e7320a21abb326806",
-      "packaged_sha256": "09800e29a6ce5860490583778e5758a069f063e4af28b4a82997fcf696afc052",
+      "packaged_sha256": "47605013910ea672df908709bcc941b7a965f38c0b284583b391cffd0d92a525",
       "path": "renderers/shared/cli.mjs",
       "target_sha256": "be9ebe98b4002b522d139dc19b8412488d978cd82041d46899137746c5cf9496",
-      "resolution": "Upstream v3.3.0 diagnostic printer with the retained super-archify warn prefix"
+      "resolution": "Upstream v3.3.0 diagnostic printer with the retained super-archify warn prefix; wrapSingleChildAnchor wraps a drilldown anchor only when the target href passes the schema relativeHtmlHref pattern (isSiblingHtmlHref), a second line of defense beyond schema validation"
     },
     {
       "base_sha256": "55ee7aba702d7883a08b6e54b39b00d5a17918a0c6bcf0c0fea19034f4de8990",
