@@ -850,6 +850,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-i-have-adhd" / "SKILL.md",
                 root / "skills" / "super-gh-axi" / "SKILL.md",
                 root / "skills" / "super-session-insights" / "SKILL.md",
+                root / "skills" / "super-brainstorming" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
             bundled = [

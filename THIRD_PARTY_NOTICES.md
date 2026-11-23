@@ -61,6 +61,8 @@ The README promo video is not stored in this repository. Both READMEs link to th
 
 The previous Rederive showcase, SHA-256 `63ca128fbed8b5f31dd969572dbb30eb9f3ac4fb655cba5588830a7729de9621`, had a bounded colour check on 2026-11-21 but did not meet the GitHub canvas profile. That historical check does not establish approval or production readiness for its replacement; detailed records stay private.
 
+`assets/skills/super-brainstorming-effect.png` is the Brainstorming skill showcase scene required by the showcase rule in `docs/skill-standard.md` §4, added 2026-11-23. It landed through the maintainer's governed azhou-scenes local candidate pipeline (2026-11-23, `backend: azhou-gen`, `execution_scope: local_candidate_only`, `article_16_9` mode, final profile tier): the shipped PNG is the metadata-sanitized copy of the approved seed-20261124 candidate (a chunk whitelist keeps only IHDR/IDAT/IEND, so the pixel stream is byte-identical to the approved candidate and the shipped file carries no prompt text, no local paths and no runtime identity), SHA-256 `7a6885b4bdb3f12b4a7b56ab885f6e366a9a4428fb630121927dee14c36da412`, pinned together with the chunk walk by `tests/test_super_brainstorming.py`. Approved for publication 2026-11-23 by the delegated named human visual P0 under the maintainer's standing go-ahead (seed 20261124 selected; the seed-20261123 alternative was not). It has no machine colour gate: the formal governed-workspace colour audit remains open. The full pipeline record is the [package provenance](skills/super-brainstorming/references/provenance.md). No separate rights review is recorded. When replacing it, repeat the visual and rights review.
+
 On 2026-11-21 the README hero and four Skills section banners had their package count corrected from 16 to 17. The hero retains its 2026-11-12 illustration and is pixel-identical outside the digit rectangle. The four banners were re-encoded as JPEG after the heading was redrawn with Noto Sans SC; recompression affects pixels beyond that rectangle. The maintainer approved these five exact images for the public README after a contact sheet was presented. The private decision binds their SHA-256 values; no separate rights review is recorded.
 
 ## Rederive
@@ -184,6 +186,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - License: [MIT](LICENSES/Diagram-Design-MIT.txt); bundled icon and font notices inside the package under `THIRD_PARTY_LICENSES.md`
 - Imported boundary: the 51-type diagram pipeline (semantic-pattern selection, three-variant template skins, style-guide gate and profile mechanism), the `.drawio`/Mermaid/`.excalidraw`/PlantUML import extractors, the self-check and geometry verification scripts, SVG/PNG export, and the 70-page reference corpus with 242 example/template assets
 - Local changes: frontmatter normalization to the hub contract (the upstream `license` and `metadata.version` keys are recorded in provenance), a compressed frontmatter description with carve sentences naming `super-archify` and `super-excalidraw-diagram`, the Azhou identity anchor, brand protocol and stable receipt, the fail-closed `setup.md` for the Python 3 baseline and the optional Playwright export/preview boundary, and the provenance/compatibility records
+
+## Brainstorming
+
+`skills/super-brainstorming/` adapts the `brainstorming` skill from [obra/superpowers](https://github.com/obra/superpowers) at immutable tag [`v7.0.2`](https://github.com/obra/superpowers/releases/tag/v7.0.2) (commit [`22f0b463e7a5e579904dd6211a520321035526f7`](https://github.com/obra/superpowers/commit/22f0b463e7a5e579904dd6211a520321035526f7)). The upstream instruction body is retained verbatim outside six recorded deltas and the Azhou brand layer, and hash-locked for reproducibility (see the [package provenance](skills/super-brainstorming/references/provenance.md)).
+
+- Copyright: Jesse Vincent, 2025
+- License: [MIT](LICENSES/Obra-Superpowers-MIT.txt), vendored byte-identical as the package `LICENSE`
+- Imported boundary: the eight upstream `skills/brainstorming/` files (instruction body, builder-check prompt, visual-companion guide, companion server scripts); the rest of the upstream plugin ecosystem (installer, sibling skills such as the planning skill, plugin manifests) is not vendored
+- Local changes: neutral three-key frontmatter with all upstream trigger sentences kept verbatim, the planning handoff unbound from the upstream sibling skill, a neutral design-doc location, branding/telemetry flipped from opt-out to opt-in, a harness note and a builder-check provenance clause, and the Azhou brand protocol and provenance/setup/compatibility records
 
 ## Public prior art excluded from distribution
 

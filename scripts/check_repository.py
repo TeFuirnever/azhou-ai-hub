@@ -73,6 +73,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-azhou-info/SKILL.md",
     "skills/super-azhou-setup/SKILL.md",
     "skills/super-azhou-verify/SKILL.md",
+    "skills/super-brainstorming/SKILL.md",
     "skills/super-diagram-design/SKILL.md",
     "skills/super-eli5/SKILL.md",
     "skills/super-excalidraw-diagram/SKILL.md",
@@ -549,6 +550,12 @@ SKILL_BRAND_CONTRACTS = {
         "startup": "🦊 阿舟 · Gh Axi 启动（mode=<inspect|operate|raw>, scope=<github-area>）",
         "brand_path": "skills/super-gh-axi/references/brand-layer.md",
     },
+    "skills/super-brainstorming/SKILL.md": {
+        "display_name": "Brainstorming",
+        "motto": "先问为什么，再画怎么做，门没过不写码。",
+        "startup": "🦊 阿舟 · Brainstorming 启动（mode=<start|resume>, scope=<topic>）",
+        "brand_path": "skills/super-brainstorming/references/brand-layer.md",
+    },
 }
 
 BASELINE_HASHES = {
@@ -985,6 +992,7 @@ RENAMED_AWAY_SKILLS = {
     "excalidraw-diagram": "super-excalidraw-diagram",
     "gh-axi": "super-gh-axi",
     "session-insights": "super-session-insights",
+    "brainstorming": "super-brainstorming",
 }
 
 # Surfaces where a renamed-away canonical name is legal, by category:
@@ -1009,6 +1017,10 @@ RESIDUE_PROVENANCE_PATH_PATTERNS = (
     # Vendored skill packages keep their upstream license records at the
     # package root; those records name the upstream as source identity.
     re.compile(r"^skills/[^/]+/THIRD_PARTY_LICENSES\.md$"),
+    # The brainstorming adaptation keeps the upstream visual-companion guide
+    # at the package root (its scripts/ examples are package-root relative),
+    # so the upstream-verbatim prose may name the upstream as source identity.
+    re.compile(r"^skills/super-brainstorming/visual-companion\.md$"),
     re.compile(r"^THIRD_PARTY_NOTICES\.md$"),
     re.compile(r"^tests/archify-vendor-manifest\.json$"),
 )
