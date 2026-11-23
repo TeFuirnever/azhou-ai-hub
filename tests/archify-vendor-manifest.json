@@ -7,7 +7,7 @@
     "SKILL.md": "7481a4618fc660458ff3da8411af70cd5b6f5478a0e3ff5c353f0179d3eeb5fb",
     "THIRD_PARTY_NOTICES.md": "6595f9485861d8e1f46bdae09bde7288be4f82f3f286e2a41d3f8356d6fdc3b9",
     "assets/JetBrainsMono-OFL.txt": "c1ab7c666206842a02b35b30770dac0d7a10156ed401c9defc3f02a754d89e90",
-    "assets/template.html": "e64f459f176c9908042246d54f8a3bfaab1927ffc8d94184cb284be9a7ee7d5a",
+    "assets/template.html": "29ec25703aff22a4a370d61806208137b549225f1651f9d90df1a189cf70bdea",
     "bin/archify.mjs": "17fb2e4795413570696d5d9d3586cb7e610ee0008acf0c3051f07faf861e54fe",
     "bin/delivery-update.mjs": "24d92f908d91ece10ddcefe979f7950f9250023813c41777022ae5d948aa8e2c",
     "bin/export-svg.mjs": "002c8f6cf361646cc2e1d781ee00e6d5e50e2f27f668a0d0227ade717975da71",
@@ -269,14 +269,14 @@
     "modules/code-analysis/overlay/atlas.mjs": "78b7f0aa4e60f81edf7109dd806e15518948dfa8ee0ed7b9c8d1e1c14f1e8964",
     "modules/code-analysis/overlay/client-assets.mjs": "6d9204efd2cf378154f0b96984bc3f576c39e278bf6c8befa9acb6167de352af",
     "modules/code-analysis/overlay/client/atlas.css": "83d3ceee77435fe70b52af694e968033e3bdee6154c7f592678378eeaa261d50",
-    "modules/code-analysis/overlay/client/atlas.js": "3d7eeaf0addd268d52a197e7cff60c681968f92dd3e3f282731ba816149583c3",
+    "modules/code-analysis/overlay/client/atlas.js": "d191e3c2daa2666a3c8359fd637951aca62ad6bd539ba14e0a41b335c32b46e0",
     "modules/code-analysis/overlay/client/atlas3d.css": "83d5ceef6a3452f268738f01ceaa132aed64c501bf5bd4dcf9f2daf35d496c81",
-    "modules/code-analysis/overlay/client/atlas3d.js": "bbb4f976deafe6e97311da772cf3bed87c1a93d9a9742ed65627b0fab9b1e253",
+    "modules/code-analysis/overlay/client/atlas3d.js": "454451f5c9abd449b4809d78d33455ee01d4c861403f79a82eb3c6340a359e3a",
     "modules/code-analysis/overlay/client/drift.css": "3c47e94a06860e076ab171ed33185c1e4f437f89845e2fffad91bd40e68a755c",
     "modules/code-analysis/overlay/client/drift.js": "83f8530ff6ce281f5a44a5cbb47f3ec3121c35fa8daaff8d43a5199095f7cf8c",
     "modules/code-analysis/overlay/client/entry.css": "1bb4e6d76a14fb7382d9fff4517d9ea8c8f9f33383add3f7014a728c766440ba",
     "modules/code-analysis/overlay/client/overlay.css": "bfb0ca4ce66fc9f50c575c5cb8fae16e2c4613fd316aebbf789f38d9bd06cdca",
-    "modules/code-analysis/overlay/client/overlay.js": "377a5131310fe8ffe15441e8ef1663b5efc186afabfcdb1c4e193799fcbbcfa3",
+    "modules/code-analysis/overlay/client/overlay.js": "20099ffa0e3a14b0141428c186adb22ba5c0dece00e8ac3388f26f5f3af42037",
     "modules/code-analysis/overlay/client/verification.js": "e64b7cacbe38bb9b243358acbf9556455496ded2ef28cda3f24948d4679399fc",
     "modules/code-analysis/overlay/drift.mjs": "8a68bf1e1b808535429e292e53e25c581b3386c9645acdffaaa74f866258781d",
     "modules/code-analysis/overlay/i18n.mjs": "48ebcaa2f7f70d7b29bbd2019300f6497b2eb44cf21cafc590d162f9c3763c8c",
@@ -463,7 +463,7 @@
     "pr/markdown.mjs": "35c441ac845eeae8411b00865bf824bbfcb5af8a06c78317e9ff21fbf75c3da1",
     "pr/metadata.mjs": "24142c0aa2216b928f37e12f50a48e4ef0b0469e4552c9c61321d900ac01dba0",
     "pr/preflight.mjs": "bbe34f782c78826531115708d8aceb239cfab64a8c4dcfaeb9e26877cc45a7e0",
-    "pr/story-svg.mjs": "044835d4fa03d50142ecd59bfabb3e4b88cbf88766d639bd0bef7df959c80470",
+    "pr/story-svg.mjs": "f6e0539329195f55cb09cb310da2861d4848d053bc40a6cdab1a051befe32a8e",
     "recipes/scenarios.mjs": "a63fc08ddca0b6d89c95be9ed6f472fb123830de80a35453a169cb5bb7ce01bd",
     "references/architecture-layout-repair.md": "dc1811a145d5749ce17628b19a805ac922f4f2e047b7e562718f58f9c7bcf0de",
     "references/authoring-contract.md": "e78b524d7dbaf3afe27a8be7df0a6175d43567a9784dffd977eab6ae6bd8fbdc",
@@ -472,12 +472,12 @@
     "references/delivery-contract.md": "418250feeb9a4d3e172e954822c16f7d02c9b1733fd06cfdaf41ac8f6ad1369c",
     "references/explainer-authoring.md": "cdc159e11582a516fa023bb2e57aabc4c280f3d9ea76183761e52dcd58e0e79e",
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
-    "references/provenance.md": "1f0f54f41ae5cd0e09ab5abf97274f18b02acd6ae576fdc16676dbed0cab9d41",
+    "references/provenance.md": "db0183524e7f2074848167f5ff351580d95928f025b459e572e11db2a1537131",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
     "references/setup.md": "a33984b89461b782acd2062f50e37d1b347febe80b9acfb98cde1dc8b15d2663",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
     "references/update-awareness.md": "16b437a47790fda48f0e74f6aa053715fb06b6e8cd1ba994d1c01ffefa12a76b",
-    "references/upstream-compatibility.md": "3505def803ce6438c41ca1d4dbb5295335abe06646c7b9ce2c4e89fcc5a62183",
+    "references/upstream-compatibility.md": "0c2257e05bb28dbe8916e7be14cb6d5464304e497637ee7883c9cbf819f642ce",
     "references/viewer-runtime.md": "229e729444321e1ee2ecee54833b3ede90c1ad66315123fbbfdb08ab47742bba",
     "renderers/architecture/automatic-placement-candidates.mjs": "60d46fda8c075cf2ee68dd34f1d10398e30989beaff54d4a9b318da90fdcdff2",
     "renderers/architecture/automatic-placement.mjs": "4b9d9d158a410e2ee6818ecfccd96d2d053dcfe3372b842820706af887dd2713",
@@ -532,7 +532,7 @@
     "renderers/shared/sidecar-path.mjs": "c23cac8bcc265a74e2920c58d0968d1ffa06c1328bdd9cfd07755d4df2f22974",
     "renderers/shared/software-notices.mjs": "8bfc9ee3dc35eb0aa9860f71e7038f15647ed24d6ce7386e0e24870766e10bfe",
     "renderers/shared/spatial-grid.mjs": "e728bf6a729972f95ae09e368ea370490d10ff94d49debe2fab2e9bac923ee1a",
-    "renderers/shared/svg-bake.mjs": "63d77552c4d5be5a8c675fcbe5ed3010a97f0f8eda938cd4d47688fb1b0f3cf7",
+    "renderers/shared/svg-bake.mjs": "d7ec39731923890dc3193a631bb1460fed58e9c052fd60efec2f5cec8d4c0241",
     "renderers/shared/svg-export.mjs": "80fb4004b1492f469b27ebd4f8b35c1c58c83d431ca75092cceb41c3d12127a1",
     "renderers/shared/svg-path-analysis.mjs": "dce96da166651de28498fedf6e8f4c934368a1aded81db2406cd73e7247f3421",
     "renderers/shared/text-fit.mjs": "ebd499072ef4fe31c9aabf45a01c204a9c2c142d45f087c3240673f90f477038",
@@ -564,7 +564,7 @@
     "schemas/tree.schema.json": "d487f1b8271173768905bd4fd939af0bdbd80eddfc6fe6c92f94336370f65755",
     "schemas/waterfall.schema.json": "05930ded2ec89df4bc54d72a01d7cdd5acd8cddd385ccb1e0dd9c5cd43c3cd1a",
     "schemas/workflow.schema.json": "d77542cef3c1226eb1c4fb2548582f0ff0a956039b65280353d2057e3aa34fd6",
-    "scripts/check-render-output.mjs": "37a79af93faccab3a0f991a66d726423ac8c4f548432b9a692e110c9a1d7265e",
+    "scripts/check-render-output.mjs": "336300378ef76029d749af894f8649c8dd09df2c23d4dd5155db2332de88ad3e",
     "scripts/check-update.mjs": "a1ed8be99a484d81964c9d66938f813fb3726690aace3e982e777ea8bca5ebbc",
     "scripts/delivery-update-child.mjs": "ec231c992ab9b548c735698f209cb350d4b137aad2a5e8cb1374e692b6b38064",
     "scripts/generate-brand-marks.mjs": "192005549a15af101aede192e37a30fc66df1e3e27cb1bd281fc332aafd533dd",
@@ -652,12 +652,12 @@
     },
     {
       "base_sha256": "4fe243de7448f83d2123e987db5ec2539b662480a6e3ce3c90deb9e0c9ad11ef",
-      "disposition": "replay_local_packaging_delta",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": "52e995c61a728c37da242bfaf7c83e289b00bc6b7723e020345305664b81580e",
-      "packaged_sha256": "e64f459f176c9908042246d54f8a3bfaab1927ffc8d94184cb284be9a7ee7d5a",
+      "packaged_sha256": "29ec25703aff22a4a370d61806208137b549225f1651f9d90df1a189cf70bdea",
       "path": "assets/template.html",
       "target_sha256": "ce14fe404b80577bf5aceae189d78a50dded861a026f99c21997f57fdd3254fb",
-      "resolution": "Upstream 3.3.0 generator meta line carries the local super-archify label; whitespace-only line normalization replayed"
+      "resolution": "Upstream 3.3.0 generator meta line carries the local super-archify label; whitespace-only line normalization replayed; drilldown, parent-return and Semantic Passport navigation hrefs pass one shared scheme allowlist guard before location or href writes"
     },
     {
       "base_sha256": "3cebcee3fa339e3b98deacae8cb9a5570525e003d8823368d304d904ba9ceecd",
@@ -2900,11 +2900,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "3d7eeaf0addd268d52a197e7cff60c681968f92dd3e3f282731ba816149583c3",
+      "packaged_sha256": "d191e3c2daa2666a3c8359fd637951aca62ad6bd539ba14e0a41b335c32b46e0",
       "path": "modules/code-analysis/overlay/client/atlas.js",
-      "target_sha256": "3d7eeaf0addd268d52a197e7cff60c681968f92dd3e3f282731ba816149583c3"
+      "target_sha256": "3d7eeaf0addd268d52a197e7cff60c681968f92dd3e3f282731ba816149583c3",
+      "resolution": "Repository-derived values interpolated raw into the flagged innerHTML sinks pass esc() (tip fan-in/out and function numbers, module coupling counts, PR distribution bars and complexity metrics, severity bars, tiles, histogram heights); markup and layout unchanged"
     },
     {
       "base_sha256": null,
@@ -2916,11 +2917,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "bbb4f976deafe6e97311da772cf3bed87c1a93d9a9742ed65627b0fab9b1e253",
+      "packaged_sha256": "454451f5c9abd449b4809d78d33455ee01d4c861403f79a82eb3c6340a359e3a",
       "path": "modules/code-analysis/overlay/client/atlas3d.js",
-      "target_sha256": "bbb4f976deafe6e97311da772cf3bed87c1a93d9a9742ed65627b0fab9b1e253"
+      "target_sha256": "bbb4f976deafe6e97311da772cf3bed87c1a93d9a9742ed65627b0fab9b1e253",
+      "resolution": "Repository-derived values interpolated raw into the flagged innerHTML sinks pass esc() (rail function complexity, selection tiles, severity bars, finding location columns); directory, panels and flyout layout unchanged"
     },
     {
       "base_sha256": null,
@@ -2956,11 +2958,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "377a5131310fe8ffe15441e8ef1663b5efc186afabfcdb1c4e193799fcbbcfa3",
+      "packaged_sha256": "20099ffa0e3a14b0141428c186adb22ba5c0dece00e8ac3388f26f5f3af42037",
       "path": "modules/code-analysis/overlay/client/overlay.js",
-      "target_sha256": "377a5131310fe8ffe15441e8ef1663b5efc186afabfcdb1c4e193799fcbbcfa3"
+      "target_sha256": "377a5131310fe8ffe15441e8ef1663b5efc186afabfcdb1c4e193799fcbbcfa3",
+      "resolution": "Repository-derived values interpolated raw into the flagged innerHTML sinks pass the module esc() (component stats, indicator keys and statuses, evidence line/range/match numbers, diff-deletion counts, totals, small-diagram numbers, fly counts); markup, classes and numeric formatting unchanged"
     },
     {
       "base_sha256": null,
@@ -4461,11 +4464,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "044835d4fa03d50142ecd59bfabb3e4b88cbf88766d639bd0bef7df959c80470",
+      "packaged_sha256": "f6e0539329195f55cb09cb310da2861d4848d053bc40a6cdab1a051befe32a8e",
       "path": "pr/story-svg.mjs",
-      "target_sha256": "044835d4fa03d50142ecd59bfabb3e4b88cbf88766d639bd0bef7df959c80470"
+      "target_sha256": "044835d4fa03d50142ecd59bfabb3e4b88cbf88766d639bd0bef7df959c80470",
+      "resolution": "scopeEmbeddedStyles rejects CDATA terminators in re-serialized CSS and unmatched <style> fragments so scoped styles stay inside their CDATA section; scoping output on well-formed styles unchanged"
     },
     {
       "base_sha256": "1e93ba15d0782be535251bfb406cf8cc056291d84d77d33ca9dca01df743528f",
@@ -4537,7 +4541,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "d356702ce287ca8cee85eba9a98398a2b38da58ec766d096af3cdf4eb31d2e91",
-      "packaged_sha256": "1f0f54f41ae5cd0e09ab5abf97274f18b02acd6ae576fdc16676dbed0cab9d41",
+      "packaged_sha256": "db0183524e7f2074848167f5ff351580d95928f025b459e572e11db2a1537131",
       "path": "references/provenance.md",
       "target_sha256": null
     },
@@ -4577,7 +4581,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "9f3042e7d7b00d13c965ea1470c96f4680ddc76114826dc90caeb945ac218ce7",
-      "packaged_sha256": "3505def803ce6438c41ca1d4dbb5295335abe06646c7b9ce2c4e89fcc5a62183",
+      "packaged_sha256": "0c2257e05bb28dbe8916e7be14cb6d5464304e497637ee7883c9cbf819f642ce",
       "path": "references/upstream-compatibility.md",
       "target_sha256": null
     },
@@ -5023,11 +5027,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "63d77552c4d5be5a8c675fcbe5ed3010a97f0f8eda938cd4d47688fb1b0f3cf7",
+      "packaged_sha256": "d7ec39731923890dc3193a631bb1460fed58e9c052fd60efec2f5cec8d4c0241",
       "path": "renderers/shared/svg-bake.mjs",
-      "target_sha256": "63d77552c4d5be5a8c675fcbe5ed3010a97f0f8eda938cd4d47688fb1b0f3cf7"
+      "target_sha256": "63d77552c4d5be5a8c675fcbe5ed3010a97f0f8eda938cd4d47688fb1b0f3cf7",
+      "resolution": "bakeBodyStyles rejects markup characters in re-emitted style attributes and any unmatched or reassembled <style> fragment so a baked body cannot re-open a style element; declarations, theme baking and clean-input bytes unchanged"
     },
     {
       "base_sha256": null,
@@ -5285,11 +5290,12 @@
     },
     {
       "base_sha256": "dcfb6c8eccd08bd7ce4b9fc1928cd4c3a6794b49a512e0afa1aea87e1e332195",
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": "dcfb6c8eccd08bd7ce4b9fc1928cd4c3a6794b49a512e0afa1aea87e1e332195",
-      "packaged_sha256": "37a79af93faccab3a0f991a66d726423ac8c4f548432b9a692e110c9a1d7265e",
+      "packaged_sha256": "336300378ef76029d749af894f8649c8dd09df2c23d4dd5155db2332de88ad3e",
       "path": "scripts/check-render-output.mjs",
-      "target_sha256": "37a79af93faccab3a0f991a66d726423ac8c4f548432b9a692e110c9a1d7265e"
+      "target_sha256": "37a79af93faccab3a0f991a66d726423ac8c4f548432b9a692e110c9a1d7265e",
+      "resolution": "SVG_TAG_TOKEN splits its two = alternatives with a lookahead so each character has one way to match (linear on repeated =\"\" input); token language preserved on the corpus and 40k fuzz inputs outside the one documented degenerate corner"
     },
     {
       "base_sha256": "a1ed8be99a484d81964c9d66938f813fb3726690aace3e982e777ea8bca5ebbc",

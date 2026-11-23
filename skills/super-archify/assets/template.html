@@ -10275,8 +10275,20 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         if (authored && isSafeRelativeHtmlHref(authored)) return authored.trim();
         return null;
       }
+      /**
+       * 跳转 / 写 href 前的统一协议闸：去掉浏览器解析时会忽略的控制字符与首尾空白后，
+       * 只放行相对地址（不含 //host 这类跨主机写法）与 http(s):、file:；
+       * javascript:、data: 等其余协议一律拒绝。
+       */
+      function safeNavigationHref(value) {
+        if (typeof value !== 'string') return null;
+        var href = value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim();
+        if (/^[\\/]{2}/.test(href)) return null;
+        if (!/^(?:(?:https?|file):[\u0020-\uffff]*|[\u0020-\u0039\u003b-\uffff]*[/?#][\u0020-\uffff]*|[\u0020-\u0039\u003b-\uffff]+)$/i.test(href)) return null;
+        return href;
+      }
       function navigateToRelativeHtml(href) {
-        var next = hrefWithFrom(href);
+        var next = safeNavigationHref(hrefWithFrom(href));
         if (!next) return false;
         location.assign(next);
         return true;
@@ -10284,7 +10296,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       function navigateToParent() {
         var parent = resolveParentHref();
         if (!parent) return false;
-        location.assign(withReaderContext(parent));
+        var next = safeNavigationHref(withReaderContext(parent));
+        if (!next) return false;
+        location.assign(next);
         return true;
       }
       function syncParentBackControls() {
@@ -10348,7 +10362,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         targets.forEach(function (target, index) {
           var link = document.createElement('a');
           link.className = 'semantic-passport-drilldown';
-          link.href = hrefWithFrom(target.href) || target.href;
+          var href = safeNavigationHref(hrefWithFrom(target.href) || target.href);
+          if (href) link.href = href;
           link.setAttribute('data-drilldown-index', String(index));
           link.setAttribute('aria-label', viewerText('viewer.passport.drilldowns.open', { label: target.label }));
           var title = document.createElement('span');

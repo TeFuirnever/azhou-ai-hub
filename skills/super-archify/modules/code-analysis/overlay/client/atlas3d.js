@@ -493,9 +493,9 @@
     const ranked = (list) => list.slice().sort((a, b) => (sev[FD[a].severity] - sev[FD[b].severity]) || (FD[b].fn != null ? FN[FD[b].fn][3] : 0) - (FD[a].fn != null ? FN[FD[a].fn][3] : 0) || (FD[a].title < FD[b].title ? -1 : 1));
     const layerName = (r) => (cycles ? (r === 0 ? tr('Level 0 · trunk and ground') : tr('Level {n}', { n: r })) : (r === 0 ? tr('Layer {n} · foundations', { n: layer[trunk] }) : tr('Layer {n}', { n: layer[trunk] + r })));
     const dot = (m) => (m === trunk ? 'var(--a3d-core)' : 'var(--a3d-plain)');
-    const tiles = (list) => `<div class="a3d-tiles">${list.map(([v, k]) => `<div><b>${v}</b><span>${esc(k)}</span></div>`).join('')}</div>`;
+    const tiles = (list) => `<div class="a3d-tiles">${list.map(([v, k]) => `<div><b>${esc(v)}</b><span>${esc(k)}</span></div>`).join('')}</div>`;
     const head = (title, note) => `<h5 class="a3d-h">${esc(title)}${note ? `<small>${esc(note)}</small>` : ''}</h5>`;
-    const findingRows = (list) => list.map((i) => { const f = FD[i], file = f.fn != null ? F[FN[f.fn][0]][0] : ''; return `<button type="button" class="a3d-find${i === state.finding ? ' active' : ''}" data-finding="${i}"><i style="background:${tone[f.severity] || 'var(--a3d-plain)'}"></i><b>${esc(f.title)}</b><em>${f.fn != null ? esc(tr('complexity {n}', { n: FN[f.fn][3] })) : esc(tr(f.severity))}</em>${file ? `<small>${esc(file.split('/').pop())}:${FN[f.fn][2]}</small>` : ''}</button>`; }).join('');
+    const findingRows = (list) => list.map((i) => { const f = FD[i], file = f.fn != null ? F[FN[f.fn][0]][0] : ''; return `<button type="button" class="a3d-find${i === state.finding ? ' active' : ''}" data-finding="${i}"><i style="background:${tone[f.severity] || 'var(--a3d-plain)'}"></i><b>${esc(f.title)}</b><em>${f.fn != null ? esc(tr('complexity {n}', { n: FN[f.fn][3] })) : esc(tr(f.severity))}</em>${file ? `<small>${esc(file.split('/').pop())}:${esc(FN[f.fn][2])}</small>` : ''}</button>`; }).join('');
     function modulePanel(m) {
       const comp = compOf[M[m].id], list = ranked(findingsOfModule[m]), s = surface[m];
       const deps = out[m].slice().sort((a, b) => b[1] - a[1]), users = inn[m].slice().sort((a, b) => b[1] - a[1]);
@@ -506,7 +506,7 @@
       let h = `<p class="a3d-kick"><i style="background:${dot(m)}"></i>${esc(role)}</p><h4 class="a3d-title">${esc(M[m].label)}</h4>
         <p class="a3d-sub">${esc(M[m].path || '.')} · ${comp ? esc(tr('“{name}” on the diagram', { name: comp.label })) : `<span class="a3d-off">${esc(tr('Not on the diagram'))}</span>`}</p>
         ${tiles([[fmt(filesOf[m].length), tr('files')], [fmt(locOf[m]), tr('lines')], [fmt(openOf[m]), tr('open findings')]])}
-        <div class="a3d-sevbar"><i style="flex:${n.error};background:var(--a3d-warning)"></i><i style="flex:${n.warning};background:var(--a3d-warning);opacity:.75"></i><i style="flex:${n.info};background:var(--a3d-info)"></i></div>`;
+        <div class="a3d-sevbar"><i style="flex:${esc(n.error)};background:var(--a3d-warning)"></i><i style="flex:${esc(n.warning)};background:var(--a3d-warning);opacity:.75"></i><i style="flex:${esc(n.info)};background:var(--a3d-info)"></i></div>`;
       if (deps.length) h += head(tr('Depends on'), plural(deps.length, 'module')) + rel(deps, (b) => isBranch(m, b));
       if (users.length) h += head(tr('Used by'), plural(users.length, 'module')) + rel(users, (a) => isBranch(a, m));
       if (files.length) h += head(tr('Files with the most findings'), tr('{n} of {total}', { n: Math.min(files.length, 4), total: plural(filesOf[m].length, 'file') })) + files.slice(0, 4).map((fi) => `<button type="button" class="a3d-rel" data-file="${fi}"><i style="background:var(--a3d-warning)"></i><span class="a3d-mono">${esc(F[fi][0].split('/').pop())}</span><em>${esc(tr('{n} · {lines}', { n: findingsOfFile[fi].length, lines: plural(F[fi][2], 'line') }))}</em></button>`).join('');
@@ -518,7 +518,7 @@
     function findingPanel(i) {
       const f = FD[i], d = A.detail[f.id] || {};
       let h = `<p class="a3d-kick"><span class="a3d-pill" style="--tone:${tone[f.severity] || 'var(--a3d-plain)'}">${esc(tr(f.severity))}</span>${esc(NAMES[f.code] || f.code)}</p><h4 class="a3d-title a3d-mono">${esc(f.title)}</h4>`;
-      if (f.kind === 'function' && f.fn != null) { const fn = FN[f.fn]; h += `<p class="a3d-loc"><span>${esc(F[fn[0]][0])}</span><em>:${fn[2]}</em></p>${tiles([[fn[3], tr('complexity')], [fn[4], tr('nesting')], [fmt(fn[5]), tr('lines')]])}`; }
+      if (f.kind === 'function' && f.fn != null) { const fn = FN[f.fn]; h += `<p class="a3d-loc"><span>${esc(F[fn[0]][0])}</span><em>:${esc(fn[2])}</em></p>${tiles([[fn[3], tr('complexity')], [fn[4], tr('nesting')], [fmt(fn[5]), tr('lines')]])}`; }
       if (f.kind === 'edges') h += `<p class="a3d-loc"><span>${esc(f.module != null ? tr('{imports} drawn as bright threads into {module}', { imports: plural(f.edges.length, 'import'), module: M[f.module].label }) : tr('{imports} drawn as bright threads', { imports: plural(f.edges.length, 'import') }))}</span></p>`;
       if (d.message) h += `<p class="a3d-msg">${esc(d.message)}</p>`;
       if (d.fix) h += head(tr('First step')) + `<p class="a3d-fix">${esc(d.fix)}</p>`;
@@ -555,7 +555,7 @@
       return `<h3 class="a3d-rail-k">${esc(tr('Dependency layers'))}<small>${esc(tr('click a module to select it'))}</small></h3>${rows.join('')}
         <details class="a3d-more"><summary>${esc(tr('Findings · {n}', { n: fmt(FD.length) }))}</summary>${Object.keys(groups).sort().map((code) => {
           const list = ranked(groups[code]);
-          return `<details${list.includes(state.finding) ? ' open' : ''}><summary>${esc(NAMES[code] || code)} · ${list.length}</summary>${list.slice(0, 40).map((i) => `<button type="button" class="a3d-row${i === state.finding ? ' active' : ''}" data-finding="${i}"><i style="background:${tone[FD[i].severity] || 'var(--a3d-plain)'}"></i><span class="t">${esc(FD[i].title)}</span><span class="n">${FD[i].fn != null ? FN[FD[i].fn][3] : esc(tr(FD[i].severity))}</span></button>`).join('')}${list.length > 40 ? `<p class="a3d-muted">${esc(tr('{n} more, smaller ones in the Atlas.', { n: list.length - 40 }))}</p>` : ''}</details>`;
+          return `<details${list.includes(state.finding) ? ' open' : ''}><summary>${esc(NAMES[code] || code)} · ${list.length}</summary>${list.slice(0, 40).map((i) => `<button type="button" class="a3d-row${i === state.finding ? ' active' : ''}" data-finding="${i}"><i style="background:${tone[FD[i].severity] || 'var(--a3d-plain)'}"></i><span class="t">${esc(FD[i].title)}</span><span class="n">${FD[i].fn != null ? esc(FN[FD[i].fn][3]) : esc(tr(FD[i].severity))}</span></button>`).join('')}${list.length > 40 ? `<p class="a3d-muted">${esc(tr('{n} more, smaller ones in the Atlas.', { n: list.length - 40 }))}</p>` : ''}</details>`;
         }).join('')}</details>
         <details class="a3d-more"><summary>${esc(tr('Same data as the Atlas'))} ${consistent ? '✓' : '!'}</summary><div class="a3d-check ${consistent ? 'ok' : 'bad'}">${esc(consistent ? tr('Every file, function and finding of the run is in the model.') : tr('The model does not account for every item of the run.'))}
           <dl><dt>${esc(tr('Files'))}</dt><dd>${fmt(drawnFiles)} / ${fmt(F.length)}</dd><dt>${esc(tr('Functions'))}</dt><dd>${fmt(drawnFns)} / ${fmt(FN.length)}</dd>

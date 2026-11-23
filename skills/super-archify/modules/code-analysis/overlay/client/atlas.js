@@ -588,10 +588,10 @@
   }
   function tipText(h) {
     if(h.type==='pr-change') {var change=pr.changes[h.index],a=change.before,b=change.after;return '<b>'+esc(change.name||change.path||change.from+' → '+change.to)+'</b>'+esc(tr(change.status))+(change.kind==='function'&&a&&b?'<br>'+esc(tr('Complexity {before} → {after}',{before:a.complexity,after:b.complexity})):'');}
-    if (h.type === 'module') { var m = M[h.index], c = F.filter(function (f) { return f[1] === h.index; }).length; return '<b>' + esc(m.label) + '</b>' + (m.path && m.path !== m.label ? esc(m.path) + '<br>' : '') + plural(c, 'file') + tr(" · fan-in ") + m.fanIn + tr(" · fan-out ") + m.fanOut + (hubOf[h.index] != null ? tr(" · reported hub") : '') + (pr?prModuleRows(h.index).map(function(text){return '<br>'+esc(text);}).join(''):'') + ("<br>" + tr("Click to focus its dependencies.")); }
+    if (h.type === 'module') { var m = M[h.index], c = F.filter(function (f) { return f[1] === h.index; }).length; return '<b>' + esc(m.label) + '</b>' + (m.path && m.path !== m.label ? esc(m.path) + '<br>' : '') + plural(c, 'file') + tr(" · fan-in ") + esc(m.fanIn) + tr(" · fan-out ") + esc(m.fanOut) + (hubOf[h.index] != null ? tr(" · reported hub") : '') + (pr?prModuleRows(h.index).map(function(text){return '<br>'+esc(text);}).join(''):'') + ("<br>" + tr("Click to focus its dependencies.")); }
     if (h.type === 'file') { var f = F[h.index]; return '<b>' + esc(f[0]) + '</b>' + esc(M[f[1]].label) + ' · ' + plural(f[2], 'line') + ' · ' + plural(fnsByFile[h.index].length, 'function'); }
     var fn = FN[h.index], fd = fn[6] !== -1 ? FD[fn[6]] : null;
-    return '<b>' + esc(fn[1]) + '</b>' + esc(F[fn[0]][0]) + ':' + fn[2] + esc(functionColumns(fn)) + ("<br>" + tr("complexity ")) + fn[3] + tr(" · nesting ") + fn[4] + ' · ' + plural(fn[5], 'line') + (fd ? ("<br>" + tr("Reported (")) + esc(fd.severity) + tr("). Click to select.") : ("<br>" + tr("Captured source position, not a runtime call.")));
+    return '<b>' + esc(fn[1]) + '</b>' + esc(F[fn[0]][0]) + ':' + esc(fn[2]) + esc(functionColumns(fn)) + ("<br>" + tr("complexity ")) + esc(fn[3]) + tr(" · nesting ") + esc(fn[4]) + ' · ' + plural(fn[5], 'line') + (fd ? ("<br>" + tr("Reported (")) + esc(fd.severity) + tr("). Click to select.") : ("<br>" + tr("Captured source position, not a runtime call.")));
   }
   canvas.addEventListener('mousemove', function (e) {
     var b = canvas.getBoundingClientRect(), h = hit(e.clientX - b.left, e.clientY - b.top);
@@ -712,7 +712,7 @@
       var surfaceText = used.length
         ? tr("Imported from outside through ") + fmt(used.length) + tr(" of its ") + plural(files, 'file') + tr(", by ") + plural(Object.keys(sf.consumers).length, 'module') + tr(" (marked inside the rim): ") + used.slice(0, 4).map(function (k) { return F[k][0].split('/').pop() + ' ' + Object.keys(sf.files[k]).length; }).join(', ') + (used.length > 4 ? tr(" and ") + plural(used.length - 4, 'more', 'more') : '') + '.'
         : tr("No other module imports it.");
-      return '<div class="selected"><h4>' + esc(m.label) + '</h4><p>' + plural(files, 'file') + ' · ' + plural(fns.length, 'function') + tr(" · fan-in ") + m.fanIn + tr(" · fan-out ") + m.fanOut + '<br>' + tr("Coloured curves: dependencies inside it and its ") + plural(edgesByModule[state.focusModule].out, 'dependency', 'dependencies') + tr(" on other modules. Neutral curves: ") + plural(edgesByModule[state.focusModule].in, 'dependency', 'dependencies') + (tr(" of other modules on it.") + "<br>") + esc(surfaceText) + '</p></div>';
+      return '<div class="selected"><h4>' + esc(m.label) + '</h4><p>' + plural(files, 'file') + ' · ' + plural(fns.length, 'function') + tr(" · fan-in ") + esc(m.fanIn) + tr(" · fan-out ") + esc(m.fanOut) + '<br>' + tr("Coloured curves: dependencies inside it and its ") + plural(edgesByModule[state.focusModule].out, 'dependency', 'dependencies') + tr(" on other modules. Neutral curves: ") + plural(edgesByModule[state.focusModule].in, 'dependency', 'dependencies') + (tr(" of other modules on it.") + "<br>") + esc(surfaceText) + '</p></div>';
     }
     return '<div class="note">' + tr("Hover the circle for names. Click a module arc to focus it, a dotted spike or a finding below to light it up.") + '</div>';
   }
@@ -724,12 +724,12 @@
     });
     h += '</dl><div class="k">' + esc(tr('Complexity distribution · function counts')) + '</div><p class="note">' + esc(tr('Grey: merge-base · green: PR head')) + '</p><div class="pr-distribution" role="img" aria-label="' + esc(tr('Complexity distribution · function counts')) + '">';
     var d=pr.distribution, max=Math.max.apply(Math,d.before.concat(d.after,1));
-    d.labels.forEach(function(label,i) { h += '<div class="pr-band"><span>' + esc(label) + '</span><span class="pr-tracks"><i style="width:' + 100*d.before[i]/max + '%"></i><b style="width:' + 100*d.after[i]/max + '%"></b></span><span>' + d.before[i] + ' → ' + d.after[i] + '</span></div>'; });
+    d.labels.forEach(function(label,i) { h += '<div class="pr-band"><span>' + esc(label) + '</span><span class="pr-tracks"><i style="width:' + esc(100*d.before[i]/max) + '%"></i><b style="width:' + esc(100*d.after[i]/max) + '%"></b></span><span>' + esc(d.before[i]) + ' → ' + esc(d.after[i]) + '</span></div>'; });
     h += '</div><p class="note">' + esc(tr('Green +: added · amber ◇: changed · red dashed curve: removed dependency. Removed objects remain in the change list.')) + '</p><p class="note">' + esc(tr('Grey dashed spikes: merge-base complexity · red −: removed function. Click a marker for source; hover a module for counts.')) + '</p>';
     h += '<details class="pr-changes"><summary>' + esc(tr('PR changes · {count}',{count:pr.changes.length})) + '</summary>';
     pr.changes.forEach(function(change,i) {
       var label=change.kind==='edge'?change.from+' → '+change.to:change.kind==='function'?change.name+'() · '+change.path:change.path;
-      var metrics=change.kind==='function'&&change.before&&change.after?' · '+tr('complexity ')+change.before.complexity+' → '+change.after.complexity:'';
+      var metrics=change.kind==='function'&&change.before&&change.after?' · '+tr('complexity ')+esc(change.before.complexity)+' → '+esc(change.after.complexity):'';
       h += '<button type="button" class="row" data-pr-change="' + i + '"><i class="pr-mark-' + change.status + '"></i><span class="t" title="' + esc(label) + '">' + esc(label) + '</span><span class="n">' + esc(tr(change.status)) + '</span></button>' + (metrics?'<p class="note">'+esc(metrics)+'</p>':'');
     });
     h += '</details>';
@@ -854,12 +854,12 @@
       FN.forEach(function (fn) { counts[Math.max(1, Math.min(fn[3], 20)) - 1]++; });
       var max = Math.max.apply(Math, counts);
       h += '<div class="k">' + tr('Cyclomatic complexity · √ scale') + '</div><div class="hist" role="img" aria-label="' + esc(tr('Function counts by complexity 1 to 20 or more: ') + counts.join(', ')) + '">' + counts.map(function (n, i) {
-        return '<div class="' + (i >= 14 ? 'hot' : '') + '" title="' + esc((i === 19 ? '20+' : i + 1) + ': ' + plural(n, 'function')) + '" style="height:' + (n ? Math.max(2, Math.round(100 * Math.sqrt(n / max))) : 0) + '%"></div>';
+        return '<div class="' + (i >= 14 ? 'hot' : '') + '" title="' + esc((i === 19 ? '20+' : i + 1) + ': ' + plural(n, 'function')) + '" style="height:' + esc(n ? Math.max(2, Math.round(100 * Math.sqrt(n / max))) : 0) + '%"></div>';
       }).join('') + '</div><div class="axis"><span>1</span><span>15</span><span>20+</span></div>';
     }
     var order = M.map(function (m, i) { return i; }).sort(function (a, b) { return (M[b].fanIn + M[b].fanOut) - (M[a].fanIn + M[a].fanOut) || (M[a].label < M[b].label ? -1 : 1); });
     var moduleRow = function (i) {
-      return '<button type="button" class="row' + (i === state.focusModule ? ' active' : '') + '" data-module="' + i + '"><i style="background:' + hue(i, theme()) + '"></i><span class="t">' + esc(M[i].label) + (hubOf[i] != null ? tr(" · hub") : '') + '</span><span class="n">' + M[i].fanIn + ' / ' + M[i].fanOut + '</span></button>';
+      return '<button type="button" class="row' + (i === state.focusModule ? ' active' : '') + '" data-module="' + i + '"><i style="background:' + hue(i, theme()) + '"></i><span class="t">' + esc(M[i].label) + (hubOf[i] != null ? tr(" · hub") : '') + '</span><span class="n">' + esc(M[i].fanIn) + ' / ' + esc(M[i].fanOut) + '</span></button>';
     };
     h += '<div class="k">' + tr('Modules by coupling · fan-in / fan-out') + '</div><div class="module-list">' + order.map(moduleRow).join('') + '</div>';
     var cov = atlas.coverage, total = Math.max(cov.records, 1);
@@ -918,10 +918,10 @@
   var SEV = { error: 0, warning: 1, info: 2 };
   function fnComplexity(i) { var f = FD[i]; return f.fn != null ? FN[f.fn][3] : 0; }
   function sevRank(list) { return list.slice().sort(function (a, b) { return (SEV[FD[a].severity] - SEV[FD[b].severity]) || fnComplexity(b) - fnComplexity(a) || (FD[a].title < FD[b].title ? -1 : 1); }); }
-  function tiles(list) { return '<div class="atlas-tiles">' + list.map(function (t) { return '<div><b>' + t[0] + '</b><span>' + esc(t[1]) + '</span></div>'; }).join('') + '</div>'; }
+  function tiles(list) { return '<div class="atlas-tiles">' + list.map(function (t) { return '<div><b>' + esc(t[0]) + '</b><span>' + esc(t[1]) + '</span></div>'; }).join('') + '</div>'; }
   function sevBar(list) {
     var n = { error: 0, warning: 0, info: 0 }; list.forEach(function (i) { if (openFinding(FD[i])) n[FD[i].severity] = (n[FD[i].severity] || 0) + 1; });
-    return '<div class="atlas-sevbar" aria-hidden="true"><i style="flex:' + n.error + ';background:' + TONE.error + '"></i><i style="flex:' + n.warning + ';background:' + TONE.warning + '"></i><i style="flex:' + n.info + ';background:' + TONE.info + '"></i></div>';
+    return '<div class="atlas-sevbar" aria-hidden="true"><i style="flex:' + esc(n.error) + ';background:' + TONE.error + '"></i><i style="flex:' + esc(n.warning) + ';background:' + TONE.warning + '"></i><i style="flex:' + esc(n.info) + ';background:' + TONE.info + '"></i></div>';
   }
   function head(title, note) { return '<h5 class="atlas-h">' + esc(title) + (note ? '<small>' + esc(note) + '</small>' : '') + '</h5>'; }
   function relRows(list) {
@@ -930,7 +930,7 @@
   function findingRows(list) {
     return list.map(function (i) {
       var f = FD[i], file = f.fn != null ? F[FN[f.fn][0]][0] : f.file != null ? F[f.file][0] : '';
-      return '<button type="button" class="atlas-find' + (i === state.finding ? ' active' : '') + (f.accepted ? ' accepted' : '') + '" data-finding="' + i + '" data-preview="' + (f.fn != null ? 'function:' + f.fn : '') + '"><i style="background:' + (TONE[f.severity] || TONE.info) + '"></i><b>' + esc(findingTitle(f)) + '</b><em>' + (f.fn != null ? esc(tr('complexity ')) + FN[f.fn][3] : esc(tr(f.severity))) + '</em>' + (file ? '<small>' + esc(file.split('/').pop()) + (f.fn != null ? ':' + FN[f.fn][2] : '') + '</small>' : '') + '</button>';
+      return '<button type="button" class="atlas-find' + (i === state.finding ? ' active' : '') + (f.accepted ? ' accepted' : '') + '" data-finding="' + i + '" data-preview="' + (f.fn != null ? 'function:' + f.fn : '') + '"><i style="background:' + (TONE[f.severity] || TONE.info) + '"></i><b>' + esc(findingTitle(f)) + '</b><em>' + (f.fn != null ? esc(tr('complexity ')) + esc(FN[f.fn][3]) : esc(tr(f.severity))) + '</em>' + (file ? '<small>' + esc(file.split('/').pop()) + (f.fn != null ? ':' + esc(FN[f.fn][2]) : '') + '</small>' : '') + '</button>';
     }).join('');
   }
   function modulePanel(mi) {
@@ -957,7 +957,7 @@
       '<div class="selected"><h4 class="mono">' + esc(findingTitle(f)) + '</h4></div>';
     if (f.kind === 'function' && f.fn != null) {
       var fn = FN[f.fn];
-      h += '<p class="atlas-loc"><span>' + esc(F[fn[0]][0]) + '</span><em>:' + fn[2] + esc(functionColumns(fn)) + '</em></p>' + tiles([[fn[3], tr('complexity')], [fn[4], tr('nesting')], [fmt(fn[5]), tr('lines')]]);
+      h += '<p class="atlas-loc"><span>' + esc(F[fn[0]][0]) + '</span><em>:' + esc(fn[2]) + esc(functionColumns(fn)) + '</em></p>' + tiles([[fn[3], tr('complexity')], [fn[4], tr('nesting')], [fmt(fn[5]), tr('lines')]]);
     } else h += '<p class="atlas-loc"><span>' + esc(findingWhat(f)) + '</span></p>';
     if (info.message) h += '<p class="atlas-msg">' + esc(info.message) + '</p>';
     var fix = (info.supportedFixes || [])[0];
@@ -970,7 +970,7 @@
     var file = F[fi], fns = fnsByFile[fi].slice().sort(function (a, b) { return FN[b][3] - FN[a][3]; });
     var h = '<p class="atlas-kick"><i style="background:' + hue(file[1], theme()) + '"></i>' + esc(tr('File')) + ' · ' + esc(M[file[1]].label) + '</p><div class="selected"><h4 class="mono">' + esc(file[0]) + '</h4></div>' +
       tiles([[fmt(file[2]), tr('lines')], [fmt(fns.length), tr('functions')], [fmt(fileFindings[fi].length), tr('Findings')]]);
-    if (fns.length) h += head(tr('Most complex functions')) + fns.slice(0, 6).map(function (i) { var fd = FN[i][6]; return '<button type="button" class="atlas-rel"' + (fd !== -1 ? ' data-finding="' + fd + '"' : ' disabled') + ' data-preview="function:' + i + '"><i style="background:' + (fd !== -1 ? TONE[FD[fd].severity] || TONE.info : 'var(--atlas-calm)') + '"></i><span class="mono">' + esc(FN[i][1]) + '</span><em>' + esc(tr('complexity ')) + FN[i][3] + '</em></button>'; }).join('');
+    if (fns.length) h += head(tr('Most complex functions')) + fns.slice(0, 6).map(function (i) { var fd = FN[i][6]; return '<button type="button" class="atlas-rel"' + (fd !== -1 ? ' data-finding="' + fd + '"' : ' disabled') + ' data-preview="function:' + i + '"><i style="background:' + (fd !== -1 ? TONE[FD[fd].severity] || TONE.info : 'var(--atlas-calm)') + '"></i><span class="mono">' + esc(FN[i][1]) + '</span><em>' + esc(tr('complexity ')) + esc(FN[i][3]) + '</em></button>'; }).join('');
     h += head(tr('Captured file Markdown')) + '<textarea class="atlas-file-markdown" readonly aria-label="' + esc(tr("Captured file Markdown")) + '">' + esc(fileMarkdown(fi)) + '</textarea>';
     h += '<div class="atlas-acts"><button type="button" class="primary atlas-file-download">' + esc(tr("Download .md")) + '</button><button type="button" data-module="' + file[1] + '" data-keep="1">' + esc(tr('Open its module')) + '</button></div>';
     return h;

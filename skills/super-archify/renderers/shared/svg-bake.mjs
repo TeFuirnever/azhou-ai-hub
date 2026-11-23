@@ -555,11 +555,16 @@ function bakeInlineStyle(style, lookup) {
 
 function bakeBodyStyles(body, variables) {
   const lookup = (name) => variables.get(name) ?? null;
-  return body
+  let emitted = 0;
+  const bakedBody = body
     .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/g, (match, attrs, css) => {
       const baked = bakeEmbeddedStylesheet(css, variables);
-      if (/[<&]/.test(baked)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
-      return baked ? `<style${attrs}>${baked}</style>` : '';
+      if (/[<&]/.test(baked) || /[<>]/.test(attrs)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
+      // Unmatched fragments (an unterminated or reassembled <style>) must not
+      // survive into the output, where they could re-open a style element.
+      if (!baked) return '';
+      emitted += 1;
+      return `<style${attrs}>${baked}</style>`;
     })
     .replace(PRESENTATION_VAR_RE, (match, attribute, value) => {
       const resolved = substituteVariables(value, lookup);
@@ -569,6 +574,10 @@ function bakeBodyStyles(body, variables) {
       const baked = bakeInlineStyle(style, lookup);
       return baked ? `style="${escapeAttribute(baked)}"` : '';
     });
+  if ((bakedBody.match(/<\/?style\b/g) || []).length !== 2 * emitted) {
+    throw new Error('svg-bake: embedded style elements did not parse completely');
+  }
+  return bakedBody;
 }
 
 export function authoredPreset(svg) {

@@ -37,7 +37,8 @@ The local capability-independent adaptations remain:
 - the retained local documentation corrections where upstream still ships the stale text (`schemas/README.md` schema facts, the `explainer-authoring.md` diagram-count sentence);
 - the generator-label and whitespace-only normalization (`assets/template.html` generator meta line, `renderers/workflow/workflow-compiler.mjs` whitespace-only lines);
 - the retained local `examples/archify-repository.tree.json` packaging delta, `renderers/shared/diagnostics.mjs`, `scripts/generate-brand-marks.mjs` and the unchanged mode README deltas;
-- the v3.2.0-era restore of the real sibling `bin/archify.mjs` identity in `bin/preview.mjs` and the upstream `archify` skillId in `skill-release.json`/`scripts/update-contract.mjs`; v3.3.0 keeps both, so `bin/preview.mjs` and `skill-release.json` now carry upstream bytes verbatim.
+- the v3.2.0-era restore of the real sibling `bin/archify.mjs` identity in `bin/preview.mjs` and the upstream `archify` skillId in `skill-release.json`/`scripts/update-contract.mjs`; v3.3.0 keeps both, so `bin/preview.mjs` and `skill-release.json` now carry upstream bytes verbatim;
+- the bounded CodeQL-driven security hardening added on this pin (see below), which keeps every flagged flow behavior-preserving and pins its regressions in repository-level `tests/test_archify.py`.
 
 ## Local compatibility fixes carried across this pin
 
@@ -51,6 +52,20 @@ The four PR #430-era files are re-derived against the v3.3.0 bytes:
 | `explainer/sources.mjs` | Reject explicit citation revisions conflicting with the document pin before fallback handling (upstream unchanged at v3.3.0, so the local bytes carry over unchanged) | Same-pin excerpts, explicit old document pins, inferred HEAD and no-repository plain references retained; two-commit regression covers silent revision replacement |
 
 These are bounded local safety/correctness adaptations, not a new upstream version or an extra skill capability. The source commit, source digests and licenses remain pinned; packaged digests and each migration disposition describe the actual local bytes. Regression code lives in repository-level `tests/test_archify.py`; immutable upstream tests remain separate evidence.
+
+## Security hardening added on this pin (CodeQL findings)
+
+Twenty-three CodeQL findings against the v3.3.0 bytes were fixed locally with behavior-level regressions (each new test fails against the pristine upstream bytes and passes after); dispositions live in `tests/archify-vendor-manifest.json` under `adopt_upstream_with_documented_local_fix`:
+
+| File | Local change | Preserved behavior and regression |
+|---|---|---|
+| `modules/code-analysis/overlay/client/overlay.js`, `atlas.js`, `atlas3d.js` | Every repository-derived value interpolated raw into the flagged `innerHTML` sinks passes the module's existing `esc()` — component stats and class fragments, indicator keys, evidence line/range/match numbers, diff-deletion counts, totals, tips, coupling counts, PR distribution bars, tiles, severity bars and the Atlas 3D rail | Markup, class names and numeric formatting unchanged; the hub regression drives all fourteen flagged sinks with hostile module/file/symbol/numeric payloads through a fake DOM |
+| `assets/template.html` | One shared `safeNavigationHref` allowlist guard (control characters and surrounding whitespace normalized before a case-insensitive scheme check; relative URLs, `http:`, `https:` and the documented `file:` output links allowed; `javascript:`, `data:`, `vbscript:` and scheme-relative hosts refused) backs `location.assign` in `navigateToRelativeHtml`/`navigateToParent` and the Semantic Passport drilldown links; rejected URLs keep the existing non-navigating fallbacks | Sibling/parent/passport navigation bytes unchanged for safe hrefs; the regression refuses fifteen obfuscated-scheme payloads at all three sinks and keeps eleven allowed forms working |
+| `renderers/shared/svg-bake.mjs` | `bakeBodyStyles` rejects `<`/`>` inside re-emitted style attributes and any unmatched or reassembled `<style` fragment left after the rewrite, so an input cannot re-open or leave open a style element | Clean bodies bake byte-identically (declarations, theme resolution, empty-style drop); reconstitution, unterminated, stray-close, nested and attribute-breakout payloads now fail closed |
+| `pr/story-svg.mjs` | `scopeEmbeddedStyles` rejects `]]>` surviving in re-serialized CSS and any unmatched `<style` fragment, so scoped styles stay inside their CDATA section | Well-formed styles scope to identical bytes; CDATA-breakout and reconstitution payloads fail closed |
+| `scripts/check-render-output.mjs` | `SVG_TAG_TOKEN` splits its two `=` alternatives with a lookahead so every input character has exactly one way to match | Tokenization language preserved on the documented corpus plus 40k seeded fuzz inputs, linear on 20k repetitions of `=""` (the old alternation took exponential time there); one degenerate corner is documented in the test — a `>` inside a complete quoted value with no later `>` used to end a shorter tag and now yields no tag, a shape upstream output cannot produce because attribute values are XML-escaped |
+
+The `js/incomplete-multi-character-sanitization` finding in the same file's `stripTags` is deliberately left unchanged: a single global pass removing `<[^>]*>` cannot leave or reconstitute a tag (any intact `<...>` span is itself consumed; removals only join text around an eaten middle), its results feed text metrics rather than markup, and the regression asserts that invariant over exhaustive short-alphabet inputs plus nested-tag payloads. Like `delta/architecture-delta.mjs` below, this is a recorded no-fix decision, but with a completeness proof instead of a limitation.
 
 ## Retained third-party notices
 

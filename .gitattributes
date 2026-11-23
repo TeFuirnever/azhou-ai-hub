@@ -8,6 +8,8 @@ skills/excalidraw-diagram/references/uv.lock linguist-generated
 skills/excalidraw-diagram/scripts/package-lock.json linguist-generated
 benchmarks/**/fixtures/** linguist-generated
 skills/super-diagram-design/** -text linguist-vendored -whitespace
+skills/super-archify/modules/code-analysis/vendor/** linguist-vendored -whitespace
+skills/super-archify/modules/code-analysis/test/fixtures/** -whitespace
 *.woff2 binary
 *.png binary
 *.gz binary

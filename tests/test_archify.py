@@ -426,5 +426,574 @@ console.log(JSON.stringify({argumentPreserved:true,errorPropagated:true,contextR
         )
 
 
+@unittest.skipIf(shutil.which("node") is None, "node is not available")
+class ArchifyLocalHardeningRegressionTest(unittest.TestCase):
+    def test_drilldown_navigation_refuses_unsafe_schemes(self) -> None:
+        program = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+const source=fs.readFileSync(path.join(process.argv[1],'assets/template.html'),'utf8');
+const start=source.indexOf('      function isSafeRelativeHtmlHref(value) {'),end=source.indexOf('      function relationshipsFor(id, byId) {',start);
+assert.ok(start>=0&&end>start,'drilldown navigation block');
+const page=({search='',parentHref=null}={})=>{
+  const navigations=[],links=[];
+  const element=()=>{const node={attributes:{},children:[],setAttribute(name,value){this.attributes[name]=String(value);},appendChild(child){this.children.push(child);}};Object.defineProperty(node,'href',{set(value){links.push(String(value));}});return node;};
+  const context={location:{pathname:'/docs/parent.html',search,assign:url=>navigations.push(url)},svg:{getAttribute:name=>name==='data-parent-href'?parentHref:null},
+    document:{createElement:element},URLSearchParams,viewerText:key=>key,drilldownsSection:{},drilldownsList:element()};
+  vm.runInNewContext(source.slice(start,end)+'\nthis.navigation={navigateToRelativeHtml,navigateToParent,renderDrilldowns};',context);
+  return {...context.navigation,navigations,links,guard:context.safeNavigationHref};
+};
+const drilldowns=href=>({getAttribute:name=>name==='data-node-drilldowns'?JSON.stringify([{href,label:'Drilldown'}]):null});
+// The three sinks keep their documented behavior: a sibling page navigates with ?from=, the parent
+// link comes from ?from= or data-parent-href, and the passport list links to the sibling.
+for(const [options,run,expected,navigations,links] of [
+  [{},view=>view.navigateToRelativeHtml('child.html'),true,['child.html?from=parent.html'],[]],
+  [{search:'?from=parent.html&theme=dark'},view=>view.navigateToParent(),true,['parent.html?theme=dark'],[]],
+  [{parentHref:'up.html#top'},view=>view.navigateToParent(),true,['up.html#top'],[]],
+  [{},view=>view.renderDrilldowns(drilldowns('child.html')),undefined,[],['child.html?from=parent.html']],
+]){
+  const view=page(options);
+  assert.equal(run(view),expected);
+  assert.deepEqual(view.navigations,navigations);
+  assert.deepEqual(view.links,links);
+}
+const hostile=['javascript:alert(1)','JavaScript:alert(1)',' javascript:alert(1)','jav\tascript:alert(1)','\u0001javascript:alert(1)','java\nscript:alert(1)',
+  'data:text/html,<script>alert(1)</script>','vbscript:msgbox(1)','blob:https://example.invalid/x','mailto:a@example.invalid','//example.invalid/x.html','\\\\example.invalid\\x.html',''];
+for(const href of hostile){
+  const view=page({search:'?from='+encodeURIComponent(href),parentHref:href});
+  assert.equal(view.navigateToRelativeHtml(href),false,JSON.stringify(href));
+  assert.equal(view.navigateToParent(),false,JSON.stringify(href));
+  assert.deepEqual(view.navigations,[],JSON.stringify(href));
+  view.renderDrilldowns(drilldowns(href));
+  assert.deepEqual(view.links,[],JSON.stringify(href));
+}
+// One shared guard backs the sinks: it normalizes what a browser ignores before the scheme check.
+assert.equal(typeof page().guard,'function','template ships the shared safe-URL guard');
+const guard=page().guard;
+for(const href of hostile) assert.equal(guard(href),null,JSON.stringify(href));
+for(const value of [null,undefined,42,{}]) assert.equal(guard(value),null);
+for(const [href,expected] of [
+  ['child.html','child.html'],['child.html?from=parent.html#top','child.html?from=parent.html#top'],['../dir/child.html','../dir/child.html'],
+  ['/docs/child.html','/docs/child.html'],['#fragment','#fragment'],['?theme=dark','?theme=dark'],['  child.html\t\n','child.html'],
+  ['/example.invalid/x.html','/example.invalid/x.html'],
+  ['https://example.invalid/a b.html','https://example.invalid/a b.html'],['HTTP://EXAMPLE.INVALID/x.html','HTTP://EXAMPLE.INVALID/x.html'],
+  ['file:///abs/path/x.html','file:///abs/path/x.html'],['\u0001 file:///abs/path/x.html ','file:///abs/path/x.html'],
+]) assert.equal(guard(href),expected,JSON.stringify(href));
+console.log(JSON.stringify({sites:4,hostile:hostile.length,allowed:12,passed:true}));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual({"sites": 4, "hostile": 13, "allowed": 12, "passed": True}, json.loads(result.stdout))
+
+    def test_analysis_client_renders_repository_payloads_as_text(self) -> None:
+        program = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+const CLIENT = path.join(process.argv[1], 'modules/code-analysis/overlay/client');
+const IMG = '<img src=x onerror=alert(1)>';
+const FILE = `deep/${IMG}/a.py`;
+const MSG = `msg ${IMG} tail`;
+const NUM = `9>${IMG}`;
+let captured = { html: [] };
+const rowValues = {};
+const ctxProxy = () => new Proxy({}, {
+  get(target, key) {
+    if (key in target) return target[key];
+    if (key === 'measureText') return () => ({ width: 12 });
+    if (key === 'createLinearGradient' || key === 'createRadialGradient' || key === 'createPattern') return () => ({ addColorStop() {} });
+    if (key === 'canvas') return null;
+    return (...a) => {};
+  },
+  set(target, key, value) { target[key] = value; return true; },
+});
+class El {
+  constructor(tag) {
+    this.tagName = tag; this.children = []; this.attributes = {}; this.dataset = {};
+    this.style = { setProperty() {}, removeProperty() {} };
+    this._listeners = {};
+    this.classList = { add() {}, remove() {}, toggle() {}, contains: () => false };
+    this.hidden = false; this.textContent = ''; this.scrollTop = 0; this.disabled = false;
+    this._html = ''; this.parentNode = null; this.clientWidth = 640; this.clientHeight = 480;
+  }
+  get innerHTML() { return this._html; }
+  set innerHTML(v) { this._html = String(v); captured.html.push(this._html); }
+  appendChild(c) { this.children.push(c); c.parentNode = this; return c; }
+  prepend(c) { this.children.unshift(c); c.parentNode = this; return c; }
+  insertBefore(c) { this.children.push(c); c.parentNode = this; return c; }
+  append(c) { this.children.push(c); c.parentNode = this; return c; }
+  before() {} after() {} remove() {} focus() {} select() {} click() {}
+  setAttribute(k, v) { this.attributes[k] = String(v); }
+  getAttribute(k) { return k in this.attributes ? this.attributes[k] : null; }
+  removeAttribute(k) { delete this.attributes[k]; }
+  hasAttribute(k) { return k in this.attributes; }
+  addEventListener(t, fn) { (this._listeners[t] = this._listeners[t] || []).push(fn); }
+  fire(t, ev) { (this._listeners[t] || []).slice().forEach((fn) => fn.call(this, ev)); }
+  fireClick() { this.fire('click', { preventDefault() {}, stopPropagation() {}, target: this, key: 'Enter', clientX: 0, clientY: 0 }); }
+  getClientRects() { return [{}]; }
+  getBoundingClientRect() { return { left: 0, top: 0, right: 640, bottom: 480, width: 640, height: 480, x: 0, y: 0 }; }
+  querySelector(sel) { this._q = this._q || {}; if (!this._q[sel]) { const el = new El(sel); el.parentElement = this; this._q[sel] = el; } return this._q[sel]; }
+  querySelectorAll(sel) {
+    this._qa = this._qa || {};
+    if (!this._qa[sel]) {
+      const row = new El('row');
+      row.getAttribute = (name) => (rowValues[name] !== undefined ? rowValues[name] : '');
+      row.hasAttribute = (name) => name === 'data-finding' || name === 'data-ind' || name === 'data-edge';
+      row.closest = () => row;
+      this._qa[sel] = [row];
+    }
+    return this._qa[sel];
+  }
+  contains() { return false; }
+  getContext() { return ctxProxy(); }
+}
+function makeEnv({ analysis, atlas, atlas3dData }) {
+  captured = { html: [] };
+  const allEls = [];
+  const root = new El('html');
+  const toolbar = new El('div');
+  const container = new El('div');
+  container.getAttribute = (k) => (k === 'data-just-panned' ? 'false' : null);
+  const docStubs = { '.toolbar': toolbar, '.header': new El('div'), '.diagram-container': container, '.analysis-stage': new El('div') };
+  const rafQueue = [];
+  const windowObj = {
+    innerWidth: 1400, innerHeight: 900, devicePixelRatio: 1,
+    addEventListener() {}, removeEventListener() {},
+    __archifyMakeAnalysisTranslator: () => (key, params) => String(key).replace(/\{(\w+)\}/g, (m, k) => (params && k in params ? String(params[k]) : m)),
+    __archifyWireVerification: () => {},
+  };
+  const doc = {
+    documentElement: root,
+    body: new El('body'),
+    hidden: false,
+    activeElement: null,
+    getElementById(id) {
+      if (id === 'bauify-analysis') return { textContent: JSON.stringify(analysis) };
+      if (id === 'bauify-atlas-data') return { textContent: JSON.stringify(atlas) };
+      if (id === 'bauify-atlas3d-data') return { textContent: JSON.stringify(atlas3dData || {}) };
+      return null;
+    },
+    createElement(tag) { const el = new El(tag); allEls.push(el); return el; },
+    createElementNS(ns, tag) { const el = new El(tag); allEls.push(el); return el; },
+    querySelector(sel) { return docStubs[sel] || new El(sel); },
+    querySelectorAll() { return []; },
+    addEventListener() {},
+  };
+  const sandbox = {
+    document: doc, window: windowObj, root,
+    innerHeight: 900, innerWidth: 1400,
+    navigator: { clipboard: undefined, platform: 'test', userAgent: 'test' },
+    location: { pathname: '/reports/x.html', search: '', assign() {}, replace() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    matchMedia: () => ({ matches: false }),
+    MutationObserver: class { observe() {} },
+    ResizeObserver: class { observe() {} },
+    requestAnimationFrame(fn) { rafQueue.push(fn); return rafQueue.length; },
+    cancelAnimationFrame() {},
+    performance,
+    getComputedStyle: () => ({ getPropertyValue: () => '' }),
+    Float32Array, Float64Array, JSON, Math, Object, Array, Number, String, Set, Map, URL, URLSearchParams, Blob, Proxy,
+    setTimeout, clearTimeout,
+    console,
+    Option: class { constructor(label, value) { this.text = label; this.value = value; } },
+  };
+  sandbox.globalThis = sandbox;
+  windowObj.matchMedia = sandbox.matchMedia;
+  return { sandbox, windowObj, doc, root, toolbar, container, rafQueue, captured, allEls, flush: () => { const q = rafQueue.splice(0); q.forEach((fn) => fn(performance.now())); } };
+}
+function runScript(env, file) {
+  const source = fs.readFileSync(path.join(CLIENT, file), 'utf8');
+  vm.runInNewContext(source, env.sandbox, { filename: file, timeout: 20000 });
+}
+function findEl(list, pred) {
+  for (const el of list || []) {
+    if (pred(el)) return el;
+    const inner = findEl(el.children, pred);
+    if (inner) return inner;
+  }
+  return null;
+}
+const overlayAnalysis = {
+  ui: { locale: 'en', messages: {} },
+  repository: { url: 'https://example.invalid/x', language: 'py', root: '.', revision: 'abcdef123456', sourceKind: 'commit' },
+  totals: { modules: NUM, edges: 2 },
+  unmapped: [{ id: 'U1', label: `unmapped ${IMG}`, path: 'u<img>', files: 2, loc: 10, fanIn: 1, fanOut: 1, fileList: [] }],
+  components: [
+    {
+      id: 'C1', label: `comp ${IMG}`,
+      modules: [{ id: 'M1', label: `mod ${IMG}`, path: 'm<img>', files: 1, loc: 5, fanIn: 1, fanOut: 0 }],
+      indicators: { status: 'amber', items: [{ key: 'instability', label: 'Instability', status: 'neutral', findings: ['FHUB', 'FIMP'], detail: [], value: '0.5', fanIn: NUM, fanOut: 1, instability: NUM }] },
+      ambiguousModules: [], files: NUM, loc: NUM, internalImports: 1,
+      incoming: [],
+      outgoing: [{ component: 'C2', weight: NUM, evidence: [{ file: 'a.py', line: 2, to: 'b.py' }] }],
+      fileList: [{ path: FILE, module: 'M1', findings: [{ id: 'FIMP' }], loc: NUM, importsOut: NUM, importedBy: NUM }],
+      findings: [{ id: 'FHUB' }, { id: 'FIMP' }],
+    },
+    { id: 'C2', label: 'C2', modules: [], indicators: { status: 'grey', items: [] }, ambiguousModules: [], files: 1, loc: 1, internalImports: 0, incoming: [{ component: 'C1', weight: 2, evidence: [{ file: 'a.py', line: 2, to: 'b.py' }] }], outgoing: [], fileList: [], findings: [] },
+  ],
+  edges: [{ from: 'C1', to: 'C2', weight: 2, declared: true, evidence: [{ file: FILE, line: NUM, to: 'x' }] }],
+  findings: [
+    { id: 'FHUB', code: 'coupling/hub', dimension: 'coupling', severity: 'warning', message: MSG, subject: { module: 'M1' }, componentIds: ['C1'], moduleIds: ['M1'], evidence: { fanIn: 1, fanOut: 1, dependents: ['M2'], dependencies: ['M3'], threshold: { fanIn: NUM, fanOut: 1 } } },
+    { id: 'FIMP', code: 'architecture/boundary', dimension: 'architecture', severity: 'warning', message: `b ${IMG}`, subject: { file: FILE, line: 2, boundary: { from: 'ui', to: 'db' } }, componentIds: ['C1'], moduleIds: ['M1'], evidence: { imports: [{ file: FILE, line: NUM, to: `to ${IMG}` }], rule: { reason: 'r' }, totalImports: 1, files: ['x'] } },
+  ],
+  overview: {
+    counts: { error: 1, warning: 2, info: 0, findings: 2, acceptedErrors: 0, accepted: 0 },
+    priorities: ['FHUB'],
+    groups: [{ code: 'coupling/hub', severity: 'warning', count: 1, ids: ['FHUB'] }, { code: 'architecture/boundary', severity: 'warning', count: 1, ids: ['FIMP'] }],
+    coverage: { language: 'py', files: { analyzed: 2, excludedByRole: 0, excludedRoles: [], parseErrors: [] }, rules: { run: ['coupling/hub'], suppressed: [] }, unresolved: {}, boundaries: { layers: [], rules: 1 } },
+    review: null, investigation: null,
+  },
+  snippets: { [FILE]: { lines: ['line one', `line ${IMG} two`], changes: { status: 'modified', added: [2], modified: [], deleted: [{ after: 1, count: NUM }] } } },
+};
+function runOverlay() {
+  Object.assign(rowValues, {
+    'data-finding': 'FHUB', 'data-ind': 'instability', 'data-edge': 'C1>C2',
+    'data-file': FILE, 'data-line': '3', 'data-range-start': NUM, 'data-range-end': '6',
+    'data-match': JSON.stringify({ kind: 'external', line: 2, endLine: 2, column: NUM, endColumn: '5' }),
+    'data-why': 'why', 'data-tone': 'amber',
+  });
+  const env = makeEnv({ analysis: overlayAnalysis });
+  const g = new El('g');
+  g.getBBox = () => ({ x: 0, y: 0, width: 10, height: 10 });
+  g.getAttribute = (k) => (k === 'data-node-id' ? 'C1' : null);
+  const svg = new El('svg');
+  svg.appendChild(g);
+  svg.querySelector = (sel) => { svg._q = svg._q || {}; if (!svg._q[sel]) svg._q[sel] = sel.indexOf('data-node-id') !== -1 ? g : new El(sel); return svg._q[sel]; };
+  svg.querySelectorAll = (sel) => (sel.indexOf('data-node-id') !== -1 ? [g] : []);
+  const baseQuery = env.doc.querySelector.bind(env.doc);
+  env.doc.querySelector = (sel) => (sel === 'svg' ? svg : baseQuery(sel));
+  runScript(env, 'overlay.js');
+  const btn = env.toolbar.children.find((c) => c.tagName === 'button');
+  btn.fireClick();
+  env.flush();
+  env.windowObj.__archifyShowFinding('FHUB');
+  env.flush();
+  const detailEl = findEl(env.allEls, (el) => el.id === 'bauify-detail');
+  assert.ok(detailEl, 'overlay detail element exists');
+  detailEl.querySelectorAll('.ref')[0].fireClick();
+  env.flush();
+  const panelEl = findEl(env.allEls, (el) => el.id === 'bauify-panel');
+  const stageEl = findEl(env.allEls, (el) => el.id === 'bauify-stage');
+  svg.fire('click', { preventDefault() {}, stopPropagation() {}, target: { closest: (sel) => (sel && sel.indexOf('g[data-node-id]') !== -1 ? g : null) } }, true);
+  env.flush();
+  panelEl.querySelectorAll('.ind.link')[0].fireClick();
+  env.flush();
+  panelEl.querySelectorAll('.fly-rel[data-edge]')[0].fireClick();
+  env.flush();
+  const offRow = new El('button');
+  offRow.dataset.go = 'off:U1';
+  offRow.closest = (sel) => (sel === 'button' ? offRow : null);
+  if (stageEl) stageEl.fire('click', { stopPropagation() {}, target: offRow });
+  env.flush();
+  return captured.html;
+}
+function atlasPayload(mode) {
+  return {
+    ui: { locale: 'en', messages: {}, mode },
+    components: [{ id: 'C1', label: `c ${IMG}`, modules: [{ id: 'm1', label: `m ${IMG}`, path: 'p<img>' }] }],
+    findings: [{ id: 'F1', code: 'complexity/function', dimension: 'complexity', severity: 'warning', message: MSG, subject: { file: FILE, line: 3 }, componentIds: ['C1'], moduleIds: ['m1'] }],
+  };
+}
+function atlasData() {
+  return {
+    modules: [{ id: 'm1', label: `mod ${IMG}`, path: 'p<img>', fanIn: NUM, fanOut: NUM }],
+    files: [[FILE, 0, 40]],
+    edges: [],
+    functions: [[0, `fn ${IMG}`, 7, NUM, 2, 10, 0, null]],
+    findings: [
+      { id: 'F1', code: 'complexity/function', severity: 'warning', kind: 'function', fn: 0, file: 0, accepted: false, title: `t ${IMG}` },
+      { id: 'F2', code: 'coupling/hub', severity: 'warning', kind: 'module', module: 0, accepted: false, title: `h ${IMG}` },
+    ],
+    coverage: { records: 1, resolved: 1, external: 0, unknown: 0, outside: 0, parseErrors: 0, notCompiled: 0 },
+    measured: true,
+  };
+}
+function runAtlas(mode) {
+  Object.assign(rowValues, { 'data-finding': '0', 'data-module': '0' });
+  const env = makeEnv({ analysis: atlasPayload(mode), atlas: atlasData() });
+  env.root.setAttribute('data-bauify', 'on');
+  runScript(env, 'atlas.js');
+  env.flush();
+  const panel = findEl(env.allEls, (el) => el.id === 'bauify-atlas');
+  assert.ok(panel, 'atlas panel exists');
+  if (mode === 'standalone') {
+    const canvas = panel.querySelector('canvas');
+    const tip = panel.querySelector('.atlas-tip');
+    let hitAny = false;
+    outer: for (let y = 6; y < 470; y += 3) {
+      for (let x = 6; x < 630; x += 3) {
+        canvas.fire('mousemove', { clientX: x, clientY: y });
+        if (!tip.hidden && tip._html) { hitAny = true; break outer; }
+      }
+    }
+    assert.ok(hitAny, 'atlas hover tip rendered');
+  } else {
+    const side = panel.querySelector('.atlas-side');
+    side.querySelectorAll('[data-finding]')[0].fireClick();
+    env.flush();
+  }
+  return captured.html;
+}
+function runAtlas3d() {
+  const env = makeEnv({ analysis: atlasPayload('diagram'), atlas: atlasData(), atlas3dData: { detail: { F1: { message: MSG, fix: `fix ${IMG}` } }, run: { summary: { errors: 1, warnings: 0, info: 0 } } } });
+  class V3 {
+    constructor(x, y, z) { this.x = x || 0; this.y = y || 0; this.z = z || 0; }
+    clone() { return new V3(this.x, this.y, this.z); }
+    add(v) { this.x += v.x; this.y += v.y; this.z += v.z; return this; }
+    multiplyScalar(s) { this.x *= s; this.y *= s; this.z *= s; return this; }
+    copy(v) { this.x = v.x; this.y = v.y; this.z = v.z; return this; }
+    normalize() { const l = Math.hypot(this.x, this.y, this.z) || 1; return this.multiplyScalar(1 / l); }
+    project() { this.x = 0; this.y = 0; this.z = 0.5; return this; }
+    set(x, y, z) { this.x = x; this.y = y; this.z = z; return this; }
+    setXYZ() { return this; }
+  }
+  class Attr {
+    constructor(array, itemSize) { this.array = array; this.itemSize = itemSize; this.count = Math.ceil(array.length / itemSize); }
+    getX(i) { return this.array[i * this.itemSize]; }
+    getY(i) { return this.array[i * this.itemSize + 1]; }
+    getZ(i) { return this.array[i * this.itemSize + 2]; }
+    setXYZ(i, x, y, z) { const o = i * this.itemSize; this.array[o] = x; this.array[o + 1] = y; this.array[o + 2] = z; return this; }
+  }
+  class Geometry { constructor() { this._a = {}; } setAttribute(n, a) { this._a[n] = a; } getAttribute(n) { return this._a[n] || new Attr([], 3); } }
+  class Color { constructor() { this.r = 0.5; this.g = 0.4; this.b = 0.6; } }
+  class Box3 {
+    constructor() { this.min = new V3(Infinity, Infinity, Infinity); this.max = new V3(-Infinity, -Infinity, -Infinity); }
+    setFromBufferAttribute(a) { for (let i = 0; i < a.count; i += 1) { this.min.x = Math.min(this.min.x, a.getX(i)); this.min.y = Math.min(this.min.y, a.getY(i)); this.min.z = Math.min(this.min.z, a.getZ(i)); this.max.x = Math.max(this.max.x, a.getX(i)); this.max.y = Math.max(this.max.y, a.getY(i)); this.max.z = Math.max(this.max.z, a.getZ(i)); } return this; }
+    expandByScalar(s) { this.min.x -= s; this.min.y -= s; this.min.z -= s; this.max.x += s; this.max.y += s; this.max.z += s; return this; }
+    getSize(v) { return v.set(this.max.x - this.min.x, this.max.y - this.min.y, this.max.z - this.min.z); }
+    getCenter(v) { return v.set((this.min.x + this.max.x) / 2, (this.min.y + this.max.y) / 2, (this.min.z + this.max.z) / 2); }
+  }
+  class Curve { constructor() {} getPoints(n) { return Array.from({ length: n }, () => new V3()); } }
+  const canvas = new El('canvas');
+  env.sandbox.window.THREE = {
+    Vector3: V3, Color, Box3,
+    BufferAttribute: Attr, Float32BufferAttribute: Attr, BufferGeometry: Geometry,
+    WebGLRenderer: class { constructor() { this.domElement = canvas; } setPixelRatio() {} setClearColor() {} setSize() {} getPixelRatio() { return 1; } render() {} },
+    Scene: class { add() {} },
+    PerspectiveCamera: class { constructor() { this.position = new V3(); this.aspect = 1; } lookAt() {} updateProjectionMatrix() {} },
+    Points: class { constructor() { this.position = new V3(); } },
+    LineSegments: class { constructor() { this.position = new V3(); } },
+    ShaderMaterial: class {}, LineBasicMaterial: class {},
+    EdgesGeometry: class {}, BoxGeometry: class {}, CubicBezierCurve3: Curve, QuadraticBezierCurve3: Curve,
+    AdditiveBlending: 0,
+  };
+  const host = new El('section');
+  runScript(env, 'atlas3d.js');
+  const view = env.windowObj.__archifyAtlas3d.mount(host);
+  assert.ok(view && view.select, 'atlas3d mounted');
+  view.select({ type: 'finding', index: 0 });
+  return captured.html;
+}
+const overlayHtml = runOverlay();
+const atlasPageHtml = runAtlas('diagram');
+const atlasStandaloneHtml = runAtlas('standalone');
+const atlas3dHtml = runAtlas3d();
+const all = [...overlayHtml, ...atlasPageHtml, ...atlasStandaloneHtml, ...atlas3dHtml];
+const sinks = all.length;
+assert.ok(sinks >= 20, `collected ${sinks} innerHTML writes`);
+for (const html of all) assert.doesNotMatch(html, /<img\b/i, `raw payload in sink: ${html.slice(0, 200)}`);
+const escaped = all.filter((h) => h.includes('&lt;img'));
+assert.ok(escaped.length >= 10, `escaped payload present in only ${escaped.length} sinks`);
+console.log(JSON.stringify({ sinks, withEscapedPayload: escaped.length, passed: true }));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=60,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual({"sinks": 21, "withEscapedPayload": 14, "passed": True}, json.loads(result.stdout))
+
+    def test_static_bake_cannot_reconstitute_embedded_style_elements(self) -> None:
+        program = r"""
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+const {bakeSvg} = await import(pathToFileURL(path.join(process.argv[1], 'renderers/shared/svg-bake.mjs')));
+const wrap = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${body}</svg>`;
+const legit = bakeSvg(wrap('<style>.c-n{fill:#102030}</style><rect class="c-n" width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
+const styleCount = (text) => (text.match(/<\/?style\b/g) || []).length;
+if (styleCount(legit) !== 4) throw new Error('legit bake: expected baker + body style tags, got ' + styleCount(legit));
+if (!legit.includes('fill: #102030') || !legit.includes('<rect class="c-n"')) throw new Error('legit bake lost declarations');
+const empty = bakeSvg(wrap('<style></style><rect width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
+if (styleCount(empty) !== 2) throw new Error('empty body style should only keep the baker style');
+const hostile = [
+  '<sty<style></style>le>.n{fill:red}</style><rect class="n" width="4" height="4"/>',
+  '<style>.n{fill:red}<rect class="n" width="4" height="4"/>',
+  '<rect width="4" height="4"/></style>',
+  '<style><style>.n{fill:red}</style></style><rect width="4" height="4"/>',
+  '<style x="<s>a</s y=">.n{fill:red}</style><rect width="4" height="4"/>',
+];
+let threw = 0;
+for (const body of hostile) {
+  try { bakeSvg(wrap(body), { theme: 'dark', preset: 'classic' }); } catch (_) { threw += 1; }
+}
+console.log(JSON.stringify({ styles: styleCount(legit), empty: styleCount(empty), threw, expected: hostile.length, passed: threw === hostile.length }));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual({"styles": 4, "empty": 2, "threw": 5, "expected": 5, "passed": True}, json.loads(result.stdout))
+
+    def test_story_scoping_rejects_style_reconstitution_and_terminators(self) -> None:
+        program = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import {pathToFileURL} from 'node:url';
+const root = process.argv[1];
+const {parseStylesheet} = await import(pathToFileURL(path.join(root, 'renderers/shared/svg-bake.mjs')));
+const source = fs.readFileSync(path.join(root, 'pr/story-svg.mjs'), 'utf8');
+const start = source.indexOf('function scopeEmbeddedStyles(svg, key) {'), end = source.indexOf('function annotateEdgePaths(svg) {', start);
+assert.ok(start >= 0 && end > start);
+const scopeEmbeddedStyles = vm.runInNewContext('(' + source.slice(start, end) + ')', { parseStylesheet });
+const cases = [
+  ['<svg><style>.c-n{fill:var(--x)}</style><rect class="c-n"/></svg>', '<svg><style><![CDATA[[data-native-key="native-1"] :is(.c-n){fill:var(--x)}]]></style><rect class="c-n"/></svg>'],
+  ['<svg><style></style><rect/></svg>', '<svg><rect/></svg>'],
+  ['<svg><style><![CDATA[.c-node{fill:red}]]></style><rect class="c-node"/></svg>', '<svg><style><![CDATA[[data-native-key="native-1"] :is(.c-node){fill:red}]]></style><rect class="c-node"/></svg>'],
+];
+for (const [input, expected] of cases) assert.equal(scopeEmbeddedStyles(input, 'native-1'), expected);
+const hostile = [
+  '<svg><sty<style></style>le><rect/></svg>',
+  '<svg><style>a]]><img src=x onerror=alert(1)>{fill:red}</style><rect/></svg>',
+  '<svg><style>.a{fill:red}]]><script>alert(1)</script>.b{fill:blue}</style><rect/></svg>',
+  '<svg><style>.a{fill:red}</style y="1"><rect/></svg>',
+];
+let threw = 0;
+for (const svg of hostile) {
+  try { scopeEmbeddedStyles(svg, 'native-1'); } catch (_) { threw += 1; }
+}
+assert.equal(threw, hostile.length);
+console.log(JSON.stringify({ cases: cases.length, threw, expected: hostile.length, passed: true }));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        self.assertEqual({"cases": 3, "threw": 4, "expected": 4, "passed": True}, json.loads(result.stdout))
+
+    def test_render_tag_tokenizer_is_equivalent_and_linear(self) -> None:
+        program = r"""
+import fs from 'node:fs';
+import path from 'node:path';
+const source = fs.readFileSync(path.join(process.argv[1], 'scripts/check-render-output.mjs'), 'utf8');
+const marker = 'const SVG_TAG_TOKEN = ';
+const at = source.indexOf(marker);
+const lineEnd = source.indexOf('\n', at);
+const NEW = new Function('return ' + source.slice(at + marker.length, lineEnd).replace(/;$/, ''))();
+const OLD = /<!--[\s\S]*?(?:-->|$)|<!\[CDATA\[[\s\S]*?(?:\]\]>|$)|<(\/?)([A-Za-z][\w:-]*)(?=[\s/>])(?:=\s*"[^"]*"|=\s*'[^']*'|[^>"']|["'])*>/g;
+if (NEW.source === OLD.source) throw new Error('the tag tokenizer alternation was not restructured');
+const tokenize = (re, text) => Array.from(text.matchAll(re), (m) => [m.index, m[0], m[1] || '', m[2] || '']);
+// The one documented degenerate corner where the old alternation fell back to a
+// shorter tag: '=' followed by a complete quoted value that contains '>' with no
+// '>' after the closing quote. Archify output XML-escapes attribute values, so
+// this shape never reaches the tokenizer in generated artifacts.
+const divergent = (text) => {
+  const m = /=(?=\s*(?:"[^"]*>[^"]*"|'[^']*>'[^']*'))/.exec(text);
+  if (!m) return false;
+  const open = text.indexOf('"', m.index) !== -1 ? '"' : "'";
+  const closeStart = text.indexOf(open, m.index + 1);
+  const closeEnd = text.indexOf(open, closeStart + 1);
+  return !text.slice(closeEnd + 1).includes('>');
+};
+const corpus = [
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10">',
+  '<g class="n" data-node-id="a1">', "<g data-note=it's>",
+  '<path d="M0,0 L10,10"/>', '<rect x=1 y=2 width=3 height=4/>',
+  '<!-- a <style> comment -->', '<![CDATA[ raw <ctx > data ]]>',
+  '<title>Text with <img> inside</title>', "<a href='x'>",
+  '<b = "unclosed', "<c ='x", "<d data-note=it's x=1>",
+  '<e "quoted" literal>', '<f = >', '<g ==>', "<h ='='>",
+  '<text>plain > text</text>', '</closing-tag>', '<k a="1" b=\'2\' c=3 d/>',
+];
+let mismatches = 0;
+const check = (text) => {
+  const a = tokenize(OLD, text), b = tokenize(NEW, text);
+  if (JSON.stringify(a) !== JSON.stringify(b) && !divergent(text)) mismatches += 1;
+};
+corpus.forEach(check);
+let seed = 0x12345678;
+const rnd = () => { seed = (Math.imul(seed ^ (seed >>> 15), 1 | seed) + 0x6d2b79f5) >>> 0; return seed / 0xffffffff; };
+const alpha = ['<', '>', 'a', 'b', '=', '"', "'", ' ', '/', ':', '\n'];
+for (let i = 0; i < 40000; i += 1) {
+  let text = '';
+  const len = 1 + Math.floor(rnd() * 20);
+  for (let j = 0; j < len; j += 1) text += alpha[Math.floor(rnd() * alpha.length)];
+  check(text);
+}
+if (mismatches) throw new Error(`tokenizer language mismatch on ${mismatches} inputs`);
+const pathological = '<a ' + '=""'.repeat(20000);
+const t0 = performance.now();
+Array.from(pathological.matchAll(NEW));
+const ms = performance.now() - t0;
+if (ms > 2000) throw new Error(`tokenizer still slow on pathological input: ${ms}ms`);
+console.log(JSON.stringify({ mismatches: 0, ms: Math.round(ms), passed: true }));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=60,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual({"mismatches": 0, "passed": True}, {k: payload[k] for k in ("mismatches", "passed")})
+        self.assertLess(payload["ms"], 2000)
+
+    def test_strip_tags_cannot_leave_a_complete_tag(self) -> None:
+        program = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+const source = fs.readFileSync(path.join(process.argv[1], 'scripts/check-render-output.mjs'), 'utf8');
+const start = source.indexOf('function stripTags(value) {');
+const end = source.indexOf('\n}', start) + 2;
+assert.ok(start >= 0);
+const stripTags = vm.runInNewContext('(' + source.slice(start, end) + ')', {});
+const TAG = /<[A-Za-z/][^>]*>/;
+const alphabet = ['<', '>', 'a', 'b', '"', '/'];
+let cases = 0;
+const check = (value) => {
+  cases += 1;
+  const out = stripTags(value);
+  assert.doesNotMatch(out, TAG, JSON.stringify(value) + ' -> ' + JSON.stringify(out));
+};
+for (let len = 0; len <= 6; len += 1) {
+  const total = alphabet.length ** len;
+  for (let i = 0; i < total; i += 1) {
+    let value = '', n = i;
+    for (let j = 0; j < len; j += 1) { value += alphabet[n % alphabet.length]; n = Math.floor(n / alphabet.length); }
+    check(value);
+  }
+}
+for (const payload of [
+  '<scr<script>ipt>alert(1)</scr</script>ipt>',
+  '<img<img src=x onerror=alert(1)> src=y>',
+  '<<script>script>alert(1)<</script>/script>',
+  '<img src="a>b" onerror=alert(1)>',
+  '<a b="</script>x">',
+  '<b<c>old</c>ad>',
+  '<<in>img src=x onerror=alert(1)>',
+  'i<3<t>ag>',
+]) check(payload);
+console.log(JSON.stringify({ cases, passed: true }));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=60,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertTrue(payload["passed"])
+        self.assertGreater(payload["cases"], 50000)
+
+
 if __name__ == "__main__":
     unittest.main()

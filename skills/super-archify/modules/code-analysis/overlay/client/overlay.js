@@ -365,7 +365,7 @@
     if (flyMode && !(pick && pick.kind === 'node' && pick.id === id)) { pick = { kind: 'node', id: id }; paintStage(); }
     var h = ("<button class=\"close\" aria-label=\"" + tr("Close") + "\">" + "×" + "</button>" + "<button type=\"button\" class=\"back\">" + tr("← Overview") + "</button>");
     if (flyMode) h += componentKicker(c);
-    h += ("<div class=\"k\">" + tr("Bauify · code analysis") + "</div>" + "<h3>") + esc(c.label) + '<span class="badge ' + c.indicators.status + '">' + tr(LEVELS[c.indicators.status].name) + '</span></h3>';
+    h += ("<div class=\"k\">" + tr("Bauify · code analysis") + "</div>" + "<h3>") + esc(c.label) + '<span class="badge ' + esc(c.indicators.status) + '">' + tr(LEVELS[c.indicators.status].name) + '</span></h3>';
     if (flyMode && nodeSublabel(id)) h += '<p class="fly-sub">' + esc(nodeSublabel(id)) + '</p>';
     h += '<div class="ev">' + esc(indicatorSummary(c.indicators)) + '</div>';
     if (flyMode) h += componentBody(c);
@@ -373,7 +373,7 @@
       h += ("<div class=\"k\">" + tr("Indicators · click one for its findings and a diagram") + "</div>");
       c.indicators.items.forEach(function (i) {
         var n = (i.findings || []).length;
-        h += '<div class="ind link' + (i.status === 'green' ? ' quiet' : '') + '" data-ind="' + i.key + '" role="button" tabindex="0"><i class="' + i.status + '"></i><div><b>' + esc(tr(i.label)) + ' <span class="more">' + (n ? n + tr(" finding") + (n === 1 ? '' : 's') + ' ›' : tr("details ›")) + '</span></b><span class="v">' + esc(indicatorValue(c, i)) + '</span>' +
+        h += '<div class="ind link' + (i.status === 'green' ? ' quiet' : '') + '" data-ind="' + esc(i.key) + '" role="button" tabindex="0"><i class="' + esc(i.status) + '"></i><div><b>' + esc(tr(i.label)) + ' <span class="more">' + (n ? n + tr(" finding") + (n === 1 ? '' : 's') + ' ›' : tr("details ›")) + '</span></b><span class="v">' + esc(indicatorValue(c, i)) + '</span>' +
           (i.detail.length ? ("<div class=\"detail\">" + tr("with: ")) + i.detail.map(function (d) { var m = d.split(':'); return m[0] === 'component' && byId[m[1]] ? esc(byId[m[1]].label) : esc(m[1]) + tr(" (not on diagram)"); }).join(', ') + '</div>' : '') + '</div></div>';
       });
     }
@@ -382,16 +382,16 @@
     } else {
       h += '<div>' + c.modules.map(function (m) { return esc(m.label); }).join(' · ') + '</div>';
       if ((c.ambiguousModules || []).length) h += ("<p class=\"warn\">" + tr("Shared module mapping: ")) + c.ambiguousModules.map(esc).join(', ') + (tr(". Component import attribution remains unresolved; inspect the module files below.") + "</p>");
-      h += '<span class="stat">' + c.files + (tr(" files") + "</span>" + "<span class=\"stat\">") + c.loc + (tr(" LOC") + "</span>");
+      h += '<span class="stat">' + esc(c.files) + (tr(" files") + "</span>" + "<span class=\"stat\">") + esc(c.loc) + (tr(" LOC") + "</span>");
       var fi = c.incoming.reduce(function (n, e) { return n + e.weight; }, 0), fo = c.outgoing.reduce(function (n, e) { return n + e.weight; }, 0);
-      h += ("<span class=\"stat\">" + tr("in ")) + fi + ("</span>" + "<span class=\"stat\">" + tr("out ")) + fo + '</span>';
-      if (c.internalImports) h += ("<span class=\"stat\">" + tr("internal ")) + c.internalImports + '</span>';
+      h += ("<span class=\"stat\">" + tr("in ")) + esc(fi) + ("</span>" + "<span class=\"stat\">" + tr("out ")) + esc(fo) + '</span>';
+      if (c.internalImports) h += ("<span class=\"stat\">" + tr("internal ")) + esc(c.internalImports) + '</span>';
       var section = function (title, list, arrow) {
         if (!list.length) return '';
         var s = '<details><summary>' + title + ' · ' + list.length + '</summary>';
         list.forEach(function (e) {
           var target = e.component ? (byId[e.component] ? byId[e.component].label : e.component) : (e.module + (e.ambiguous ? tr(" (component mapping unresolved)") : tr(" (not on diagram)")));
-          s += '<div class="edge"><b>' + arrow + '</b> ' + esc(target) + ' <span class="ev">' + e.weight + tr(" import") + (e.weight === 1 ? '' : 's') + '</span><div class="ev">' +
+          s += '<div class="edge"><b>' + arrow + '</b> ' + esc(target) + ' <span class="ev">' + esc(e.weight) + tr(" import") + (e.weight === 1 ? '' : 's') + '</span><div class="ev">' +
             e.evidence.map(function (v) { return '<div>' + fileLink(v.file, v.line) + ' → ' + esc(v.to) + '</div>'; }).join('') + '</div></div>';
         });
         return s + '</details>';
@@ -401,13 +401,13 @@
       if (c.fileList && c.fileList.length) {
         h += ("<details>" + "<summary>" + tr("Files · ")) + c.fileList.length + '</summary><table>';
         c.fileList.forEach(function (f) {
-          h += '<tr><td class="p" title="' + esc(f.path) + '">' + esc(f.path) + (f.findings.length ? ' <b>!' + f.findings.length + '</b>' : '') + '</td><td class="n">' + f.loc + (tr(" LOC") + "</td>" + "<td class=\"n\">" + tr("out ")) + f.importsOut + ("</td>" + "<td class=\"n\">" + tr("in ")) + f.importedBy + '</td></tr>';
+          h += '<tr><td class="p" title="' + esc(f.path) + '">' + esc(f.path) + (f.findings.length ? ' <b>!' + f.findings.length + '</b>' : '') + '</td><td class="n">' + esc(f.loc) + (tr(" LOC") + "</td>" + "<td class=\"n\">" + tr("out ")) + esc(f.importsOut) + ("</td>" + "<td class=\"n\">" + tr("in ")) + esc(f.importedBy) + '</td></tr>';
         });
         h += '</table></details>';
       }
     }
     h += ("<div class=\"k\">" + tr("Repository") + "</div>" + "<div class=\"ev\">") + esc(data.repository.url || tr("no origin")) + (data.repository.sourceKind === 'working-tree' ? tr(" · Working tree") + (data.repository.baseRevision ? tr(" (base ") + esc(data.repository.baseRevision.slice(0, 7)) + ')' : '') : (data.repository.revision ? ' @ ' + esc(data.repository.revision.slice(0, 7)) : '')) +
-      '<br>' + data.totals.modules + tr(" modules · ") + data.totals.edges + tr(" module edges · ") + data.unmapped.length + (tr(" not on this diagram") + "</div>");
+      '<br>' + esc(data.totals.modules) + tr(" modules · ") + esc(data.totals.edges) + tr(" module edges · ") + data.unmapped.length + (tr(" not on this diagram") + "</div>");
     panel.innerHTML = h;
     panel.hidden = false;
     detail.hidden = true; codePane.hidden = true;
@@ -425,7 +425,7 @@
     var seen = {}; return fl.filter(function (f) { var k = f.id || f.code + JSON.stringify(f.subject); if (seen[k]) return false; seen[k] = true; return true; }).map(function (f) { return findingById[f.id] || f; });
   }
   function ref(file, line, rest, why, tone, rangeStart, rangeEnd, match) {
-    return '<button type="button" class="ref" data-file="' + esc(file) + '" data-line="' + line + '" data-range-start="' + (rangeStart || '') + '" data-range-end="' + (rangeEnd || '') + '" data-match="' + (match ? esc(JSON.stringify(match)) : '') + '" data-why="' + esc(why || '') + '" data-tone="' + (tone || '') + '"><b>' + esc(match ? file : short(file)) + '</b> <em>(' + (match ? tr("lines") + " " + rangeStart + '–' + rangeEnd : tr("line ") + line) + ')</em>' + (rest ? ' ' + rest : '') + '</button>';
+    return '<button type="button" class="ref" data-file="' + esc(file) + '" data-line="' + esc(line) + '" data-range-start="' + esc(rangeStart || '') + '" data-range-end="' + esc(rangeEnd || '') + '" data-match="' + (match ? esc(JSON.stringify(match)) : '') + '" data-why="' + esc(why || '') + '" data-tone="' + esc(tone || '') + '"><b>' + esc(match ? file : short(file)) + '</b> <em>(' + (match ? tr("lines") + " " + esc(rangeStart) + '–' + esc(rangeEnd) : tr("line ") + esc(line)) + ')</em>' + (rest ? ' ' + rest : '') + '</button>';
   }
   function nextStepHtml(f) {
     var text = f.code === 'coupling/hub' ? tr("Check whether dependencies cluster by responsibility before splitting this module.")
@@ -516,12 +516,12 @@
         if (changes.status === 'added') h += tr(" · New file");
         h += '</div>';
       } else if (changes) h += ("<div class=\"diff-legend\">" + tr("Change markers unavailable: no readable base commit.") + "</div>");
-      var deletion = function (after) { return deleted.has(after) ? ("<span class=\"diff-deleted\" title=\"" + tr("Deleted from the base commit") + "\">" + "− ") + deleted.get(after) + (tr(" deleted line(s)") + "</span>") : ''; };
+      var deletion = function (after) { return deleted.has(after) ? ("<span class=\"diff-deleted\" title=\"" + tr("Deleted from the base commit") + "\">" + "− ") + esc(deleted.get(after)) + (tr(" deleted line(s)") + "</span>") : ''; };
       var start = full ? 0 : line ? Math.max(0, Math.min(line - 5, snip.lines.length - 9)) : 0;
       var end = full ? snip.lines.length : Math.min(snip.lines.length, start + (line ? 9 : 12));
       h += ("<div class=\"why\">" + tr("Lines ")) + (start + 1) + '–' + end + tr(" of ") + snip.lines.length + (line || full ? '' : tr(" · opening lines, not finding evidence")) + '</div>';
-      if (match) h += '<div class="why duplicate-legend"><mark class="duplicate-match">' + (match.kind === 'external' ? tr("Reported range") : tr("Matched code")) + ("</mark>" + tr(" · lines ")) + rangeStart + '–' + rangeEnd + (match.column ? tr(" · column ") + match.column + (match.endColumn ? '–' + match.endColumn + tr(" (end exclusive)") : '') : '') + (full ? '' : tr(" · expand for the complete range")) + '</div>';
-      else if (rangeStart && rangeEnd) h += ("<div class=\"why\">" + tr("Highlighted function: lines ")) + rangeStart + '–' + rangeEnd + (full ? '' : tr(" · excerpt only; expand for the complete function")) + '</div>';
+      if (match) h += '<div class="why duplicate-legend"><mark class="duplicate-match">' + (match.kind === 'external' ? tr("Reported range") : tr("Matched code")) + ("</mark>" + tr(" · lines ")) + esc(rangeStart) + '–' + esc(rangeEnd) + (match.column ? tr(" · column ") + esc(match.column) + (match.endColumn ? '–' + esc(match.endColumn) + tr(" (end exclusive)") : '') : '') + (full ? '' : tr(" · expand for the complete range")) + '</div>';
+      else if (rangeStart && rangeEnd) h += ("<div class=\"why\">" + tr("Highlighted function: lines ")) + esc(rangeStart) + '–' + esc(rangeEnd) + (full ? '' : tr(" · excerpt only; expand for the complete function")) + '</div>';
       if (snip.lines.length > (line ? 9 : 12)) h += '<button type="button" class="source-file source-toggle">' + (full ? tr("Show excerpt") : tr("Show full file")) + '</button>';
       h += '<pre class="' + (full ? '' : 'excerpt') + (match && match.kind !== 'external' ? ' duplicate-source' : '') + '">';
       if (!start) h += deletion(0);
@@ -576,7 +576,7 @@
     var fl = allFindings(c).filter(function (f) { return ids.indexOf(f.id) !== -1; });
     var lvl = LEVELS[ind.status] || LEVELS.neutral;
     var h = ("<button class=\"close\" aria-label=\"" + tr("Close") + "\">" + "×" + "</button>" + "<button class=\"back\" type=\"button\">" + tr("← Component") + "</button>");
-    h += '<div class="k">' + esc(c.label) + '</div><h3><i class="bauify-' + ind.status + '"></i>' + esc(tr(ind.label)) + '</h3>';
+    h += '<div class="k">' + esc(c.label) + '</div><h3><i class="bauify-' + esc(ind.status) + '"></i>' + esc(tr(ind.label)) + '</h3>';
     var externalGroup = fl.length && fl.every(function (f) { return f.external; });
     h += '<div class="level"><b>' + esc(tr(lvl.name)) + '</b> — ' + esc(indicatorValue(c, ind)) + (ind.status === 'neutral' || externalGroup ? '' : '<br>' + esc(lvl.text)) + '</div>';
     if (!externalGroup) h += ("<details class=\"relationship\">" + "<summary>" + tr("Relationships and metrics") + "</summary>") + diagram(c, key, fl) + '</details>';
@@ -813,7 +813,7 @@
     }
     var b = r.baseline;
     if (b) {
-      h += ("<div class=\"ev review-line\">" + tr("Baseline: ")) + b.accepted + " " + tr("accepted") + (b.changed.length ? ' · ' + b.changed.length + tr(" changed since accepted and shown again") : '') + (b.stale.length ? ' · ' + plural(b.stale.length, 'entry') .replace('entrys', 'entries') + tr(" no longer found") : '') + '</div>';
+      h += ("<div class=\"ev review-line\">" + tr("Baseline: ")) + esc(b.accepted) + " " + tr("accepted") + (b.changed.length ? ' · ' + b.changed.length + tr(" changed since accepted and shown again") : '') + (b.stale.length ? ' · ' + plural(b.stale.length, 'entry') .replace('entrys', 'entries') + tr(" no longer found") : '') + '</div>';
       if (b.stale.length) h += ("<details>" + "<summary>" + tr("Baseline entries no longer found · ")) + b.stale.length + '</summary><div class="ev">' + b.stale.map(function (e) { return '<div>' + esc(e.id) + ' (' + esc(e.code) + ') · ' + esc(e.reason) + '</div>'; }).join('') + ("<div>" + tr("Fixed or moved; remove them from the baseline file.") + "</div>" + "</div>" + "</details>");
     }
     return h;
@@ -898,7 +898,7 @@
     var moduleCycles = data.findings.filter(function (f) { return f.code === 'coupling/cycle'; }).length;
     var boundaryViolations = data.findings.filter(function (f) { return f.code === 'architecture/boundary'; }).length;
     if (data.pullRequest) h += '<details class="pr-head-checks"><summary>' + esc(tr('PR head checks · {errors} error-level findings', { errors: errors })) + '</summary>';
-    h += '<section class="health-summary" aria-label="' + esc(tr('Structural signals')) + '"><div class="health-primary ' + (errors ? 'attention' : 'positive') + '"><b>' + fmt(o.counts.findings) + '</b><span>' + esc(tr('findings')) + '</span><i>' + esc(!rules.length ? tr('No checks ran') : errors ? tr('{count} errors', { count: errors }) : tr('No errors')) + '</i></div>';
+    h += '<section class="health-summary" aria-label="' + esc(tr('Structural signals')) + '"><div class="health-primary ' + (errors ? 'attention' : 'positive') + '"><b>' + esc(fmt(o.counts.findings)) + '</b><span>' + esc(tr('findings')) + '</span><i>' + esc(!rules.length ? tr('No checks ran') : errors ? tr('{count} errors', { count: errors }) : tr('No errors')) + '</i></div>';
     h += '<div class="health-facts"><span>' + esc(tr('Import cycles')) + '<b>' + (rules.indexOf('coupling/import-cycle') !== -1 ? fmt(fileCycles) : tr('Not checked')) + '</b></span><span>' + esc(tr('Module cycles')) + '<b>' + (rules.indexOf('coupling/cycle') !== -1 ? fmt(moduleCycles) : tr('Not checked')) + '</b></span><span>' + esc(tr('Boundary violations')) + '<b>' + (!o.coverage.boundaries || !o.coverage.boundaries.rules ? tr('Not configured') : rules.indexOf('architecture/boundary') !== -1 ? fmt(boundaryViolations) : tr('Not checked')) + '</b></span></div>';
     if (o.counts.acceptedErrors) h += '<p class="scope-line">' + esc(tr('{open} open · {accepted} accepted error-level findings', { open: o.counts.error, accepted: o.counts.acceptedErrors })) + '</p>';
     // A thin ring is still a finding, not an all-clear: say what each ring weight means.
@@ -934,7 +934,7 @@
     h += (data.pullRequest ? '<p class="ev">' + esc(tr('Whole-head background, including existing findings')) + '</p>' : '') + '<div class="overview-secondary"><button type="button" class="browse-findings" aria-label="' + esc(tr('Browse findings')) + '" data-analysis-tip="' + esc(tr('Browse findings')) + '">' + uiIcon('filter') + esc(tr('Filter')) + '</button><p class="ev counts">' + esc(tr('{warnings} warnings · {info} reference signals · {accepted} accepted', { warnings: o.counts.warning, info: o.counts.info, accepted: o.counts.accepted || 0 })) + '</p>';
     if (o.groups.length) {
       h += '<details class="all-finding-groups"><summary>' + esc(tr('All findings')) + ' · ' + o.counts.findings + '</summary>';
-      o.groups.forEach(function (g) { h += '<details><summary><i class="bauify-' + toneOf(g.severity) + '"></i>' + esc(GROUPS[g.code] || g.code) + ' · ' + g.count + '</summary>' + g.ids.map(function (id) { return findingRow(id); }).join('') + '</details>'; });
+      o.groups.forEach(function (g) { h += '<details><summary><i class="bauify-' + toneOf(g.severity) + '"></i>' + esc(GROUPS[g.code] || g.code) + ' · ' + esc(g.count) + '</summary>' + g.ids.map(function (id) { return findingRow(id); }).join('') + '</details>'; });
       h += '</details>';
     }
     var unchecked = [['redundancy/', tr("duplicate code")], ['conventions/', tr("project coding conventions")]].filter(function (x) { return !rules.some(function (r) { return r.indexOf(x[0]) === 0; }); }).map(function (x) { return tr(x[1]); });
@@ -1250,7 +1250,7 @@
     return { blob: u + '/blob/' + r.revision + '/' + root, tree: u + '/tree/' + r.revision + '/' + root };
   }
   function fileLink(path, line) {
-    return '<button type="button" class="source-file" data-file="' + esc(path) + '" data-line="' + (line || '') + '">' + esc(path) + (line ? ':' + line : '') + '</button>';
+    return '<button type="button" class="source-file" data-file="' + esc(path) + '" data-line="' + esc(line || '') + '">' + esc(path) + (line ? ':' + esc(line) : '') + '</button>';
   }
   document.body.addEventListener('click', function (event) {
     var link = event.target.closest && event.target.closest('.source-file');
@@ -1285,9 +1285,9 @@
     var files = (c.fileList || []).filter(function (x) { return x.module === m.id; });
     var b = repoBase();
     var h = ("<div class=\"k\">" + tr("Hub module source") + "</div>" + "<div class=\"ev\">") + esc(m.path || tr("(repository root)")) +
-      ' · ' + m.files + tr(" files · ") + m.loc + (tr(" LOC") + "</div>");
+      ' · ' + esc(m.files) + tr(" files · ") + esc(m.loc) + (tr(" LOC") + "</div>");
     if (files.length) {
-      h += '<table>' + files.slice(0, 40).map(function (x) { return '<tr><td class="p">' + sourceLinks(c, x.path) + '</td><td class="n">' + x.loc + (tr(" LOC") + "</td>" + "<td class=\"n\">" + tr("out ")) + x.importsOut + ("</td>" + "<td class=\"n\">" + tr("in ")) + x.importedBy + '</td></tr>'; }).join('') + '</table>';
+      h += '<table>' + files.slice(0, 40).map(function (x) { return '<tr><td class="p">' + sourceLinks(c, x.path) + '</td><td class="n">' + esc(x.loc) + (tr(" LOC") + "</td>" + "<td class=\"n\">" + tr("out ")) + esc(x.importsOut) + ("</td>" + "<td class=\"n\">" + tr("in ")) + esc(x.importedBy) + '</td></tr>'; }).join('') + '</table>';
       if (files.length > 40) h += '<div class="ev">… ' + (files.length - 40) + (tr(" more") + "</div>");
     }
     return h;
@@ -1330,12 +1330,12 @@
       var cMax = Math.max(f.evidence.complexity, t.complexity || 1) * 1.15, nMax = Math.max(f.evidence.nesting, t.nesting || 1) * 1.15;
       var name = f.subject.function.length > 56 ? f.subject.function.slice(0, 55) + '…' : f.subject.function;
       svg += '<text x="8" y="' + (y + 11) + '">' + esc(name) + '()</text>';
-      svg += '<text class="muted" x="8" y="' + (y + 29) + ("\">" + tr("complexity ")) + f.evidence.complexity + '</text>';
-      svg += '<rect class="bar" x="' + x0 + '" y="' + (y + 20) + '" width="' + (span * f.evidence.complexity / cMax) + '" height="11"/>';
-      svg += '<text class="muted" x="8" y="' + (y + 47) + ("\">" + tr("nesting ")) + f.evidence.nesting + '</text>';
-      svg += '<rect class="bar" x="' + x0 + '" y="' + (y + 38) + '" width="' + Math.max(2, span * f.evidence.nesting / nMax) + '" height="11" opacity=".6"/>';
-      if (t.complexity) svg += '<path class="e amber" d="M' + (x0 + span * t.complexity / cMax) + ',' + (y + 17) + ' L' + (x0 + span * t.complexity / cMax) + ',' + (y + 34) + '"/>';
-      if (t.nesting) svg += '<path class="e amber" d="M' + (x0 + span * t.nesting / nMax) + ',' + (y + 35) + ' L' + (x0 + span * t.nesting / nMax) + ',' + (y + 52) + '"/>';
+      svg += '<text class="muted" x="8" y="' + (y + 29) + ("\">" + tr("complexity ")) + esc(f.evidence.complexity) + '</text>';
+      svg += '<rect class="bar" x="' + x0 + '" y="' + (y + 20) + '" width="' + esc(span * f.evidence.complexity / cMax) + '" height="11"/>';
+      svg += '<text class="muted" x="8" y="' + (y + 47) + ("\">" + tr("nesting ")) + esc(f.evidence.nesting) + '</text>';
+      svg += '<rect class="bar" x="' + x0 + '" y="' + (y + 38) + '" width="' + esc(Math.max(2, span * f.evidence.nesting / nMax)) + '" height="11" opacity=".6"/>';
+      if (t.complexity) svg += '<path class="e amber" d="M' + esc(x0 + span * t.complexity / cMax) + ',' + (y + 17) + ' L' + esc(x0 + span * t.complexity / cMax) + ',' + (y + 34) + '"/>';
+      if (t.nesting) svg += '<path class="e amber" d="M' + esc(x0 + span * t.nesting / nMax) + ',' + (y + 35) + ' L' + esc(x0 + span * t.nesting / nMax) + ',' + (y + 52) + '"/>';
     });
     svg += '</svg>';
     return svg + ("<div class=\"caption\">" + tr("Upper bar: cyclomatic complexity; lower bar: nesting depth. Amber ticks mark the thresholds of the level this finding reached; reaching either one is enough. Thresholds are configurable; function length is context only.") + "</div>");
@@ -1417,7 +1417,7 @@
     right.slice(0, 12).forEach(function (m, i) { var p = { x: W - 70, y: 20 + i * rowH + bh / 2 }; svg += gutterArrow(mid.x + bw / 2 + 2, mid.y, p.x - bw / 2 - 4, p.y); boxes += nodeRect(p.x, p.y, bw, bh, short(m)); });
     svg += boxes;
     svg += nodeRect(mid.x, mid.y, bw, bh, centre, 'focus') + '</svg>';
-    return svg + ("<div class=\"caption\">" + tr("Left: modules that depend on it (fan-in ")) + left.length + tr("). Right: modules it depends on (fan-out ") + right.length + ').' + (f ? tr(" Threshold ") + f.evidence.threshold.fanIn + ' / ' + f.evidence.threshold.fanOut + tr(" from config.") : tr(" Below the hub threshold.")) +
+    return svg + ("<div class=\"caption\">" + tr("Left: modules that depend on it (fan-in ")) + left.length + tr("). Right: modules it depends on (fan-out ") + right.length + ').' + (f ? tr(" Threshold ") + esc(f.evidence.threshold.fanIn) + ' / ' + esc(f.evidence.threshold.fanOut) + tr(" from config.") : tr(" Below the hub threshold.")) +
       ("</div>" + "<details>" + "<summary>" + tr("What does high coupling mean?") + "</summary>" + "<div class=\"caption\">" + tr("A hub is a module that is both widely depended on (fan-in) and depends widely (fan-out). Changes may affect dependents or require coordination with dependencies. This is a design signal, not a proven bug. Check whether its dependents cluster by responsibility before deciding to split.") + "</div>" + "</details>") + (f ? hubSources(c, f) : '');
   }
   // Two bars: imports coming in vs going out, and where I = out / (in + out) lands.
@@ -1426,11 +1426,11 @@
     var fi = ind.fanIn || 0, fo = ind.fanOut || 0;
     var W = 400, H = 110, max = Math.max(fi, fo, 1), scale = 250 / max;
     var svg = svgOpen(W, H);
-    svg += ("<text x=\"12\" y=\"30\">" + tr("in ")) + fi + '</text><rect class="bar" x="70" y="18" width="' + (fi * scale) + '" height="16"/>';
-    svg += ("<text x=\"12\" y=\"62\">" + tr("out ")) + fo + '</text><rect class="bar" x="70" y="50" width="' + (fo * scale) + '" height="16"/>';
+    svg += ("<text x=\"12\" y=\"30\">" + tr("in ")) + esc(fi) + '</text><rect class="bar" x="70" y="18" width="' + esc(fi * scale) + '" height="16"/>';
+    svg += ("<text x=\"12\" y=\"62\">" + tr("out ")) + esc(fo) + '</text><rect class="bar" x="70" y="50" width="' + esc(fo * scale) + '" height="16"/>';
     var I = ind.instability === undefined || ind.instability === null ? null : ind.instability;
     svg += ("<text class=\"muted\" x=\"70\" y=\"92\">" + tr("0 stable") + "</text>" + "<text class=\"muted\" x=\"320\" y=\"92\" text-anchor=\"end\">" + tr("1 volatile") + "</text>" + "<path class=\"e e\" d=\"M70,86 L320,86\"/>");
-    if (I !== null) svg += '<circle cx="' + (70 + I * 250) + '" cy="86" r="5" fill="#34D399"/><text x="' + (70 + I * 250) + '" y="76" text-anchor="middle">I = ' + I + '</text>';
+    if (I !== null) svg += '<circle cx="' + esc(70 + I * 250) + '" cy="86" r="5" fill="#34D399"/><text x="' + esc(70 + I * 250) + '" y="76" text-anchor="middle">I = ' + esc(I) + '</text>';
     svg += '</svg>';
     return svg + ("<div class=\"caption\">" + tr("Fan-in / fan-out summed over the modules mapped to this component (each counts modules, not import statements). High fan-in says \"change carefully\"; high fan-out says \"changes elsewhere reach me\".") + "</div>");
   }
@@ -1597,7 +1597,7 @@
     var h = '';
     if (!c.modules.length) return h;
     var o = openOf(c);
-    h += '<div class="fly-nums"><div><b>' + fmt(c.files) + '</b><span>' + esc(tr('files')) + '</span></div><div><b>' + fmtK(c.loc) + '</b><span>' + esc(tr('lines')) + '</span></div><div><b>' + fmt(o.list.length) + '</b><span>' + esc(tr('open')) + '</span></div></div>';
+    h += '<div class="fly-nums"><div><b>' + esc(fmt(c.files)) + '</b><span>' + esc(tr('files')) + '</span></div><div><b>' + esc(fmtK(c.loc)) + '</b><span>' + esc(tr('lines')) + '</span></div><div><b>' + esc(fmt(o.list.length)) + '</b><span>' + esc(tr('open')) + '</span></div></div>';
     if (o.list.length) h += '<div class="fly-sev" aria-hidden="true"><i class="red" style="flex:' + o.e + '"></i><i class="amber" style="flex:' + o.w + '"></i><i class="blue" style="flex:' + o.i + '"></i></div>';
     h += '<h4 class="fly-h">' + esc(tr('Source')) + '<small>' + esc(plural(c.modules.length, 'module')) + '</small></h4><div class="fly-chips">' + c.modules.slice(0, 6).map(function (m) { return '<code>' + esc(m.label) + '</code>'; }).join('') + (c.modules.length > 6 ? '<code>+' + (c.modules.length - 6) + '</code>' : '') + '</div>';
     var rel = function (list, outgoing) {
@@ -1630,10 +1630,10 @@
     h += '<h3 class="fly-edge-title">' + esc(compLabel(from)) + ' <span>→</span> ' + esc(compLabel(to)) + '</h3>';
     if (e) {
       var files = {}; e.evidence.forEach(function (v) { files[v.file] = true; });
-      h += '<div class="fly-nums two"><div><b>' + fmt(e.weight) + '</b><span>' + esc(tr('imports')) + '</span></div><div><b>' + Object.keys(files).length + (e.evidence.length < e.weight ? '+' : '') + '</b><span>' + esc(tr('source files')) + '</span></div></div>';
+      h += '<div class="fly-nums two"><div><b>' + esc(fmt(e.weight)) + '</b><span>' + esc(tr('imports')) + '</span></div><div><b>' + esc(Object.keys(files).length) + (e.evidence.length < e.weight ? '+' : '') + '</b><span>' + esc(tr('source files')) + '</span></div></div>';
       h += '<p class="fly-note' + (undrawn ? ' attention' : '') + '">' + esc(undrawn ? tr('{from} imports {to} in the code, but the diagram draws no line between them. Add it to the diagram, or treat it as coupling that should not exist.', { from: compLabel(from), to: compLabel(to) }) : tr('The diagram draws this dependency and the code confirms it.')) + '</p>';
       h += '<h4 class="fly-h">' + esc(tr('Which files cause it')) + '<small>' + esc(e.evidence.length < e.weight ? tr('first {count}', { count: e.evidence.length }) : tr('all')) + '</small></h4>';
-      h += e.evidence.map(function (v) { return '<button type="button" class="fly-ev" data-file="' + esc(v.file) + '" data-line="' + (v.line || '') + '"><span>' + esc(v.file) + '</span><em>:' + (v.line || '?') + '</em><small>→ ' + esc(v.to) + '</small></button>'; }).join('');
+      h += e.evidence.map(function (v) { return '<button type="button" class="fly-ev" data-file="' + esc(v.file) + '" data-line="' + esc(v.line || '') + '"><span>' + esc(v.file) + '</span><em>:' + esc(v.line || '?') + '</em><small>→ ' + esc(v.to) + '</small></button>'; }).join('');
       h += '<div class="fly-acts"><button type="button" class="fly-copy">' + esc(tr('Copy for AI')) + '</button></div><p class="fly-status ev" role="status" aria-live="polite"></p>';
     } else h += '<p class="fly-note">' + esc(tr('The diagram draws this relationship, but no import between these components was found. It may come from configuration, runtime calls or an external system, or the diagram over-states it.')) + '</p>';
     panel.innerHTML = h; panel.hidden = false; panel.scrollTop = 0;
@@ -1657,7 +1657,7 @@
     var files = (m.fileList || []).slice().sort(function (a, b) { return (b.loc || 0) - (a.loc || 0); });
     var h = flyClose(tr('Overview'));
     h += '<p class="fly-kick"><i class="dot grey"></i>' + esc(tr('Code not on the diagram')) + '</p><h3>' + esc(m.label) + '</h3>' + (m.path && m.path !== m.label ? '<p class="fly-sub">' + esc(m.path) + '</p>' : '');
-    h += '<div class="fly-nums"><div><b>' + fmt(m.files) + '</b><span>' + esc(tr('files')) + '</span></div><div><b>' + fmtK(m.loc) + '</b><span>' + esc(tr('lines')) + '</span></div><div><b>' + fmt(fs.length) + '</b><span>' + esc(tr('findings')) + '</span></div></div>';
+    h += '<div class="fly-nums"><div><b>' + esc(fmt(m.files)) + '</b><span>' + esc(tr('files')) + '</span></div><div><b>' + esc(fmtK(m.loc)) + '</b><span>' + esc(tr('lines')) + '</span></div><div><b>' + esc(fmt(fs.length)) + '</b><span>' + esc(tr('findings')) + '</span></div></div>';
     h += '<p class="fly-note">' + esc(tr('This code is in the repository, but no component on the architecture diagram owns it. If it is part of the product, the diagram needs a node for it; if it is tooling, it can be left out of the analysis.')) + '</p>';
     if (fs.length) h += '<h4 class="fly-h">' + esc(tr('Look at these first')) + '<small>' + esc(tr('by severity and complexity')) + '</small></h4>' + fs.slice().sort(function (a, b) { return sevRank(a) - sevRank(b) || complexityOf(b) - complexityOf(a); }).slice(0, 5).map(flyFinding).join('');
     if (files.length) h += '<h4 class="fly-h">' + esc(tr('Largest files')) + '<small>' + esc(plural(files.length, 'file')) + '</small></h4>' + files.slice(0, 5).map(function (f) { return '<button type="button" class="fly-ev" data-file="' + esc(f.path) + '"><span>' + esc(f.path) + '</span><em>' + esc(plural(f.loc || 0, 'line')) + '</em></button>'; }).join('');

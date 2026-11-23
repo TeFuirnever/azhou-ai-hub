@@ -101,8 +101,10 @@ const NON_FINITE_TOKEN = /\b(?:NaN|undefined|Infinity)\b/;
 // A quote opens a quoted attribute value only right after '='; anywhere
 // else (for example the apostrophe in data-note=it's) it is literal text,
 // so the tag pattern anchors quoted spans to '=' and lets a lone quote
-// through as an ordinary character.
-const SVG_TAG_TOKEN = /<!--[\s\S]*?(?:-->|$)|<!\[CDATA\[[\s\S]*?(?:\]\]>|$)|<(\/?)([A-Za-z][\w:-]*)(?=[\s/>])(?:=\s*"[^"]*"|=\s*'[^']*'|[^>"']|["'])*>/g;
+// through as an ordinary character. The two '=' branches are split by a
+// lookahead so each input character has exactly one way to match and the
+// alternation cannot backtrack exponentially on repeated '=""' pairs.
+const SVG_TAG_TOKEN = /<!--[\s\S]*?(?:-->|$)|<!\[CDATA\[[\s\S]*?(?:\]\]>|$)|<(\/?)([A-Za-z][\w:-]*)(?=[\s/>])(?:(?:=(?=\s*(?:"[^"]*"|'[^']*'))\s*(?:"[^"]*"|'[^']*')|=(?!\s*(?:"[^"]*"|'[^']*')))|[^>"'=]|["'])*>/g;
 const AUTOMATIC_CROSSOVER_UNDERLAY_TAG = /<path\b[^>]*\bdata-graph-role="automatic-crossover-underlay"[^>]*\/>/i;
 const HTML_VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 const SVG_HTML_INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title']);

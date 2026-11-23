@@ -648,7 +648,8 @@ function namespaceSubSvgIds(svg, key) {
 }
 
 function scopeEmbeddedStyles(svg, key) {
-  return svg.replace(/<style[^>]*>([\s\S]*?)<\/style>/g, (_, css) => {
+  let emitted = 0;
+  const scopedSvg = svg.replace(/<style[^>]*>([\s\S]*?)<\/style>/g, (_, css) => {
     const clean = css.replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, '');
     const scoped = parseStylesheet(clean).map((rule) => {
       const decls = rule.declarations.map((d) => `${d.property}:${d.value}${d.important ? '!important' : ''}`).join(';');
@@ -656,8 +657,17 @@ function scopeEmbeddedStyles(svg, key) {
       const body = `[data-native-key="${key}"] :is(${rule.selector}){${decls}}`;
       return rule.media ? `${rule.media}{${body}}` : body;
     }).filter(Boolean).join('');
-    return scoped ? `<style><![CDATA[${scoped}]]></style>` : '';
+    // Re-serialized CSS becomes CDATA text: a surviving terminator would close
+    // it early, and unmatched <style> fragments would re-open a style element.
+    if (scoped.includes(']]>')) throw new Error('story-svg: scoped stylesheet contains a CDATA terminator');
+    if (!scoped) return '';
+    emitted += 1;
+    return `<style><![CDATA[${scoped}]]></style>`;
   });
+  if ((scopedSvg.match(/<\/?style\b/g) || []).length !== 2 * emitted) {
+    throw new Error('story-svg: embedded style elements did not parse completely');
+  }
+  return scopedSvg;
 }
 
 function annotateEdgePaths(svg) {
