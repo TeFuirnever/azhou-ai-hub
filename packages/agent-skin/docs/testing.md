@@ -58,6 +58,10 @@ python3 -B tools/test-unit-coverage.py
 | FT-ACCEPT-RUN | 用户退出日常宿主后监督链自动执行：隔离实例 → 只读探针确认主页面 → CDP 页面截图（URL 带 `?locale=` 查询串）→ 生产 UI 十步 | 探针 exit 0 且唯一主页面；截图为有效 PNG；UI 十步全绿 exit 0 | `acceptance-harness.test.mjs` 的 E2E 切片（`/json` 带查询串端到端解析）；全链按 runbook 实机执行 |
 | FT-ACCEPT-CLOSEOUT | 验收失败路径：预检拒绝、UI 中途失败、宿主丢失 | 每次失败都落盘 STATUS/HOST-CLOSEOUT/PIPELINE-DONE 并自动重开宿主；退避在收尾之后；截图在盖章前必须经操作者事后审阅 | `acceptance-harness.test.mjs` 的幂等目录与错误码契约；closeout 语义按 runbook 复苏清单人工核对 |
 
+**壁纸丢失取证（仅限独立测试会话）**：分别验证冷启动首次可见的 Dot 中央区，以及点到另一个 macOS App 前、离开期间、返回后的同一窗口左栏。记录实际前台 App 和窗口，保留不含会话内容的目标区域画面；Chromium 切页不能替代 macOS App 切换。
+
+先保存目标画面和被动的外观状态记录，再单独调用 `--wallpaper-status`。该调用会刷新状态，可能处理待送达的 DOM 变更并释放已失效的壁纸；`applied` 也不证明屏幕上有壁纸。记录调用的时点，不把调用后的画面当成调用前的现场。
+
 Finder/Dock 使用 **macOS 语言**；注入的动画和外观使用 **官方宿主页面语言**。这两条合同分别验收，不能用应用内按钮为英文推断 Finder/Dock 已通过。
 
 ## 冷启动防回归门禁

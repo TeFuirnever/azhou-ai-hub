@@ -1293,6 +1293,39 @@ test('observed invalidation releases markers observers URL and activation before
   assert.deepEqual(page.revoked, ['blob:wallpaper-1']);
 }));
 
+test('observed status drains queued invalidation and retires owned paint before observer delivery', async () => onObservedPage(async page => {
+  await installRenderer(page.payload);
+  const controller = globalThis.__azhouWallpaper;
+  const mutation = page.observers[0];
+  const sheet = page.styleElements.find(style => style.id === STYLE_ID && style.isConnected);
+  const scene = page.main.getAttribute('data-azhou-wallpaper-plane');
+  assert.ok(sheet && scene);
+  assert.equal(controller.status().applied, true);
+
+  // A structural host class change queues an invalidation without hiding or
+  // removing the fixture. Deliberately leave the observer callback undelivered.
+  page.main.setAttribute('class', 'fixture-host-inactive');
+  const queued = [{ type: 'attributes', target: page.main, attributeName: 'class', oldValue: null }];
+  mutation.records = queued;
+  assert.equal(mutation.records, queued);
+  assert.equal(globalThis.__azhouWallpaper, controller);
+  assert.equal(sheet.isConnected, true);
+  assert.equal(page.root.getAttribute(ATTRIBUTE), 'active');
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), scene);
+  assert.deepEqual(page.revoked, []);
+
+  const status = controller.status();
+  assert.equal(status.applied, false);
+  assert.equal(status.reason, 'disposed');
+  assert.deepEqual(mutation.records, []);
+  assert.equal(globalThis.__azhouWallpaper, undefined);
+  assert.equal(sheet.isConnected, false);
+  assert.equal(page.root.getAttribute(ATTRIBUTE), 'baseline');
+  assert.equal(page.main.getAttribute('data-azhou-wallpaper-plane'), null);
+  assert.equal(page.main.getAttribute('class'), 'fixture-host-inactive');
+  assert.deepEqual(page.revoked, [scene]);
+}));
+
 test('own transparent paint changes do not retire the observed controller', async () => onObservedPage(async page => {
   await installRenderer(page.payload);
   const controller = globalThis.__azhouWallpaper;
