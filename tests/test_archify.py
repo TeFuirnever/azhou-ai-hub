@@ -448,12 +448,13 @@ const page=({search='',parentHref=null}={})=>{
 const drilldowns=href=>({getAttribute:name=>name==='data-node-drilldowns'?JSON.stringify([{href,label:'Drilldown'}]):null});
 // The three sinks keep their documented behavior: a sibling page navigates with ?from=, the parent
 // link comes from ?from= or data-parent-href, and the passport list links to the sibling.
-for(const [options,run,expected,navigations,links] of [
+const cases=[
   [{},view=>view.navigateToRelativeHtml('child.html'),true,['child.html?from=parent.html'],[]],
   [{search:'?from=parent.html&theme=dark'},view=>view.navigateToParent(),true,['parent.html?theme=dark'],[]],
   [{parentHref:'up.html#top'},view=>view.navigateToParent(),true,['up.html#top'],[]],
   [{},view=>view.renderDrilldowns(drilldowns('child.html')),undefined,[],['child.html?from=parent.html']],
-]){
+];
+for(const [options,run,expected,navigations,links] of cases){
   const view=page(options);
   assert.equal(run(view),expected);
   assert.deepEqual(view.navigations,navigations);
@@ -474,14 +475,15 @@ assert.equal(typeof page().guard,'function','template ships the shared safe-URL 
 const guard=page().guard;
 for(const href of hostile) assert.equal(guard(href),null,JSON.stringify(href));
 for(const value of [null,undefined,42,{}]) assert.equal(guard(value),null);
-for(const [href,expected] of [
+const allowed=[
   ['child.html','child.html'],['child.html?from=parent.html#top','child.html?from=parent.html#top'],['../dir/child.html','../dir/child.html'],
   ['/docs/child.html','/docs/child.html'],['#fragment','#fragment'],['?theme=dark','?theme=dark'],['  child.html\t\n','child.html'],
   ['/example.invalid/x.html','/example.invalid/x.html'],
   ['https://example.invalid/a b.html','https://example.invalid/a b.html'],['HTTP://EXAMPLE.INVALID/x.html','HTTP://EXAMPLE.INVALID/x.html'],
   ['file:///abs/path/x.html','file:///abs/path/x.html'],['\u0001 file:///abs/path/x.html ','file:///abs/path/x.html'],
-]) assert.equal(guard(href),expected,JSON.stringify(href));
-console.log(JSON.stringify({sites:4,hostile:hostile.length,allowed:12,passed:true}));
+];
+for(const [href,expected] of allowed) assert.equal(guard(href),expected,JSON.stringify(href));
+console.log(JSON.stringify({sites:cases.length,hostile:hostile.length,allowed:allowed.length,passed:true}));
 """
         result = subprocess.run(
             ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],

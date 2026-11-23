@@ -30,7 +30,7 @@ In PR mode, short file/function addition and removal counts follow the original 
 From the `archify/` package directory inside the Archify repository:
 
 ```sh
-npm start -- "/path/to/project" --locale zh-CN
+node bin/archify.mjs start "/path/to/project" --locale zh-CN
 ```
 
 Open the printed URL. Without `--ir`, analysis starts on page load: the left workbench presents priorities and task-copy controls, alongside the interactive whole-repository Atlas. Select a finding to highlight its Atlas evidence; **Open source evidence** returns from Atlas to the left reader. Narrow screens stack the workbench above Atlas.
@@ -454,7 +454,7 @@ Real projects have findings the team knows about and has decided to leave for no
 node bin/archify.mjs code-analysis check "/path/to/project" --baseline analysis-baseline.json --update-baseline --reason "existing debt when analysis was adopted"
 ```
 
-This writes every current finding to `analysis-baseline.json` with that reason. Edit the reasons per entry if you like, and commit the file. Pass it to the page with `--baseline analysis-baseline.json` (`npm start -- … --baseline …`) or to `check`.
+This writes every current finding to `analysis-baseline.json` with that reason. Edit the reasons per entry if you like, and commit the file. Pass it to the page with `--baseline analysis-baseline.json` (`node bin/archify.mjs start … --baseline …`) or to `check`.
 
 - Accepted findings stay listed, marked **accepted** with their reason, but no longer count toward the verdict, the priorities, the diagram colours, or a CI failure.
 - An accepted **error** is the exception for colour: it no longer fails CI or counts toward the priorities, but its component stays red and it is marked **accepted · still to fix**. The baseline records a decision to wait, not a repair.

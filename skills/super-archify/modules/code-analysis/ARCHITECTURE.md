@@ -7,7 +7,7 @@ Code Analysis is an integrated Archify module. This document describes the imple
 From the Archify package directory:
 
 ```sh
-npm start -- "/path/to/project" --ir architecture.json
+node bin/archify.mjs start "/path/to/project" --ir architecture.json
 ```
 
 `bin/archify.mjs` dispatches `start` to this module's `bin/serve.mjs`. The legacy `archify code-analysis serve` command reaches the same implementation. The unified entry supplies a temporary output directory when `--out` is omitted.

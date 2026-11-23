@@ -17,7 +17,7 @@ Copy the complete package to the authorized location and invoke the CLI:
 node /path/to/skills/super-archify/bin/archify.mjs doctor
 ```
 
-The package's canonical discovery/bin name is `super-archify`; the actual internal CLI filename remains `archify.mjs`. Official stable-update identity stays `archify` because it belongs to the upstream manifest protocol, not Hub discovery.
+The package's canonical discovery/bin name is `super-archify`; the actual internal CLI filename remains `archify.mjs`. Official stable-update identity stays `archify` because it belongs to the upstream manifest protocol, not Hub discovery. The supported Code Analysis workbench entry is `node bin/archify.mjs start "/path/to/project" [--ir architecture.json] [--locale zh-CN]` from the package root; the upstream monorepo `npm start` quick-start and `npm run test:code-analysis` development suite are not part of this packaged skill.
 
 ## Verification (fail closed)
 

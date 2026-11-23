@@ -1,6 +1,6 @@
 # Code Analysis
 
-Start Archify with `npm start -- "/path/to/project" [--locale zh-CN]` from the Archify package directory. Open the printed URL for the standalone workbench and Atlas. Add `--ir architecture.json` to keep the authored diagram plus the existing click-to-analyze dual view. Use `--out` to choose an output directory; otherwise artifacts go to the system temporary directory. The legacy command below remains supported.
+Start Archify with `node bin/archify.mjs start "/path/to/project" [--locale zh-CN]` from the Archify package directory. Open the printed URL for the standalone workbench and Atlas. Add `--ir architecture.json` to keep the authored diagram plus the existing click-to-analyze dual view. Use `--out` to choose an output directory; otherwise artifacts go to the system temporary directory. The legacy command below remains supported.
 
 [Quick start guide](docs/USAGE.md) — installation, startup, and viewing analysis results.
 
@@ -25,7 +25,7 @@ Its review workflows share the same extraction and graph pipeline:
 
 - **A prepared investigation** (`prepare`): `code-analysis prepare <repo-root> --out out/analysis [--locale zh-CN] [--ir architecture.json]` creates `analysis/repo.analysis.html` with captured AI tasks, opens on the overview and exits. The reader follows `--locale`, then optional `meta.locale` (`zh-CN` or English fallback); no server stays running. See [Agent entry and investigation](docs/USAGE.md#agent-entry-and-investigation) for natural Skill delivery and restarting for comparison after edits.
 
-- **On the diagram** (`serve`, also reached through `npm start`):
+- **On the diagram** (`serve`, also reached through `bin/archify.mjs start`):
   1. **Archify delivers the authored diagram** (`archify deliver architecture …`),
      exactly as it would without this module.
   2. The delivered page is served locally with one extra toolbar button,
@@ -134,9 +134,7 @@ Findings describe working-tree facts with evidence (file, line, import, captured
 potential import-time risks without claiming that execution is safe or that a runtime failure is proven. See
 [ARCHITECTURE.md](ARCHITECTURE.md) and the [technical guide](docs/TECH-GUIDE.md).
 
-```sh
-npm run test:code-analysis
-```
+The upstream `npm run test:code-analysis` development test entry is not shipped with this packaged skill.
 
 Go source investigation supports root-module packages, function definitions and conservative direct function bindings. It requires Go 1.18+; build conditions, exclusions and incomplete typing are explicit. See [Go source scope and limitations](docs/GO.md).
 

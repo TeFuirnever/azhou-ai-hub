@@ -113,10 +113,10 @@
     "migrations/workflow-v2.mjs": "0eec02057b8490afca9b093de5ea6e636c7fad2361cd28a04cf2f3e4b6197434",
     "modules/code-analysis/.gitattributes": "eccbebbd50c7e8efa0b1e3288abfe469b477984d63e7ef238a6a59d7ee61b0fe",
     "modules/code-analysis/.gitignore": "1eee606ea33ae17e1aa09b14923fbf1bcac6d1b1c17ae6664c036381d5e50e7c",
-    "modules/code-analysis/ARCHITECTURE.md": "5cf4cf87accd7905c6fd4771c131f38ce4ee7fd4c9247ce9f98014d97581b704",
+    "modules/code-analysis/ARCHITECTURE.md": "eebd4c4004ad11c9504f5142d55e81c2081f2bc07c2245910c57c2ca69bfecdf",
     "modules/code-analysis/LICENSE": "d082b45b4224cdeb6f4fc7200cfed8506c80044dd8ac7da8a301e2b9c27e82b4",
     "modules/code-analysis/NOTICE": "42af7f9c29359a60d3e9e94a21ab66391c0012f2d2f548ff927d9368ea6a48af",
-    "modules/code-analysis/README.md": "6205d125ad1d5561f5f335ea9c8c96058a45ff667d5bc4379b94923d979a613c",
+    "modules/code-analysis/README.md": "29f9d5d0caba4261bed8ef4ba1531ec50e055f873c20fd83eb9477aae28aa9b7",
     "modules/code-analysis/bin/analyze-run.mjs": "888c51c6c2b1c9a522c10621d5482b6a51d38767f1aa77503484b842cc6b8d8c",
     "modules/code-analysis/bin/check.mjs": "b8d2b45054e208d2280f2b34308fd2b4881aa1553e0ba9f38727e3e78b5752e9",
     "modules/code-analysis/bin/drift.mjs": "9d65551dc08676eb3bc9b350625fb1fa0beb3a65eba8b5a59af9fb457e7d51c6",
@@ -148,7 +148,7 @@
     "modules/code-analysis/docs/TS-REAL-PROJECT-ACCEPTANCE.md": "bcc5cc8165c9671f867f76c8496a74241f3beb802544c5e57f88faea663aa2bf",
     "modules/code-analysis/docs/TS-SDK-PROBE.md": "e9b7198df45de0671db9d17fc7cc5c05e86f74c7957677157554f12e3386646c",
     "modules/code-analysis/docs/TS-UPSTREAM-LEDGER.md": "10565f056098566522379ca677b9584e633b1086639509f55bebdd985b881b41",
-    "modules/code-analysis/docs/USAGE.md": "967483b03f99770aaa15d708c1426827fd32cd16571c0c4174ea2c312a19aa5b",
+    "modules/code-analysis/docs/USAGE.md": "18aa3f1a9e644c71036804895ab44a32c7e64c11c1a0ef37c2bf630dfe24ee0f",
     "modules/code-analysis/evaluate/index.mjs": "9124dd1df6da873660abac1f43813d57d96e5a014eb11e6de99371aeba5365e9",
     "modules/code-analysis/evaluate/rules/architecture/boundary.mjs": "c0ffa97fb1413f4ae27c950f29e8f271baad0dfd9c62531a33de5d17b86cd498",
     "modules/code-analysis/evaluate/rules/complexity/function.mjs": "16fca718990582412936500d8c157cf5c88793f77b78e81127034f0082b61102",
@@ -472,12 +472,12 @@
     "references/delivery-contract.md": "418250feeb9a4d3e172e954822c16f7d02c9b1733fd06cfdaf41ac8f6ad1369c",
     "references/explainer-authoring.md": "cdc159e11582a516fa023bb2e57aabc4c280f3d9ea76183761e52dcd58e0e79e",
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
-    "references/provenance.md": "20b8138300fcd6ed3c3cd5d899b3da2e2e9ecf084e663a342e17d2244a5048c3",
+    "references/provenance.md": "1ebee8a20b4e18e53fae7fbda3c3cd76294c1a2529b66f6822fd9774dd779c4a",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
-    "references/setup.md": "a33984b89461b782acd2062f50e37d1b347febe80b9acfb98cde1dc8b15d2663",
+    "references/setup.md": "9a1a373c923e0cd45280ef43dc9be7580a43c227a89f8bbdb21bfed19be1f12b",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
     "references/update-awareness.md": "16b437a47790fda48f0e74f6aa053715fb06b6e8cd1ba994d1c01ffefa12a76b",
-    "references/upstream-compatibility.md": "0c2257e05bb28dbe8916e7be14cb6d5464304e497637ee7883c9cbf819f642ce",
+    "references/upstream-compatibility.md": "9407b3d3c11183e8fb1f835bf1d47bb382dc3b1accfd86c4688fbfc6cef31a26",
     "references/viewer-runtime.md": "229e729444321e1ee2ecee54833b3ede90c1ad66315123fbbfdb08ab47742bba",
     "renderers/architecture/automatic-placement-candidates.mjs": "60d46fda8c075cf2ee68dd34f1d10398e30989beaff54d4a9b318da90fdcdff2",
     "renderers/architecture/automatic-placement.mjs": "4b9d9d158a410e2ee6818ecfccd96d2d053dcfe3372b842820706af887dd2713",
@@ -1652,11 +1652,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "5cf4cf87accd7905c6fd4771c131f38ce4ee7fd4c9247ce9f98014d97581b704",
+      "packaged_sha256": "eebd4c4004ad11c9504f5142d55e81c2081f2bc07c2245910c57c2ca69bfecdf",
       "path": "modules/code-analysis/ARCHITECTURE.md",
-      "target_sha256": "5cf4cf87accd7905c6fd4771c131f38ce4ee7fd4c9247ce9f98014d97581b704"
+      "target_sha256": "5cf4cf87accd7905c6fd4771c131f38ce4ee7fd4c9247ce9f98014d97581b704",
+      "resolution": "Packaged entry-point correction: the npm start quick-start cannot run after the Hub packaging strips the monorepo root scripts; documented the packaged node bin/archify.mjs start entry"
     },
     {
       "base_sha256": null,
@@ -1676,11 +1677,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "6205d125ad1d5561f5f335ea9c8c96058a45ff667d5bc4379b94923d979a613c",
+      "packaged_sha256": "29f9d5d0caba4261bed8ef4ba1531ec50e055f873c20fd83eb9477aae28aa9b7",
       "path": "modules/code-analysis/README.md",
-      "target_sha256": "6205d125ad1d5561f5f335ea9c8c96058a45ff667d5bc4379b94923d979a613c"
+      "target_sha256": "6205d125ad1d5561f5f335ea9c8c96058a45ff667d5bc4379b94923d979a613c",
+      "resolution": "Packaged entry-point correction: the npm start quick-start and npm run test:code-analysis fence cannot run after the Hub packaging strips the monorepo root scripts; documented the packaged node bin/archify.mjs start entry and marked the test entry as upstream development-only"
     },
     {
       "base_sha256": null,
@@ -1932,11 +1934,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "967483b03f99770aaa15d708c1426827fd32cd16571c0c4174ea2c312a19aa5b",
+      "packaged_sha256": "18aa3f1a9e644c71036804895ab44a32c7e64c11c1a0ef37c2bf630dfe24ee0f",
       "path": "modules/code-analysis/docs/USAGE.md",
-      "target_sha256": "967483b03f99770aaa15d708c1426827fd32cd16571c0c4174ea2c312a19aa5b"
+      "target_sha256": "967483b03f99770aaa15d708c1426827fd32cd16571c0c4174ea2c312a19aa5b",
+      "resolution": "Packaged entry-point correction: the npm start quick-start cannot run after the Hub packaging strips the monorepo root scripts; documented the packaged node bin/archify.mjs start entry"
     },
     {
       "base_sha256": null,
@@ -4541,7 +4544,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "d356702ce287ca8cee85eba9a98398a2b38da58ec766d096af3cdf4eb31d2e91",
-      "packaged_sha256": "20b8138300fcd6ed3c3cd5d899b3da2e2e9ecf084e663a342e17d2244a5048c3",
+      "packaged_sha256": "1ebee8a20b4e18e53fae7fbda3c3cd76294c1a2529b66f6822fd9774dd779c4a",
       "path": "references/provenance.md",
       "target_sha256": null
     },
@@ -4557,7 +4560,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "a33984b89461b782acd2062f50e37d1b347febe80b9acfb98cde1dc8b15d2663",
-      "packaged_sha256": "a33984b89461b782acd2062f50e37d1b347febe80b9acfb98cde1dc8b15d2663",
+      "packaged_sha256": "9a1a373c923e0cd45280ef43dc9be7580a43c227a89f8bbdb21bfed19be1f12b",
       "path": "references/setup.md",
       "target_sha256": null
     },
@@ -4581,7 +4584,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "9f3042e7d7b00d13c965ea1470c96f4680ddc76114826dc90caeb945ac218ce7",
-      "packaged_sha256": "0c2257e05bb28dbe8916e7be14cb6d5464304e497637ee7883c9cbf819f642ce",
+      "packaged_sha256": "9407b3d3c11183e8fb1f835bf1d47bb382dc3b1accfd86c4688fbfc6cef31a26",
       "path": "references/upstream-compatibility.md",
       "target_sha256": null
     },
