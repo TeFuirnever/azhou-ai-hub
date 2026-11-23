@@ -3,9 +3,9 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const matter = require("gray-matter");
+const { treeBase: GITHUB_TREE_BASE } = require("./site");
 
 const SKILLS_ROOT = path.resolve(__dirname, "..", "..", "skills");
-const { treeBase } = require("./site.js");
 
 module.exports = function () {
   const names = fs
@@ -49,7 +49,7 @@ module.exports = function () {
       description: data.description.trim(),
       invocation:
         typeof data.invocation === "string" ? data.invocation.trim() : "",
-      url: `${treeBase}/skills/${name}/`,
+      url: `${GITHUB_TREE_BASE}/skills/${name}/`,
     });
   }
 

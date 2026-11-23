@@ -12,9 +12,6 @@ const SUPPORT_MATRIX = path.resolve(
 );
 const HEADING = "# Support matrix";
 
-// Only the inline constructs the opening paragraph currently uses: bold spans
-// and inline code. Anything else fails loud so a richer paragraph gets an
-// explicit loader update instead of leaking raw markdown to the page.
 function inlineMarkdownToHtml(text) {
   if (/\[[^\]]+\]\([^)]*\)/.test(text) || /(^|\s)_[^_]+_($|\s)/.test(text)) {
     throw new Error(
