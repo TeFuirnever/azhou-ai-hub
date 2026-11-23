@@ -8,23 +8,23 @@ Repository-wide notice and the retained license copy live in [THIRD_PARTY_NOTICE
 |---|---|
 | Audited source | configured user skill root, `gh-axi/SKILL.md` |
 | Upstream | `https://github.com/kunchenguid/gh-axi` |
-| Immutable commit | `911a0868600b125aafe5e7f77197a0eb5a5b493c` |
-| Upstream tag | `gh-axi-v0.1.51` |
+| Immutable commit | `5a526599c9fa5a76b650079f5e9dbb1c1874a6ce` |
+| Upstream tag | `gh-axi-v0.1.52` |
 | Upstream path | `skills/gh-axi/SKILL.md` |
 | Upstream source SHA-256 | `3d01b3112442275d52cc5847cb17543c710128f4591346e77eeecc30c45e76f3` |
-| CLI baseline | `gh-axi@0.1.51` |
-| npm integrity | `sha512-uZ/DIKzfmYOPkcHdM7Dn8fBmdO7bZt7QzcZ6ZXUz55m58UbdfemQ3rlZNYT6avH3h7d9tPAjwUeMJ9JmFqVjAA==` |
-| npm tarball SHA-256 | `fee983711774d8fa50ecec90a51aa8032538648c6877fcb1c44d7bd9716d54c2` |
+| CLI baseline | `gh-axi@0.1.52` |
+| npm integrity | `sha512-HWCP4xvRkvO2ESQSr2Vns8Z2BEiMBRqEkAs/BoQAFkGmyxhV0ZL7KnZSQ3M8oXhZnz+DgOGtose3QKaIqdYGSA==` |
+| npm tarball SHA-256 | `af7a7b6ab5f2c1e0cd2fd10ac53cab0c59142501df70bdc26c8f4ca6bdaee41c` |
 | License | MIT, copyright 2026 Kun Chen |
 
-The recorded hash identifies the unmodified upstream skill baseline at the locked commit and official release. The upstream repository generates its installable skill from its own source; this package imports that generated behavior rather than the gh-axi CLI code. On import (2026-11-17) the `skills/gh-axi/SKILL.md` bytes were verified identical between the tag commit and the npm `0.1.51` release tarball, and the tarball SHA-256 and npm `dist.integrity` were computed from the downloaded tarball and cross-checked against the npm registry (the official registry and the mirror returned the same digests). The audited maintainer shell copy differs from the upstream baseline by exactly one inserted project-rules-win clause; that clause is adopted here as a documented local enhancement, not as upstream bytes.
+The recorded hash identifies the unmodified upstream skill baseline at the locked commit and official release. The upstream repository generates its installable skill from its own source; this package imports that generated behavior rather than the gh-axi CLI code. At adoption (2026-11-17, release `gh-axi-v0.1.51`, commit `911a0868600b125aafe5e7f77197a0eb5a5b493c`) the `skills/gh-axi/SKILL.md` bytes were verified identical between the tag commit and the npm release tarball, and the tarball SHA-256 and npm `dist.integrity` were computed from the downloaded tarball and cross-checked against the npm registry (the official registry and the mirror returned the same digests). On upgrade (2026-11-23, release `gh-axi-v0.1.52`, commit `5a526599c9fa5a76b650079f5e9dbb1c1874a6ce`) the same verification was repeated: the packaged `skills/gh-axi/SKILL.md` is byte-identical between the tag commit and the npm `0.1.52` tarball and unchanged since `0.1.51` (same SHA-256), the upstream `LICENSE` is unchanged (same SHA-256), and the recomputed tarball SHA-256 and npm `dist.integrity` matched between the official registry and the mirror. The `0.1.51`→`0.1.52` upstream delta is CLI-only (issue create/edit blocked-by/blocking forwarding #262, `issue view --fields` #263, large bodies forwarded via a temporary file #259, and a search scope hint #261); the imported skill source surface does not move. The audited maintainer shell copy differs from the upstream baseline by exactly one inserted project-rules-win clause; that clause is adopted here as a documented local enhancement, not as upstream bytes.
 
 ## Azhou-maintained adaptation
 
 Azhou AI Hub keeps the upstream CLI-first design: the command, flag, and workflow surface is read from the locked CLI at run time and never baked into the package. The local layer:
 
 - narrows frontmatter to the neutral `name`, `description`, and `invocation` contract, translating the upstream host-specific `user-invocable: false` into `invocation: model-invoked discipline` (the upstream `author` and `metadata.hermes` keys are not copied);
-- pins npm execution to `0.1.51` for reproducibility where upstream instructs the unpinned `npx -y gh-axi`;
+- pins npm execution to `0.1.52` for reproducibility where upstream instructs the unpinned `npx -y gh-axi`;
 - adds the project-rules-win precedence clause (prefer this over `gh` and other methods for GitHub operations unless the current repository's rules name a different tool or recipe for the task), already present in the audited shell copy, as a documented local enhancement;
 - adds the Azhou identity, stage language, status dictionary, and stable receipt ([brand-layer](brand-layer.md));
 - adds setup, provenance, capability mapping, and explicit authorization checkpoints (global installs, hook installs, baseline updates, credential and secret handling, named-mutation-only boundaries);
@@ -40,7 +40,7 @@ No gh-axi application code, `dist/` bundle, or runtime assets are vendored. `npx
 ## Reproducible source check
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kunchenguid/gh-axi/911a0868600b125aafe5e7f77197a0eb5a5b493c/skills/gh-axi/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/kunchenguid/gh-axi/5a526599c9fa5a76b650079f5e9dbb1c1874a6ce/skills/gh-axi/SKILL.md \
   | shasum -a 256
 ```
 
@@ -49,19 +49,19 @@ Expected SHA-256: `3d01b3112442275d52cc5847cb17543c710128f4591346e77eeecc30c45e7
 On platforms without `shasum` (e.g. Windows), the standard-library equivalent:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/kunchenguid/gh-axi/911a0868600b125aafe5e7f77197a0eb5a5b493c/skills/gh-axi/SKILL.md \
+curl -fsSL https://raw.githubusercontent.com/kunchenguid/gh-axi/5a526599c9fa5a76b650079f5e9dbb1c1874a6ce/skills/gh-axi/SKILL.md \
   | python -c "import sys,hashlib; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())"
 ```
 
 Release tarball check:
 
 ```bash
-curl -fsSL -o /tmp/gh-axi-0.1.51.tgz https://registry.npmjs.org/gh-axi/-/gh-axi-0.1.51.tgz
-shasum -a 256 /tmp/gh-axi-0.1.51.tgz
-npm view gh-axi@0.1.51 dist.integrity
+curl -fsSL -o /tmp/gh-axi-0.1.52.tgz https://registry.npmjs.org/gh-axi/-/gh-axi-0.1.52.tgz
+shasum -a 256 /tmp/gh-axi-0.1.52.tgz
+npm view gh-axi@0.1.52 dist.integrity
 ```
 
-Expected tarball SHA-256: `fee983711774d8fa50ecec90a51aa8032538648c6877fcb1c44d7bd9716d54c2`. Expected npm `dist.integrity`: `sha512-uZ/DIKzfmYOPkcHdM7Dn8fBmdO7bZt7QzcZ6ZXUz55m58UbdfemQ3rlZNYT6avH3h7d9tPAjwUeMJ9JmFqVjAA==`.
+Expected tarball SHA-256: `af7a7b6ab5f2c1e0cd2fd10ac53cab0c59142501df70bdc26c8f4ca6bdaee41c`. Expected npm `dist.integrity`: `sha512-HWCP4xvRkvO2ESQSr2Vns8Z2BEiMBRqEkAs/BoQAFkGmyxhV0ZL7KnZSQ3M8oXhZnz+DgOGtose3QKaIqdYGSA==`.
 
 ## Fidelity classification
 

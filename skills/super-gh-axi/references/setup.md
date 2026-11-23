@@ -7,7 +7,7 @@ Read this before first use or when the CLI, the `gh` binary, authentication, or 
 | Requirement | Locked baseline | Purpose |
 |---|---:|---|
 | Node.js + npm/npx | Node 20+ | Run `gh-axi` (the npm package declares `engines.node >= 20`) |
-| `gh-axi` | `0.1.51` | Agent-ergonomic GitHub operations: issues, PRs, stacked PRs, discussions, workflow runs and dispatch, releases, repositories, labels, gists, Projects (v2), Actions secrets and variables, search, raw API |
+| `gh-axi` | `0.1.52` | Agent-ergonomic GitHub operations: issues, PRs, stacked PRs, discussions, workflow runs and dispatch, releases, repositories, labels, gists, Projects (v2), Actions secrets and variables, search, raw API |
 | `gh` CLI | `gh >= 2.99.0` per the CLI's own guidance (for `--attach` on issue/pr create, edit and comment; `GH_BIN` overrides the binary) | The wrapped binary and its authentication |
 | Network | npm fetch; GitHub API | Resolve the CLI when not installed and reach GitHub |
 
@@ -21,8 +21,8 @@ Fail closed: when Node 20+, npx, the locked baseline, the `gh` binary, or its au
 node --version
 npm --version
 gh --version
-npx -y gh-axi@0.1.51 --help
-npm view gh-axi@0.1.51 version dist.integrity repository.url license engines --json
+npx -y gh-axi@0.1.52 --help
+npm view gh-axi@0.1.52 version dist.integrity repository.url license engines --json
 ```
 
 `npx -y` downloads and executes the locked npm package when it is absent from the local cache. Review the npm metadata before first execution in a sensitive environment; the recorded integrity lives in [provenance.md](provenance.md).
@@ -30,8 +30,8 @@ npm view gh-axi@0.1.51 version dist.integrity repository.url license engines --j
 ## Run without a persistent install
 
 ```bash
-npx -y gh-axi@0.1.51 issue list --state open
-npx -y gh-axi@0.1.51 --help
+npx -y gh-axi@0.1.52 issue list --state open
+npx -y gh-axi@0.1.52 --help
 ```
 
 This package itself writes no repository state; the CLI writes only what the requested GitHub operation does. The CLI's `setup hooks` subcommand changes user-level state — run it only with explicit authorization.
@@ -41,7 +41,7 @@ This package itself writes no repository state; the CLI writes only what the req
 Use a project-local install when repeated downloads are undesirable:
 
 ```bash
-npm install --save-dev --ignore-scripts gh-axi@0.1.51
+npm install --save-dev --ignore-scripts gh-axi@0.1.52
 node "$(npm root)/gh-axi/dist/bin/gh-axi.js" --help
 ```
 
@@ -50,8 +50,8 @@ A global install changes user-level state. Run it only with explicit authorizati
 ## Verify
 
 ```bash
-npx -y gh-axi@0.1.51 --version
-npx -y gh-axi@0.1.51 --help
+npx -y gh-axi@0.1.52 --version
+npx -y gh-axi@0.1.52 --help
 ```
 
 Verify `gh` authentication with `gh` itself (`gh auth status`), then one read-only CLI operation against the target repository. Do not create, edit, merge, or release anything merely to prove package installation; a mutation is never a setup check.
