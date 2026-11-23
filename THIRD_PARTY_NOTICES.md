@@ -79,11 +79,11 @@ On 2026-11-21 the README hero and four Skills section banners had their package 
 
 ## Lavish Editor
 
-`skills/super-lavish/` imports the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`79aa0a18dba9c1a1dcec6db19d2ef4eb7643754b`](https://github.com/kunchenguid/lavish-axi/commit/79aa0a18dba9c1a1dcec6db19d2ef4eb7643754b) (official release `lavish-axi-v0.1.97`). The unmodified upstream baseline is hash-locked for reproducibility.
+`skills/super-lavish/` imports the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`2b32b92ec8e8fcfb7069af3e1a89c0cabc3bf9aa`](https://github.com/kunchenguid/lavish-axi/commit/2b32b92ec8e8fcfb7069af3e1a89c0cabc3bf9aa) (official release `lavish-axi-v0.1.98`). The unmodified upstream baseline is hash-locked for reproducibility.
 
 - Copyright: Kun Chen, 2026
 - License: [MIT](LICENSES/Lavish-AXI-MIT.txt)
-- Imported boundary: generated skill instructions only; no Lavish application code, browser bundle or hosted service is vendored. `lavish-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y lavish-axi@0.1.97` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The CLI's own bundled third-party notices ship inside the npm package and are not redistributed from this repository.
+- Imported boundary: generated skill instructions only; no Lavish application code, browser bundle or hosted service is vendored. `lavish-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y lavish-axi@0.1.98` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The CLI's own bundled third-party notices ship inside the npm package and are not redistributed from this repository.
 - Local changes: neutral frontmatter, locked CLI baseline, Azhou brand protocol and stable receipt, setup/provenance/compatibility records, and explicit authorization checkpoints.
 
 ## Excalidraw Diagram
