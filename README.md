@@ -151,7 +151,7 @@ Two complete projects live under `packages/`. These projects are not Skills, and
 
 [Azhou Appearance](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary) accepts user-selected images and Azhou JSON presets. It does not import themes or migrate data from other projects.
 
-[Azhou mouse cursors 3.3.1](assets/cursors/azhou-double-hug/README.md) are available as a separate Mousecape candidate; desktop visual acceptance is pending.
+[Azhou mouse cursors 3.6.1](assets/cursors/azhou-double-hug/README.md) are available as a standalone Mousecape theme for macOS.
 
 Run these from a clone of this repository, as above:
 
