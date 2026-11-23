@@ -42,6 +42,10 @@ The upstream instruction body is retained verbatim except for the six recorded d
 | D5 | Harness note | `visual-companion.md`, before `**Launching the server by platform:**` | one inserted paragraph declaring the platform recipes examples and the generic start/share/stop loop normative |
 | D6 | Builder-check provenance note | the subagent fallback sentence ("Without a subagent tool, read the document as that builder yourself.") | one appended clause requiring the mechanism that performed the check to be named |
 
+### Accepted upstream-behavior notes
+
+Four review findings reported against the packaged scripts (2026-11-24) sit in bytes identical to the pin — three in files vendored byte-for-byte, the fourth in a `scripts/server.cjs` region outside the D4 hunks — and were accepted as upstream-behavior notes rather than patched, so the upstream bytes and their pins stay intact and upstream keeps ownership of the fixes: a launcher loop when a value-taking option has no value, deletion of project-backed sessions under `/tmp`, explicit-choice events left out of the feedback file, and percent-encoded asset names returning 404. The itemized record and the hub-layer guidance are in [upstream-compatibility](upstream-compatibility.md#accepted-upstream-behavior-notes-at-the-pin) and [setup](setup.md#known-upstream-behavior-at-the-pin).
+
 ## Adoption evidence
 
 Adoption follows the execution plan in `.planning/skills-intro-brainstorming-grill-me-20261123/plan.md` (Git-external): the upstream pin was re-verified against the live release list on 2026-11-23 (v7.0.2 still the latest stable release), the byte baseline was re-verified twice (all eight upstream blob SHAs recomputed locally and matched the upstream `contents` API at the pin), and the delta diff of the packaged `SKILL.md` against the upstream file was mechanically confirmed to contain exactly the recorded deltas and the Azhou layer before commit.
