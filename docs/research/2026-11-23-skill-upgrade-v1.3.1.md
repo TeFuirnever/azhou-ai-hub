@@ -15,7 +15,7 @@
 
 ## 变更文件逐条处置
 
-`compare` v1.2.2...v1.3.1 共 22 个变更文件；neat-freak 相关 8 个，逐条映射如下。快照五文件（`SKILL.snapshot.md` + 4 references）全部刷新至 v1.3.1 原字节，`scripts/check_repository.py` `BASELINE_HASHES` 重锁 5/5 项。
+`compare` v1.2.2...v1.3.1 共 23 个变更文件；neat-freak 相关 7 个，逐条映射如下。快照五文件（`SKILL.snapshot.md` + 4 references）全部刷新至 v1.3.1 原字节，`scripts/check_repository.py` `BASELINE_HASHES` 重锁 5/5 项。
 
 | 上游文件 | 引入 release / commit | 对 neat-freak 基线 | 处置 |
 |---|---|---|---|
@@ -26,7 +26,7 @@
 | `neat-freak/references/verification.md`（+51/−83） | v1.3.0 / `1cff16da` | **口语化重写**：标题改「什么结论要什么证据」；9 行结论→最低证据表逐行保持（措辞中文化）；发布状态机压缩为线性链（跳步需理由、卡在哪步按哪步汇报保留；新增「项目没有部署环节时如实说不适用」）；「真相矩阵」text 模板删除（其「每一面都核实过」语义保留在证据表末行）；清场前 gate 8 步并为 7 步（内容逐项保持）；「验证失败时」四条逐条保持（`pending`→`未核实` 措辞） | 快照刷新为该 commit 原字节。无能力删除；台账验证行不变 |
 | `neat-freak/scripts/audit-inventory.sh`（+3/−2） | v1.3.0 / `1cff16da` | 规则链探测与用户级探测各新增 `GEMINI.md` / `~/.gemini/GEMINI.md` 候选（additive 平台覆盖） | 不在快照面（快照只锁 SKILL + 4 references）。记录为上游 additive 观察；本包 Python inventory 的平台候选由 `runtime-history.md` 表管理，GEMINI 候选暂不加入本地表（无本地宿主证据），未改动本地脚本。无台账行变化 |
 | `neat-freak/evals/evals.json`（+10/−10） | v1.3.0 / `1cff16da` | 期望条目措辞中文化（`定稿/毕业/待整合`→`定稿结论、并进文档留指针、如实报告为过期`；`pending/out-of-scope`→`未核实或待决/范围外`；`生产 marker`→`生产的版本标记`），eval-7 期望语义逐条保持 | evals 不在快照面（2026-10-07 审计已声明未取 eval fixtures）。逐条语义比对无能力变化；无处置动作。`evals/validate.py` 在 v1.2.2→v1.3.1 区间逐字节未变（`git diff` 为空），无需复核 |
-| 其余 14 个文件（`hv-analysis/`、`khazix-writer/`、`leader/`、`storage-analyzer/`、`AGENTS.md`、`README*.md`、`.claude-plugin/marketplace.json`、`tests/test_hv_report.py`） | v1.3.0 / `1cff16da`；v1.3.1 / `76fc0f8e` 仅 `.claude-plugin/marketplace.json` 与 `leader/references/anatomy.md` | 属其他 skill 或仓库级文件，不属于 neat-freak 能力集 | 不采纳、不建行；v1.3.0→v1.3.1 跳因此无需 neat-freak 能力复核 |
+| 其余 16 个文件（`hv-analysis/`、`khazix-writer/`、`leader/`、`storage-analyzer/`、`AGENTS.md`、`README*.md`、`.claude-plugin/marketplace.json`、`tests/test_hv_report.py`） | v1.3.0 / `1cff16da`；v1.3.1 / `76fc0f8e` 仅 `.claude-plugin/marketplace.json` 与 `leader/references/anatomy.md` | 属其他 skill 或仓库级文件，不属于 neat-freak 能力集 | 不采纳、不建行；v1.3.0→v1.3.1 跳因此无需 neat-freak 能力复核 |
 
 ## 触发语义保持核验（v4.0.0 description 改写）
 
@@ -61,7 +61,7 @@
 - 原采用上游基线：v1.2.2 / skill 3.1.1 / `71cd50ff`（快照字节仍在 Git 历史与本记录引用的上一版 provenance 中）。
 - 当前本地实现：`skills/super-repo-pedant/` 全部 Azhou 包装增量（frontmatter 收窄与双语触发、品牌锚与过程播报、四模式、inventory/impact/execution 协议、Python 脚本族、receipt、runtime-state 合同、evolution 合同）逐字节未动。
 - 目标稳定版：v1.3.1 / skill 4.0.0 / `76fc0f8e`。
-- 结论：按能力迁移为**基线指针移动 + 快照刷新 + 台账措辞重述**；本地无行为变化。全部 28 行 disposition 保持原分类，7 行措辞重述至 4.0.0（触发行、anti-bloat 三行、conversation-review 行、per-file 行、deletion 行、runtime-paths 行）。兼容合同升 v6；`neat-freak-parity.json` 与 `tests/test_super_repo_pedant_parity.py` 的基线 pins 同步；`provenance.md`、`runtime-history.md`、`THIRD_PARTY_NOTICES.md` 记录新 pin。support-matrix 不引用上游版本号，无同步对象。
+- 结论：按能力迁移为**基线指针移动 + 快照刷新 + 台账措辞重述**；本地无行为变化。全部 28 行 disposition 保持原分类，8 行措辞重述至 4.0.0（触发行、anti-bloat 三行、conversation-review 行、per-file 行、deletion 行、runtime-paths 行）。兼容合同升 v6；`neat-freak-parity.json` 与 `tests/test_super_repo_pedant_parity.py` 的基线 pins 同步；`provenance.md`、`runtime-history.md`、`THIRD_PARTY_NOTICES.md` 记录新 pin。support-matrix 不引用上游版本号，无同步对象。
 
 ## 快照字节保真证据
 
