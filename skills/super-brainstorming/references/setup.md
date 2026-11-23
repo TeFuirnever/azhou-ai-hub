@@ -23,8 +23,8 @@ node --check skills/super-brainstorming/scripts/server.cjs
 
 ## Session state and sensitive files
 
-- Session state lives under `<project>/.superpowers/brainstorm/` (content, state, `.last-port`, `.last-token`). The token file is a capability: anyone who can read it can talk to a running server. Do not commit it; this repository gitignores `/.superpowers/` at the root, and downstream projects should do the same (the skill body already reminds the reader).
-- Stop and clean with `scripts/stop-server.sh`; removing the session directory removes the recorded port and token. Nothing outside `.superpowers/` (or `/tmp/brainstorm` when no project dir is passed) is written.
+- Session state lives under `<project>/.superpowers/brainstorm/`: each session directory `<session-id>/` holds `content/` and `state/`, while `.last-port` and `.last-token` sit at the namespace root, persisted per project so a restart reuses them. The token file is a capability: anyone who can read it can talk to a running server. Do not commit it; this repository gitignores `/.superpowers/` at the root, and downstream projects should do the same (the skill body already reminds the reader).
+- Stop with `scripts/stop-server.sh <session-dir>`; removing the session directory removes its content and state but keeps the recorded port and token at the namespace root. Nothing outside `.superpowers/` (or `/tmp/brainstorm` when no project dir is passed) is written.
 
 ## Related packages
 

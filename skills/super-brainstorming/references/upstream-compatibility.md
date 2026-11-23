@@ -25,4 +25,4 @@ On a pin upgrade, fetch the new upstream `skills/brainstorming/` tree, then re-a
 5. **D5** — re-insert the harness note paragraph immediately before `**Launching the server by platform:**` in `visual-companion.md`.
 6. **D6** — re-attach the builder-check provenance clause after the subagent fallback sentence.
 
-Then re-record every upstream SHA-256 in [provenance](provenance.md), re-pin the retained segments in `tests/test_super_brainstorming.py`, re-run the token simulation (upstream bytes may introduce new bare old-name tokens outside allowed surfaces), and land the upgrade through a fresh exact-diff approval. Never silently follow upstream main.
+Then re-record every upstream SHA-256 in [provenance](provenance.md), re-pin the retained segments and full local digests in `tests/test_super_brainstorming.py`, re-run the token simulation (upstream bytes may introduce new bare old-name tokens outside allowed surfaces), and land the upgrade through a fresh exact-diff approval. Never silently follow upstream main.

@@ -11,7 +11,7 @@ Run in a scratch directory (never a real checkout):
 3. `curl` the URL — expect the frame HTML; expect **no** `<img class="brand-logo">` and **no** `href="https://github.com/obra/…"` in the markup (branding defaults off; delta D4).
 4. With `SUPERPOWERS_ENABLE_TELEMETRY=1`, repeat step 3 — expect the brand markup to appear (the opt-in path still works).
 5. Push a content fragment and confirm it lands under `<scratch-dir>/.superpowers/brainstorm/<session>/content/`.
-6. `bash skills/super-brainstorming/scripts/stop-server.sh` — expect a clean stop and the session files removable.
+6. `bash skills/super-brainstorming/scripts/stop-server.sh <scratch-dir>/.superpowers/brainstorm/<session>` — expect a clean stop and the session files removable.
 7. Assert zero npm involvement at every step (no `npm install`, no `package.json` anywhere in the package).
 
 Record the Node version alongside any run notes. The conversation behavior itself (exploration → approaches → design doc → approval gate) is a human-in-the-loop protocol and is walked through, not automated, by this contract.
