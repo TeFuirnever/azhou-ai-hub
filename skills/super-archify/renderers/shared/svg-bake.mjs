@@ -557,7 +557,7 @@ function bakeBodyStyles(body, variables) {
   const lookup = (name) => variables.get(name) ?? null;
   let emitted = 0;
   const bakedBody = body
-    .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/g, (match, attrs, css) => {
+    .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (match, attrs, css) => {
       const baked = bakeEmbeddedStylesheet(css, variables);
       if (/[<&]/.test(baked) || /[<>]/.test(attrs)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
       // Unmatched fragments (an unterminated or reassembled <style>) must not
@@ -574,7 +574,7 @@ function bakeBodyStyles(body, variables) {
       const baked = bakeInlineStyle(style, lookup);
       return baked ? `style="${escapeAttribute(baked)}"` : '';
     });
-  if ((bakedBody.match(/<\/?style\b/g) || []).length !== 2 * emitted) {
+  if ((bakedBody.match(/<\/?style\b/gi) || []).length !== 2 * emitted) {
     throw new Error('svg-bake: embedded style elements did not parse completely');
   }
   return bakedBody;

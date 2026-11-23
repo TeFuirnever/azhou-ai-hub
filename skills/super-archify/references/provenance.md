@@ -13,6 +13,7 @@ Repository-wide notices and the retained license copies live in [THIRD_PARTY_NOT
 | Release published | 2026-11-22T18:04:07Z; `draft=false`, `prerelease=false`, tag `v3.3.0` resolves to the commit (`git rev-parse v3.3.0^{commit}`) |
 | Release artifact | `archify.zip` uploaded by `github-actions[bot]`, SHA-256 `00e4ff53267aee7dabf22ed333360cd3e380db20271a50264ae146ee25cf2538` |
 | Verification date | 2026-11-23 (Asia/Shanghai), official release list and exact tag tree |
+| Browser-observation evidence | Not re-run at this pin (recorded 2026-11-23): the six-branch real-Chrome browser observations and the PR #430 version recordings were not repeated; no visual-acceptance claim is made |
 | Upstream package path / identity | `archify/` / `archify`; the Hub canonical package is `super-archify` |
 | Upstream `archify/SKILL.md` SHA-256 | `e5c49b1c3e1b5b46ffb044aa676c46a58715cb34b459cbabd7f48e5887fed808` |
 | License at the current immutable commit | Apache-2.0 (`LICENSE` SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30`), with pre-transition MIT grants preserved upstream as `LICENSE-MIT` (SHA-256 `b799ab081703e7821ae5096d2c1abdf14bbdc75e8ea1c4045998c36ed6db9706`, byte-identical to the license text at the previous pins) and named in `NOTICE` (SHA-256 `4c88357b600f24214bd6d12ee70e37d66a160c6069bba2aec2d35486f6ff1a3a`); the transition names pre-transition commit `82c7e0f089a02a4d514714adf37dc2061682da5f` and keeps existing MIT grants and the separately versioned DSH adapter MIT |
@@ -55,7 +56,7 @@ These are bounded local safety/correctness adaptations, not a new upstream versi
 
 ## Security hardening added on this pin (CodeQL findings)
 
-Twenty-three CodeQL findings against the v3.3.0 bytes were fixed locally with behavior-level regressions (each new test fails against the pristine upstream bytes and passes after); dispositions live in `tests/archify-vendor-manifest.json` under `adopt_upstream_with_documented_local_fix`:
+Twenty-two of the twenty-three CodeQL findings against the v3.3.0 bytes were fixed locally with behavior-level regressions (each new test fails against the pristine upstream bytes and passes after); the remaining `stripTags` finding was proven complete by exhaustive search and is recorded below as a retained limitation. Dispositions live in `tests/archify-vendor-manifest.json` under `adopt_upstream_with_documented_local_fix`:
 
 | File | Local change | Preserved behavior and regression |
 |---|---|---|

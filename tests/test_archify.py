@@ -832,14 +832,20 @@ let threw = 0;
 for (const body of hostile) {
   try { bakeSvg(wrap(body), { theme: 'dark', preset: 'classic' }); } catch (_) { threw += 1; }
 }
-console.log(JSON.stringify({ styles: styleCount(legit), empty: styleCount(empty), threw, expected: hostile.length, passed: threw === hostile.length }));
+const variantBody = '<STYLE><script xmlns="http://www.w3.org/2000/svg">alert(1)</script></STYLE><rect width="4" height="4"/>';
+let variantOut = null;
+try { variantOut = bakeSvg(wrap(variantBody), { theme: 'dark', preset: 'classic' }); } catch (_) {}
+if (variantOut !== null && (/<script/i.test(variantOut) || ![...variantOut.matchAll(/<\/?[sS][tT][yY][lL][eE]\b/g)].every((m) => m[0] === '<style' || m[0] === '</style'))) {
+  throw new Error('case-variant style payload survived baking: ' + variantOut);
+}
+console.log(JSON.stringify({ styles: styleCount(legit), empty: styleCount(empty), threw, expected: hostile.length, caseVariant: variantOut === null ? 'threw' : 'neutralized', passed: threw === hostile.length }));
 """
         result = subprocess.run(
             ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
             capture_output=True, text=True, encoding="utf-8", timeout=30,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        self.assertEqual({"styles": 4, "empty": 2, "threw": 5, "expected": 5, "passed": True}, json.loads(result.stdout))
+        self.assertEqual({"styles": 4, "empty": 2, "threw": 5, "expected": 5, "caseVariant": "neutralized", "passed": True}, json.loads(result.stdout))
 
     def test_story_scoping_rejects_style_reconstitution_and_terminators(self) -> None:
         program = r"""
@@ -871,14 +877,20 @@ for (const svg of hostile) {
   try { scopeEmbeddedStyles(svg, 'native-1'); } catch (_) { threw += 1; }
 }
 assert.equal(threw, hostile.length);
-console.log(JSON.stringify({ cases: cases.length, threw, expected: hostile.length, passed: true }));
+const variantSvg = '<svg><STYLE><script xmlns="http://www.w3.org/2000/svg">alert(1)</script></STYLE><rect/></svg>';
+let variantOut = null;
+try { variantOut = scopeEmbeddedStyles(variantSvg, 'native-1'); } catch (_) {}
+if (variantOut !== null && (/<script/i.test(variantOut) || ![...variantOut.matchAll(/<\/?[sS][tT][yY][lL][eE]\b/g)].every((m) => m[0] === '<style' || m[0] === '</style'))) {
+  assert.fail('case-variant style payload survived scoping: ' + variantOut);
+}
+console.log(JSON.stringify({ cases: cases.length, threw, expected: hostile.length, caseVariant: variantOut === null ? 'threw' : 'neutralized', passed: true }));
 """
         result = subprocess.run(
             ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
             capture_output=True, text=True, encoding="utf-8", timeout=30,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        self.assertEqual({"cases": 3, "threw": 4, "expected": 4, "passed": True}, json.loads(result.stdout))
+        self.assertEqual({"cases": 3, "threw": 4, "expected": 4, "caseVariant": "neutralized", "passed": True}, json.loads(result.stdout))
 
     def test_render_tag_tokenizer_is_equivalent_and_linear(self) -> None:
         program = r"""

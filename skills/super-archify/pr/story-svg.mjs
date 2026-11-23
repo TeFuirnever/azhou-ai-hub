@@ -649,7 +649,7 @@ function namespaceSubSvgIds(svg, key) {
 
 function scopeEmbeddedStyles(svg, key) {
   let emitted = 0;
-  const scopedSvg = svg.replace(/<style[^>]*>([\s\S]*?)<\/style>/g, (_, css) => {
+  const scopedSvg = svg.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_, css) => {
     const clean = css.replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, '');
     const scoped = parseStylesheet(clean).map((rule) => {
       const decls = rule.declarations.map((d) => `${d.property}:${d.value}${d.important ? '!important' : ''}`).join(';');
@@ -664,7 +664,7 @@ function scopeEmbeddedStyles(svg, key) {
     emitted += 1;
     return `<style><![CDATA[${scoped}]]></style>`;
   });
-  if ((scopedSvg.match(/<\/?style\b/g) || []).length !== 2 * emitted) {
+  if ((scopedSvg.match(/<\/?style\b/gi) || []).length !== 2 * emitted) {
     throw new Error('story-svg: embedded style elements did not parse completely');
   }
   return scopedSvg;
