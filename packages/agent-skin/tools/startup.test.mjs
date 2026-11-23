@@ -165,8 +165,8 @@ function controlledHost({ body = true } = {}) {
     },
     keydown(event) { for (const listener of keyListeners) listener(event); },
     scroll() { for (const listener of scrollListeners) listener(); },
-    pagehide() { for (const listener of pageHideListeners) listener(); },
-    pageshow() { for (const listener of pageShowListeners) listener(); },
+    pagehide(event) { for (const listener of pageHideListeners) listener(event); },
+    pageshow(event) { for (const listener of pageShowListeners) listener(event); },
     setBody() {
       document.body = {};
       for (const observer of observers) observer.trigger();
@@ -3686,7 +3686,7 @@ async function workspaceRecoveryFixture({ invalidateBeforePublish = false, cover
     const call = { value, current, signal, options, resolve, reject };
     call.finish = () => {
       const wallpaper = { owner: 'azhou.codex-startup-animation', version: '0.9.0',
-        status: () => ({ applied: true, imageDecoded: true, ...(coverage ? {coverage, fullCoverage:false} : {}) }), dispose() {} };
+        status: () => call.onStatus?.() ?? ({ applied: true, imageDecoded: true, ...(coverage ? {coverage, fullCoverage:false} : {}) }), dispose() {} };
       if (current()) controlled.host.__azhouWallpaper = wallpaper;
       call.wallpaper = wallpaper;
       if (invalidateBeforePublish && calls.length === 1) {
@@ -3959,6 +3959,62 @@ test('Native original nonce can revoke its recovery after known URL changes with
     assert.equal(f.api.readSettingsSnapshotChunk(snapshotChunkRequest(f.request, descriptor, 0, 0)).ok, false);
   } finally { f.api.dispose(); }
 });
+
+for (const mode of ['retired-while-hidden', 'retired-by-status', 'interrupted-recovery', 'healthy', 'fresh-incumbent', 'foreign-descriptor', 'stale-generation', 'wrong-document', 'wrong-route', 'non-persisted-hide', 'non-persisted-show']) {
+  test(`persisted Codex page restore handles wallpaper recovery: ${mode}`, async () => {
+    const f = await workspaceRecoveryFixture();
+    try {
+      const host = f.controlled.host;
+      const runId = f.api.status().runId;
+      const interrupted = mode === 'interrupted-recovery';
+      if (interrupted) f.invalidate(0);
+      host.pagehide({ persisted: mode !== 'non-persisted-hide' });
+      if (interrupted) assert.equal(f.calls[1].signal.aborted, true);
+      else if (mode === 'retired-by-status') {
+        f.calls[0].onStatus = () => {
+          f.invalidate(0);
+          return { applied: false, reason: 'disposed', imageDecoded: false };
+        };
+        assert.equal(f.api.status().wallpaper.applied, false);
+      } else if (mode !== 'healthy') f.invalidate(0);
+      if (mode === 'wrong-document') host.document = { ...host.document };
+      if (mode === 'wrong-route') host.location.href = 'app://-/index.html?initialRoute=%2Fmini';
+      const incumbent = Object.freeze({ owner: 'azhou.codex-startup-animation', version: '0.9.0',
+        status() { assert.fail('resume must not probe an incumbent'); }, dispose() { assert.fail('resume must not dispose an incumbent'); } });
+      if (mode === 'fresh-incumbent') host.__azhouWallpaper = incumbent;
+      if (mode === 'foreign-descriptor') Object.defineProperty(host, '__azhouWallpaper', {
+        configurable: true, get() { assert.fail('resume must not read an unowned accessor'); },
+      });
+      if (mode === 'stale-generation') {
+        const retry = f.api.retryWallpaper();
+        assert.equal(f.calls.length, 2, 'a concurrent explicit retry supersedes the ticket generation');
+        f.calls[1].resolve({ applied: false, failureCode: 'image-decode-failed' });
+        await retry;
+        assert.equal(f.api.status().runId, runId, 'generation changed without changing the run');
+      }
+      const before = f.calls.length;
+      assert.equal(before, interrupted || mode === 'stale-generation' ? 2 : 1, 'no automatic recovery while hidden');
+      host.pageshow({ persisted: mode !== 'non-persisted-show' });
+      if (mode.startsWith('retired-') || interrupted) {
+        assert.equal(f.calls.length, before + 1, 'same owned intent is applied again on persisted return');
+        assert.equal(f.calls.at(-1).value.image, f.calls[0].value.image);
+        assert.equal(f.calls.at(-1).value.strength, f.calls[0].value.strength);
+        assert.equal(f.calls.at(-1).current(), true);
+        if (interrupted) f.calls[1].finish();
+        f.calls.at(-1).finish();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(f.api.status().wallpaper.applied, true);
+        assert.equal(f.api.status().runId, runId);
+        assert.equal(f.controlled.frames.length, 1, 'startup does not replay');
+        host.pageshow({ persisted: true });
+        assert.equal(f.calls.length, before + 1, 'the restore event is consumed once');
+      } else {
+        assert.equal(f.calls.length, before, 'other returns and healthy paint do not start recovery');
+        if (mode === 'fresh-incumbent') assert.equal(host.__azhouWallpaper, incumbent);
+      }
+    } finally { f.api.dispose(); }
+  });
+}
 
 test('settings open then cancel transfers committed wallpaper recovery to the current run', async () => {
   const f = await workspaceRecoveryFixture();
