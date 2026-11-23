@@ -23,7 +23,7 @@
 | `neat-freak/references/agent-paths.md`（+10/−7） | v1.3.0 / `1cff16da` | **实质事实更新**：新增 Claude Code 2.1.277 起直接读 `AGENTS.md` 的条件（仅当工作目录及上级均无 CLAUDE 系文件）与三种共存方案（`@AGENTS.md` 导入/软链/`claude-md-and-agents-md` 设置）；新增 `AGENTS.override.md`、`AGENTS.local.md`、`.agents/` 不被 Claude Code 读取；新增 `@路径` 导入按写它的文件解析、最多嵌套四层；「宿主管线生成」措辞改「Codex 自己生成」；标题改各平台速查口径；表头加「核对于 2026-11」 | 快照刷新为该 commit 原字节。属上游 additive 平台事实更新，方向与本包 `disadvantage_replaced` 行（`concrete-cross-runtime-paths`，非永久表 + verify-current）一致；台账该行已注明 4.0.0 表更新。本包 runtime-history 的路径候选表与「discovery candidates, not ownership proof」守卫不变 |
 | `neat-freak/references/sync-matrix.md`（+60/−62） | v1.3.0 / `1cff16da` | **口语化重排**：章节重排（噪音表移后），表格措辞全面改写（`pending`→`待决`、`out-of-scope`→`范围外`、`marker`→`版本标记` 等）；能力面（变化→核对处 9 行、四受众职责、记忆路由 8 行、违规→动作 7 行、跨项目 4 条件）逐行保持 | 快照刷新为该 commit 原字节。无能力增删，无台账行变化 |
 | `neat-freak/references/governance.md`（+61/−61） | v1.3.0 / `1cff16da` | **口语化重排**：「确定实际规则链」提前为第一节；机械可核验约定表（7 类）、范围分级（4 档）、处置等级（直接修/先报告/只读）、规则质量检查（6 项）、报告要求逐项保持 | 快照刷新为该 commit 原字节。无能力增删，无台账行变化 |
-| `neat-freak/references/verification.md`（+51/−83） | v1.3.0 / `1cff16da` | **口语化重写**：标题改「什么结论要什么证据」；9 行结论→最低证据表逐行保持（措辞中文化）；发布状态机压缩为线性链（跳步需理由、卡在哪步按哪步汇报保留；新增「项目没有部署环节时如实说不适用」）；「真相矩阵」text 模板删除（其「每一面都核实过」语义保留在证据表末行）；清场前 gate 8 步并为 7 步（内容逐项保持）；「验证失败时」四条逐条保持（`pending`→`未核实` 措辞） | 快照刷新为该 commit 原字节。无能力删除；台账验证行不变 |
+| `neat-freak/references/verification.md`（+51/−83） | v1.3.0 / `1cff16da` | **口语化重写**：标题改「什么结论要什么证据」；9 行结论→最低证据表逐行保持（措辞中文化）；发布状态机压缩为线性链（跳步需理由、卡在哪步按哪步汇报保留；新增「项目没有部署环节（本地工具、还没上线的小项目）时，后面几步不适用，如实说不适用，不编造部署状态」）；「真相矩阵」text 模板删除（其「每一面都核实过」语义保留在证据表末行）；清场前 gate 8 步并为 7 步（内容逐项保持）；「验证失败时」四条逐条保持（`pending`→`未核实` 措辞） | 快照刷新为该 commit 原字节。无能力删除；台账验证行不变 |
 | `neat-freak/scripts/audit-inventory.sh`（+3/−2） | v1.3.0 / `1cff16da` | 规则链探测与用户级探测各新增 `GEMINI.md` / `~/.gemini/GEMINI.md` 候选（additive 平台覆盖） | 不在快照面（快照只锁 SKILL + 4 references）。记录为上游 additive 观察；本包 Python inventory 的平台候选由 `runtime-history.md` 表管理，GEMINI 候选暂不加入本地表（无本地宿主证据），未改动本地脚本。无台账行变化 |
 | `neat-freak/evals/evals.json`（+10/−10） | v1.3.0 / `1cff16da` | 期望条目措辞中文化（`定稿/毕业/待整合`→`定稿结论、并进文档留指针、如实报告为过期`；`pending/out-of-scope`→`未核实或待决/范围外`；`生产 marker`→`生产的版本标记`），eval-7 期望语义逐条保持 | evals 不在快照面（2026-10-07 审计已声明未取 eval fixtures）。逐条语义比对无能力变化；无处置动作。`evals/validate.py` 在 v1.2.2→v1.3.1 区间逐字节未变（`git diff` 为空），无需复核 |
 | 其余 16 个文件（`hv-analysis/`、`khazix-writer/`、`leader/`、`storage-analyzer/`、`AGENTS.md`、`README*.md`、`.claude-plugin/marketplace.json`、`tests/test_hv_report.py`） | v1.3.0 / `1cff16da`；v1.3.1 / `76fc0f8e` 仅 `.claude-plugin/marketplace.json` 与 `leader/references/anatomy.md` | 属其他 skill 或仓库级文件，不属于 neat-freak 能力集 | 不采纳、不建行；v1.3.0→v1.3.1 跳因此无需 neat-freak 能力复核 |
@@ -42,10 +42,10 @@
 
 上游删除/合并的四个结构要素逐项核验其语义去向：
 
-1. **完成合同六事实面矩阵**（`verified-current`/`changed-and-verified`/`pending`/`out-of-scope`/`not-applicable` 枚举表）→ 语义收敛为「以什么为准」可信度排序（代码/配置/运行服务 > 用户当次明确决定 > 文档 > 记忆）+「核实不了的不写成事实，标『未核实』」。本包 inventory 的 fact-surface 状态机与 validator 不受影响（本地更强形式不变）。
+1. **完成合同六事实面矩阵**（`verified-current`/`changed-and-verified`/`pending`/`out-of-scope`/`not-applicable` 枚举表）→ 语义收敛为「以什么为准」可信度排序（代码/配置/运行服务 > 用户当次明确决定 > 文档 > 记忆）+『核实不了的不写成事实，在汇报里标「未核实」』。本包 inventory 的 fact-surface 状态机与 validator 不受影响（本地更强形式不变）。
 2. **轻量/完整路径分叉** → 线性五步。原轻量五步（盘点/对齐/补规则文件/清点残留/汇报）与完整路径 0–7 步的内容逐项分布在五步正文与四 references：补规则文件五要素+60 行上限保留（「没有规则文件的项目」段）、残留清理候选保留（「会话留下的临时文件」段）、发布闭环移入 `references/verification.md` 发布链与「清场之前」节。
 3. **最终自检 checklist** → 「核对，然后汇报」四问（每文件改/不改判断、旧名重搜、命令路径链接真实性、跑项目自有检查）。本包 execution protocol 六固定检查不变。
-4. **汇报骨架** → 保留（影响/改动新建/待你确认/遗留），仅「待你确认」两条的括号限定语并入「边界」节的删除授权判断（内容等价且更强：明确「收拾文档与记忆的授权不是删文件的授权」「项目没有版本管理时删了找不回，一律先列候选」）。
+4. **汇报骨架** → 保留（影响/改动新建/待你确认/遗留），仅「待你确认」两条的括号限定语并入「边界」节的删除授权判断（内容等价且更强：明确「他说的是把文档和记忆收拾、整理干净，要的是内容对齐，不是让你删文件」「项目没有版本管理时删了找不回，除非用户点名了要删的东西，一律先列候选」）。
 
 **上游 additive（v4.0.0 新增，4 项，记录为观察、不建强制行）：**
 
