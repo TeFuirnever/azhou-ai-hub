@@ -7,11 +7,6 @@ module.exports = function (eleventyConfig) {
     "../assets/github/readme-hero.png": "./assets/hero.png",
     "../assets/site/hero.webp": "./assets/hero.webp",
     "../assets/site/hero-640.webp": "./assets/hero-640.webp",
-    "../assets/skills/super-archify-effect.png": "./assets/skills/super-archify-effect.png",
-    "../assets/skills/super-eli5-effect.png": "./assets/skills/super-eli5-effect.png",
-    "../assets/skills/super-excalidraw-diagram-effect.png": "./assets/skills/super-excalidraw-diagram-effect.png",
-    "../benchmarks/super-excalidraw-diagram/ordinary-model-floor/fixtures/reference/reference.architecture.excalidraw": "./showcase/demos/reference.architecture.excalidraw",
-    "./showcase/demos": "./showcase/demos",
     "./robots.txt": "./robots.txt",
   });
 
