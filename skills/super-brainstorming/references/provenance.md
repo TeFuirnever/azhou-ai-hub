@@ -31,7 +31,7 @@ The upstream release carries no per-skill license file; the repository-root `LIC
 
 ## Azhou-maintained adaptation
 
-The upstream instruction body is retained verbatim except for the six recorded deltas; each delta is reproducible against the upstream anchors:
+The upstream instruction body is retained verbatim except for the six recorded deltas and the Azhou brand layer; each delta is reproducible against the upstream anchors:
 
 | # | Delta | Upstream anchor | Change |
 |---|---|---|---|
@@ -70,4 +70,4 @@ Expected SHA-256: `a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2
 
 ## Fidelity classification
 
-Classification: `adapted` — the upstream capability is extended, not merely repackaged: the six recorded deltas change instruction text (planning handoff, design-doc location, builder-check provenance), default behavior (branding/telemetry opt-in), and add the Azhou brand layer, while the upstream instruction body itself is retained verbatim outside the recorded deltas and the upstream name keeps working as a trigger. Skill-standard §2.3.
+Classification: `adapted` — the upstream capability is extended, not merely repackaged: the six recorded deltas change instruction text (planning handoff, design-doc location, builder-check provenance) and default behavior (branding/telemetry opt-in), and the Azhou brand layer is added alongside them, while the upstream instruction body itself is retained verbatim outside the recorded deltas and the Azhou brand layer; the upstream name keeps working as a trigger. Skill-standard §2.3.

@@ -59,7 +59,7 @@ without repeating it.
 
 **Harness note:** the platform-specific launch recipes below are examples;
 the generic loop — start with `scripts/start-server.sh`, share the complete
-keyed URL, and stop with `scripts/stop-server.sh` — is the normative
+keyed URL, and stop with `scripts/stop-server.sh <session-dir>` — is the normative
 procedure and works on any harness with a shell.
 
 **Launching the server by platform:**

@@ -189,7 +189,7 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 
 ## Brainstorming
 
-`skills/super-brainstorming/` adapts the `brainstorming` skill from [obra/superpowers](https://github.com/obra/superpowers) at immutable tag [`v7.0.2`](https://github.com/obra/superpowers/releases/tag/v7.0.2) (commit [`22f0b463e7a5e579904dd6211a520321035526f7`](https://github.com/obra/superpowers/commit/22f0b463e7a5e579904dd6211a520321035526f7)). The upstream instruction body is retained verbatim outside six recorded deltas and hash-locked for reproducibility (see the [package provenance](skills/super-brainstorming/references/provenance.md)).
+`skills/super-brainstorming/` adapts the `brainstorming` skill from [obra/superpowers](https://github.com/obra/superpowers) at immutable tag [`v7.0.2`](https://github.com/obra/superpowers/releases/tag/v7.0.2) (commit [`22f0b463e7a5e579904dd6211a520321035526f7`](https://github.com/obra/superpowers/commit/22f0b463e7a5e579904dd6211a520321035526f7)). The upstream instruction body is retained verbatim outside six recorded deltas and the Azhou brand layer, and hash-locked for reproducibility (see the [package provenance](skills/super-brainstorming/references/provenance.md)).
 
 - Copyright: Jesse Vincent, 2025
 - License: [MIT](LICENSES/Obra-Superpowers-MIT.txt), vendored byte-identical as the package `LICENSE`

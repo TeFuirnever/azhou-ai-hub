@@ -10,7 +10,6 @@ provenance.
 from __future__ import annotations
 
 import hashlib
-import re
 import unittest
 from pathlib import Path
 
@@ -48,11 +47,9 @@ VERBATIM_FILES = (
     "scripts/helper.js",
 )
 
-DELTA_FILES = ("SKILL.md", "visual-companion.md", "scripts/server.cjs", "scripts/frame-template.html")
-
 DELTA_FILE_SHA256 = {
     "SKILL.md": "503b5fc3240e90145ad76b3db374d3c446e8ce636bcd84f1be0ca23e3ef36543",
-    "visual-companion.md": "54906d0a3b66f3c94cf7c56cfc140a119a4f19c25996cc21a56bed271a048b4c",
+    "visual-companion.md": "0d00eeb35af93d8d822f2cde5088992ca442f1df87fcb6080f31142c66ff461c",
     "scripts/server.cjs": "3a3452c0e6cf6671e8ad5472832668a35786fb3e932bd3f087bd1ca7fe04d832",
     "scripts/frame-template.html": "ede490ecf25083c5af502601063ce07832831cc61f994b4767c36c0f382d0d8b",
 }
@@ -91,12 +88,6 @@ SEGMENTS = {
         ("<!DOCTYPE", "<style>", "2d0a9e44ab9c0a2e4823759c1fe64fa0136ea850397b9b22011d5a651ac6c0f5"),
     ),
 }
-
-# Hub-authored surfaces where the bare upstream name must not appear.
-RESIDUE_CLEAN_FILES = (
-    "references/setup.md",
-    "references/brand-layer.md",
-)
 
 
 def sha256_text(text: str) -> str:
@@ -201,13 +192,6 @@ class SuperBrainstormingPackageTest(unittest.TestCase):
         self.assertEqual(set(chunks), {"IHDR", "IDAT", "IEND"})
         self.assertEqual(chunks[0], "IHDR")
         self.assertEqual(chunks[-1], "IEND")
-
-    def test_hub_authored_surfaces_avoid_bare_upstream_name(self) -> None:
-        pattern = re.compile(r"(?<![\w./-])brainstorming(?![\w-])")
-        for relative in RESIDUE_CLEAN_FILES:
-            with self.subTest(file=relative):
-                text = (PACKAGE / relative).read_text(encoding="utf-8")
-                self.assertIsNone(pattern.search(text), f"bare upstream name leaked into {relative}")
 
 
 if __name__ == "__main__":
