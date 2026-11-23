@@ -19,6 +19,8 @@ against one of the schemas in this folder before any layout work happens.
 | `waterfall.schema.json` | `diagram_type: "waterfall"` | `spans` (each with optional `parent`) |
 | `common.schema.json` | shared `$defs` only (no top-level document) | — |
 | `explainer.schema.json` | `diagram_type: "explainer"` | `answer` (object), `panels`, `sources` |
+| `story-choreography.schema.json` | `kind: "story-choreography"` | `views`, `stages`, `steps`, `transitions`, `traces` |
+| `pr-pack.schema.json` | `kind: "pr-pack"` | `views`, `changes` |
 
 Every diagram schema requires `schema_version`, `diagram_type`, `meta` (with
 `title`; `timeline` and `waterfall` additionally require `meta.evidence`, and
@@ -146,7 +148,7 @@ compatibility contract; version 2 opts into the readable workflow compiler and
 can be produced explicitly with `super-archify migrate workflow ... --to-schema 2`.
 Lifecycle accepts only version 3, an automatic main-path layout (see the
 [lifecycle renderer](../renderers/lifecycle/README.md)).
-The other nine diagram schemas keep `schema_version` pinned to `1`; they have
+The other eleven schemas keep `schema_version` pinned to `1`; they have
 no schema-version migration command. For any of the five diagram types that
 require `meta.output`, repair a legacy missing or nonportable `meta.output` in
 the source and run `validate`.
@@ -178,7 +180,7 @@ version; additive, backwards-compatible fields do not.
 
 ## Shared definitions (common.schema.json)
 
-The eleven diagram schemas reference `common.schema.json#/$defs/...`:
+The thirteen document schemas reference `common.schema.json#/$defs/...`:
 
 - `id` — element identifiers, pattern `^[a-zA-Z][a-zA-Z0-9_-]*$`
 - `point` — an `[x, y]` pair of numbers (used by `via` and `labelAt`)
@@ -216,8 +218,9 @@ that need the same cross-platform acceptance boundary should use that wrapper.
 
 ## Runtime validation
 
-At development time, `scripts/generate-validators.mjs` compiles all eleven
-schemas with ajv's draft 2020-12 standalone generator using `strict: true` and
+At development time, `scripts/generate-validators.mjs` compiles all thirteen
+document schemas — the ten diagram types plus `explainer`, `story-choreography`,
+and `pr-pack` — with ajv's draft 2020-12 standalone generator using `strict: true` and
 `allErrors: true`. The generated `renderers/shared/generated-validators.mjs`
 is committed and shipped with the skill, so runtime validation has no npm or
 network dependency. `renderers/shared/validator.mjs` applies the matching
@@ -226,13 +229,14 @@ The shared loader then checks one cross-collection fact that JSON Schema cannot
 express cleanly here: duplicate authored relationship IDs within the mode's
 relationship collection.
 
-All eleven modes support opt-in, revision-pinned repository evidence.
+All ten diagram modes and the explainer support opt-in, revision-pinned repository evidence.
 `meta.repository` names the repository URL and full commit SHA, with optional
 `provider` (`github`, `gitee`, or `gitlab`) and `link_mode` (`web` or `local-only`; see the
 authoring contract); a node may carry one to three `sources` with repo-relative POSIX paths, optional line
 ranges, and optional labels. Sources are authored on the mode's own node
-collection — Architecture `components`, Workflow and Data Flow `nodes`,
-Sequence `participants`, Lifecycle `states` — and the verified payload is keyed
+collection — Architecture `components`, Workflow, Data Flow and Tree `nodes`,
+Sequence `participants`, Lifecycle `states`, ERD `entities`, Class `types`,
+Timeline `events`, and Waterfall `spans` — and the verified payload is keyed
 by node id. Shape is schema-checked, then the renderer requires
 `--repo-root`: the local Git origin must match, and Git must prove the commit,
 blobs, and requested lines. Verified evidence is embedded outside the canonical
@@ -242,7 +246,7 @@ exports carry no repository evidence.
 ## Visual quality and engineering truth
 
 `meta.quality_profile` and `meta.engineering_profile` answer different
-questions. `quality_profile` is available in all eleven modes and controls how
+questions. `quality_profile` is available in all ten diagram modes and the explainer, and controls how
 strictly Archify judges composition. `engineering_profile` is an optional
 Architecture-only semantic contract; omitting it preserves the ordinary v1
 behavior.

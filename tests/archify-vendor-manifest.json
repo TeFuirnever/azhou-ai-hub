@@ -477,7 +477,7 @@
     "references/setup.md": "9a1a373c923e0cd45280ef43dc9be7580a43c227a89f8bbdb21bfed19be1f12b",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
     "references/update-awareness.md": "16b437a47790fda48f0e74f6aa053715fb06b6e8cd1ba994d1c01ffefa12a76b",
-    "references/upstream-compatibility.md": "bf9b25519ba9d76c660d564991950259a03aa30a7ca927527531b57f6a884075",
+    "references/upstream-compatibility.md": "529d93333a868eb92c46409e88ea7cbbe2020fd416e6089d08743fdc514b365f",
     "references/viewer-runtime.md": "229e729444321e1ee2ecee54833b3ede90c1ad66315123fbbfdb08ab47742bba",
     "renderers/architecture/automatic-placement-candidates.mjs": "60d46fda8c075cf2ee68dd34f1d10398e30989beaff54d4a9b318da90fdcdff2",
     "renderers/architecture/automatic-placement.mjs": "4b9d9d158a410e2ee6818ecfccd96d2d053dcfe3372b842820706af887dd2713",
@@ -549,7 +549,7 @@
     "renderers/workflow/workflow-compiler.mjs": "ae21ef6253ff56faceb12acdda5ab6751932bf92e3d73290d2a204da22ace808",
     "renderers/workflow/workflow-migration-geometry.mjs": "47729f32eae163c05c249cc0a663949fae745a9c74fe9548c83eb361b31e285a",
     "renderers/workflow/workflow-placement-repair.mjs": "3ee6e83c3a5279e1af2b06db39fd39c3348264b2daa159a94cda3e1d8de5ed7c",
-    "schemas/README.md": "0760ca7c0f4040cf5db279f72424e4e4a400103acc8d740498593929b92fd377",
+    "schemas/README.md": "9dbd76ea41358d1444ee719f1f7eb9163d352a524d1b28705060ed49e206367e",
     "schemas/architecture.schema.json": "196e2349a56d7f6a5712ca72c52202fb1280c11cd88015b4e563bfcb2c7c05b6",
     "schemas/class.schema.json": "7e6f3323fab74ae1c4f09dd0a6172390216d5385568dda61df93ed532befa6aa",
     "schemas/common.schema.json": "12904dd129f0657785b231e59004aa9613fc1ea5dad3182a81a3d95d7d986573",
@@ -4587,7 +4587,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "9f3042e7d7b00d13c965ea1470c96f4680ddc76114826dc90caeb945ac218ce7",
-      "packaged_sha256": "bf9b25519ba9d76c660d564991950259a03aa30a7ca927527531b57f6a884075",
+      "packaged_sha256": "529d93333a868eb92c46409e88ea7cbbe2020fd416e6089d08743fdc514b365f",
       "path": "references/upstream-compatibility.md",
       "target_sha256": null
     },
@@ -5177,10 +5177,10 @@
       "base_sha256": "dcb6e86f3d1591004c669764ec62558bd01384c2e9155bb82d8a3be1c3842e05",
       "disposition": "replay_local_packaging_delta",
       "local_sha256": "7265eb9586fb2b25cd8e1b6a874cd9684a1404448791ef9492e87c132bca4e10",
-      "packaged_sha256": "0760ca7c0f4040cf5db279f72424e4e4a400103acc8d740498593929b92fd377",
+      "packaged_sha256": "9dbd76ea41358d1444ee719f1f7eb9163d352a524d1b28705060ed49e206367e",
       "path": "schemas/README.md",
       "target_sha256": "79733f9e21a59b85bec78401788e5dc81109478a87c10f4367b37df55a838577",
-      "resolution": "Retained schema-fact corrections (optional/required arrays, brand scope, migration command, check-mode invocation, eleven modes) replayed onto the v3.3.0 body"
+      "resolution": "Retained schema-fact corrections (optional/required arrays, brand scope, migration command, check-mode invocation, stale mode-count claims) replayed onto the v3.3.0 body; v3.3.0 schema inventory and counts corrected to the fourteen shipped schema files \u2014 thirteen compiled document schemas, repository evidence and quality_profile scoped to the ten diagram modes plus the explainer"
     },
     {
       "base_sha256": "aef992b585a18a4016b8207254fe43a6227b0d45322a1ba95e0f69a80fc8f8c1",
