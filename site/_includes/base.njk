@@ -7,10 +7,9 @@
   {%- if description %}
   <meta name="description" content="{{ description }}">
   {%- endif %}
-  {%- set siteUrl = "https://tefuirnever.github.io/azhou-ai-hub" %}
-  {%- set ogImage = siteUrl ~ "/assets/hero.png" %}
+  {%- set ogImage = site.siteUrl ~ "/assets/hero.png" %}
   {%- set themeColorLight = "#f8f9fa" if bodyClass == "doc" else "#ffffff" %}
-  <link rel="canonical" href="{{ siteUrl }}{{ page.url }}">
+  <link rel="canonical" href="{{ site.siteUrl }}{{ page.url }}">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
   <meta name="theme-color" content="{{ themeColorLight }}" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#2a2b2e" media="(prefers-color-scheme: dark)">
@@ -20,7 +19,7 @@
   {%- if description %}
   <meta property="og:description" content="{{ description }}">
   {%- endif %}
-  <meta property="og:url" content="{{ siteUrl }}{{ page.url }}">
+  <meta property="og:url" content="{{ site.siteUrl }}{{ page.url }}">
   <meta property="og:image" content="{{ ogImage }}">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="{{ title }}">
@@ -354,11 +353,10 @@
   <div class="brand-rule" aria-hidden="true"></div>
   <footer class="site-foot">
     <div class="wrap">
-      {%- set blobBase = "https://github.com/TeFuirnever/azhou-ai-hub/blob/main" %}
       {%- if lang == "zh" %}
-      <p>阿舟自研代码使用 <a href="{{ blobBase }}/LICENSE">MIT</a>。阿舟素材使用 <a href="{{ blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>。名称、标识与角色见 <a href="{{ blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>。第三方组件保留自己的版权与许可证：<a href="{{ blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
+      <p>阿舟自研代码使用 <a href="{{ site.blobBase }}/LICENSE">MIT</a>。阿舟素材使用 <a href="{{ site.blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>。名称、标识与角色见 <a href="{{ site.blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>。第三方组件保留自己的版权与许可证：<a href="{{ site.blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>。</p>
       {%- else %}
-      <p>Azhou-maintained code: <a href="{{ blobBase }}/LICENSE">MIT</a>. Azhou artwork: <a href="{{ blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>. Name, logo and character: <a href="{{ blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>. Third-party components retain their own notices and licenses: <a href="{{ blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.</p>
+      <p>Azhou-maintained code: <a href="{{ site.blobBase }}/LICENSE">MIT</a>. Azhou artwork: <a href="{{ site.blobBase }}/packages/agent-skin/assets/azhou/NOTICE.md">CC BY-NC-ND 4.0</a>. Name, logo and character: <a href="{{ site.blobBase }}/TRADEMARKS.md">TRADEMARKS.md</a>. Third-party components retain their own notices and licenses: <a href="{{ site.blobBase }}/THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.</p>
       {%- endif %}
       <p>Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0</p>
     </div>

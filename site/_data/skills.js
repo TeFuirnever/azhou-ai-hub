@@ -1,19 +1,11 @@
 "use strict";
 
-// Build-time loader for the canonical skill catalog. The site never keeps a
-// hand-maintained copy of the catalog: it reads every package's SKILL.md
-// frontmatter straight from the repository checkout, so the page follows the
-// packages as they are added, renamed or removed.
-//
-// Fail loud: a package with missing or unreadable SKILL.md frontmatter
-// terminates the build instead of silently dropping a skill from the page.
 const fs = require("node:fs");
 const path = require("node:path");
 const matter = require("gray-matter");
+const { skillsTreeBase: GITHUB_TREE_BASE } = require("./site");
 
 const SKILLS_ROOT = path.resolve(__dirname, "..", "..", "skills");
-const GITHUB_TREE_BASE =
-  "https://github.com/TeFuirnever/azhou-ai-hub/tree/main/skills";
 
 module.exports = function () {
   const names = fs
