@@ -15,7 +15,7 @@ permalink: "skills/index.html"
       <li><a href="#{{ skill.name }}">{{ skill.name }}</a></li>
       {%- endfor %}
     </ul>
-    <p class="dn-note"><a href="https://github.com/TeFuirnever/azhou-ai-hub/tree/main/skills/">All {{ skills.length }} packages in the repo</a></p>
+    <p class="dn-note"><a href="{{ site.treeBase }}/skills/">All {{ skills.length }} packages in the repo</a></p>
   </nav>
   <article class="doc-card">
     <nav class="crumbs" aria-label="Breadcrumb">
@@ -27,7 +27,7 @@ permalink: "skills/index.html"
     <p class="doc-lede">Every canonical package is independently installable from the repository checkout. This catalog is generated at build time from each package's <code>SKILL.md</code> frontmatter, so it follows the packages as they change; each card links to the package in the repository.</p>
     <p class="count">{{ skills.length }} packages</p>
     <div class="callout note">
-      <p>Choose one installation method per skill; see the <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md">installation guide</a>.</p>
+      <p>Choose one installation method per skill; see the <a href="{{ site.blobBase }}/docs/installation.md">installation guide</a>.</p>
     </div>
     <ul class="cardgrid">
       {%- for skill in skills %}
@@ -42,6 +42,6 @@ permalink: "skills/index.html"
       </li>
       {%- endfor %}
     </ul>
-    <p class="doc-source">Generated from <code>SKILL.md</code> frontmatter at build time · <a href="https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md">installation guide</a></p>
+    <p class="doc-source">Generated from <code>SKILL.md</code> frontmatter at build time · <a href="{{ site.blobBase }}/docs/installation.md">installation guide</a></p>
   </article>
 </div>

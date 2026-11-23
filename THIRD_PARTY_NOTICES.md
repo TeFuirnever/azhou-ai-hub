@@ -79,11 +79,11 @@ On 2026-11-21 the README hero and four Skills section banners had their package 
 
 ## Lavish Editor
 
-`skills/super-lavish/` imports the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`79aa0a18dba9c1a1dcec6db19d2ef4eb7643754b`](https://github.com/kunchenguid/lavish-axi/commit/79aa0a18dba9c1a1dcec6db19d2ef4eb7643754b) (official release `lavish-axi-v0.1.97`). The unmodified upstream baseline is hash-locked for reproducibility.
+`skills/super-lavish/` imports the generated `lavish` Agent Skill from [kunchenguid/lavish-axi](https://github.com/kunchenguid/lavish-axi) at immutable commit [`2b32b92ec8e8fcfb7069af3e1a89c0cabc3bf9aa`](https://github.com/kunchenguid/lavish-axi/commit/2b32b92ec8e8fcfb7069af3e1a89c0cabc3bf9aa) (official release `lavish-axi-v0.1.98`). The unmodified upstream baseline is hash-locked for reproducibility.
 
 - Copyright: Kun Chen, 2026
 - License: [MIT](LICENSES/Lavish-AXI-MIT.txt)
-- Imported boundary: generated skill instructions only; no Lavish application code, browser bundle or hosted service is vendored. `lavish-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y lavish-axi@0.1.97` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The CLI's own bundled third-party notices ship inside the npm package and are not redistributed from this repository.
+- Imported boundary: generated skill instructions only; no Lavish application code, browser bundle or hosted service is vendored. `lavish-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y lavish-axi@0.1.98` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The CLI's own bundled third-party notices ship inside the npm package and are not redistributed from this repository.
 - Local changes: neutral frontmatter, locked CLI baseline, Azhou brand protocol and stable receipt, setup/provenance/compatibility records, and explicit authorization checkpoints.
 
 ## Excalidraw Diagram
@@ -161,11 +161,11 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 
 ## Gh Axi
 
-`skills/super-gh-axi/` imports the generated `gh-axi` Agent Skill from [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi) at immutable commit [`911a0868600b125aafe5e7f77197a0eb5a5b493c`](https://github.com/kunchenguid/gh-axi/commit/911a0868600b125aafe5e7f77197a0eb5a5b493c) (official release `gh-axi-v0.1.51`). The unmodified upstream baseline is hash-locked for reproducibility.
+`skills/super-gh-axi/` imports the generated `gh-axi` Agent Skill from [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi) at immutable commit [`5a526599c9fa5a76b650079f5e9dbb1c1874a6ce`](https://github.com/kunchenguid/gh-axi/commit/5a526599c9fa5a76b650079f5e9dbb1c1874a6ce) (official release `gh-axi-v0.1.52`). The unmodified upstream baseline is hash-locked for reproducibility.
 
 - Copyright: Kun Chen, 2026
 - License: [MIT](LICENSES/Gh-Axi-MIT.txt)
-- Imported boundary: generated skill instructions only; no gh-axi application code, `dist/` bundle or runtime assets are vendored. `gh-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y gh-axi@0.1.51` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The wrapped `gh` binary and its authentication stay external and are not redistributed from this repository.
+- Imported boundary: generated skill instructions only; no gh-axi application code, `dist/` bundle or runtime assets are vendored. `gh-axi` remains an external npm runtime dependency resolved at run time through the locked `npx -y gh-axi@0.1.52` baseline; the npm `dist.integrity` and tarball SHA-256 are recorded in the package provenance. The wrapped `gh` binary and its authentication stay external and are not redistributed from this repository.
 - Local changes: neutral frontmatter with the invocation translation, locked CLI baseline, Azhou brand protocol and stable receipt, setup/provenance/compatibility records, and explicit authorization checkpoints.
 
 ## Frontend Design

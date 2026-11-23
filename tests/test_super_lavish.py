@@ -21,16 +21,16 @@ ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / "skills" / "super-lavish"
 SKILL = SKILL_DIR / "SKILL.md"
 
-# Upstream baseline: kunchenguid/lavish-axi, tag lavish-axi-v0.1.97.
-UPSTREAM_COMMIT = "79aa0a18dba9c1a1dcec6db19d2ef4eb7643754b"
-UPSTREAM_TAG = "lavish-axi-v0.1.97"
-UPSTREAM_CLI_VERSION = "0.1.97"
+# Upstream baseline: kunchenguid/lavish-axi, tag lavish-axi-v0.1.98.
+UPSTREAM_COMMIT = "2b32b92ec8e8fcfb7069af3e1a89c0cabc3bf9aa"
+UPSTREAM_TAG = "lavish-axi-v0.1.98"
+UPSTREAM_CLI_VERSION = "0.1.98"
 UPSTREAM_SKILL_SHA256 = "00ea380ff3e993d58029e4467901333138726f734755e0eef254de2fe4c2f1ef"
 UPSTREAM_LICENSE_SHA256 = "945016bd37e1ba7211622ef60ee1d23ab727896ba7710edd21e8fbe983863969"
 UPSTREAM_NPM_INTEGRITY = (
-    "sha512-Ux6/kePVt7DboZpROPKnrBNQaLtyaVDdC5wTT5X+roCR2e7AGI8Q4HDGbLFAXlm9zQlJO+SWRW9xHYHDI9F/UQ=="
+    "sha512-LGadkBwrutayCodUzcuE68xZ5roAQr76tNq6UQQjyTAozZJZulbm2/3sHqq8IVxLa74aVrUnkLYi18emYlhlCQ=="
 )
-UPSTREAM_TARBALL_SHA256 = "84e4d91c173e91b966c506da770a649d533766d93985739d26b8592143127662"
+UPSTREAM_TARBALL_SHA256 = "429d796a03771a759d1df8967a58ff596ad5b5634a6382a530b4f917ea67d0fb"
 
 LOCKED_INVOCATION = f"lavish-axi@{UPSTREAM_CLI_VERSION}"
 UNPINNED_NPX = re.compile(r"npx -y lavish-axi(?!@)")

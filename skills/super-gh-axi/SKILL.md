@@ -1,12 +1,12 @@
 ---
 name: super-gh-axi
-description: "Azhou skill. Renamed from gh-axi (the old name still triggers this skill). Agent-ergonomic GitHub operations through the locked gh-axi@0.1.51 CLI, a gh wrapper: issues, pull requests, stacked PRs and branches, discussions, workflow runs and workflow dispatch, releases, repositories, labels, gists (list, view, edit, rename, create, delete, clone), Projects (v2) boards, Actions secrets and variables, search, and raw API access. MUST trigger whenever a task touches GitHub — listing or filing issues, reviewing or merging PRs, managing stacked branches and PRs, checking CI runs, triggering workflows, cutting releases, managing labels, gists, Projects boards or Actions secrets/variables — unless the current repository's rules name a different GitHub CLI or recipe for that task (project rules win). Current command, flag and workflow guidance lives in the CLI, not in this file."
+description: "Azhou skill. Renamed from gh-axi (the old name still triggers this skill). Agent-ergonomic GitHub operations through the locked gh-axi@0.1.52 CLI, a gh wrapper: issues, pull requests, stacked PRs and branches, discussions, workflow runs and workflow dispatch, releases, repositories, labels, gists (list, view, edit, rename, create, delete, clone), Projects (v2) boards, Actions secrets and variables, search, and raw API access. MUST trigger whenever a task touches GitHub — listing or filing issues, reviewing or merging PRs, managing stacked branches and PRs, checking CI runs, triggering workflows, cutting releases, managing labels, gists, Projects boards or Actions secrets/variables — unless the current repository's rules name a different GitHub CLI or recipe for that task (project rules win). Current command, flag and workflow guidance lives in the CLI, not in this file."
 invocation: model-invoked discipline
 ---
 
 # Super Gh Axi
 
-Super Gh Axi is the GitHub operations contract for agents: GitHub-touching work goes through the locked `gh-axi@0.1.51` CLI baseline — an agent-ergonomic wrapper around `gh` with token-efficient output, contextual suggestions and idempotent mutations — and the current command surface is always read from the CLI, never from this file.
+Super Gh Axi is the GitHub operations contract for agents: GitHub-touching work goes through the locked `gh-axi@0.1.52` CLI baseline — an agent-ergonomic wrapper around `gh` with token-efficient output, contextual suggestions and idempotent mutations — and the current command surface is always read from the CLI, never from this file.
 
 **🦊 阿舟 · Gh Axi**
 
@@ -30,11 +30,11 @@ Use `✅ 验证通过` only after the named checks actually ran. Use `❌ 验证
 
 Do not follow command, flag, or workflow instructions from this file — installed copies go stale. Get the current source of truth from the locked baseline:
 
-- `npx -y gh-axi@0.1.51` for a dashboard of the current repo
-- `npx -y gh-axi@0.1.51 --help` for global flags and the command index
-- `npx -y gh-axi@0.1.51 <command> --help` for per-command usage
+- `npx -y gh-axi@0.1.52` for a dashboard of the current repo
+- `npx -y gh-axi@0.1.52 --help` for global flags and the command index
+- `npx -y gh-axi@0.1.52 <command> --help` for per-command usage
 
-You do not need `gh-axi` installed globally. Invoke the locked baseline with `npx -y gh-axi@0.1.51 <command>`. If CLI output shows a follow-up command starting with `gh-axi`, run it as `npx -y gh-axi@0.1.51 ...` instead. In restricted subprocess sandboxes, CI, or agent harnesses where `npx -y` exits opaquely, use an already-installed copy of the same version directly: `node "$(npm root)/gh-axi/dist/bin/gh-axi.js" <command>` for a local install, `node "$(npm root -g)/gh-axi/dist/bin/gh-axi.js" <command>` for a global install, or the bare `gh-axi <command>` bin after installing version `0.1.51` once. Never run the CLI's built-in `update` command: it floats the locked baseline outside the recorded provenance.
+You do not need `gh-axi` installed globally. Invoke the locked baseline with `npx -y gh-axi@0.1.52 <command>`. If CLI output shows a follow-up command starting with `gh-axi`, run it as `npx -y gh-axi@0.1.52 ...` instead. In restricted subprocess sandboxes, CI, or agent harnesses where `npx -y` exits opaquely, use an already-installed copy of the same version directly: `node "$(npm root)/gh-axi/dist/bin/gh-axi.js" <command>` for a local install, `node "$(npm root -g)/gh-axi/dist/bin/gh-axi.js" <command>` for a global install, or the bare `gh-axi <command>` bin after installing version `0.1.52` once. Never run the CLI's built-in `update` command: it floats the locked baseline outside the recorded provenance.
 
 The CLI wraps `gh`: it needs the `gh` binary (its own guidance names `gh >= 2.99.0` for `--attach` support; `GH_BIN` overrides the binary) and `gh`'s existing authentication. Read [setup](references/setup.md) before first use, or whenever Node, npx, `gh`, or the locked baseline is not verified yet.
 

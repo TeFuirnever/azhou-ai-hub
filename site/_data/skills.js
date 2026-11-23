@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const matter = require("gray-matter");
-const { skillsTreeBase: GITHUB_TREE_BASE } = require("./site");
+const { treeBase: GITHUB_TREE_BASE } = require("./site");
 
 const SKILLS_ROOT = path.resolve(__dirname, "..", "..", "skills");
 
@@ -49,7 +49,7 @@ module.exports = function () {
       description: data.description.trim(),
       invocation:
         typeof data.invocation === "string" ? data.invocation.trim() : "",
-      url: `${GITHUB_TREE_BASE}/${name}/`,
+      url: `${GITHUB_TREE_BASE}/skills/${name}/`,
     });
   }
 

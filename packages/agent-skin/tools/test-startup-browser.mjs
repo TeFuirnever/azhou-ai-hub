@@ -7026,23 +7026,6 @@ try {
 
   await check('theme readability is pixel bounded through viewport changes and legacy handover', async () => {
     const results=[];
-    let paintObjectId;
-    const releasePaintObject=async()=>{
-      if (!paintObjectId) return;
-      const objectId=paintObjectId;
-      paintObjectId=undefined;
-      await cdp.call('Runtime.releaseObject',{objectId})
-        .catch(error=>console.error('Failed to release theme fixture object:',error));
-    };
-    const callPaint=async(functionDeclaration,...values)=>{
-      const response=await cdp.call('Runtime.callFunctionOn',{
-        objectId:paintObjectId,functionDeclaration,arguments:values.map(value=>({value})),
-        awaitPromise:true,returnByValue:true,
-      });
-      if(response.exceptionDetails) throw Error(response.exceptionDetails.exception?.description || response.exceptionDetails.text);
-      return response.result?.value;
-    };
-    try {
     for (const scenario of themeProtocol ? themeProtocol.conditions.map(condition=>({...condition,trial:themeProtocol.session})) : Array.from({length:5},(_,trial)=>[{width:997,height:613,dpr:1.5,zoom:0.9},{width:811,height:577,dpr:2,zoom:1.1}].flatMap(v=>['#123b57','#d8c49a'].map(color=>({...v,color,trial})))).flat()) {
       await cdp.call('Emulation.setDeviceMetricsOverride',{width:scenario.width,height:scenario.height,deviceScaleFactor:scenario.dpr,mobile:false});
       if(options.generatedPayload&&themeProtocol) await prepareGeneratedThemeMeasurement(scenario);
@@ -7088,27 +7071,12 @@ try {
         if(owner!==window.__azhouWallpaper||owner.status().applied!==true)throw Error('measurement owner retired during observation');
         return {executionLane:window.__formalMeasurementController?'generated-payload-public-settings':'source-fixture',controllerOwner:window.__formalMeasurementController?.owner||null,owner:owner.owner,retained:true,mainConnected:document.querySelector('[data-app-shell-main-surface]')?.isConnected===true,paint,viewport:{width:innerWidth,height:innerHeight,dpr:devicePixelRatio},structure};
       }`);
-      const paintTarget=await cdp.call('Runtime.evaluate',{expression:'globalThis',returnByValue:false});
-      paintObjectId=paintTarget.result?.objectId;
-      assert.ok(paintObjectId,'isolated theme fixture global');
       const captureFrame=async()=> (await cdp.call('Page.captureScreenshot',{format:'png',fromSurface:true})).data;
       // All probes in a sample derive from one fixed full-viewport raster. CDP
       // clip capture changes the rasterization path, even for unchanged input.
-      const capture=async(x,y,frame,afterSnapshotMark=null)=>{
+      const capture=async(x,y,frame)=>{
         const pixels=frame??await captureFrame();
-        assert.equal(typeof pixels,'string');
-        assert.ok([x,y,scenario.width,scenario.height].every(Number.isFinite));
-        return callPaint(`async function (pixels,x,y,viewportWidth,viewportHeight,mark) {
-          if(mark) try {performance.mark(mark);} catch {}
-          const image=new Image();image.src='data:image/png;base64,'+pixels;await image.decode();
-          const source=document.createElement('canvas');source.width=image.width;source.height=image.height;
-          const ctx=source.getContext('2d');ctx.drawImage(image,0,0);
-          const sx=image.width/viewportWidth,sy=image.height/viewportHeight;
-          const width=Math.round(12*sx),height=Math.round(12*sy);
-          const data=ctx.getImageData(Math.round(x*sx),Math.round(y*sy),width,height);
-          const crop=document.createElement('canvas');crop.width=width;crop.height=height;
-          crop.getContext('2d').putImageData(data,0,0);return crop.toDataURL('image/png').split(',')[1];
-        }`,pixels,x,y,scenario.width,scenario.height,afterSnapshotMark);
+        return cdp.evaluate(`(async()=>{const image=new Image();image.src='data:image/png;base64,'+${JSON.stringify(pixels)};await image.decode();const source=document.createElement('canvas');source.width=image.width;source.height=image.height;const ctx=source.getContext('2d');ctx.drawImage(image,0,0);const sx=image.width/${scenario.width},sy=image.height/${scenario.height};const width=Math.round(12*sx),height=Math.round(12*sy);const data=ctx.getImageData(Math.round(${x}*sx),Math.round(${y}*sy),width,height);const crop=document.createElement('canvas');crop.width=width;crop.height=height;crop.getContext('2d').putImageData(data,0,0);return crop.toDataURL('image/png').split(',')[1];})()`);
       };
       const delta=async(a,b)=>cdp.evaluate(`(async()=>{const read=async src=>{const img=new Image();img.src='data:image/png;base64,'+src;await img.decode();const c=document.createElement('canvas');c.width=img.width;c.height=img.height;const ctx=c.getContext('2d');ctx.drawImage(img,0,0);return ctx.getImageData(0,0,c.width,c.height).data;};const a=await read(${JSON.stringify(a)}),b=await read(${JSON.stringify(b)});let max=0,total=0,count=0;for(let i=0;i<a.length;i++)if(i%4!==3){const d=Math.abs(a[i]-b[i]);max=Math.max(max,d);total+=d;count++;}return {max,mean:total/count};})()`);
       await cdp.evaluate('window.__themeApply(null)');
@@ -7171,104 +7139,32 @@ try {
       const boundary=samples[0].geometry;
       const boundaryROI={x:boundary.x+5,y:boundary.y-2,width:12,height:12};
       const boundarySamples={};
-      // One diagnostic arm in the hosted generated-payload lane; no trace in
-      // formal measurements or other scenarios. A trace never replaces a PNG assertion.
-      const traceSelected=process.platform==='darwin'&&options.generatedPayload&&!themeProtocol
-        &&scenario.width===811&&scenario.height===577&&scenario.dpr===2&&scenario.zoom===1.1
-        &&scenario.color==='#d8c49a'&&scenario.trial===0;
-      const traceEvidence={scenario,screenshots:{}};
-      let traceStarted=false;
-      const traceMark=label=>traceStarted?'azhou-clip:'+label:null;
-      const boundaryAnimationReady=label=>traceStarted
-        ? callPaint(`function (mark) {
-          return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
-            try {performance.mark(mark);} catch {}
-            r();
-          })));
-        }`,traceMark(label))
-        : cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-      const retainBoundaryTrace=async()=>{
-        let stream;
-        try {
-          if (traceStarted) {
-            const finished=cdp.waitForEvent('Tracing.tracingComplete');
-            try {
-              await cdp.call('Tracing.end');
-              const result=await finished;
-              stream=result.stream;
-              traceEvidence.dataLossOccurred=result.dataLossOccurred===true;
-              if (!stream) throw new Error('Trace stream missing');
-              const parts=[],limit=8*1024*1024,deadline=performance.now()+15000;
-              let bytes=0;
-              for (;;) {
-                if (performance.now()>deadline) throw new Error('Trace read deadline exceeded');
-                const {data,base64Encoded,eof}=await cdp.call('IO.read',{handle:stream,size:256*1024});
-                const chunk=Buffer.from(data,base64Encoded?'base64':'utf8');
-                bytes+=chunk.length;
-                if (bytes>limit) throw new Error('Trace exceeds 8 MiB');
-                if (!eof&&!chunk.length) throw new Error('Trace stream made no progress');
-                parts.push(chunk);
-                if (eof) break;
-              }
-              await writeFile(join(options.out,'clip-restore-trace.json'),Buffer.concat(parts,bytes));
-            } finally { finished.cancel(); }
-          }
-        } catch(error) { traceEvidence.traceError=String(error); }
-        finally {
-          if (stream) await cdp.call('IO.close',{handle:stream})
-            .catch(error=>{traceEvidence.streamCloseError=String(error);});
-        }
-        // This arm retains its first samples even on a non-reproduction.
-        for (const stage of ['before','displaced','restored']) {
-          const sample=boundarySamples[stage];
-          if (!sample) continue;
-          const name='clip-restore-trace-'+stage+'.png';
-          try {
-            await writeFile(join(options.out,name),Buffer.from(sample.frame,'base64'));
-            traceEvidence.screenshots[stage].raw=name;
-          } catch(error) { traceEvidence.screenshots[stage].writeError=String(error); }
-        }
-        await writeFile(join(options.out,'clip-restore-trace-manifest.json'),JSON.stringify(traceEvidence));
-      };
       const captureBoundary=async stage=>{
-        const requestedAtMs=traceSelected?performance.now():null;
         const frame=await captureFrame();
-        const capturedAtMs=performance.now();
-        if (traceSelected) traceEvidence.screenshots[stage]={requestedAtMs,capturedAtMs};
-        const roi=await capture(boundaryROI.x,boundaryROI.y,frame,traceMark(stage+':snapshot-response'));
-        boundarySamples[stage]={frame,roi,capturedAtMs};
+        const roi=await capture(boundaryROI.x,boundaryROI.y,frame);
+        boundarySamples[stage]={frame,roi};
         return roi;
       };
-      const captureBoundaryDiagnostic=async (stage,prepare=()=>{})=>{
-        try {
-          await prepare();
-          await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-          boundarySamples[stage]={frame:await captureFrame(),capturedAtMs:performance.now()};
-        } catch(error) {
-          console.error('Failed to capture boundary diagnostic '+stage+':',error);
-        }
-      };
-      const retainBoundaryFailure=async (failure,clipFault,restoration,originalWash)=>{
+      const retainBoundaryFailure=async (failure,clipFault,restoration)=>{
         try {
           const prefix='clip-fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'-'+failure;
           const captures={};
-          for(const [stage,{frame,roi,capturedAtMs}] of Object.entries(boundarySamples)) {
+          for(const [stage,{frame,roi}] of Object.entries(boundarySamples)) {
             const raw=Buffer.from(frame,'base64');
             const width=raw.readUInt32BE(16),height=raw.readUInt32BE(20);
             const sx=width/scenario.width,sy=height/scenario.height;
             const rawFile=prefix+'-'+stage+'-raw.png',roiFile=prefix+'-'+stage+'-roi.png';
-            captures[stage]={raw:rawFile,...(roi?{roi:roiFile}:{}),capturedAtMs,viewport:{width,height},pixelROI:{
+            captures[stage]={raw:rawFile,roi:roiFile,viewport:{width,height},pixelROI:{
               x:Math.round(boundaryROI.x*sx),y:Math.round(boundaryROI.y*sy),
               width:Math.round(boundaryROI.width*sx),height:Math.round(boundaryROI.height*sy),
             }};
             await writeFile(join(options.out,rawFile),raw);
-            // Optional raw controls can be cropped offline using pixelROI.
-            if (roi) await writeFile(join(options.out,roiFile),Buffer.from(roi,'base64'));
+            await writeFile(join(options.out,roiFile),Buffer.from(roi,'base64'));
           }
           const postFailure=await cdp.evaluate(`(()=>{const state=window.__themeEvidence(),owner=window.__azhouWallpaper;return {
             owner:owner?.owner??null,applied:state.status?.applied===true,imageDecoded:state.status?.imageDecoded===true,
             documentToken:state.documentToken,workspaceEpoch:state.workspaceEpoch,geometry:state.geometry,wash:state.wash,
-          };})()`).then(state=>({...state,washMatchesOriginal:state.wash===originalWash}),
+          };})()`).then(state=>({...state,washMatchesOriginal:state.wash===injected.before}),
             error=>({error:String(error)}));
           await writeFile(join(options.out,prefix+'-manifest.json'),JSON.stringify({
             schema:1,scenario,boundary,cssROI:boundaryROI,captures,failure,clipFault,restoration,postFailure,
@@ -7278,65 +7174,20 @@ try {
           console.error('Failed to retain boundary control diagnostics:',error);
         }
       };
-      if (traceSelected) {
-        traceEvidence.browser=await cdp.call('Browser.getVersion')
-          .catch(error=>({error:String(error)}));
-        try {
-          await cdp.call('Tracing.start',{transferMode:'ReturnAsStream',streamFormat:'json',
-            traceConfig:{recordMode:'recordUntilFull',traceBufferSizeInKb:8192,includedCategories:[
-              'blink.user_timing','cc','benchmark','viz','devtools',
-              'disabled-by-default-devtools.timeline','disabled-by-default-devtools.timeline.frame',
-            ]}});
-          traceStarted=true;
-        } catch(error) { traceEvidence.traceStartError=String(error); }
-      }
-      let clipFault;
-      try {
-        const boundaryBefore=await captureBoundary('before');
-        const injected=await callPaint(`async function (mark) {
-          const root=document.documentElement,before=root.style.getPropertyValue('--azhou-wallpaper-wash');
-          const svg=decodeURIComponent(JSON.parse(before.slice(4,-1)).split(',')[1]);
-          const d=new DOMParser().parseFromString(svg,'image/svg+xml');
-          for (const rect of [d.querySelector('mask rect[fill="black"]'),d.documentElement.lastElementChild])
-            rect.setAttribute('y',Number(rect.getAttribute('y'))+1);
-          const source='data:image/svg+xml,'+encodeURIComponent(new XMLSerializer().serializeToString(d));
-          const image=new Image();image.src=source;await image.decode();image.src='';
-          const after='url('+JSON.stringify(source)+')';root.style.setProperty('--azhou-wallpaper-wash',after);
-          if(mark) try {performance.mark(mark);} catch {}
-          return {before,after};
-        }`,traceMark('displaced:css-write'));
-        await boundaryAnimationReady('displaced:before-snapshot');
-        const boundaryAfter=await captureBoundary('displaced');
-        clipFault=await delta(boundaryBefore,boundaryAfter);
-        if (traceSelected) traceEvidence.displacement=clipFault;
-        await writeFile(join(options.out,'clip-fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'.json'),JSON.stringify({clipFault,injected}));
-        if (!(clipFault.max>1)) await retainBoundaryFailure('displacement',clipFault,null,injected.before);
-        assert.ok(clipFault.max>1,'actual one-pixel clip displacement must be detected '+JSON.stringify({clipFault,injected}));
-        assert.equal(typeof injected.before,'string');
-        await callPaint(`function (wash,mark) {
-          document.documentElement.style.setProperty('--azhou-wallpaper-wash',wash);
-          if(mark) try {performance.mark(mark);} catch {}
-        }`,injected.before,traceMark('restored:css-write'));
-        await boundaryAnimationReady('restored:before-snapshot');
-        const boundaryRestored=await captureBoundary('restored');
-        const restoration=await delta(boundaryBefore,boundaryRestored);
-        if (traceSelected) traceEvidence.restoration=restoration;
-        if (restoration.max!==0) {
-          // Observe whether the raw difference persists without retrying the strict assertion.
-          for (let repeat=1;repeat<=3;repeat++) await captureBoundaryDiagnostic('restored-repeat-'+repeat);
-          await captureBoundaryDiagnostic('restored-same-value-write',()=>callPaint(`function (expected) {
-            const style=document.documentElement.style,key='--azhou-wallpaper-wash';
-            const value=style.getPropertyValue(key);
-            if(value!==expected) throw new Error('wash no longer matches the original');
-            style.setProperty(key,value,style.getPropertyPriority(key));
-          }`,injected.before));
-          await retainBoundaryFailure('restoration',clipFault,restoration,injected.before);
-        }
-        assert.equal(restoration.max,0);
-      } finally {
-        if (traceSelected) await retainBoundaryTrace()
-          .catch(error=>console.error('Failed to retain clip restore trace:',error));
-      }
+      const boundaryBefore=await captureBoundary('before');
+      const injected=await cdp.evaluate(`(async()=>{const root=document.documentElement,before=root.style.getPropertyValue('--azhou-wallpaper-wash');const svg=decodeURIComponent(JSON.parse(before.slice(4,-1)).split(',')[1]);const d=new DOMParser().parseFromString(svg,'image/svg+xml');for(const r of [d.querySelector('mask rect[fill="black"]'),d.documentElement.lastElementChild])r.setAttribute('y',Number(r.getAttribute('y'))+1);const source='data:image/svg+xml,'+encodeURIComponent(new XMLSerializer().serializeToString(d));const image=new Image();image.src=source;await image.decode();image.src='';const after='url('+JSON.stringify(source)+')';root.style.setProperty('--azhou-wallpaper-wash',after);return {before,after};})()`);
+      await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      const boundaryAfter=await captureBoundary('displaced');
+      const clipFault=await delta(boundaryBefore,boundaryAfter);
+      await writeFile(join(options.out,'clip-fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'.json'),JSON.stringify({clipFault,injected}));
+      if (!(clipFault.max>1)) await retainBoundaryFailure('displacement',clipFault,null);
+      assert.ok(clipFault.max>1,'actual one-pixel clip displacement must be detected '+JSON.stringify({clipFault,injected}));
+      await cdp.evaluate('document.documentElement.style.setProperty("--azhou-wallpaper-wash",'+JSON.stringify(injected.before)+')');
+      await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      const boundaryRestored=await captureBoundary('restored');
+      const restoration=await delta(boundaryBefore,boundaryRestored);
+      if (restoration.max!==0) await retainBoundaryFailure('restoration',clipFault,restoration);
+      assert.equal(restoration.max,0);
       await cdp.evaluate(`window.__themeFaultOwner=window.__azhouWallpaper;window.__themeFaultObservation=()=>{
         const owner=window.__themeFaultOwner,status=owner?.status();
         if(!owner||owner!==window.__azhouWallpaper||status?.reason==='disposed'||status?.imageDecoded!==true)throw Error('fault control owner invalid');
@@ -7429,9 +7280,7 @@ try {
       await cdp.evaluate('window.__azhouWallpaper.dispose()');
       assert.equal(await cdp.evaluate("document.querySelectorAll('[data-azhou-theme-layer]').length"),0);
       results.push({scenario,threadScroll,clipFault,structuralFaults,sceneDisplacements,registrationNegative,outsideDeltas,interTheme,sameTDeltas,sameTExact,automaticResize,scrolling,legacyWithinEmpiricalBudget,outsideTExact,themePixelsOutsideUnchanged:true,pixelsInsideChanged:true,geometryUnchanged:true,viewportCropEqual:true,legacy,replacement});
-      await releasePaintObject();
     }
-    } finally { await releasePaintObject(); }
     await cdp.call('Emulation.clearDeviceMetricsOverride');
     await writeFile(join(options.out,'holdout-matrix.json'),JSON.stringify(results,null,2));
     // V1/V2 pixel outcomes remain diagnostics; V3 acceptance is a separate
