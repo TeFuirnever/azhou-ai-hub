@@ -1,6 +1,6 @@
 # super-brainstorming benchmark contract
 
-Exploratory manual benchmark; **not** wired into `scripts/verify.py`. This file records the smoke contract a contributor can run by hand; no run has been recorded at adoption time.
+Exploratory manual benchmark; **not** wired into `scripts/verify.py`. This file records the smoke contract a contributor can run by hand; executed runs are logged under [Recorded run](#recorded-run).
 
 ## Manual smoke contract
 
@@ -15,3 +15,7 @@ Run in a scratch directory (never a real checkout):
 7. Assert zero npm involvement at every step (no `npm install`, no `package.json` anywhere in the package).
 
 Record the Node version alongside any run notes. The conversation behavior itself (exploration → approaches → design doc → approval gate) is a human-in-the-loop protocol and is walked through, not automated, by this contract.
+
+## Recorded run
+
+2026-11-23, macOS arm64, against this branch's pushed bytes on the official Node.js v18.20.8 build: smoke-contract steps 1-4 and 6 were executed — the scripts parsed, the server started and served the cookie-authenticated waiting page, the default page carried no `<img class="brand-logo">`, no upstream repository link, and no external URL at all, the `SUPERPOWERS_ENABLE_TELEMETRY=1` restart showed the brand markup, and `stop-server.sh` returned a clean stop. Step 5 (which needs a WebSocket client) and Node majors below 18 were not exercised.
