@@ -151,6 +151,8 @@ python scripts/azhou_hub.py verify
 
 [阿舟外观](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary)可选用本机图片和阿舟 JSON 预设，不导入其他项目的主题，也不迁移其他项目的数据。
 
+[阿舟鼠标指针 3.3.1](assets/cursors/azhou-double-hug/README.md) 提供独立 Mousecape 候选包，桌面视觉验收仍待确认。
+
 同样在本仓库的 clone 中执行：
 
 ~~~bash
