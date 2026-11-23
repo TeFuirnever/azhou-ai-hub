@@ -523,7 +523,7 @@
       if (d.message) h += `<p class="a3d-msg">${esc(d.message)}</p>`;
       if (d.fix) h += head(tr('First step')) + `<p class="a3d-fix">${esc(d.fix)}</p>`;
       const owner = f.fn != null ? F[FN[f.fn][0]][1] : f.module != null ? f.module : -1;
-      if (owner !== -1) h += head(tr('Module')) + `<button type="button" class="a3d-rel" data-module="${owner}"><i style="background:${dot(owner)}"></i><span>${esc(M[owner].label)}</span><em>${esc(tr('{n} open', { n: openOf[owner] }))} ›</em></button>`;
+      if (owner !== -1) h += head(tr('Module')) + `<button type="button" class="a3d-rel" data-module="${esc(owner)}"><i style="background:${dot(owner)}"></i><span>${esc(M[owner].label)}</span><em>${esc(tr('{n} open', { n: openOf[owner] }))} ›</em></button>`;
       h += `<div class="a3d-acts">${window.__archifyShowFinding ? `<button type="button" class="primary a3d-evidence" data-id="${esc(f.id)}">${esc(tr('Open evidence in the analysis panel'))}</button>` : ''}<button type="button" data-go-finding="${esc(f.id)}">${esc(tr('Show in the Atlas'))}</button></div>`;
       return h;
     }
@@ -533,7 +533,7 @@
         ${tiles([[fmt(F[fi][2]), tr('lines')], [fmt(fns.length), tr('functions')], [fmt(fns.filter((i) => FN[i][6] !== -1).length), tr('reported')]])}
         ${fns.length ? head(tr('Most complex functions')) : ''}${fns.slice(0, 8).map((i) => `<button type="button" class="a3d-rel${state.fn === i ? ' active' : ''}" data-fn="${i}"><i style="background:${FN[i][6] !== -1 ? tone[FD[FN[i][6]].severity] : 'var(--a3d-plain)'}"></i><span class="a3d-mono">${esc(FN[i][1])}</span><em>${esc(tr('complexity {n}', { n: FN[i][3] }))}</em></button>`).join('')}
         ${fns.length > 8 ? `<p class="a3d-note">${esc(tr('and {more}', { more: plural(fns.length - 8, 'more function') }))}</p>` : ''}
-        <div class="a3d-acts"><button type="button" class="primary" data-module="${F[fi][1]}">${esc(tr('Open its module'))}</button></div>`;
+        <div class="a3d-acts"><button type="button" class="primary" data-module="${esc(F[fi][1])}">${esc(tr('Open its module'))}</button></div>`;
     }
     const bigCycles = compSize.filter((n) => n > 1);
     const cycleNote = cycles ? `<p class="a3d-muted">${esc(bigCycles.length === 1 ? tr('{n} modules form one dependency cycle, so dependency layers do not order them. Height there is the number of branches from where the cycle meets the tree; the branches and threads are still their real dependencies.', { n: bigCycles[0] }) : tr('{n} module cycles, so dependency layers do not order them. Height there is the number of branches from where a cycle meets the tree; the branches and threads are still their real dependencies.', { n: bigCycles.length }))}</p>` : '';

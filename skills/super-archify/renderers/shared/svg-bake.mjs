@@ -556,6 +556,10 @@ function bakeInlineStyle(style, lookup) {
 function bakeBodyStyles(body, variables) {
   const lookup = (name) => variables.get(name) ?? null;
   let emitted = 0;
+  // A <style> fragment reassembled by this pass is left unmatched, so the
+  // completeness count below rejects it
+  // (test_static_bake_cannot_reconstitute_embedded_style_elements).
+  // codeql[js/incomplete-multi-character-sanitization]
   const bakedBody = body
     .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (match, attrs, css) => {
       const baked = bakeEmbeddedStylesheet(css, variables);

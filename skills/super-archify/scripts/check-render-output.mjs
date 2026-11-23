@@ -1906,5 +1906,9 @@ function isPoint(point) {
 }
 
 function stripTags(value) {
+  // Any intact <...> span is consumed whole and an unconsumed < has no later
+  // >, so removals cannot join text into a tag
+  // (test_strip_tags_cannot_leave_a_complete_tag).
+  // codeql[js/incomplete-multi-character-sanitization]
   return value.replace(/<[^>]*>/g, '');
 }

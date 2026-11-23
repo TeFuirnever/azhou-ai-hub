@@ -373,7 +373,7 @@
       h += ("<div class=\"k\">" + tr("Indicators · click one for its findings and a diagram") + "</div>");
       c.indicators.items.forEach(function (i) {
         var n = (i.findings || []).length;
-        h += '<div class="ind link' + (i.status === 'green' ? ' quiet' : '') + '" data-ind="' + esc(i.key) + '" role="button" tabindex="0"><i class="' + esc(i.status) + '"></i><div><b>' + esc(tr(i.label)) + ' <span class="more">' + (n ? n + tr(" finding") + (n === 1 ? '' : 's') + ' ›' : tr("details ›")) + '</span></b><span class="v">' + esc(indicatorValue(c, i)) + '</span>' +
+        h += '<div class="ind link' + (i.status === 'green' ? ' quiet' : '') + '" data-ind="' + esc(i.key) + '" role="button" tabindex="0"><i class="' + esc(i.status) + '"></i><div><b>' + esc(tr(i.label)) + ' <span class="more">' + (n ? esc(n) + tr(" finding") + (n === 1 ? '' : 's') + ' ›' : tr("details ›")) + '</span></b><span class="v">' + esc(indicatorValue(c, i)) + '</span>' +
           (i.detail.length ? ("<div class=\"detail\">" + tr("with: ")) + i.detail.map(function (d) { var m = d.split(':'); return m[0] === 'component' && byId[m[1]] ? esc(byId[m[1]].label) : esc(m[1]) + tr(" (not on diagram)"); }).join(', ') + '</div>' : '') + '</div></div>';
       });
     }
@@ -388,7 +388,7 @@
       if (c.internalImports) h += ("<span class=\"stat\">" + tr("internal ")) + esc(c.internalImports) + '</span>';
       var section = function (title, list, arrow) {
         if (!list.length) return '';
-        var s = '<details><summary>' + title + ' · ' + list.length + '</summary>';
+        var s = '<details><summary>' + title + ' · ' + esc(list.length) + '</summary>';
         list.forEach(function (e) {
           var target = e.component ? (byId[e.component] ? byId[e.component].label : e.component) : (e.module + (e.ambiguous ? tr(" (component mapping unresolved)") : tr(" (not on diagram)")));
           s += '<div class="edge"><b>' + arrow + '</b> ' + esc(target) + ' <span class="ev">' + esc(e.weight) + tr(" import") + (e.weight === 1 ? '' : 's') + '</span><div class="ev">' +
@@ -399,15 +399,15 @@
       h += section(tr("Imports from here"), c.outgoing, tr("OUT →"));
       h += section(tr("Imported by"), c.incoming, tr("← IN"));
       if (c.fileList && c.fileList.length) {
-        h += ("<details>" + "<summary>" + tr("Files · ")) + c.fileList.length + '</summary><table>';
+        h += ("<details>" + "<summary>" + tr("Files · ")) + esc(c.fileList.length) + '</summary><table>';
         c.fileList.forEach(function (f) {
-          h += '<tr><td class="p" title="' + esc(f.path) + '">' + esc(f.path) + (f.findings.length ? ' <b>!' + f.findings.length + '</b>' : '') + '</td><td class="n">' + esc(f.loc) + (tr(" LOC") + "</td>" + "<td class=\"n\">" + tr("out ")) + esc(f.importsOut) + ("</td>" + "<td class=\"n\">" + tr("in ")) + esc(f.importedBy) + '</td></tr>';
+          h += '<tr><td class="p" title="' + esc(f.path) + '">' + esc(f.path) + (f.findings.length ? ' <b>!' + esc(f.findings.length) + '</b>' : '') + '</td><td class="n">' + esc(f.loc) + (tr(" LOC") + "</td>" + "<td class=\"n\">" + tr("out ")) + esc(f.importsOut) + ("</td>" + "<td class=\"n\">" + tr("in ")) + esc(f.importedBy) + '</td></tr>';
         });
         h += '</table></details>';
       }
     }
     h += ("<div class=\"k\">" + tr("Repository") + "</div>" + "<div class=\"ev\">") + esc(data.repository.url || tr("no origin")) + (data.repository.sourceKind === 'working-tree' ? tr(" · Working tree") + (data.repository.baseRevision ? tr(" (base ") + esc(data.repository.baseRevision.slice(0, 7)) + ')' : '') : (data.repository.revision ? ' @ ' + esc(data.repository.revision.slice(0, 7)) : '')) +
-      '<br>' + esc(data.totals.modules) + tr(" modules · ") + esc(data.totals.edges) + tr(" module edges · ") + data.unmapped.length + (tr(" not on this diagram") + "</div>");
+      '<br>' + esc(data.totals.modules) + tr(" modules · ") + esc(data.totals.edges) + tr(" module edges · ") + esc(data.unmapped.length) + (tr(" not on this diagram") + "</div>");
     panel.innerHTML = h;
     panel.hidden = false;
     detail.hidden = true; codePane.hidden = true;
@@ -452,8 +452,8 @@
     }
     if (f.code === 'complexity/function' && f.subject && f.subject.file) {
       ev += ("<div class=\"ev\" style=\"margin-top:4px\">" + tr("Where to look — click to see the code:") + "</div>");
-      ev += ref(f.subject.file, f.subject.line, '<span>' + esc(f.subject.function) + (tr("() starts") + "</span>" + " " + "<em>" + "· ") + plural(f.evidence.length, 'line') + '</em>', tr("The function this finding measures (lines ") + f.subject.line + '–' + f.subject.endLine + ').', tone, f.subject.line, f.subject.endLine);
-      if (f.evidence.deepestLine && f.evidence.deepestLine !== f.subject.line) ev += ref(f.subject.file, f.evidence.deepestLine, ("<span>" + tr("deepest nesting (")) + f.evidence.nesting + (tr(" levels)") + "</span>"), tr("The most deeply nested block; usually the best place to start simplifying."), tone, f.subject.line, f.subject.endLine);
+      ev += ref(f.subject.file, f.subject.line, '<span>' + esc(f.subject.function) + (tr("() starts") + "</span>" + " " + "<em>" + "· ") + esc(plural(f.evidence.length, 'line')) + '</em>', tr("The function this finding measures (lines ") + f.subject.line + '–' + f.subject.endLine + ').', tone, f.subject.line, f.subject.endLine);
+      if (f.evidence.deepestLine && f.evidence.deepestLine !== f.subject.line) ev += ref(f.subject.file, f.evidence.deepestLine, ("<span>" + tr("deepest nesting (")) + esc(f.evidence.nesting) + (tr(" levels)") + "</span>"), tr("The most deeply nested block; usually the best place to start simplifying."), tone, f.subject.line, f.subject.endLine);
     }
     if (f.evidence && f.evidence.imports && f.evidence.imports.length) {
       var isCycle = f.code === 'coupling/import-cycle' || f.code === 'coupling/cycle';
@@ -494,7 +494,7 @@
     var snip = snapshot === 'base' ? captured(pr && pr.beforeSources, file) : captured(data.snippets, file);
     line = Number.isInteger(line) && line > 0 ? line : null;
     var sourceParent = sourcePair ? tr("Files") : detail.hidden ? tr("Component") : tr("Problem");
-    var h = ("<div class=\"grip\">" + "<button class=\"close\" aria-label=\"" + tr("Close") + "\">" + "×" + "</button>" + "<button type=\"button\" class=\"source-back back\">" + "← ") + sourceParent + ("</button>" + "<div class=\"k\">" + tr("Source · ")) + (line ? tr("line ") + line : (full ? tr("full file") : tr("file preview")) + tr(" · no specific finding line")) + '</div><h3>' + esc(file) + '</h3></div>';
+    var h = ("<div class=\"grip\">" + "<button class=\"close\" aria-label=\"" + tr("Close") + "\">" + "×" + "</button>" + "<button type=\"button\" class=\"source-back back\">" + "← ") + sourceParent + ("</button>" + "<div class=\"k\">" + tr("Source · ")) + (line ? tr("line ") + esc(line) : (full ? tr("full file") : tr("file preview")) + tr(" · no specific finding line")) + '</div><h3>' + esc(file) + '</h3></div>';
     if (pr) h += '<div class="pr-source-sides">' +
       '<button type="button" data-pr-side="base" aria-pressed="' + (snapshot === 'base') + '"' +
       (!captured(pr.beforeSources, before) ? ' disabled' : '') + '>' + esc(tr('Merge-base')) + ' ' + esc(pr.baseSHA.slice(0, 8)) + '</button>' +
@@ -519,7 +519,7 @@
       var deletion = function (after) { return deleted.has(after) ? ("<span class=\"diff-deleted\" title=\"" + tr("Deleted from the base commit") + "\">" + "− ") + esc(deleted.get(after)) + (tr(" deleted line(s)") + "</span>") : ''; };
       var start = full ? 0 : line ? Math.max(0, Math.min(line - 5, snip.lines.length - 9)) : 0;
       var end = full ? snip.lines.length : Math.min(snip.lines.length, start + (line ? 9 : 12));
-      h += ("<div class=\"why\">" + tr("Lines ")) + (start + 1) + '–' + end + tr(" of ") + snip.lines.length + (line || full ? '' : tr(" · opening lines, not finding evidence")) + '</div>';
+      h += ("<div class=\"why\">" + tr("Lines ")) + (start + 1) + '–' + esc(end) + tr(" of ") + esc(snip.lines.length) + (line || full ? '' : tr(" · opening lines, not finding evidence")) + '</div>';
       if (match) h += '<div class="why duplicate-legend"><mark class="duplicate-match">' + (match.kind === 'external' ? tr("Reported range") : tr("Matched code")) + ("</mark>" + tr(" · lines ")) + esc(rangeStart) + '–' + esc(rangeEnd) + (match.column ? tr(" · column ") + esc(match.column) + (match.endColumn ? '–' + esc(match.endColumn) + tr(" (end exclusive)") : '') : '') + (full ? '' : tr(" · expand for the complete range")) + '</div>';
       else if (rangeStart && rangeEnd) h += ("<div class=\"why\">" + tr("Highlighted function: lines ")) + esc(rangeStart) + '–' + esc(rangeEnd) + (full ? '' : tr(" · excerpt only; expand for the complete function")) + '</div>';
       if (snip.lines.length > (line ? 9 : 12)) h += '<button type="button" class="source-file source-toggle">' + (full ? tr("Show excerpt") : tr("Show full file")) + '</button>';
@@ -529,7 +529,7 @@
         if (i < start || i >= end) return;
         var n = i + 1;
         var kind = added.has(n) ? 'added' : modified.has(n) ? 'modified' : '';
-        h += '<span class="ln' + (!match && rangeStart && n >= rangeStart && n <= rangeEnd ? ' range-hit' : '') + (n === line ? ' hit ' + (tone || '') : '') + (kind ? ' diff-' + kind : '') + '"' + (kind ? ' title="' + (kind === 'added' ? tr("Added") : tr("Modified")) + tr(' since base commit') + '"' : '') + '><i>' + n + '</i>' + (match ? duplicateText(text, n, match) : esc(text)) + '</span>';
+        h += '<span class="ln' + (!match && rangeStart && n >= rangeStart && n <= rangeEnd ? ' range-hit' : '') + (n === line ? ' hit ' + esc(tone || '') : '') + (kind ? ' diff-' + kind : '') + '"' + (kind ? ' title="' + (kind === 'added' ? tr("Added") : tr("Modified")) + tr(' since base commit') + '"' : '') + '><i>' + n + '</i>' + (match ? duplicateText(text, n, match) : esc(text)) + '</span>';
         h += deletion(n);
       });
       h += '</pre>';
@@ -704,7 +704,7 @@
   function renderFindingList() {
     var sources = externalSources(), dimensions = [...new Set(data.findings.map(function (f) { return f.dimension; }))].sort();
     var option = function (value, label) { return '<option value="' + esc(value) + '">' + esc(label) + '</option>'; };
-    overview.innerHTML = ("<button type=\"button\" class=\"back findings-back\">" + tr("← Overview") + "</button>" + "<div class=\"findings-heading\">" + "<h3>" + tr("Findings") + "</h3>") + (sources.length ? ("<button type=\"button\" class=\"text-action view-sources\">" + tr("Sources · ")) + sources.length + '</button>' : '') + '</div>' +
+    overview.innerHTML = ("<button type=\"button\" class=\"back findings-back\">" + tr("← Overview") + "</button>" + "<div class=\"findings-heading\">" + "<h3>" + tr("Findings") + "</h3>") + (sources.length ? ("<button type=\"button\" class=\"text-action view-sources\">" + tr("Sources · ")) + esc(sources.length) + '</button>' : '') + '</div>' +
       ("<label class=\"sr-only\" for=\"finding-search\">" + tr("Search findings") + "</label>" + "<input id=\"finding-search\" class=\"finding-search\" type=\"search\" placeholder=\"" + tr("Search rule, message or file…") + "\" value=\"") + esc(filters.search) + '">' +
       '<div class="finding-filters' + (dimensions.length < 2 ? ' compact' : '') + ("\">" + "<select aria-label=\"" + tr("Finding source") + "\">") + option('all', tr("All sources")) + option('internal', 'Archify') + (sources.length ? option('external', tr("External tools")) + sources.map(function (s) { return option('source:' + s.id, sourceLabel(s)); }).join('') : '') + '</select>' +
       (dimensions.length > 1 ? ("<select aria-label=\"" + tr("Finding category") + "\">") + option('all', tr("All categories")) + dimensions.map(function (d) { return option(d, CATEGORIES[d] || d); }).join('') + '</select>' : '') +
@@ -747,9 +747,9 @@
     overview.innerHTML = '<button type="button" class="back sources-back">← ' + (parent === 'findings' ? tr("Findings") : tr("Overview")) + ("</button>" + "<h3>" + tr("Sources & coverage") + "</h3>" + "<p class=\"ev\">" + tr("Report import, source binding and scan scope are separate facts.") + "</p>") + externalSources().map(function (source) {
       var count = data.findings.filter(function (f) { return f.external && f.external.sourceId === source.id; }).length;
       var coverage = source.coverage || {}, complete = coverage.complete === true ? 'complete' : coverage.complete === false ? 'incomplete' : tr("not declared");
-      return '<section class="external-source"><div class="findings-heading"><h4>' + esc(source.tool + ' · ' + source.id) + '</h4><span class="ev">' + esc(source.toolVersion || tr("Version not supplied")) + '</span></div><div class="ev">' + plural(count, 'diagnostic') + ' · ' + esc(source.format) + ("</div>" + "<dl class=\"external-facts\">" + "<div>" + "<dt>" + tr("Import") + "</dt>" + "<dd>") + (source.status === 'partial' ? tr("Partial · review import notices") : tr("Imported")) + ("</dd>" + "</div>" + "<div>" + "<dt>" + tr("Report binding") + "</dt>" + "<dd>") + esc(bindingLabel(source.binding)) + ("</dd>" + "</div>" + "<div>" + "<dt>" + tr("Declared scope") + "</dt>" + "<dd>") + (coverage.files && coverage.files.length ? plural(coverage.files.length, 'file') + ' · ' : '') + esc(complete) + '</dd></div></dl>' +
+      return '<section class="external-source"><div class="findings-heading"><h4>' + esc(source.tool + ' · ' + source.id) + '</h4><span class="ev">' + esc(source.toolVersion || tr("Version not supplied")) + '</span></div><div class="ev">' + plural(count, 'diagnostic') + ' · ' + esc(source.format) + ("</div>" + "<dl class=\"external-facts\">" + "<div>" + "<dt>" + tr("Import") + "</dt>" + "<dd>") + (source.status === 'partial' ? tr("Partial · review import notices") : tr("Imported")) + ("</dd>" + "</div>" + "<div>" + "<dt>" + tr("Report binding") + "</dt>" + "<dd>") + esc(bindingLabel(source.binding)) + ("</dd>" + "</div>" + "<div>" + "<dt>" + tr("Declared scope") + "</dt>" + "<dd>") + (coverage.files && coverage.files.length ? esc(plural(coverage.files.length, 'file')) + ' · ' : '') + esc(complete) + '</dd></div></dl>' +
         (count === 0 ? ("<p class=\"ev\">" + tr("This report contains no diagnostics. Coverage is limited to its declared scope.") + "</p>") : '') +
-        ("<details>" + "<summary>" + tr("Import details") + "</summary>" + "<dl class=\"external-facts\">" + "<div>" + "<dt>" + tr("Source ID") + "</dt>" + "<dd>") + esc(source.id) + ("</dd>" + "</div>" + "<div>" + "<dt>" + tr("Report") + "</dt>" + "<dd>") + esc(source.reportFile || tr("Not recorded")) + ("</dd>" + "</div>" + "<div>" + "<dt>" + tr("Suppressed") + "</dt>" + "<dd>") + (source.suppressed || 0) + '</dd></div></dl>' + (source.notices || []).map(function (n) { return '<p class="ev">' + esc(n.message) + '</p>'; }).join('') + '</details><button type="button" class="text-action source-findings" data-source="' + esc(source.id) + ("\">" + tr("View findings") + "</button>" + "</section>");
+        ("<details>" + "<summary>" + tr("Import details") + "</summary>" + "<dl class=\"external-facts\">" + "<div>" + "<dt>" + tr("Source ID") + "</dt>" + "<dd>") + esc(source.id) + ("</dd>" + "</div>" + "<div>" + "<dt>" + tr("Report") + "</dt>" + "<dd>") + esc(source.reportFile || tr("Not recorded")) + ("</dd>" + "</div>" + "<div>" + "<dt>" + tr("Suppressed") + "</dt>" + "<dd>") + esc(source.suppressed || 0) + '</dd></div></dl>' + (source.notices || []).map(function (n) { return '<p class="ev">' + esc(n.message) + '</p>'; }).join('') + '</details><button type="button" class="text-action source-findings" data-source="' + esc(source.id) + ("\">" + tr("View findings") + "</button>" + "</section>");
     }).join('') + ("<p class=\"ev\">" + tr("Run the source tool to update its report, then re-analyze. Importing a report does not rerun its rules.") + "</p>");
     overview.querySelector('.sources-back').addEventListener('click', function () { if (parent === 'findings') showFindings(); else showOverview(); });
     overview.querySelectorAll('.source-findings').forEach(function (button) { button.addEventListener('click', function () { showFindings('source:' + button.getAttribute('data-source')); }); });
@@ -809,12 +809,12 @@
       if(data.pullRequest) h += '<p>' + esc(tr('This compares rule reports. Changed evidence is not a finding of increased risk; PR-attributed effects are below.')) + '</p>';
       if (!comparable && (c.reasons || []).length) h += '<details><summary>' + esc(tr('Comparison details')) + '</summary><p class="ev">' + esc(c.reasons.map(function (r) { return typeof r === 'string' ? tr(r) : tr(r && (r.message || r.code) || ''); }).join(' ')) + '</p></details>';
       h += '</section>';
-      if (gone.length) h += ("<details>" + "<summary>" + tr("No longer detected · ")) + gone.length + '</summary><div class="ev">' + gone.map(function (f) { return '<div>' + esc(GROUPS[f.code] || f.code) + ': ' + esc(f.message) + (f.likelyCause ? ' · ' + esc(f.likelyCause) : '') + '</div>'; }).join('') + '</div></details>';
+      if (gone.length) h += ("<details>" + "<summary>" + tr("No longer detected · ")) + esc(gone.length) + '</summary><div class="ev">' + gone.map(function (f) { return '<div>' + esc(GROUPS[f.code] || f.code) + ': ' + esc(f.message) + (f.likelyCause ? ' · ' + esc(f.likelyCause) : '') + '</div>'; }).join('') + '</div></details>';
     }
     var b = r.baseline;
     if (b) {
-      h += ("<div class=\"ev review-line\">" + tr("Baseline: ")) + esc(b.accepted) + " " + tr("accepted") + (b.changed.length ? ' · ' + b.changed.length + tr(" changed since accepted and shown again") : '') + (b.stale.length ? ' · ' + plural(b.stale.length, 'entry') .replace('entrys', 'entries') + tr(" no longer found") : '') + '</div>';
-      if (b.stale.length) h += ("<details>" + "<summary>" + tr("Baseline entries no longer found · ")) + b.stale.length + '</summary><div class="ev">' + b.stale.map(function (e) { return '<div>' + esc(e.id) + ' (' + esc(e.code) + ') · ' + esc(e.reason) + '</div>'; }).join('') + ("<div>" + tr("Fixed or moved; remove them from the baseline file.") + "</div>" + "</div>" + "</details>");
+      h += ("<div class=\"ev review-line\">" + tr("Baseline: ")) + esc(b.accepted) + " " + tr("accepted") + (b.changed.length ? ' · ' + esc(b.changed.length) + tr(" changed since accepted and shown again") : '') + (b.stale.length ? ' · ' + esc(plural(b.stale.length, 'entry') .replace('entrys', 'entries')) + tr(" no longer found") : '') + '</div>';
+      if (b.stale.length) h += ("<details>" + "<summary>" + tr("Baseline entries no longer found · ")) + esc(b.stale.length) + '</summary><div class="ev">' + b.stale.map(function (e) { return '<div>' + esc(e.id) + ' (' + esc(e.code) + ') · ' + esc(e.reason) + '</div>'; }).join('') + ("<div>" + tr("Fixed or moved; remove them from the baseline file.") + "</div>" + "</div>" + "</details>");
     }
     return h;
   }
@@ -922,18 +922,18 @@
     h += verificationHtml() + offline;
     var architecture = o.investigation && o.investigation.architecture;
     if (!data.pullRequest && architecture && architecture.structuralSignals.length) {
-      h += '<details class="structural-signals"><summary>' + esc(tr('Additional structural signals')) + ' · ' + architecture.structuralSignals.length + '</summary>';
+      h += '<details class="structural-signals"><summary>' + esc(tr('Additional structural signals')) + ' · ' + esc(architecture.structuralSignals.length) + '</summary>';
       architecture.structuralSignals.forEach(function (signal) { h += findingRow(signal.id); });
       h += '</details>';
     }
     var sources = externalSources();
     if (sources.length) {
       var externalCount = data.findings.filter(function (f) { return f.external; }).length;
-      h += '<div class="external-entry"><button type="button" class="external-findings"><b>' + esc(tr('External diagnostics')) + ' · ' + externalCount + '</b><span>' + plural(sources.length, 'source') + '</span></button><button type="button" class="text-action overview-sources">' + esc(tr('Sources & coverage')) + '</button></div>';
+      h += '<div class="external-entry"><button type="button" class="external-findings"><b>' + esc(tr('External diagnostics')) + ' · ' + externalCount + '</b><span>' + esc(plural(sources.length, 'source')) + '</span></button><button type="button" class="text-action overview-sources">' + esc(tr('Sources & coverage')) + '</button></div>';
     }
     h += (data.pullRequest ? '<p class="ev">' + esc(tr('Whole-head background, including existing findings')) + '</p>' : '') + '<div class="overview-secondary"><button type="button" class="browse-findings" aria-label="' + esc(tr('Browse findings')) + '" data-analysis-tip="' + esc(tr('Browse findings')) + '">' + uiIcon('filter') + esc(tr('Filter')) + '</button><p class="ev counts">' + esc(tr('{warnings} warnings · {info} reference signals · {accepted} accepted', { warnings: o.counts.warning, info: o.counts.info, accepted: o.counts.accepted || 0 })) + '</p>';
     if (o.groups.length) {
-      h += '<details class="all-finding-groups"><summary>' + esc(tr('All findings')) + ' · ' + o.counts.findings + '</summary>';
+      h += '<details class="all-finding-groups"><summary>' + esc(tr('All findings')) + ' · ' + esc(o.counts.findings) + '</summary>';
       o.groups.forEach(function (g) { h += '<details><summary><i class="bauify-' + toneOf(g.severity) + '"></i>' + esc(GROUPS[g.code] || g.code) + ' · ' + esc(g.count) + '</summary>' + g.ids.map(function (id) { return findingRow(id); }).join('') + '</details>'; });
       h += '</details>';
     }
@@ -1039,7 +1039,7 @@
       var start = Math.max(0, focus - 5), end = Math.min(snip.lines.length, start + 9);
       h += ("<pre aria-label=\"" + tr("Code excerpt from ") + "") + esc(loc.file) + '">';
       snip.lines.slice(start, end).forEach(function (text, i) { var n = start + i + 1; h += '<span class="evidence-line' + (n === focus ? ' focus-line' : '') + '"><span class="line-number">' + n + '  </span>' + esc(text) + '</span>'; });
-      h += ("</pre>" + "<div class=\"ev\">" + tr("Captured lines ")) + (start + 1) + '–' + end + tr(" of ") + snip.lines.length + (tr(" · excerpt only; click the path to expand.") + "</div>" + "</div>");
+      h += ("</pre>" + "<div class=\"ev\">" + tr("Captured lines ")) + (start + 1) + '–' + end + tr(" of ") + esc(snip.lines.length) + (tr(" · excerpt only; click the path to expand.") + "</div>" + "</div>");
       return h;
     }).join('');
   }
@@ -1417,7 +1417,7 @@
     right.slice(0, 12).forEach(function (m, i) { var p = { x: W - 70, y: 20 + i * rowH + bh / 2 }; svg += gutterArrow(mid.x + bw / 2 + 2, mid.y, p.x - bw / 2 - 4, p.y); boxes += nodeRect(p.x, p.y, bw, bh, short(m)); });
     svg += boxes;
     svg += nodeRect(mid.x, mid.y, bw, bh, centre, 'focus') + '</svg>';
-    return svg + ("<div class=\"caption\">" + tr("Left: modules that depend on it (fan-in ")) + left.length + tr("). Right: modules it depends on (fan-out ") + right.length + ').' + (f ? tr(" Threshold ") + esc(f.evidence.threshold.fanIn) + ' / ' + esc(f.evidence.threshold.fanOut) + tr(" from config.") : tr(" Below the hub threshold.")) +
+    return svg + ("<div class=\"caption\">" + tr("Left: modules that depend on it (fan-in ")) + esc(left.length) + tr("). Right: modules it depends on (fan-out ") + esc(right.length) + ').' + (f ? tr(" Threshold ") + esc(f.evidence.threshold.fanIn) + ' / ' + esc(f.evidence.threshold.fanOut) + tr(" from config.") : tr(" Below the hub threshold.")) +
       ("</div>" + "<details>" + "<summary>" + tr("What does high coupling mean?") + "</summary>" + "<div class=\"caption\">" + tr("A hub is a module that is both widely depended on (fan-in) and depends widely (fan-out). Changes may affect dependents or require coordination with dependencies. This is a design signal, not a proven bug. Check whether its dependents cluster by responsibility before deciding to split.") + "</div>" + "</details>") + (f ? hubSources(c, f) : '');
   }
   // Two bars: imports coming in vs going out, and where I = out / (in + out) lands.
@@ -1591,7 +1591,7 @@
   function clearPick() { if (pick) { pick = null; paintStage(); } }
   function componentKicker(c) {
     var top = topComponent();
-    return '<p class="fly-kick"><i class="dot ' + (c.modules.length ? c.indicators.status : 'grey') + '"></i>' + esc(tr('Architecture component')) + (top && top.id === c.id ? ' · <b>' + esc(tr('most open findings')) + '</b>' : '') + '</p>';
+    return '<p class="fly-kick"><i class="dot ' + (c.modules.length ? esc(c.indicators.status) : 'grey') + '"></i>' + esc(tr('Architecture component')) + (top && top.id === c.id ? ' · <b>' + esc(tr('most open findings')) + '</b>' : '') + '</p>';
   }
   function componentBody(c) {
     var h = '';
@@ -1604,7 +1604,7 @@
       return list.slice().sort(function (a, b) { return b.weight - a.weight; }).map(function (e) {
         if (!e.component) return '<div class="fly-rel off"><i class="dot grey"></i><span>' + esc(modLabel(e.module)) + '</span><em>' + esc(tr('{count} imports', { count: e.weight })) + ' · ' + esc(tr('not on this diagram')) + '</em></div>';
         var key = outgoing ? c.id + '>' + e.component : e.component + '>' + c.id, code = codeEdgeByKey[key];
-        return '<button type="button" class="fly-rel" data-edge="' + esc(key) + '"><i class="dot ' + (byId[e.component] ? byId[e.component].indicators.status : 'grey') + '"></i><span>' + esc(compLabel(e.component)) + '</span><em>' + esc(tr('{count} imports', { count: e.weight })) + (code && code.declared === false ? ' · <b>' + esc(tr('not drawn')) + '</b>' : '') + '</em></button>';
+        return '<button type="button" class="fly-rel" data-edge="' + esc(key) + '"><i class="dot ' + (byId[e.component] ? esc(byId[e.component].indicators.status) : 'grey') + '"></i><span>' + esc(compLabel(e.component)) + '</span><em>' + esc(tr('{count} imports', { count: e.weight })) + (code && code.declared === false ? ' · <b>' + esc(tr('not drawn')) + '</b>' : '') + '</em></button>';
       }).join('');
     };
     if (c.outgoing.length) h += '<h4 class="fly-h">' + esc(tr('Depends on')) + '<small>' + esc(tr('click one for the files')) + '</small></h4>' + rel(c.outgoing, true);

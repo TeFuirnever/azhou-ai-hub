@@ -649,6 +649,10 @@ function namespaceSubSvgIds(svg, key) {
 
 function scopeEmbeddedStyles(svg, key) {
   let emitted = 0;
+  // A <style> fragment reassembled by this pass is left unmatched, so the
+  // completeness count below rejects it
+  // (test_story_scoping_rejects_style_reconstitution_and_terminators).
+  // codeql[js/incomplete-multi-character-sanitization]
   const scopedSvg = svg.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_, css) => {
     const clean = css.replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, '');
     const scoped = parseStylesheet(clean).map((rule) => {
