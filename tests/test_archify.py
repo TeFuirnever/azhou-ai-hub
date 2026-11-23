@@ -1,6 +1,6 @@
 """Integrity suite for the super-archify canonical skill.
 
-Pins the vendored upstream baseline (tt-a1i/archify v3.2.0), the hub wrapper
+Pins the vendored upstream baseline (tt-a1i/archify v3.3.0), the hub wrapper
 layer (frontmatter contract, carved coexistence boundary, brand protocol,
 receipt) and the deterministic CLI surfaces the receipt depends on.
 """
@@ -24,11 +24,11 @@ ROOT = Path(__file__).parents[1]
 SKILL_DIR = ROOT / "skills" / "super-archify"
 SKILL = SKILL_DIR / "SKILL.md"
 
-UPSTREAM_TAG = "v3.2.0"
-UPSTREAM_COMMIT = "208acba8d412335185b2056fedf54b3405df43fb"
+UPSTREAM_TAG = "v3.3.0"
+UPSTREAM_COMMIT = "af3aaf3c36762f2afb62a4a09533f6c7273b07e5"
 UPSTREAM_URL = "https://github.com/tt-a1i/archify"
-UPSTREAM_SKILL_SHA256 = "93434ad579983f4cff639c2b7230c311e0785cc48a25b66b1498e1802be7de91"
-VENDORED_FILE_COUNT = 190
+UPSTREAM_SKILL_SHA256 = "e5c49b1c3e1b5b46ffb044aa676c46a58715cb34b459cbabd7f48e5887fed808"
+VENDORED_FILE_COUNT = 598
 VENDOR_MANIFEST = ROOT / "tests" / "archify-vendor-manifest.json"
 
 
@@ -93,7 +93,7 @@ class ArchifyPackageTest(unittest.TestCase):
         compat = (SKILL_DIR / "references" / "upstream-compatibility.md").read_text(encoding="utf-8")
         self.assertIn(UPSTREAM_COMMIT, compat)
         self.assertIn("intentionally omitted", compat)
-        self.assertIn("preserved verbatim, plus one carve sentence", compat)
+        self.assertIn("condensed to the 1024-character hub frontmatter ceiling", compat)
         self.assertIn("A future removal or replacement needs", compat)
 
     def test_setup_documents_the_node_runtime(self) -> None:
@@ -108,8 +108,8 @@ class ArchifyPackageTest(unittest.TestCase):
         self.assertEqual(UPSTREAM_TAG, manifest["tag"])
         self.assertEqual(UPSTREAM_COMMIT, manifest["commit"])
         self.assertEqual(UPSTREAM_SKILL_SHA256, manifest["source_files"]["SKILL.md"])
-        self.assertEqual(203, len(manifest["source_files"]))
-        self.assertEqual(16, sum(row["disposition"] == "retain_documented_exclusion" for row in manifest["migration"]))
+        self.assertEqual(596, len(manifest["source_files"]))
+        self.assertEqual(1, sum(row["disposition"] == "retain_documented_exclusion" for row in manifest["migration"]))
         actual = {
             path.relative_to(SKILL_DIR).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(SKILL_DIR.rglob("*")) if path.is_file()
@@ -226,7 +226,7 @@ console.log(JSON.stringify({local,official,renamedRejected}));
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         payload = json.loads(result.stdout)
         self.assertEqual("archify", payload["local"]["skillId"])
-        self.assertEqual("3.2.0", payload["local"]["version"])
+        self.assertEqual("3.3.0", payload["local"]["version"])
         self.assertEqual(manifest, payload["official"])
         self.assertTrue(payload["renamedRejected"])
 
@@ -254,21 +254,24 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 const source=fs.readFileSync(path.join(process.argv[1],'explainer/reader.js'),'utf8');
-let start=source.indexOf('  // Clipboard writes');
-if(start<0)start=source.indexOf("  all('[data-copy]')");
+const lineByPrefix=prefix=>{const i=source.indexOf(prefix);assert.ok(i>=0,prefix);return source.slice(i,source.indexOf('\n',i)+1);};
+// The vendored file defines copyText and escapeText at the top level; the regression
+// slices the handlers and prepends those two single-line definitions unchanged.
+const preamble=lineByPrefix('  async function copyText(')+lineByPrefix('  const escapeText = value => String(value');
+let start=source.indexOf("  all('[data-copy]')");
 const end=source.indexOf('  // Source cards:',start);
 assert.ok(start>=0&&end>start);
-const handlers=source.slice(start,end);
+const handlers=preamble+source.slice(start,end);
 for(const handler of ['snippet','ask'])for(const mode of ['missing','reject','success']){
   const writes=[],notices=[];
   const element=()=>({textContent:'',value:'',style:{},events:{},children:[],setAttribute(){},focus(){},addEventListener(event,fn){this.events[event]=fn;},append(child){this.children.push(child);},click(){this.events.click?.();},select(){this.selected=this.value;}});
-  const area=element(),quote=element(),where=element(),form=element(),head=element(),dialog=element(),copy=element();
+  const area=element(),quote=element(),where=element(),form=element(),head=element(),note=element(),dialog=element(),copy=element();
   copy.textContent='Copy';copy.closest=()=>({querySelector:()=>({textContent:'Original snippet'})});
   form.requestSubmit=()=>form.events.submit({preventDefault(){}});
-  dialog.querySelector=selector=>({'textarea':area,'blockquote':quote,'.ask-where':where,'form':form}[selector]);
+  dialog.querySelector=selector=>({'textarea':area,'blockquote':quote,'.ask-where':where,'.ask-note':note,'form':form}[selector]);
   dialog.querySelectorAll=()=>[];dialog.showModal=()=>{dialog.open=true;};dialog.close=()=>{dialog.open=false;};
   const panel={id:'panel',dataset:{title:'Panel title'},querySelector:selector=>selector==='.panel-id'?{textContent:'1'}:head};
-  const document={body:{append(){}},createElement:tag=>tag==='dialog'?dialog:element(),querySelector:()=>({textContent:'Page title'}),addEventListener(){}};
+  const document={body:{append(){}},createElement:tag=>tag==='dialog'?dialog:element(),querySelector:selector=>selector==='.masthead'?{dataset:{title:'Page title'}}:{textContent:'Page title'},addEventListener(){}};
   const clipboard=mode==='missing'?undefined:{writeText(text){assert.equal(this,clipboard);writes.push(text);return mode==='reject'?Promise.reject(new Error('Denied')):Promise.resolve();}};
   const words=new Proxy({askChips:['Explain this'],copy:'Copy',copied:'Copied',askCopied:'Question copied'},{get:(target,key)=>target[key]??String(key)});
   vm.runInNewContext(handlers+'\nsetupAsk();',{
@@ -282,7 +285,7 @@ for(const handler of ['snippet','ask'])for(const mode of ['missing','reject','su
   assert.equal(writes.length,mode==='missing'?0:1,handler+' '+mode);
   if(handler==='snippet'){
     if(mode==='success'){assert.equal(writes[0],'Original snippet');assert.equal(copy.textContent,'Copied');assert.deepEqual(notices,[]);}
-    else {assert.equal(copy.textContent,'Copy');assert.deepEqual(notices,['Copy failed.']);}
+    else {assert.equal(copy.textContent,'Copy');assert.deepEqual(notices,['Copy failed. Select the code and copy it manually.']);}
   }else{
     const text=mode==='success'?writes[0]:area.value;
     for(const context of ['Page title','ID: panel','Why?','https://example.invalid/reader'])assert.ok(text.includes(context),context);

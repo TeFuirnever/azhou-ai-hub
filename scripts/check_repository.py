@@ -658,6 +658,22 @@ VENDORED_SKILL_PACKAGES = (
     "skills/super-diagram-design/",
 )
 
+# Wholesale upstream sub-distributions that v3.3.0 added inside the hybrid
+# super-archify package, plus the two shared upstream-verbatim files the same
+# release touched. Their prose, command spellings, placeholder protocols
+# ({{archify:...}}) and doc citations belong to upstream (same doctrine as
+# VENDORED_SKILL_PACKAGES); the vendor manifest and tests/test_archify.py
+# bind their bytes, so the Hub canonical-rename, link and command-surface
+# rules do not grade them. The hub-authored identity surfaces (SKILL.md,
+# references/, bin/ usage strings) stay graded.
+VENDORED_SKILL_SUBTREES = (
+    "skills/super-archify/modules/",
+    "skills/super-archify/pr/",
+    "skills/super-archify/story/",
+    "skills/super-archify/renderers/shared/svg-bake.mjs",
+    "skills/super-archify/scripts/render-examples.mjs",
+)
+
 # Skill trees that ship inside an optional package, Hub-authored overlay
 # included. They are that package's distribution, not entries of the Hub's
 # installable skill catalogue.
@@ -1056,7 +1072,7 @@ RESIDUE_HISTORY_FILES = {
 def _residue_allowed(relative: str) -> bool:
     if relative in RESIDUE_COMPATIBILITY_TRIGGER_PATHS | RESIDUE_MIGRATION_SOURCE_PATHS | RESIDUE_HISTORY_FILES:
         return True
-    if relative.startswith(RESIDUE_HISTORY_PREFIXES):
+    if relative.startswith(RESIDUE_HISTORY_PREFIXES + VENDORED_SKILL_SUBTREES):
         return True
     return any(
         pattern.search(relative)
@@ -1137,7 +1153,11 @@ RESIDUE_EXEMPT_LITERALS = {
     "skills/super-archify/bin/preview.mjs": ("const cliPath = path.join(here, 'archify.mjs');",),
     "skills/super-archify/scripts/update-contract.mjs": ("export const SKILL_ID = 'archify';",),
     "skills/super-archify/skill-release.json": ('"skillId": "archify"',),
-    "skills/super-archify/bin/archify.mjs": ("Use: archify patch explainer ",),
+    "skills/super-archify/bin/archify.mjs": (
+        "Use: archify patch explainer ",
+        # v3.3.0 sub-command identity line: the Code Analysis module's own CLI name.
+        "archify code-analysis commands: prepare, serve, check, task, verify-change, drift, verify-drift, import-review.",
+    ),
     "docs/agents/issue-tracker.md": ("`wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`)",),
 }
 
@@ -1434,7 +1454,7 @@ def check_markdown_links(files: list[Path], root: Path) -> list[str]:
         if path.suffix.lower() != ".md":
             continue
         relative = path.relative_to(root).as_posix()
-        if relative.startswith(VENDORED_ROOTS):
+        if relative.startswith(VENDORED_ROOTS + VENDORED_SKILL_SUBTREES):
             continue
         if relative in ZCODE_NOTICES:
             if hashlib.sha256(path.read_bytes()).hexdigest() != ZCODE_NOTICE_SHA256:
@@ -1566,7 +1586,7 @@ def check_command_surface(files: list[Path], root: Path) -> list[str]:
         in_scope = relative in COMMAND_SURFACE_FILES or (
             relative.startswith(COMMAND_SURFACE_DIRECTORIES)
             and not relative.startswith(COMMAND_SURFACE_EXCLUDED_DIRECTORIES)
-            and not relative.startswith(VENDORED_SKILL_PACKAGES)
+            and not relative.startswith(VENDORED_SKILL_PACKAGES + VENDORED_SKILL_SUBTREES)
             and "/references/upstream/" not in f"/{relative}"
         )
         if path.suffix.lower() != ".md" or not in_scope:

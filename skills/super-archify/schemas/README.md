@@ -17,8 +17,8 @@ against one of the schemas in this folder before any layout work happens.
 | `class.schema.json` | `diagram_type: "class"` | `types`, `relationships` |
 | `timeline.schema.json` | `diagram_type: "timeline"` | `events` (`lanes` optional) |
 | `waterfall.schema.json` | `diagram_type: "waterfall"` | `spans` (each with optional `parent`) |
-| `explainer.schema.json` | `diagram_type: "explainer"` | `answer` (object), `panels`, `sources` |
 | `common.schema.json` | shared `$defs` only (no top-level document) | — |
+| `explainer.schema.json` | `diagram_type: "explainer"` | `answer` (object), `panels`, `sources` |
 
 Every diagram schema requires `schema_version`, `diagram_type`, `meta` (with
 `title`; `timeline` and `waterfall` additionally require `meta.evidence`, and
@@ -37,7 +37,7 @@ It also accepts `locale`, any well-formed language tag (schema pattern
 `^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$`). The field selects the fixed Viewer UI,
 renderer-owned default legend and accessibility copy, document-title suffix,
 and `<html lang>` value; it does not translate authored strings. The bundled
-catalogs enrolled in `locales/manifest.json` (`en`, `zh-CN`, `zh-TW`, `es`, `ko`, `ar`) are
+catalogs enrolled in `locales/manifest.json` (`en`, `zh-CN`, `zh-TW`, `es`, `ko`, `ar`, `ru`) are
 selected by tag, case-insensitively; region and script variants are distinct
 tags. Any other tag needs a matching `translations` object (see below) or the
 renderer falls back to English and discloses it.
@@ -56,6 +56,10 @@ report rejected entries and the final resolved coverage to stderr.
 motion-forward presentation), `blueprint` (high-contrast engineering review),
 or `editorial` (warm publication-style design review and documentation).
 Presets change only viewer styling; they do not alter semantic IDs or geometry.
+Every diagram page, and the Explainer footer, ends with a quiet line linking to email
+feedback, GitHub Issues and the GitHub repository (star). Set `meta.feedback_links: false`
+to omit it, for example in a client-facing document; Explainer shorthand uses
+`@meta feedback_links=false`. The line never appears in SVG, image or video exports.
 Sequence `meta` additionally accepts `column_fit`. The default `spread` applies whether or not `meta.viewBox` is supplied.
 Explicit `fixed` keeps the historical 108px column gap and 86px participant
 boxes. `spread` derives column distance and box width from the viewBox, with
@@ -194,6 +198,13 @@ The eleven diagram schemas reference `common.schema.json#/$defs/...`:
   override shapes used by each renderer-owned key map
 - `guidedViews` — the retired `meta.views` shape, still accepted and ignored
 - `cards` — the summary-card blocks rendered below the SVG
+- `drilldowns` / `href` / `parentHref` — cross-HTML navigation. Targets are
+  same-directory `*.html` files (optional `?` / `#`). `href` on a node is sugar
+  for a one-entry `drilldowns` list (label defaults to the node label);
+  `drilldowns` wins if both are present. Passport lists all targets. One child:
+  native SVG `<a>` + visible mark, click follows the link, Alt-click focuses.
+  Several children: click focuses; Ctrl/double-click opens the first. Child
+  diagrams may set `meta.parentHref` for Back (runtime also accepts `?from=`).
 
 Lifecycle state `type` is mode-specific (`start`/`active`/`waiting`/...) and
 stays in `lifecycle.schema.json`.
