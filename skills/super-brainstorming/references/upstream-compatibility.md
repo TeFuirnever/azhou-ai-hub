@@ -26,4 +26,4 @@ On a pin upgrade, fetch the new upstream `skills/brainstorming/` tree, then re-a
 6. **D6** — re-attach the builder-check provenance clause after the subagent fallback sentence.
 7. **Azhou brand layer** — re-insert the Azhou brand layer (the intro paragraph, identity anchor, motto and Brand protocol section) immediately after the upstream H1 title, as recorded in the current `SKILL.md` lines 9-30.
 
-Then re-record every upstream SHA-256 in [provenance](provenance.md), re-pin the retained segments and full local digests in `tests/test_super_brainstorming.py`, re-run the token simulation (upstream bytes may introduce new bare old-name tokens outside allowed surfaces), and land the upgrade through a fresh exact-diff approval. Never silently follow upstream main.
+Then re-record every upstream SHA-256 in [provenance](provenance.md), re-pin the anchor-span digests and the full local digests in `tests/test_super_brainstorming.py`, re-run the token simulation (upstream bytes may introduce new bare old-name tokens outside allowed surfaces), and land the upgrade through a fresh exact-diff approval. Never silently follow upstream main.

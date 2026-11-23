@@ -1,8 +1,8 @@
 """Package integrity tests for skills/super-brainstorming.
 
 The package adapts obra/superpowers tag v7.0.2 (commit 22f0b463...):
-verbatim files are pinned against the upstream pin, retained upstream
-segments are pinned locally, and full local digests cover every byte of
+verbatim files are pinned against the upstream pin, local anchor-span
+digests are pinned, and full local digests cover every byte of
 the four delta files, whose upstream SHA-256 anchors are recorded in
 provenance.
 """
@@ -72,7 +72,7 @@ EXPECTED_FILES = frozenset(
     }
 )
 
-# Retained upstream segments pinned locally (sha256 of text between anchors).
+# Local anchor-span digests pinned between anchors (sha256 of text between anchors).
 SEGMENTS = {
     "SKILL.md": (
         ("## Red Flags", None, "014a99130262e31b5aeb5cbc60cf2d531ceaf70eed98e51969fe8ebdda4b4470"),
@@ -133,7 +133,7 @@ class SuperBrainstormingPackageTest(unittest.TestCase):
         self.assertIn(UPSTREAM_LICENSE_SHA256, provenance)
         self.assertIn(UPSTREAM_COMMIT, provenance)
 
-    def test_retained_upstream_segments_are_pinned(self) -> None:
+    def test_anchor_span_digests_are_pinned(self) -> None:
         for relative, segments in SEGMENTS.items():
             text = (PACKAGE / relative).read_text(encoding="utf-8")
             for start, end, digest in segments:
