@@ -7141,25 +7141,36 @@ try {
       const boundarySamples={};
       const captureBoundary=async stage=>{
         const frame=await captureFrame();
+        const capturedAtMs=performance.now();
         const roi=await capture(boundaryROI.x,boundaryROI.y,frame);
-        boundarySamples[stage]={frame,roi};
+        boundarySamples[stage]={frame,roi,capturedAtMs};
         return roi;
+      };
+      const captureBoundaryDiagnostic=async (stage,prepare=()=>{})=>{
+        try {
+          await prepare();
+          await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+          boundarySamples[stage]={frame:await captureFrame(),capturedAtMs:performance.now()};
+        } catch(error) {
+          console.error('Failed to capture boundary diagnostic '+stage+':',error);
+        }
       };
       const retainBoundaryFailure=async (failure,clipFault,restoration)=>{
         try {
           const prefix='clip-fault-'+scenario.width+'-'+scenario.color.slice(1)+'-'+scenario.trial+'-'+failure;
           const captures={};
-          for(const [stage,{frame,roi}] of Object.entries(boundarySamples)) {
+          for(const [stage,{frame,roi,capturedAtMs}] of Object.entries(boundarySamples)) {
             const raw=Buffer.from(frame,'base64');
             const width=raw.readUInt32BE(16),height=raw.readUInt32BE(20);
             const sx=width/scenario.width,sy=height/scenario.height;
             const rawFile=prefix+'-'+stage+'-raw.png',roiFile=prefix+'-'+stage+'-roi.png';
-            captures[stage]={raw:rawFile,roi:roiFile,viewport:{width,height},pixelROI:{
+            captures[stage]={raw:rawFile,...(roi?{roi:roiFile}:{}),capturedAtMs,viewport:{width,height},pixelROI:{
               x:Math.round(boundaryROI.x*sx),y:Math.round(boundaryROI.y*sy),
               width:Math.round(boundaryROI.width*sx),height:Math.round(boundaryROI.height*sy),
             }};
             await writeFile(join(options.out,rawFile),raw);
-            await writeFile(join(options.out,roiFile),Buffer.from(roi,'base64'));
+            // Optional raw controls can be cropped offline using pixelROI.
+            if (roi) await writeFile(join(options.out,roiFile),Buffer.from(roi,'base64'));
           }
           const postFailure=await cdp.evaluate(`(()=>{const state=window.__themeEvidence(),owner=window.__azhouWallpaper;return {
             owner:owner?.owner??null,applied:state.status?.applied===true,imageDecoded:state.status?.imageDecoded===true,
@@ -7186,7 +7197,17 @@ try {
       await cdp.evaluate('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
       const boundaryRestored=await captureBoundary('restored');
       const restoration=await delta(boundaryBefore,boundaryRestored);
-      if (restoration.max!==0) await retainBoundaryFailure('restoration',clipFault,restoration);
+      if (restoration.max!==0) {
+        // Observe whether the raw difference persists without retrying the strict assertion.
+        for (let repeat=1;repeat<=3;repeat++) await captureBoundaryDiagnostic('restored-repeat-'+repeat);
+        await captureBoundaryDiagnostic('restored-same-value-write',()=>cdp.evaluate(`(()=>{
+          const style=document.documentElement.style,key='--azhou-wallpaper-wash';
+          const value=style.getPropertyValue(key);
+          if(value!==${JSON.stringify(injected.before)}) throw new Error('wash no longer matches the original');
+          style.setProperty(key,value,style.getPropertyPriority(key));
+        })()`));
+        await retainBoundaryFailure('restoration',clipFault,restoration);
+      }
       assert.equal(restoration.max,0);
       await cdp.evaluate(`window.__themeFaultOwner=window.__azhouWallpaper;window.__themeFaultObservation=()=>{
         const owner=window.__themeFaultOwner,status=owner?.status();
