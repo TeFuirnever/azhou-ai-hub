@@ -1,9 +1,10 @@
 """Package integrity tests for skills/super-brainstorming.
 
 The package adapts obra/superpowers tag v7.0.2 (commit 22f0b463...):
-verbatim files must stay byte-identical to the upstream pin, delta files
-carry their upstream SHA-256 anchors in provenance, and the retained
-upstream segments are pinned locally so any drift fails here.
+verbatim files are pinned against the upstream pin, retained upstream
+segments are pinned locally, and full local digests cover every byte of
+the four delta files, whose upstream SHA-256 anchors are recorded in
+provenance.
 """
 
 from __future__ import annotations
@@ -48,6 +49,13 @@ VERBATIM_FILES = (
 )
 
 DELTA_FILES = ("SKILL.md", "visual-companion.md", "scripts/server.cjs", "scripts/frame-template.html")
+
+DELTA_FILE_SHA256 = {
+    "SKILL.md": "503b5fc3240e90145ad76b3db374d3c446e8ce636bcd84f1be0ca23e3ef36543",
+    "visual-companion.md": "54906d0a3b66f3c94cf7c56cfc140a119a4f19c25996cc21a56bed271a048b4c",
+    "scripts/server.cjs": "3a3452c0e6cf6671e8ad5472832668a35786fb3e932bd3f087bd1ca7fe04d832",
+    "scripts/frame-template.html": "ede490ecf25083c5af502601063ce07832831cc61f994b4767c36c0f382d0d8b",
+}
 
 EXPECTED_FILES = frozenset(
     {
@@ -140,6 +148,16 @@ class SuperBrainstormingPackageTest(unittest.TestCase):
             for start, end, digest in segments:
                 with self.subTest(file=relative, start=start):
                     self.assertEqual(segment_digest(text, start, end), digest)
+
+    def test_delta_files_match_full_local_digests(self) -> None:
+        for relative, digest in DELTA_FILE_SHA256.items():
+            with self.subTest(file=relative):
+                local = (PACKAGE / relative).read_bytes()
+                self.assertEqual(
+                    hashlib.sha256(local).hexdigest(),
+                    digest,
+                    f"{relative} drifted from its pinned local bytes",
+                )
 
     def test_skill_md_keeps_deltas_and_foundation(self) -> None:
         text = (PACKAGE / "SKILL.md").read_text(encoding="utf-8")

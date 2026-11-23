@@ -27,7 +27,7 @@ The upstream release carries no per-skill license file; the repository-root `LIC
 | `skills/brainstorming/scripts/frame-template.html` | `6a8a4e58bd6a44b904e2e3c57de774481d909204597e1498de53f1b2fecc4c4e` |
 | `skills/brainstorming/scripts/helper.js` | `43c6d69954a46ec34a2a262bcc62a9a7e83e839c739f199cb72646d397c686e3` |
 
-`builder-check-prompt.md`, `scripts/start-server.sh`, `scripts/stop-server.sh`, and `scripts/helper.js` are vendored byte-for-byte; their local SHA-256 equals the pin value above and `tests/test_super_brainstorming.py` asserts it. The four delta files (`SKILL.md`, `visual-companion.md`, `scripts/server.cjs`, `scripts/frame-template.html`) record the pin hash above as their upstream drift anchor, and the tests pin the retained verbatim segments locally.
+`builder-check-prompt.md`, `scripts/start-server.sh`, `scripts/stop-server.sh`, and `scripts/helper.js` are vendored byte-for-byte; their local SHA-256 equals the pin value above and `tests/test_super_brainstorming.py` asserts it. The four delta files (`SKILL.md`, `visual-companion.md`, `scripts/server.cjs`, `scripts/frame-template.html`) record the pin hash above as their upstream drift anchor, and the tests pin their retained upstream segments and full local bytes locally.
 
 ## Azhou-maintained adaptation
 
