@@ -310,15 +310,32 @@ class PageController {
     this.settingsSnapshotRunID = 0;
     this.dshWallpaperPreparation = null;
     this.pageHidden = false;
+    this.persistedWorkspaceRecovery = null;
     this.motionQuery = null;
     this.onMotionChange = () => this.#updateAppearance();
-    this.onPageHide = () => {
+    this.onPageHide = event => {
       this.pageHidden = true;
+      this.persistedWorkspaceRecovery = event?.persisted === true
+        && dataProperty(this.pageAdapter, 'workspaceContract') === 'codex-active-workspace/v1'
+        && this.#canRetryStartupWallpaper() && this.wallpaperRequest && !this.wallpaperDisabled
+        && this.#ownsStartupController() && this.#workspacePageIsCurrent()
+        ? { runId: this.state.runId, request: this.wallpaperRequest, needed: !!this.workspaceRecovery } : null;
       this.#cancelWorkspaceRecovery();
+      // Cancelling the suspended recovery may itself advance the generation.
+      if (this.persistedWorkspaceRecovery) this.persistedWorkspaceRecovery.generation = this.wallpaperGeneration;
       this.#clearSettingsSnapshot();
       if (this.playbackOwner === 'dsh-gated') this.#cancelDSHWallpaperPreparation();
     };
-    this.onPageShow = () => { this.pageHidden = false; };
+    this.onPageShow = event => {
+      this.pageHidden = false;
+      const recovery = this.persistedWorkspaceRecovery;
+      this.persistedWorkspaceRecovery = null;
+      if (event?.persisted === true && recovery?.needed && recovery.runId === this.state.runId
+        && recovery.generation === this.wallpaperGeneration && recovery.request === this.wallpaperRequest
+        && this.#workspacePageIsCurrent() && !Object.getOwnPropertyDescriptor(this.host, WALLPAPER_GLOBAL)) {
+        this.#queueWorkspaceRecovery();
+      }
+    };
     this.appearance = this.pageAdapter.observeAppearance(host);
     this.savedFocus = this.document?.activeElement ?? null;
     this.intent = 'play';
@@ -1500,6 +1517,10 @@ class PageController {
       || (admitted ? runId !== this.state.runId || generation !== this.wallpaperGeneration
         : notice?.api !== this.wallpaperAPI)) return;
     this.wallpaperAPI = null;
+    const recovery = this.persistedWorkspaceRecovery;
+    if (this.pageHidden && recovery?.runId === this.state.runId && recovery.request === this.wallpaperRequest) {
+      recovery.needed = true;
+    }
     this.state.wallpaper = { applied: false, reason: 'workspace-changed', imageDecoded: false };
     this.startupWallpaperFailure = null;
     this.#updateStartupWallpaperNotice();
@@ -2105,6 +2126,7 @@ class PageController {
   #dispose() {
     if (this.disposed) return { disposed: true };
     this.disposed = true;
+    this.persistedWorkspaceRecovery = null;
     this.nativeWorkspace?.cancel?.();
     this.nativeWorkspace = null;
     this.#cancelDSHWallpaperPreparation();
