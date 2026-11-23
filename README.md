@@ -64,6 +64,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
 npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
 npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
+npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
+npx skills add TeFuirnever/azhou-ai-hub --skill super-grilling
 ~~~
 
 Choose one installation method per skill ([one-path rule](docs/installation.md#one-path-rule)). A package-manager install resolves the mutable default branch and carries no Hub receipt. The four `super-azhou-*` packages are thin wrappers: the npx command installs the Skill, but invoking it runs the Foundation CLI (`scripts/azhou_hub.py`) from a checkout of this repository, so that checkout must still be on disk (clone it once).
@@ -98,6 +100,8 @@ Every adapted package records its upstream provenance in `skills/<name>/referenc
 | [Diagram Design](skills/super-diagram-design/SKILL.md) | Create branded editor-grade HTML/SVG diagrams across 51 visual types, with .drawio/Mermaid/.excalidraw/PlantUML import. | Vendored upstream (commit pin + per-file SHA-256); packaged `self_check.py` gate. |
 | [Frontend Design](skills/super-frontend-design/SKILL.md) | Produce a distinctive, non-templated visual design direction for a new UI or a restyle: palette, typography, layout, and the avoid-the-AI-defaults review pass. | Faithfully adopted from anthropics/skills at the pinned commit with the upstream guidance body preserved verbatim, the Apache-2.0 license vendored byte-identical, and SHA-256 integrity tests. No behavior benchmark yet. |
 | [Brainstorming](skills/super-brainstorming/SKILL.md) | Hold the pre-build conversation: find out what the reader wants and why, lay out approaches, write the design doc, and enforce the approval gate. | Adapted from obra/superpowers at the pinned tag with six recorded deltas, per-file upstream SHA-256 anchors, and integrity tests. No behavior benchmark yet. |
+| [Grill Me](skills/super-grill-me/SKILL.md) | Hand a plan or design the reader already has to the `super-grilling` interview, and stop when that sibling package is missing. | Adapted from mattpocock/skills at the pinned tag; upstream trigger sentence kept verbatim; SHA-256-pinned license and integrity tests. No behavior benchmark yet. |
+| [Grilling](skills/super-grilling/SKILL.md) | Grill the user about a plan, decision, or idea in rounds: every settled question asked with a recommended answer, facts looked up, decisions left to the user. | Adapted from mattpocock/skills at the pinned tag; upstream instruction body verbatim outside one sentence; SHA-256 integrity tests. No behavior benchmark yet. |
 
 [Per-skill platform view](docs/skill-platform-view.md) · [Evaluation contract](docs/eval-case-contract.md)
 
@@ -195,7 +199,7 @@ The [Azhou Skill Standard](docs/skill-standard.md) is the single project authori
 
 ## Develop
 
-In Codex, `$refactoring` applies refactoring guidance to a change and `$release-it` reviews failure recovery; the 14 [book-inspired skills](THIRD_PARTY_NOTICES.md#agent-rules-books) ship with the repository under `.agents/skills/` — project-local, not among the 20 installable packages under `skills/` — and load their rules on demand.
+In Codex, `$refactoring` applies refactoring guidance to a change and `$release-it` reviews failure recovery; the 14 [book-inspired skills](THIRD_PARTY_NOTICES.md#agent-rules-books) ship with the repository under `.agents/skills/` — project-local, not among the 22 installable packages under `skills/` — and load their rules on demand.
 
 Python 3.11+ is enough for the repository gate:
 

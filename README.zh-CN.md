@@ -64,6 +64,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
 npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
 npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
 npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
+npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
+npx skills add TeFuirnever/azhou-ai-hub --skill super-grilling
 ~~~
 
 每个 skill 只选一种安装方式（[单一路径规则](docs/installation.md#one-path-rule)）。包管理器安装解析的是可变默认分支，不留 Hub 回执。四个 `super-azhou-*` 包只是薄封装：npx 命令装的是 Skill，但调用时执行的是本仓库 checkout 里的 Foundation CLI（`scripts/azhou_hub.py`），所以磁盘上仍需要这份 checkout（clone 一次即可）。
@@ -98,6 +100,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
 | [Diagram Design](skills/super-diagram-design/SKILL.md) | 51 种视觉类型下创建品牌化、编辑级的 HTML/SVG 图表，支持 .drawio/Mermaid/.excalidraw/PlantUML 导入。 | 上游 vendored（commit 钉定 + 逐文件 SHA-256）；包内 `self_check.py` 门禁。 |
 | [Frontend Design](skills/super-frontend-design/SKILL.md) | 为新 UI 或界面改版产出独特、非模板化的视觉设计方向：色板、字体排印、布局，以及避开 AI 默认观感的评审流程。 | 在 anthropics/skills 的钉定 commit 上 faithful 引入：上游指导正文逐字保留，Apache-2.0 许可逐字节 vendored，配 SHA-256 完整性测试。尚无行为 benchmark。 |
 | [Brainstorming](skills/super-brainstorming/SKILL.md) | 在动手前探清读者真正想要什么与为什么：枚举方案、写设计文档、守审批门。 | 上游 adapted（tag 钉定 + 逐文件 SHA-256 锚）；六处记录在案 delta；完整性测试。尚无行为 benchmark。 |
+| [Grill Me](skills/super-grill-me/SKILL.md) | 把读者已有的方案或设计转交给 `super-grilling` 访谈；缺这个兄弟包时直接停下。 | 上游 adapted（tag 钉定；上游触发句逐字保留）；SHA-256 钉许可；完整性测试。尚无行为 benchmark。 |
+| [Grilling](skills/super-grilling/SKILL.md) | 按轮拷问用户的方案、决定或想法：前提已定的问题逐个附上推荐答案，事实去查，决策留给用户。 | 上游 adapted（tag 钉定；上游正文除一句外逐字保留）；SHA-256 完整性测试。尚无行为 benchmark。 |
 
 [逐 skill 平台汇总](docs/skill-platform-view.md) · [评测合同](docs/eval-case-contract.md)
 
@@ -195,7 +199,7 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 
 ## 开发
 
-在 Codex 中，`$refactoring` 把重构指南落到一次改动上，`$release-it` 评审故障恢复；14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库放在 `.agents/skills/` 下——属于项目本地内容，不在 `skills/` 的 20 个可安装包之列——按需读取。
+在 Codex 中，`$refactoring` 把重构指南落到一次改动上，`$release-it` 评审故障恢复；14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库放在 `.agents/skills/` 下——属于项目本地内容，不在 `skills/` 的 22 个可安装包之列——按需读取。
 
 仓库级 gate 只需要 Python 3.11+：
 

@@ -61,6 +61,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
 npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
 npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
 npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
+npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
+npx skills add TeFuirnever/azhou-ai-hub --skill super-grilling
 ~~~
 
 See [First install in Codex](#first-install-in-codex) for the target, first invocation, and troubleshooting steps. Skills CLI installations use the selected scope and carry no Hub receipt.
