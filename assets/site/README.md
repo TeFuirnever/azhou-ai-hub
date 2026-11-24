@@ -2,7 +2,7 @@
 
 WebP derivatives of `../github/readme-hero.png` used by the documentation
 site (`site/`). The source artwork and its license live in `assets/github/`
-(see `packages/agent-skin/assets/azhou/NOTICE.md`); these files carry the
+(see `assets/azhou/NOTICE.md`); these files carry the
 same terms. Regenerate after changing the source artwork, then bump the
 `?v=` cache parameter in `site/index.njk` and `site/zh/index.njk`:
 

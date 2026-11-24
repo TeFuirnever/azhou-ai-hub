@@ -27,6 +27,6 @@ The repository's unit suite checks the delivered file's identifier, role set, an
 
 ## Rights
 
-Code follows the repository MIT license. Source atlases, preview and artwork embedded in the cape are © 2026 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0. See the [artwork license](../../../packages/agent-skin/assets/azhou/LICENSE) and [brand terms](../../../TRADEMARKS.md).
+Code follows the repository MIT license. Source atlases, preview and artwork embedded in the cape are © 2026 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0. See the [artwork license](../../../assets/azhou/LICENSE) and [brand terms](../../../TRADEMARKS.md).
 
 未经许可，请勿修改并再分发阿舟素材或用于商业用途。阿舟名称与形象属于作者品牌。

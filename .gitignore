@@ -93,11 +93,13 @@ benchmarks/excalidraw-diagram/workspace/
 /.agents/skills/
 /compact-adviser/
 
-# Agent Skin tracks only the published Azhou library; the local overlay and
-# anything else under assets/ stay ignored (the flat path caught a scratch-clone
-# sweep in 46031a0).
-packages/agent-skin/assets/*
-!packages/agent-skin/assets/azhou/
+# Preserve untracked files belonging to frozen local installations.
+/packages/agent-skin/assets/
+/packages/agent-skin/.build/
+/packages/agent-skin/dist/
+/packages/agent-skin/.local/
+/packages/agent-skin/docs/audits/
+
 # Local video-production configuration, runtime data and working assets.
 /hypit.runtime.json
 /.hypit/

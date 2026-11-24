@@ -1,6 +1,6 @@
 # DETAIL-2026-001 文档评审
 
-> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。
+> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/README.md)和[测试与功能验收](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/docs/testing.md)为准。
 
 2026-10-27范围更新：用户已确认产品名Agent Skin、包名`agent-skin`，面向AI工具的启动动画、壁纸与外观设置，首期仅完成Codex适配。v0.4补充产品与宿主的区分、包命名/迁移前置单及现有安装/旧快照边界；此前技术评审仅覆盖原有运行契约，不覆盖新增更名实现。票据粒度和依赖待用户确认，产品更名与代码实现均未开始。
 

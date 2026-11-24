@@ -670,11 +670,11 @@ class RepositoryPolicyTest(unittest.TestCase):
                 shutil.copy2(ROOT / relative, target)
 
             private_assets = (
-                "packages/agent-skin/assets/fixture.png",
-                "packages/agent-skin/assets/private/fixture.png",
+                "assets/azhou/fixture.png",
+                "assets/azhou/private/fixture.png",
             )
-            public_fixture = "packages/agent-skin/docs/fixtures/icon.png"
-            published_asset = "packages/agent-skin/assets/azhou/working.png"
+            public_fixture = "docs/fixtures/icon.png"
+            published_asset = "assets/azhou/working.png"
             for relative in (*private_assets, public_fixture, published_asset):
                 asset = root / relative
                 asset.parent.mkdir(parents=True, exist_ok=True)

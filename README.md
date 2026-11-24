@@ -146,14 +146,12 @@ python scripts/azhou_hub.py verify
 
 ## Integrations
 
-Two complete projects live under `packages/`. These projects are not Skills, and installing a Hub Skill does not enable any integration. A **candidate** below is a maintained source version not yet accepted as a full release; its evidence is the dated receipts in the [support matrix](docs/support-matrix.md#optional-integrations), never a release claim.
+The pstack integration lives under `packages/`. These projects are not Skills, and installing a Hub Skill does not enable any integration. A **candidate** below is a maintained source version not yet accepted as a full release; its evidence is the dated receipts in the [support matrix](docs/support-matrix.md#optional-integrations), never a release claim.
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **candidate**: native Codex/Claude plugins, a zcode plugin with bundled skills, and shared Skills discovery for MiMo and DeepSeek Harness (the maintainer host's shared-root pstack links were retired on 2026-11-14; serving pstack that way moves to a separately scoped task, and other skills sharing the root are unaffected). Dated evidence and limits: [support matrix](docs/support-matrix.md#optional-integrations). |
-| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | On Codex desktop cold starts it plays a 12-second Azhou startup animation and applies an Azhou wallpaper (visual acceptance still pending; tracked in the [support matrix](docs/support-matrix.md#optional-integrations)); an assembled DeepSeek Harness plugin package brings the same appearance to DSH. Current source candidate `0.9.0/build 43`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). |
 
-[Azhou Appearance](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary) accepts user-selected images and Azhou JSON presets. It does not import themes or migrate data from other projects.
 
 [Azhou mouse cursors 3.6.1](assets/cursors/azhou-double-hug/README.md) are available as a standalone Mousecape theme for macOS.
 
@@ -162,10 +160,8 @@ Run these from a clone of this repository, as above:
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
 python scripts/azhou_hub.py integrations pstack --help
-python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-pstack keeps its upstream MIT notices. Agent Skin code is covered by the Hub root MIT license since its independent rewrite in #441. Its Azhou art in `packages/agent-skin/assets/azhou/` is CC BY-NC-ND 4.0, and the Azhou name, logo and character follow [TRADEMARKS.md](TRADEMARKS.md).
 
 [Integration runbook](docs/integrations.md) · [Provenance](docs/integration-provenance.md) · [Support matrix](docs/support-matrix.md#optional-integrations)
 
@@ -173,10 +169,10 @@ pstack keeps its upstream MIT notices. Agent Skin code is covered by the Hub roo
 
 Retired surfaces, their last supported versions, and what installed users do now:
 
-- **agent-skin's ZCode host layer** — last supported `0.9.0/build 41`. An installed ZCode skin keeps working frozen; restore its original launcher or remove the Azhou entry and receipts.
+- **Agent Skin** is retired for Codex, DSH and previously retired ZCode. See the [installed-user exit guide](docs/decisions/agent-skin-retirement.md).
 - **Agent Orchestration Kit (model router)** — never released publicly. This entry is only for machines that still carry a private testing install: recover the Kit's own uninstaller from Git history or the old releases, and uninstall with it before installing pstack.
-- **Legacy `codex-startup-animation` package** — last version `0.7.1/build 8`, removed 2026-11-12. Agent Skin owns the current launcher source; Git history retains the legacy bytes.
-- **Azhou Codex Pet** — retired 2026-11-18. See the [retirement record](packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md).
+- **Legacy `codex-startup-animation` package** — last version `0.7.1/build 8`, removed 2026-11-12. Git history retains the legacy source.
+- **Azhou Codex Pet** — retired 2026-11-18. See the [retirement record](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md).
 
 [HUB-RET-001](docs/decisions/hub-retirement-physical-deletion.md) records the cut; [provenance rows](docs/integration-provenance.md) locate each pre-deletion revision, and all old releases and tags remain in full.
 
@@ -211,4 +207,4 @@ python scripts/verify.py
 
 ## License
 
-Azhou-maintained code: [MIT](LICENSE). Azhou artwork: [CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/NOTICE.md). Name, logo and character: [TRADEMARKS.md](TRADEMARKS.md). Third-party components retain their own notices and licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Azhou-maintained code: [MIT](LICENSE). Azhou artwork: [CC BY-NC-ND 4.0](assets/azhou/NOTICE.md). Name, logo and character: [TRADEMARKS.md](TRADEMARKS.md). Third-party components retain their own notices and licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
