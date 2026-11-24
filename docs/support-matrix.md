@@ -103,4 +103,4 @@ Open a [bug report](https://github.com/TeFuirnever/azhou-ai-hub/issues/new?templ
 
 ## Azhou Agent Inspector
 
-Codex Desktop: isolated native plugin installation, MCP App resource and per-thread tool invocation tested with synthetic counters. ZCode: isolated native marketplace registration, package installation and plugin discovery verified with the installed Desktop CLI. Composer events and dashboard behavior were checked in tests. Graphical host acceptance of this Hub distribution is pending for both.
+Codex Desktop: isolated native plugin installation, MCP App resource and per-thread tool invocation tested with synthetic counters. ZCode: isolated native marketplace registration, package installation and plugin discovery verified with the installed Desktop CLI. Composer events and dashboard behavior were checked in tests. Required CI also exercises both browser views with simulated host bridges and probes the local ZCode dashboard and overlay HTTP endpoints with a disposable usage database. Graphical host acceptance of this Hub distribution is pending for both.

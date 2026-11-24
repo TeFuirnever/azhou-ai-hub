@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // azhou-agent-inspector 的 stdio MCP server。协议实现沿用官方 example-plugin 的
-// Content-Length 帧 + 换行 JSON 兼容写法,业务逻辑复用 scripts/lib/collect-core.mjs。
+// 使用 MCP 的换行 JSON；旧客户端发送 Content-Length 帧时沿用其格式。
 //
 // 手工冒烟测试:
 //   printf '%s\n' \
@@ -41,10 +41,12 @@ const TOOLS = [
   },
 ];
 
+let transport;
 function writeMessage(message) {
   const body = JSON.stringify(message);
-  // MCP stdio 帧:Content-Length 头 + 体(同时兼容简单客户端的裸 JSON 行)
-  const payload = `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`;
+  const payload = transport === "framed"
+    ? `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`
+    : body + "\n";
   process.stdout.write(payload);
 }
 
@@ -53,6 +55,10 @@ const fail = (id, code, message) =>
   writeMessage({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
 
 async function handleRequest(msg) {
+  if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
+    fail(msg?.id, -32600, "Invalid request");
+    return;
+  }
   const { id, method, params } = msg;
 
   if (id === undefined || id === null) {
@@ -101,12 +107,13 @@ async function handleRequest(msg) {
 }
 
 function handleRaw(raw) {
-  const trimmed = raw.trim();
-  if (!trimmed) return;
+  const text = raw.toString("utf8").trim();
+  if (!text) return;
   let msg;
   try {
-    msg = JSON.parse(trimmed);
+    msg = JSON.parse(text);
   } catch {
+    fail(null, -32700, "Parse error");
     return;
   }
   if (Array.isArray(msg)) {
@@ -120,33 +127,42 @@ let buffer = Buffer.alloc(0);
 
 process.stdin.on("data", (chunk) => {
   buffer = Buffer.concat([buffer, chunk]);
-  while (true) {
-    const headerEnd = buffer.indexOf("\r\n\r\n");
-    if (headerEnd === -1) {
-      const asText = buffer.toString("utf8");
-      if (asText.includes("\n") && asText.trimStart().startsWith("{")) {
-        const lines = asText.split(/\r?\n/);
-        buffer = Buffer.from(lines.pop() || "", "utf8");
-        for (const line of lines) handleRaw(line);
+  while (buffer.length) {
+    if (!transport || transport === "lines") {
+      const newline = buffer.indexOf(10);
+      if (newline < 0) break;
+      const line = buffer.subarray(0, newline);
+      const text = line.toString("utf8").trim();
+      if (!transport && /^Content-Length:/i.test(text)) {
+        transport = "framed";
+      } else {
+        buffer = buffer.subarray(newline + 1);
+        if (text) {
+          transport = "lines";
+          handleRaw(line);
+        }
+        continue;
       }
-      break;
     }
-    const header = buffer.slice(0, headerEnd).toString("utf8");
-    const match = /Content-Length:\s*(\d+)/i.exec(header);
+    const headerEnd = buffer.indexOf("\r\n\r\n");
+    if (headerEnd < 0) break;
+    const header = buffer.subarray(0, headerEnd).toString("ascii");
+    const match = /^Content-Length:\s*(\d+)$/im.exec(header);
+    const bodyStart = headerEnd + 4;
     if (!match) {
-      buffer = buffer.slice(headerEnd + 4);
+      buffer = buffer.subarray(bodyStart);
+      fail(null, -32700, "Invalid frame");
       continue;
     }
-    const bodyStart = headerEnd + 4;
     const bodyEnd = bodyStart + Number(match[1]);
     if (buffer.length < bodyEnd) break;
-    handleRaw(buffer.slice(bodyStart, bodyEnd).toString("utf8"));
-    buffer = buffer.slice(bodyEnd);
+    handleRaw(buffer.subarray(bodyStart, bodyEnd));
+    buffer = buffer.subarray(bodyEnd);
   }
 });
 
 process.stdin.on("end", () => {
-  if (buffer.length) handleRaw(buffer.toString("utf8"));
+  if (transport !== "framed" && buffer.length) handleRaw(buffer);
 });
 
 process.stderr.write("[azhou-agent-inspector] stdio MCP server ready\n");

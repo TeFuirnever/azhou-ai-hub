@@ -98,13 +98,19 @@ async function systemMetrics() {
   const cpuPercent = await sampleCpuPercent();
   const totalMB = os.totalmem() / 1048576;
   const freeMB = os.freemem() / 1048576;
+  let hostUptimeHours = null;
+  try {
+    hostUptimeHours = r1(os.uptime() / 3600);
+  } catch {
+    // Some host sandboxes restrict the uptime syscall.
+  }
   return {
     cpuPercent,
     cpuCores: cpus,
     memTotalMB: Math.round(totalMB),
     memUsedMB: Math.round(totalMB - freeMB),
     memPercent: r1(((totalMB - freeMB) / totalMB) * 100),
-    hostUptimeHours: r1(os.uptime() / 3600),
+    hostUptimeHours,
     platform: `${os.platform()}/${os.arch()}`,
   };
 }
@@ -180,7 +186,7 @@ export function formatSnapshot(s) {
     `  —— 系统资源 ——`,
     `  CPU                : ${s.system.cpuPercent ?? "-"} %  (${s.system.cpuCores} 核)`,
     `  内存               : ${GB(s.system.memUsedMB)} / ${GB(s.system.memTotalMB)} GB (${s.system.memPercent} %)`,
-    `  主机运行时长       : ${s.system.hostUptimeHours} 小时  (${s.system.platform})`,
+    `  主机运行时长       : ${s.system.hostUptimeHours == null ? "—" : s.system.hostUptimeHours + " 小时"}  (${s.system.platform})`,
   ];
   return lines.join("\n");
 }

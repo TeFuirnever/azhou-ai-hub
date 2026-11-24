@@ -91,10 +91,13 @@ function freePort() {
 }
 
 // 拉起一个悬浮窗服务实例:环境变量全部指向临时路径,隔离真机数据
-async function startOverlay(cwd, extraEnv) {
+async function startServer(cwd, extraEnv, script = SERVER) {
   const port = await freePort();
-  const child = spawn(process.execPath, [SERVER, "--port", String(port), "--cwd", cwd], {
+  const child = spawn(process.execPath, [script, "--port", String(port), "--cwd", cwd], {
     env: Object.assign({}, process.env, {
+      HOME: TMP,
+      USERPROFILE: TMP,
+      TPS_URL: "",
       ZCODE_USAGE_DB: DB,
       TPS_MONITOR_STATE_FILE: path.join(TMP, "state.json"), // 不存在 → 全局状态兜底必然为空
       TPS_MONITOR_SESSIONS_DIR: path.join(TMP, "sessions"),
@@ -174,8 +177,31 @@ async function main() {
   buildFixture();
   console.log("[smoke] 夹具库: " + DB);
 
+  const dashboard = await startServer(TMP, {}, path.join(here, "..", "server.mjs"));
+  await check("Dashboard renders the shipped page and artwork and serves fixture usage", async function () {
+    const page = await fetch(dashboard + "/");
+    assert.match(await page.text(), /azhou\.webp/);
+    const art = await fetch(dashboard + "/azhou.webp");
+    assert.equal(art.status, 200);
+    assert.equal(art.headers.get("content-type"), "image/webp");
+    assert.deepEqual(Buffer.from(await art.arrayBuffer()), fs.readFileSync(path.join(here, "..", "azhou.webp")));
+    const usage = await fetch(dashboard + "/api/sessions");
+    assert.equal(usage.status, 200);
+    const { sessions } = await usage.json();
+    const lane = sessions.find((session) => session.sessionId === "smoke-a");
+    assert.equal(lane.turn.tokPerSec, 433.3);
+    assert.equal(lane.session.totalOutput, 1200);
+    const focused = await fetch(dashboard + "/api/token-rate");
+    assert.equal(focused.status, 200);
+    assert.equal((await focused.json()).sessionId, "smoke-a");
+    const system = await fetch(dashboard + "/api/metrics");
+    assert.equal(system.status, 200);
+    assert.ok(Number.isFinite((await system.json()).system.memTotalMB));
+    assert.equal((await fetch(dashboard + "/missing")).status, 404);
+  });
+
   // 场景 A:completed_at 落在 8s 窗口内 → generating;turn/latest/session 数据齐全
-  const A = await startOverlay(path.join(TMP, "dirA"));
+  const A = await startServer(path.join(TMP, "dirA"));
   await check("GET / 返回 overlay.html", async function () {
     const r = await fetch(A + "/", { cache: "no-store" });
     assert.equal(r.status, 200);
@@ -201,7 +227,7 @@ async function main() {
   });
 
   // 场景 B:completed_at 在窗口外 + running tool part → generating(json_extract 判定路径)
-  const B = await startOverlay(path.join(TMP, "dirB"));
+  const B = await startServer(path.join(TMP, "dirB"));
   await check("会话 B:running tool part → generating", async function () {
     const d = await live(B);
     assertStructure(d);
@@ -213,7 +239,7 @@ async function main() {
   });
 
   // 场景 C:数据久远且无 running part → idle
-  const C = await startOverlay(path.join(TMP, "dirC"));
+  const C = await startServer(path.join(TMP, "dirC"));
   await check("会话 C:无近期活动 → idle", async function () {
     const d = await live(C);
     assertStructure(d);
@@ -223,7 +249,7 @@ async function main() {
   });
 
   // 场景 D:库不存在 → 结构完整的 no-data
-  const D = await startOverlay(TMP, { ZCODE_USAGE_DB: path.join(TMP, "missing.sqlite") });
+  const D = await startServer(TMP, { ZCODE_USAGE_DB: path.join(TMP, "missing.sqlite") });
   await check("库缺失 → 结构完整的 no-data", async function () {
     const d = await live(D);
     assertStructure(d);
@@ -250,7 +276,7 @@ async function main() {
       ts: Date.now(), promptTs: Date.now(), source: "prompt-submit",
     }));
   }
-  const E = await startOverlay(path.join(TMP, "dirA"));
+  const E = await startServer(path.join(TMP, "dirA"));
   await check("同目录多会话:全局显式记录优先于 time_updated 最新的 actor", async function () {
     const d = await live(E);
     assertStructure(d);

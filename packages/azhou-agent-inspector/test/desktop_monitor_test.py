@@ -55,6 +55,40 @@ class PanelTests(unittest.TestCase):
             active.write_text(json.dumps({"type": "session_meta", "payload": {"id": str(uuid4())}}) + "\n")
             self.assertEqual("unavailable", monitor.snapshot(home, sid)["state"])
 
+    def test_interrupted_turn_keeps_previous_counters_and_ignores_partial_append(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder).resolve()
+            sessions = home / "sessions"
+            sessions.mkdir()
+            sid = str(uuid4())
+            path = sessions / f"rollout-sample-{sid}.jsonl"
+            events = [
+                ("session_meta", {"id": sid}),
+                ("event_msg", {"type": "task_started", "turn_id": "first"}),
+                ("token_usage_record", {"turn_id": "first", "response_id": "same",
+                                        "turn_token_usage": {"output_tokens": 10}}),
+                ("token_usage_record", {"turn_id": "first", "response_id": "same",
+                                        "turn_token_usage": {"output_tokens": 60, "input_tokens": 80,
+                                                             "cached_input_tokens": 20}}),
+                ("event_msg", {"type": "task_complete", "turn_id": "first", "duration_ms": 2000,
+                               "time_to_first_token_ms": 400}),
+                ("event_msg", {"type": "task_started", "turn_id": "second"}),
+            ]
+            path.write_text("".join(json.dumps({"type": kind, "payload": payload}) + "\n"
+                                    for kind, payload in events), encoding="utf8")
+            running = monitor.snapshot(home, sid)
+            self.assertEqual("running", running["state"])
+            self.assertEqual({"state": "complete", "effectiveTps": 30.0, "ttftMs": 400,
+                              "durationMs": 2000, "responses": 1, "outputTokens": 60,
+                              "cacheHitPercent": 25.0}, running["lastCompleted"])
+            with path.open("a", encoding="utf8") as stream:
+                stream.write(json.dumps({"type": "event_msg", "payload": {
+                    "type": "turn_aborted", "turn_id": "second"}}) + "\n")
+                stream.write('{"type": "partial')
+            interrupted = monitor.snapshot(home, sid)
+            self.assertEqual("interrupted", interrupted["state"])
+            self.assertEqual(running["lastCompleted"], interrupted["lastCompleted"])
+
     def test_resource_is_registered_and_self_contained(self):
         listed = monitor.dispatch("tools/list",{},None)["tools"][0]
         self.assertEqual([{"type":"thread"}],listed["_meta"]["openai/ui"]["entrypoints"])
