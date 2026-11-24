@@ -29,7 +29,7 @@ UPSTREAM_TAG = "v3.3.0"
 UPSTREAM_COMMIT = "af3aaf3c36762f2afb62a4a09533f6c7273b07e5"
 UPSTREAM_URL = "https://github.com/tt-a1i/archify"
 UPSTREAM_SKILL_SHA256 = "e5c49b1c3e1b5b46ffb044aa676c46a58715cb34b459cbabd7f48e5887fed808"
-VENDORED_FILE_COUNT = 598
+VENDORED_FILE_COUNT = 448
 VENDOR_MANIFEST = ROOT / "tests" / "archify-vendor-manifest.json"
 
 
@@ -110,7 +110,7 @@ class ArchifyPackageTest(unittest.TestCase):
         self.assertEqual(UPSTREAM_COMMIT, manifest["commit"])
         self.assertEqual(UPSTREAM_SKILL_SHA256, manifest["source_files"]["SKILL.md"])
         self.assertEqual(596, len(manifest["source_files"]))
-        self.assertEqual(1, sum(row["disposition"] == "retain_documented_exclusion" for row in manifest["migration"]))
+        self.assertEqual(151, sum(row["disposition"] == "retain_documented_exclusion" for row in manifest["migration"]))
         actual = {
             path.relative_to(SKILL_DIR).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
             for path in sorted(SKILL_DIR.rglob("*")) if path.is_file()

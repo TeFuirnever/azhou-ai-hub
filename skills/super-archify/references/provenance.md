@@ -25,7 +25,7 @@ The v3.3.0 capability baseline keeps the ten native diagram modes, typed schemas
 
 ## Three-way migration and local layer
 
-This pin move compares the v3.2.0 `archify/` tree (203 files), the Hub package and the complete v3.3.0 `archify/` tree (596 files). The prior fifteen rendered-example HTML exclusions dissolved because upstream itself stopped shipping them; the dev-only `package-lock.json` remains the single documented exclusion, and with the three Hub reference files the package carries 598 files. Per-file upstream and local digests, exclusions and dispositions are recorded in `tests/archify-vendor-manifest.json`.
+This pin move compares the v3.2.0 `archify/` tree (203 files), the Hub package and the complete v3.3.0 `archify/` tree (596 files). The prior fifteen rendered-example HTML exclusions dissolved because upstream itself stopped shipping them; the dev-only `package-lock.json` and the development-only `modules/code-analysis/test/` unit-test subtree are the documented exclusions (AGENTS.md keeps development-only evaluation material under repository-level `benchmarks/`; the subtree's upstream bytes stay recoverable from the pin through `source_files`), and with the three Hub reference files the package carries 448 files. Per-file upstream and local digests, exclusions and dispositions are recorded in `tests/archify-vendor-manifest.json`.
 
 The local capability-independent adaptations remain:
 
