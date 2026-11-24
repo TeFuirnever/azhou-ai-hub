@@ -847,7 +847,8 @@ console.log(JSON.stringify({ sinks, withEscapedPayload: escaped.length, passed: 
         // each innerHTML / outerHTML write receives, so rendered rows can be clicked
         // the way a reader would, and the run fails while any write still carries a
         // raw payload or an event-handler attribute.
-        const CLIENT = path.join(process.argv[1], 'modules/code-analysis/overlay/client');
+        // The program arrives on stdin (node -), so argv is [node, "-", root].
+        const CLIENT = path.join(process.argv[2], 'modules/code-analysis/overlay/client');
 
         // Each hostile value starts with its field number, so a value cut short by
         // slice() still names its field. P() breaks out of a quoted attribute and
@@ -1803,8 +1804,11 @@ console.log(JSON.stringify({ sinks, withEscapedPayload: escaped.length, passed: 
         assert.deepEqual(missing, [], 'every helper family rendered');
         assert.equal(leaks.length, 0, 'no sink received a raw payload');
 """
+        # The program is ~79 KB; as a -e argument it exceeds the 32767-char
+        # Windows command-line limit (WinError 206), so it is piped on stdin.
         result = subprocess.run(
-            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            ["node", "--input-type=module", "-", str(SKILL_DIR)],
+            input=program,
             capture_output=True, text=True, encoding="utf-8", timeout=60,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
