@@ -111,6 +111,29 @@ jobs:
         working-directory: site
         run: npm run build
 
+  session-monitor:
+    name: Azhou Session Monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/azhou-session-monitor
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.15.0"
+      - name: Test ZCode adapter
+        run: node --test test/*.test.mjs
+      - name: Test Codex adapter
+        run: python3 -B -m unittest discover -s test -p '*_test.py'
+
   pstack-native:
     name: pstack maintained package
     runs-on: ubuntu-latest
@@ -237,6 +260,7 @@ jobs:
       - policy
       - verify-windows
       - pstack-native
+      - session-monitor
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
@@ -246,6 +270,7 @@ jobs:
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
       WINDOWS_RESULT: ${{ needs.verify-windows.result }}
+      SESSION_MONITOR_RESULT: ${{ needs.session-monitor.result }}
       PSTACK_RESULT: ${{ needs.pstack-native.result }}
     steps:
       - name: Require every CI gate
@@ -257,6 +282,7 @@ jobs:
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
           test "$PSTACK_RESULT" = "success"
+          test "$SESSION_MONITOR_RESULT" = "success"
           # Only a confirmed docs-only change can skip a platform gate.
           for result in "$WINDOWS_RESULT"; do
             case "$result" in

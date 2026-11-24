@@ -662,6 +662,7 @@ VENDORED_SKILL_PACKAGES = (
 # included. They are that package's distribution, not entries of the Hub's
 # installable skill catalogue.
 SKILL_BUNDLE_ROOTS = VENDORED_ROOTS + (
+    "packages/azhou-session-monitor/plugins/zcode/skills/",
     "packages/pstack-agent-harness/hub-skills/",
 )
 

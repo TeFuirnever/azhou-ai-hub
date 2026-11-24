@@ -494,7 +494,7 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
             "minimum": ".".join(str(part) for part in MIN_PYTHON),
         },
         "installable_skills": canonical_skills(root),
-        "optional_integrations": ["pstack"],
+        "optional_integrations": ["pstack", "azhou-session-monitor"],
         "integration_entry": "python scripts/azhou_hub.py integrations list --json",
         # Keep this list limited to the five portable foundation commands. The
         # receipt-owned lifecycle verbs are intentionally a separate contract.

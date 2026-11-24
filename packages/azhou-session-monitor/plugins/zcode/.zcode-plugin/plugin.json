@@ -1,0 +1,72 @@
+{
+  "name": "azhou-session-monitor",
+  "version": "0.12.0",
+  "description": "Shows tokens per second for the current conversation in the ZCode Desktop composer. Requires ZCode 3.18.2 or later. Includes /tps, a multi-session dashboard, and MCP tools.",
+  "description_i18n": {
+    "en": "Shows tokens per second for the current conversation in the ZCode Desktop composer. Requires ZCode 3.18.2 or later. Includes /tps, a multi-session dashboard, and MCP tools.",
+    "zh-CN": "在 ZCode 桌面端输入框底部显示当前会话的 tok/s。要求 ZCode 3.18.2 或更高版本，另提供 /tps、多会话大屏和 MCP 工具。"
+  },
+  "author": {
+    "name": "Azhou AI Hub"
+  },
+  "license": "MIT",
+  "keywords": [
+    "tps",
+    "monitor",
+    "metrics",
+    "performance",
+    "throughput"
+  ],
+  "commands": "commands",
+  "skills": "skills",
+  "extension": {
+    "engines": {
+      "zcode": "^1.4.0"
+    },
+    "main": "./extension.mjs",
+    "activationEvents": [
+      "onAvailable"
+    ],
+    "contributes": {
+      "commands": [
+        {
+          "id": "open-dashboard",
+          "title": {
+            "zh-CN": "打开 TPS 监控面板",
+            "en-US": "Open TPS dashboard"
+          }
+        }
+      ],
+      "views": [
+        {
+          "id": "dashboard",
+          "title": {
+            "zh-CN": "阿舟会话仪表",
+            "en-US": "Azhou Session Monitor"
+          },
+          "icon": "activity"
+        }
+      ]
+    }
+  },
+  "slots": {
+    "composer.status": [
+      {
+        "id": "tps",
+        "icon": "activity",
+        "target": {
+          "command": "open-dashboard"
+        }
+      }
+    ]
+  },
+  "userConfig": {
+    "metrics_url": {
+      "title": "Metrics URL",
+      "description": "HTTP 接口地址，返回包含 tps/qps 字段的 JSON；留空则使用演示数据。",
+      "type": "string",
+      "required": false,
+      "default": ""
+    }
+  }
+}

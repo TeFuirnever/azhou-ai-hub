@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "azhou-session-monitor": {
+      "command": "python3",
+      "args": [
+        "server.py"
+      ],
+      "cwd": ".",
+      "env_vars": [
+        "CODEX_HOME"
+      ]
+    }
+  }
+}

@@ -146,10 +146,11 @@ python scripts/azhou_hub.py verify
 
 ## 集成
 
-pstack 集成位于 `packages/`。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。下文中的**候选版**（candidate）指已维护、但尚未接受为正式发布的源码版本；其证据以[支持矩阵](docs/support-matrix.md#optional-integrations)中带日期的收据为准，不构成发布声明。
+可选集成位于 `packages/`。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。下文中的**候选版**（candidate）指已维护、但尚未接受为正式发布的源码版本；其证据以[支持矩阵](docs/support-matrix.md#optional-integrations)中带日期的收据为准，不构成发布声明。
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
+| `azhou-session-monitor` | [Azhou Session Monitor](packages/azhou-session-monitor/README.md) | Codex 会话侧面板与 ZCode 输入框状态项，按宿主独立安装。 |
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
 
 

@@ -1,0 +1,17 @@
+{
+  "schema": "azhou-hub.package.v1",
+  "component": "azhou-session-monitor",
+  "display_name": "Azhou Session Monitor",
+  "version": "0.1.0",
+  "commit": "e23245990d525f333d59318abbd20bb2aa8dfda1",
+  "repository": "https://github.com/TeFuirnever/zcode-tps-monitor.git",
+  "license": "MIT (code); CC BY-NC-ND 4.0 (Azhou artwork)",
+  "runtime_paths": [
+    "hub-package.json",
+    "marketplace.json",
+    ".agents/plugins/marketplace.json",
+    "plugins",
+    "LICENSE",
+    "NOTICE.md"
+  ]
+}
