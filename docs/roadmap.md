@@ -6,11 +6,11 @@
 
 - **Principles 与现有工作对齐**：确立 Myself first, community-ready 与两个互补 pillars；复用既有工作和验收路径，不重复实现，不开展 full repository audit。
 - **Landed — `super-i-have-adhd`**：来源为 [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd)。已形成 [bounded pilot design](specs/super-i-have-adhd-pilot.md)：先对照 upstream instructions、当前 Hub Skills 与 retired Super Caveman 的历史边界，再在一个真实 workflow 比较原始、当前与最小增强。package 已落地并按该设计执行了 pilot（promote 记录为 provisional；现状与边界以 [support matrix](support-matrix.md)、包 [provenance](../skills/super-i-have-adhd/references/provenance.md) 与 [changelog](../CHANGELOG.md) 为准）。它不被预设为 Super Caveman 的 replacement。
-- **Existing integrations 继续既有 acceptance tracks**：pstack 沿 [integration contract](integrations.md) 与 [support matrix](support-matrix.md)；Agent Skin 沿既有 tickets 与其实现分支验收，不新建并行实现。Focused Skill pilot 不以所有 integrations 完成为前置条件。
+- **Existing integrations 继续既有 acceptance tracks**：pstack 沿 [integration contract](integrations.md) 与 [support matrix](support-matrix.md)。Focused Skill pilot 不以所有 integrations 完成为前置条件。
 
 ## Current-work reconciliation
 
-Agent Skin 已在本仓库的 [canonical package](../packages/agent-skin/README.md) 实现，当前支持与验收边界以 [support matrix](support-matrix.md) 和该包文档为准。安装状态与实际宿主验收须分别核查；本地构建或 tracker 状态不能替代它们。
+Agent Skin 已退役，见[退出说明](decisions/agent-skin-retirement.md)。
 
 2026-10-27 的 tracker handoff 曾报告 #352–358 completed、[#359](https://github.com/TeFuirnever/azhou-ai-hub/issues/359) ready-for-human/open、[#360](https://github.com/TeFuirnever/azhou-ai-hub/issues/360) open，并检查了当时的 `codex/agent-skin-integration` 分支；这些都是历史快照。历史 [local handoff](../evidence/optional-integrations-local-handoff-2026-10-26.md) 只证明当时的输入，不覆盖后续候选或当前安装归属。
 

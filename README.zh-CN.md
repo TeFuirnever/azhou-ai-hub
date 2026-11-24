@@ -146,14 +146,12 @@ python scripts/azhou_hub.py verify
 
 ## 集成
 
-两个完整项目位于 `packages/`。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。下文中的**候选版**（candidate）指已维护、但尚未接受为正式发布的源码版本；其证据以[支持矩阵](docs/support-matrix.md#optional-integrations)中带日期的收据为准，不构成发布声明。
+pstack 集成位于 `packages/`。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。下文中的**候选版**（candidate）指已维护、但尚未接受为正式发布的源码版本；其证据以[支持矩阵](docs/support-matrix.md#optional-integrations)中带日期的收据为准，不构成发布声明。
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面冷启动时播放 12 秒阿舟启动动画并应用阿舟壁纸（视觉验收仍待人工确认；以[支持矩阵](docs/support-matrix.md#optional-integrations)为准）；组装好的 DeepSeek Harness 插件包把同样的外观带到 DSH。当前源码候选为 `0.9.0/build 43`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。 |
 
-[阿舟外观](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary)可选用本机图片和阿舟 JSON 预设，不导入其他项目的主题，也不迁移其他项目的数据。
 
 [阿舟鼠标指针 3.6.1](assets/cursors/azhou-double-hug/README.md) 是一套适用于 macOS 的独立 Mousecape 皮肤。
 
@@ -162,10 +160,8 @@ python scripts/azhou_hub.py verify
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
 python scripts/azhou_hub.py integrations pstack --help
-python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由 Hub 根 MIT 许可证覆盖。`packages/agent-skin/assets/azhou/` 的阿舟素材采用 CC BY-NC-ND 4.0，阿舟名称、标识与角色见 [TRADEMARKS.md](TRADEMARKS.md)。
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
@@ -173,10 +169,10 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 退役面、各自最后支持的版本，以及已装用户的处置方式：
 
-- **agent-skin 的 ZCode 宿主层**——最后支持 `0.9.0/build 41`。已安装的 ZCode 皮肤作为冻结安装继续可用；恢复其原始启动器，或连同回执移除阿舟入口。
+- **Agent Skin** 已退役，覆盖 Codex、DSH 与此前退役的 ZCode。见[已安装用户退出说明](docs/decisions/agent-skin-retirement.md)。
 - **Agent Orchestration Kit（model router）**——从未公开发布。这一条只写给仍残留内部测试安装的机器：从 Git 历史或旧 release 取回其自带的卸载器执行卸载，然后再安装 pstack。
-- **旧 `codex-startup-animation` 包**——末版 `0.7.1/build 8`，2026-11-12 移除。当前启动器源码由 Agent Skin 维护；Git 历史保留旧字节。
-- **阿舟 Codex Pet**——2026-11-18 退役。见[退役记录](packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md)。
+- **旧 `codex-startup-animation` 包**——末版 `0.7.1/build 8`，2026-11-12 移除。Git 历史保留旧字节。
+- **阿舟 Codex Pet**——2026-11-18 退役。见[退役记录](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md)。
 
 [HUB-RET-001](docs/decisions/hub-retirement-physical-deletion.md) 记录了这次切割；[来源记录](docs/integration-provenance.md)各历史行定位每个删除前的修订，所有旧 release 与 tag 全量保留。
 
@@ -211,4 +207,4 @@ python scripts/verify.py
 
 ## 许可证
 
-阿舟维护的代码：[MIT](LICENSE)。阿舟素材：[CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/NOTICE.md)。名称、标识与角色：[TRADEMARKS.md](TRADEMARKS.md)。第三方组件保留自己的声明与许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+阿舟维护的代码：[MIT](LICENSE)。阿舟素材：[CC BY-NC-ND 4.0](assets/azhou/NOTICE.md)。名称、标识与角色：[TRADEMARKS.md](TRADEMARKS.md)。第三方组件保留自己的声明与许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

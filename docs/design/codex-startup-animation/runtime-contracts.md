@@ -1,6 +1,6 @@
 # CDP 同窗口启动：运行契约
 
-> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。
+> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/README.md)和[测试与功能验收](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/docs/testing.md)为准。
 
 本文所有 MUST 均是 `DETAIL-2026-001` 的 **Planned（目标态）** 契约，不是 H 当前实现声明。S 参数快照和出处见[研读](source-analysis.md)；本文选择在 H 重实现的值以此处为准。入口、步骤和追溯见[详细设计](detailed-design.md)。
 

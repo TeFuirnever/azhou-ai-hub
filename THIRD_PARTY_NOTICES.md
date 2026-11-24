@@ -12,7 +12,7 @@ For an update, review the upstream diff and license at the proposed commit first
 
 ## Optional external integrations
 
-The two optional integration projects are complete projects under `packages/` (`agent-skin`, `pstack-agent-harness`); there is no `integrations/` directory, and no tracked external source lock exists — `hub-package.json` plus `runtime_paths` fingerprints record the imported provenance instead. The table below holds one active package row (pstack-agent-harness) and two retired historical rows. See [integration provenance](docs/integration-provenance.md) for the full chain, selected file boundaries and fixed-version update procedure.
+The optional integration project is `packages/pstack-agent-harness`; there is no `integrations/` directory, and no tracked external source lock exists — `hub-package.json` plus `runtime_paths` fingerprints record the imported provenance instead. The table below holds one active package row (pstack-agent-harness) and two retired historical rows. See [integration provenance](docs/integration-provenance.md) for the full chain, selected file boundaries and fixed-version update procedure.
 
 | External source | Selected version | License and distribution boundary |
 |---|---|---|
@@ -20,7 +20,7 @@ The two optional integration projects are complete projects under `packages/` (`
 | Agent Orchestration Kit (retired; historical row), recorded origin [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator) | Local continuation `4d1a2081f96cdab8a9ea0fe3d357312471546dcc` | Apache-2.0. The package was physically removed from this repository on 2026-11-12; Git history retains the exact imported bytes and is the traceability record. The Apache-2.0 notice obligation survives for any distribution made from those historical bytes. Publication of the continuation commit at the recorded origin has not been established. |
 | Legacy startup-animation source (retired; historical row), public upstream [panding999/codex-startup-animation](https://github.com/panding999/codex-startup-animation) and local origin [TeFuirnever/codex-startup-animation](https://github.com/TeFuirnever/codex-startup-animation) | Original base `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248` plus 22 selected worktree hashes; final maintained runtime `0.7.1` build `8` | No program license grant was found. The package directory was physically removed from this repository on 2026-11-12 after the reviewed receipt-ownership handoff; Git history retains the exact imported bytes and is the traceability record. The root MIT license does not apply to these historical bytes, and no redistribution authorization for them has been established. The surviving `packages/agent-skin/` code was originally derived from this source and independently rewritten in #441 (2026-11-11); it is not a redistribution of these bytes and is covered by the root MIT license. |
 
-Agent Skin's character, wallpaper, entry portrait and icon source are the maintainer's own Azhou artwork, published in `packages/agent-skin/assets/azhou/` under [CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/LICENSE) with its [notice](packages/agent-skin/assets/azhou/NOTICE.md); they are not third-party material and are not covered by the root MIT license. The Azhou name, logo and character follow [TRADEMARKS.md](TRADEMARKS.md). An optional Git-ignored `assets/private/` overlay may replace them locally; overlay files are the user's own and stay out of Git. A successful hash check is not a rights grant or formal visual approval.
+Agent Skin's character, wallpaper, entry portrait and icon source are the maintainer's own Azhou artwork, published in `assets/azhou/` under [CC BY-NC-ND 4.0](assets/azhou/LICENSE) with its [notice](assets/azhou/NOTICE.md); they are not third-party material and are not covered by the root MIT license. The Azhou name, logo and character follow [TRADEMARKS.md](TRADEMARKS.md). An optional Git-ignored `assets/private/` overlay may replace them locally; overlay files are the user's own and stay out of Git. A successful hash check is not a rights grant or formal visual approval.
 
 ## Change scope
 
@@ -40,7 +40,7 @@ The tracked workflows under `.agents/skills/` adapt [DeepSeek Harness](https://g
 
 `assets/github/readme-banner-*.jpg` (24 files: six text-only README section banners — install, skills, try, trust, checkout, integrations — each in English and Chinese, light and dark) are Azhou-maintained brand assets made in-house on 2026-11-12. They contain no illustration and no generated imagery: each banner is a flat background, a rounded border and a hand-drawn-style underline, all drawn with Pillow, plus text set deterministically with Pillow in Noto Sans SC (SIL Open Font License 1.1; only rasterized glyphs are distributed, not the font). The banners contain no character, no third-party logos and no copied assets.
 
-`assets/github/foundation-cli-effect.png`, `assets/github/integration-pstack-effect.png` and `assets/github/integration-agent-skin-effect.png` are Azhou-maintained illustrations generated in-house on 2026-11-12 with the Grok Bot assistant's image-generation tool from text prompts, using the existing `assets/skills/super-eli5-effect.png` as the style and character reference for the Azhou fox. They did not come from the local Azhou imagegen pipeline or the governed azhou-scenes pipeline, have no machine colour gate, and are not skill showcase scenes under the showcase rule in `docs/skill-standard.md` §4. They contain no text, no third-party logos and no copied assets.
+`assets/github/foundation-cli-effect.png` and `assets/github/integration-pstack-effect.png` are Azhou-maintained illustrations generated in-house on 2026-11-12 with the Grok Bot assistant's image-generation tool from text prompts, using the existing `assets/skills/super-eli5-effect.png` as the style and character reference for the Azhou fox. They did not come from the local Azhou imagegen pipeline or the governed azhou-scenes pipeline, have no machine colour gate, and are not skill showcase scenes under the showcase rule in `docs/skill-standard.md` §4. They contain no text, no third-party logos and no copied assets.
 
 The maintainer (IP owner) visually approved all 27 files on 2026-11-12; the README captions record this. No separate rights review is recorded beyond that approval. When replacing any of them, repeat the visual and rights review.
 
@@ -148,21 +148,6 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the output-shaping instruction body only; the upstream ships no runtime, scripts, or assets to vendor.
 - Local changes: neutral frontmatter (the upstream host-specific `disable-model-invocation` key is not copied), Azhou brand protocol and stable receipt, setup/provenance records, and five appended presentation constraints (conclusion source/limit proximity, decision continuity, evidence integrity, optional Review Contract, relative-path-only output).
 
-## Codex Dream Skin SafeCSS AST derivative
-
-- Source: Codex-Dream-Skin commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`, `runtime/safe-css-validator.mjs`.
-- Copyright: 2026 Codex Dream Skin Studio contributors.
-- License: [MIT notice](packages/agent-skin/vendor/dream-safe-css.LICENSE).
-- Derivative: the pristine source plus one fixed AST-export suffix, reproduced by `tools/derive-dream-safe-css-ast.py`. Source/patch/output hashes and the narrow local mapping boundary are recorded in [Agent Skin provenance](packages/agent-skin/UPSTREAM.md#safe-css-ast-derivative). No upstream compiled selectors or theme media are imported by this adapter.
-
-## Codex Dream Skin official-theme contract
-
-- Source: [Codex-Dream-Skin](https://github.com/TeFuirnever/Codex-Dream-Skin), commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`.
-- Copyright: 2026 Codex Dream Skin Studio contributors.
-- License: [MIT notice](packages/agent-skin/vendor/dream-theme-validator.LICENSE).
-- Boundary: only the pure `validateOfficialTheme` contract and its constants/helpers from `runtime/theme-package-validator.mjs`. The derivative does not contain source staging, filesystem access, client-version assumptions, CSS compilation or host selector mappings.
-- Rebuild and exact source/derivative hashes: [Agent Skin provenance](packages/agent-skin/UPSTREAM.md#official-theme-json-contract). This code license does not authorize redistribution of third-party theme media.
-
 ## Gh Axi
 
 `skills/super-gh-axi/` imports the generated `gh-axi` Agent Skill from [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi) at immutable commit [`5a526599c9fa5a76b650079f5e9dbb1c1874a6ce`](https://github.com/kunchenguid/gh-axi/commit/5a526599c9fa5a76b650079f5e9dbb1c1874a6ce) (official release `gh-axi-v0.1.52`). The unmodified upstream baseline is hash-locked for reproducibility.
@@ -214,7 +199,3 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 ## Contributor rule
 
 New vendored or adapted material requires a source URL, immutable version or commit, license identifier, retained notice and a reproducible update path. Public visibility without a license is not permission to copy, modify or redistribute.
-
-## DSH adapter test fixtures
-
-`packages/agent-skin/tools/fixtures/dsh/` retains unmodified DeepSeek Harness source files from official `dsh-v0.2.2-rc.1` (`66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`) and `dsh-v0.2.2-rc.3` (`38a6a5c965aa99ab525161efb7cc5cf1fe62fced`) tags, solely for synthetic adapter regression tests. Copyright (c) 2026 DeepSeek; MIT licenses accompany both snapshots. See the fixture README and manifests for boundaries, immutable source paths, digests and update procedure. These snapshots do not establish installed package provenance or live release support.

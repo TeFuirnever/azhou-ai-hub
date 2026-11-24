@@ -28,7 +28,7 @@ Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Code
 
 ## Optional external integrations
 
-The existing Skill installation paths below remain independent. For the two optional pstack and Agent Skin integrations, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
+The existing Skill installation paths below remain independent. For the optional pstack integration, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
 
 ## Install or update when a task needs it
 

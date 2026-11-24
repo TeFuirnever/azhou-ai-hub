@@ -2,7 +2,7 @@
 
 Copyright (c) 2026 小亮 (阿舟 / Azhou). The Azhou character, its name and this artwork belong to the maintainer.
 
-This directory is licensed under [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](https://creativecommons.org/licenses/by-nc-nd/4.0/) (CC BY-NC-ND 4.0); the full legal code is in [LICENSE](LICENSE). The repository's MIT license covers code only and does not apply here. The name, logo and character are also governed by [TRADEMARKS.md](../../../../TRADEMARKS.md).
+This directory is licensed under [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International](https://creativecommons.org/licenses/by-nc-nd/4.0/) (CC BY-NC-ND 4.0); the full legal code is in [LICENSE](LICENSE). The repository's MIT license covers code only and does not apply here. The name, logo and character are also governed by [TRADEMARKS.md](../../TRADEMARKS.md).
 
 Attribution: `Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0`.
 

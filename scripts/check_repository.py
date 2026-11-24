@@ -123,7 +123,6 @@ PROJECT_LOCAL_SKILL_PATHS = {
     ".agents/skills/refactoring/SKILL.md",
     ".agents/skills/release-it/SKILL.md",
     ".agents/skills/the-pragmatic-programmer/SKILL.md",
-    ".agents/skills/verify-dsh-startup-gate/SKILL.md",
     ".agents/skills/working-effectively-with-legacy-code/SKILL.md",
 }
 ZCODE_NOTICE_SHA256 = "c946abfb46cf3920fefeb756c526620201a3ce29bf84953b540763605b33d9ea"
@@ -1622,10 +1621,10 @@ def check_public_boundaries(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
-# The published Azhou library (CC BY-NC-ND 4.0) is the only tracked Agent Skin
-# artwork; everything else under packages/agent-skin/assets/ stays private.
-PUBLISHED_AGENT_SKIN_ASSETS = frozenset(
-    "packages/agent-skin/assets/azhou/" + name
+# The published Azhou library (CC BY-NC-ND 4.0) is the only tracked Azhou
+# artwork; everything else under assets/azhou/ stays private.
+PUBLISHED_AZHOU_ASSETS = frozenset(
+    "assets/azhou/" + name
     for name in ("LICENSE", "NOTICE.md", "working.png", "wallpaper-scene-q-v3.png",
                  "entry-avatar.png", "app-icon/source.png")
 )
@@ -1636,7 +1635,7 @@ def check_private_startup_artwork(root: Path) -> list[str]:
     result = subprocess.run(
         [
             "git", "ls-files", "-z", "--cached", "--",
-            ":(icase)packages/agent-skin/assets/",
+            ":(icase)assets/azhou/",
         ],
         cwd=root,
         check=True,
@@ -1644,7 +1643,7 @@ def check_private_startup_artwork(root: Path) -> list[str]:
     )
     paths = sorted(set(result.stdout.decode("utf-8", errors="backslashreplace").split("\0")) - {""})
     return [f"private startup artwork is public: {path}" for path in paths
-            if path not in PUBLISHED_AGENT_SKIN_ASSETS]
+            if path not in PUBLISHED_AZHOU_ASSETS]
 
 
 def check_runtime_state_contract(files: list[Path], root: Path) -> list[str]:
