@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from xml.dom import minidom
 
 from scripts.check_repository import INVOCATION_CLASSES, SKILL_BRAND_CONTRACTS
 
@@ -1827,6 +1828,12 @@ const empty = bakeSvg(wrap('<style></style><rect width="4" height="4"/>'), { the
 if (styleCount(empty) !== 2) throw new Error('empty body style should only keep the baker style');
 const attrsKept = bakeSvg(wrap('<style id="c-n" type="text/css">.c-n{fill:#102030}</style><rect class="c-n" width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
 if (!attrsKept.includes('<style id="c-n" type="text/css">') || !attrsKept.includes('fill: #102030')) throw new Error('well-formed style attributes must survive baking');
+const mixed = bakeSvg(wrap('<style media="screen and (min-width: 600px)" id=\'c-m\'>.c-m{fill:#102030}</style><rect width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
+if (!mixed.includes('media="screen and (min-width: 600px)"') || !mixed.includes('id="c-m"') || !mixed.includes('fill: #102030')) throw new Error('mixed-quote style attributes must survive baking');
+const quoted = bakeSvg(wrap('<style data-x=\'a"b\' data-y="c&amp;d">.c-n{fill:#102030}</style><rect width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
+if (!quoted.includes("data-x='a\"b'") || !quoted.includes('data-y="c&amp;d"')) throw new Error('quoted style attribute values must survive baking');
+const spaced = bakeSvg(wrap('<style  >.c-n{fill:#102030}</style><rect width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
+if (!spaced.includes('<style>.c-n { fill: #102030; }')) throw new Error('whitespace-only style attributes must bake to a plain tag');
 const hostile = [
   '<sty<style></style>le>.n{fill:red}</style><rect class="n" width="4" height="4"/>',
   '<style>.n{fill:red}<rect class="n" width="4" height="4"/>',
@@ -1835,6 +1842,16 @@ const hostile = [
   '<style x="<s>a</s y=">.n{fill:red}</style><rect width="4" height="4"/>',
   '<style x="a>.n{fill:red}</style><rect class="n" width="4" height="4"/>',
   "<style x='a>.n{fill:red}</style><rect class='n' width='4' height='4'/>",
+  '<style/>.n{fill:red}</style><rect width="4" height="4"/>',
+  '<style x="1"/>.n{fill:red}</style><rect width="4" height="4"/>',
+  '<style x="1"/ y="2">.n{fill:red}</style><rect width="4" height="4"/>',
+  '<style x=1>.n{fill:red}</style><rect width="4" height="4"/>',
+  '<style x="1"y="2">.n{fill:red}</style><rect width="4" height="4"/>',
+  '<style x="1" x="2">.n{fill:red}</style><rect width="4" height="4"/>',
+  '<style media>.n{fill:red}</style><rect width="4" height="4"/>',
+  '<style x="a&b">.n{fill:red}</style><rect width="4" height="4"/>',
+  '<STYLE/>.n{fill:red}</STYLE><rect width="4" height="4"/>',
+  '<style//>.n{fill:red}</style><rect width="4" height="4"/>',
 ];
 let threw = 0;
 for (const body of hostile) {
@@ -1853,7 +1870,47 @@ console.log(JSON.stringify({ styles: styleCount(legit), empty: styleCount(empty)
             capture_output=True, text=True, encoding="utf-8", timeout=30,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        self.assertEqual({"styles": 4, "empty": 2, "threw": 7, "expected": 7, "caseVariant": "neutralized", "passed": True}, json.loads(result.stdout))
+        self.assertEqual({"styles": 4, "empty": 2, "threw": 17, "expected": 17, "caseVariant": "neutralized", "passed": True}, json.loads(result.stdout))
+
+    def test_static_bake_style_open_tags_stay_paired_under_attribute_sweep(self) -> None:
+        program = r"""
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+const {bakeSvg} = await import(pathToFileURL(path.join(process.argv[1], 'renderers/shared/svg-bake.mjs')));
+const wrap = (body) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${body}</svg>`;
+const alphabet = ['x', '"', "'", '/', '=', ' '];
+const cases = [''];
+for (let len = 1; len <= 5; len += 1) {
+  for (const s of cases.filter((s) => s.length === len - 1)) for (const ch of alphabet) cases.push(s + ch);
+}
+const returned = [];
+for (const attrs of cases) {
+  try {
+    const svg = bakeSvg(wrap(`<style${attrs}>.n{fill:red}</style><rect width="4" height="4"/>`), { theme: 'dark', preset: 'classic' });
+    returned.push({ attrs, svg });
+  } catch (_) {}
+}
+console.log(JSON.stringify({ alphabet: alphabet.join(''), depth: 5, checked: cases.length, threw: cases.length - returned.length, returned: returned.length, cases: returned }));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=120,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("x\"'/= ", payload["alphabet"])
+        self.assertEqual(9331, payload["checked"])
+        self.assertEqual(payload["checked"], payload["threw"] + payload["returned"])
+        accepted = {case["attrs"] for case in payload["cases"]}
+        for wellformed in ("", " ", "  ", " x=\"\""):
+            self.assertIn(wellformed, accepted, wellformed)
+        self.assertGreater(payload["returned"], 0)
+        for case in payload["cases"]:
+            try:
+                dom = minidom.parseString(case["svg"])
+            except Exception as exc:
+                self.fail(f"attrs {case['attrs']!r} baked a non-well-formed artifact: {exc}")
+            self.assertEqual(2, len(dom.getElementsByTagName("style")), case["attrs"])
 
     def test_story_scoping_rejects_style_reconstitution_and_terminators(self) -> None:
         program = r"""

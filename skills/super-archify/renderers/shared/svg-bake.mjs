@@ -539,7 +539,59 @@ export function bakeEmbeddedStylesheet(cssText, variables) {
 
 const PRESENTATION_VAR_RE = /\b(fill|stroke|stop-color|flood-color|color)="(var\([^"]*\))"/g;
 const INLINE_STYLE_RE = /\bstyle="([^"]*(?:var\(|color-mix\()[^"]*)"/g;
-const WELL_FORMED_ATTRS_RE = /^(?:[^"'<>]|"[^"<>]*"|'[^'<>]*')*$/;
+const ATTR_NAME_RE = /[A-Za-z_:][A-Za-z0-9._:-]*/y;
+const ATTR_ENTITY_RE = /&(?:amp|lt|gt|quot|apos|#x[0-9A-Fa-f]+|#[0-9]+);/y;
+const ATTR_SEPARATORS = ' \t\n\r';
+
+function parseStyleAttrs(text) {
+  const attrs = [];
+  const seen = new Set();
+  let i = 0;
+  while (i < text.length) {
+    if (!ATTR_SEPARATORS.includes(text[i])) return null;
+    while (ATTR_SEPARATORS.includes(text[i])) i += 1;
+    if (i === text.length) break;
+    ATTR_NAME_RE.lastIndex = i;
+    const name = ATTR_NAME_RE.exec(text);
+    if (!name) return null;
+    i = ATTR_NAME_RE.lastIndex;
+    if (text[i] !== '=') return null;
+    i += 1;
+    while (ATTR_SEPARATORS.includes(text[i])) i += 1;
+    const quote = text[i];
+    if (quote !== '"' && quote !== "'") return null;
+    i += 1;
+    let value = '';
+    let closed = false;
+    while (i < text.length) {
+      const char = text[i];
+      if (char === quote) { closed = true; i += 1; break; }
+      if (char === '<') return null;
+      if (char === '&') {
+        ATTR_ENTITY_RE.lastIndex = i;
+        const entity = ATTR_ENTITY_RE.exec(text);
+        if (!entity) return null;
+        value += entity[0];
+        i += entity[0].length;
+        continue;
+      }
+      if (char < ' ' && !ATTR_SEPARATORS.includes(char)) return null;
+      value += char;
+      i += 1;
+    }
+    if (!closed || seen.has(name[0])) return null;
+    seen.add(name[0]);
+    attrs.push({ name: name[0], value });
+  }
+  return attrs;
+}
+
+function emitStyleAttrs(attrs) {
+  return attrs.map(({ name, value }) => {
+    const quote = value.includes('"') ? "'" : '"';
+    return ` ${name}=${quote}${value}${quote}`;
+  }).join('');
+}
 
 function bakeInlineStyle(style, lookup) {
   const declarations = [];
@@ -563,13 +615,14 @@ function bakeBodyStyles(body, variables) {
   // codeql[js/incomplete-multi-character-sanitization]
   const bakedBody = body
     .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (match, attrs, css) => {
+      const parsed = parseStyleAttrs(attrs);
       const baked = bakeEmbeddedStylesheet(css, variables);
-      if (/[<&]/.test(baked) || !WELL_FORMED_ATTRS_RE.test(attrs)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
+      if (!parsed || /[<&]/.test(baked)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
       // Unmatched fragments (an unterminated or reassembled <style>) must not
       // survive into the output, where they could re-open a style element.
       if (!baked) return '';
       emitted += 1;
-      return `<style${attrs}>${baked}</style>`;
+      return `<style${emitStyleAttrs(parsed)}>${baked}</style>`;
     })
     .replace(PRESENTATION_VAR_RE, (match, attribute, value) => {
       const resolved = substituteVariables(value, lookup);
