@@ -593,12 +593,14 @@ function drawChart() {
 }
 
 function renderDetail(s) {
+  const hasSession = Boolean(s);
+  s ??= { label: copy.noSessions, sessionId: "", status: "idle" };
   $("dName").textContent = s.label;
   $("dModel").textContent = s.model ? "· " + s.model : "";
   $("dDir").textContent = s.cwd || s.sessionId;
   const st = $("dState");
   st.className = "state " + (s.status === "generating" ? "gen" : s.status === "active" ? "act" : "idl");
-  st.textContent = copy[s.status] || s.status;
+  st.textContent = hasSession ? (copy[s.status] || s.status) : "";
   const r = laneRate(s);
   const big = $("dRate");
   big.textContent = r == null ? "--" : rate1(r);
@@ -629,7 +631,7 @@ function renderDetail(s) {
     $("dSub").innerHTML = copy.output + " <b>" + fmtNum(l.outputTokens) + "</b> tok · " + copy.generation + " <b>" +
       (l.genMs != null ? (l.genMs / 1000).toFixed(1) : "-") + "s</b> · ⏱ " + hhmmss(l.completedAt);
   } else {
-    $("dSub").textContent = copy.noRequests;
+    $("dSub").textContent = hasSession ? copy.noRequests : copy.waitingUsage;
   }
   const ses = s.session;
   $("cAvg").textContent = ses && ses.avg != null ? rate1(ses.avg) : "--";
@@ -687,13 +689,15 @@ async function readDashboardData(name) {
 
 function renderSessions(r) {
   const list = r.sessions || [];
-  if (!focusLock) {
-    const current = list.find((session) => session.sessionId === r.focusedSessionId);
-    focusSid = current?.sessionId ?? list[0]?.sessionId ?? null;
+  let current = focusLock && list.find((session) => session.sessionId === focusSid);
+  if (!current) {
+    focusLock = false;
+    $("follow").hidden = true;
+    current = list.find((session) => session.sessionId === r.focusedSessionId) ?? list[0];
   }
+  focusSid = current?.sessionId ?? null;
   updateLanes(list, r.total);
-  const cur = list.find((x) => x.sessionId === focusSid) || list[0];
-  if (cur) renderDetail(cur); else { $("dName").textContent = copy.noSessions; $("dSub").textContent = copy.waitingUsage; }
+  renderDetail(current);
   const gen = list.filter((x) => x.status === "generating").length;
   const act = list.filter((x) => x.status !== "idle").length;
   $("sTotal").innerHTML = withUnit(r.total ?? list.length, copy.sessionUnit);
@@ -716,7 +720,7 @@ async function tickSessions() {
 }
 
 function renderSystem(system) {
-  $("cpu").textContent = system.cpuPercent.toFixed(1) + "%";
+  $("cpu").textContent = Number.isFinite(system.cpuPercent) ? system.cpuPercent.toFixed(1) + "%" : "—";
   setBar($("cpuBar"), system.cpuPercent);
   $("mem").textContent = (system.memUsedMB / 1024).toFixed(1) + " / " + (system.memTotalMB / 1024).toFixed(0) + " GB";
   setBar($("memBar"), system.memPercent);

@@ -14,7 +14,11 @@ From this package directory:
 ~~~sh
 node --test test/*.test.mjs
 python3 -B -m unittest discover -s test -p '*_test.py'
+node test/browser-smoke.mjs
+node plugins/zcode/dashboard/overlay/smoke-test.mjs
 python3 scripts/check-desktop-panel.py --codex /absolute/path/to/codex
 ~~~
+
+The smoke tests use disposable fixtures and need access to a loopback port. The browser smoke requires Chrome. Set `CHROME_BIN` when its executable is outside PATH. It exercises browser rendering with simulated host bridges.
 
 [Upstream and artwork notices](NOTICE.md)
