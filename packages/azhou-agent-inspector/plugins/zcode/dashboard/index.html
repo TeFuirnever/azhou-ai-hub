@@ -724,7 +724,7 @@ function renderSystem(system) {
   setBar($("cpuBar"), system.cpuPercent);
   $("mem").textContent = (system.memUsedMB / 1024).toFixed(1) + " / " + (system.memTotalMB / 1024).toFixed(0) + " GB";
   setBar($("memBar"), system.memPercent);
-  $("up").textContent = copy.hours(system.hostUptimeHours);
+  $("up").textContent = Number.isFinite(system.hostUptimeHours) ? copy.hours(system.hostUptimeHours) : "—";
   $("plat").textContent = system.platform + " · " + copy.cores(system.cpuCores);
 }
 
