@@ -4,6 +4,8 @@
 
 ## 公开收据
 
+- [2026-11-24 Super Grill Me 宿主检出 on Claude Code](super-grill-me-host-check-claude-2026-11-24.md)：`8463555c` 上的项目级 link 安装、headless 发现，以及显式请求、未命名 hold 与模型自主到达三种调用的脱敏回执，基线提交上同一请求不触发访谈；记录五条偏差（暂停锚点一个字符损坏、带计划的回复没有阶段行、问题未按回是即接受措辞、普通输出模式会等模型自起的后台工作、同一宿主在小项目里读了参考文件后发出了阶段行）；不升级为个人根安装、交互会话、跨宿主、其他模型或首轮之后路径的证明。
+
 - [2026-11-18 skill 升级 v1.2.2 审查说明](../docs/research/2026-11-18-skill-upgrade-v1.2.2.md)：正式稳定来源（`v1.2.1`+`v1.2.2` release，commit `71cd50ff`，neat-freak skill 版本仍 `3.1.1`）、三方能力比较与兼容台账 v5 重述（28 项处置零变动）；本轮零运行时变更、无 A/B/C 评测与受控演化内容，故无机器记录，证据为该审查说明与 provenance Update path 条目；不升级为模型质量或行为变更证明。
 
 - [2026-11-10 skill 升级机器记录](skill-upgrade-2026-11-10.json) 与[审查说明](../docs/research/2026-11-10-skill-upgrade.md)：正式稳定来源、实际 A/B/C、独立合成验收、保护与恢复；C2 已获 exact-diff 人类批准，见[受控演化决定](../benchmarks/super-repo-pedant/history/project-evidence-promotion-2026-11-10.json)；该批准与整项上游同步及文档变更分别归因。

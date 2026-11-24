@@ -23,3 +23,5 @@ Three runs are recorded (2026-11-24), one per configuration. Each gave a fresh a
 - No subject named, the command alone. The reply carried the startup line with `scope=unresolved`, asked one question about what to grill, marked the hold with `reason=nothing-named`, asked no interview question, and ended with a receipt of `status: hold`, `rounds: 0` and `frontier: unopened`.
 
 Each configuration has one sample on one model, so the runs show that each path can be met, not how often it is. No run reached an empty frontier, a later turn, a `complete` receipt or the success anchor. No run had a sub-agent or an environment to read, so the fact-finding path is untested. On earlier drafts of this package, one of three replies that received a plan did not word its questions that way. It asked open questions and told the reader that a "yes" answer accepts its recommendation.
+
+Next action: run one session past the first answer, to an empty frontier and a `complete` receipt, with a reader who answers for real, and record it here. The host check on Claude Code is recorded in [the receipt](../../evidence/super-grill-me-host-check-claude-2026-11-24.md).
