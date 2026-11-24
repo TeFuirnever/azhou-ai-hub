@@ -298,7 +298,7 @@ const SESSIONS_ACTIVE_MS = 10 * 60 * 1000;   // 最近一次活动在该窗口�
 const SESSIONS_GENERATING_MS = 8000;         // 与悬浮窗 live 判定一致 → generating
 const SESSIONS_OVERLAP_MS = 10000;           // 增量回看窗口(容忍乱序/迟到提交)
 
-const sessionsStore = new Map(); // DB_PATH -> 增量缓存(键含库路径,多库/测试互不污染)
+const sessionsStore = new Map(); // 近期活动窗口 -> 增量缓存
 
 function newSubsetState() {
   return { lastAt: 0, lastItem: null, ring: [], totals: { n: 0, o: 0, r: 0, i: 0, c: 0 }, turn: null };
@@ -383,7 +383,7 @@ function querySessions(opts = {}) {
   const db = openDb();
   try {
     const now = Date.now();
-    const existing = opts.fresh ? null : sessionsStore.get(DB_PATH);
+    const existing = opts.fresh ? null : sessionsStore.get(withinMs);
     const cache = existing ?? { lastSeenAt: 0, seen: new Map(), lanes: new Map() };
     // 首轮的窗口和全量累计必须来自同一个 SQLite 快照。
     db.exec("BEGIN");
@@ -400,6 +400,18 @@ function querySessions(opts = {}) {
       for (const r of rows) known.set(r.id, { cwd: r.directory, timeUpdated: r.time_updated });
     } catch {}
 
+    const newSessions = new Set();
+    const laneFor = (sid) => {
+      let lane = cache.lanes.get(sid);
+      if (!lane) {
+        lane = newLaneState(known.get(sid)?.cwd);
+        cache.lanes.set(sid, lane);
+        newSessions.add(sid);
+      }
+      return lane;
+    };
+    for (const [sid, session] of known) laneFor(sid).cwd = session.cwd || null;
+
     // ② 回看窗口保留已读 rowid，让比水位更早完成的迟交记录也能入账。
     const since = Math.max(now - withinMs, cache.lastSeenAt - SESSIONS_OVERLAP_MS);
     const rows = db
@@ -413,51 +425,40 @@ function querySessions(opts = {}) {
     for (const row of rows) {
       if (cache.seen.has(row.rid)) continue;
       cache.seen.set(row.rid, row.completed_at);
-      let lane = cache.lanes.get(row.session_id);
-      if (!lane) {
-        lane = newLaneState(known.get(row.session_id)?.cwd || null);
-        cache.lanes.set(row.session_id, lane);
-      }
+      const lane = laneFor(row.session_id);
       ingestRow(lane.all, row);
       if (row.query_source === "main_turn") ingestRow(lane.main, row);
       cache.lastSeenAt = Math.max(cache.lastSeenAt, row.completed_at);
     }
-    const cutoff = cache.lastSeenAt - SESSIONS_OVERLAP_MS;
+    const activityStart = now - withinMs;
+    const cutoff = Math.max(activityStart, cache.lastSeenAt - SESSIONS_OVERLAP_MS);
     for (const [id, completedAt] of cache.seen) {
       if (completedAt <= cutoff) cache.seen.delete(id);
     }
 
-    // ③ 首轮读取全量累计，此后按新增行更新。
-    if (!existing) {
-      const bySrc = (src) => {
-        try {
-          return db
-            .prepare(
-              "SELECT session_id, COUNT(*) n, SUM(output_tokens) o, SUM(reasoning_tokens) r," +
-                " SUM(input_tokens) i, SUM(cache_read_input_tokens) c FROM model_usage WHERE status = 'completed'" +
-                src +
-                " GROUP BY session_id"
-            )
-            .all();
-        } catch {
-          return [];
-        }
-      };
-      const mainTot = new Map(bySrc(" AND query_source = 'main_turn'").map((r) => [r.session_id, r]));
-      const allTot = new Map(bySrc("").map((r) => [r.session_id, r]));
-      for (const [sid, lane] of cache.lanes) {
-        const m = mainTot.get(sid);
-        if (m) lane.main.totals = { n: m.n, o: m.o, r: m.r, i: m.i, c: m.c };
-        const a = allTot.get(sid);
-        if (a) lane.all.totals = { n: a.n, o: a.o, r: a.r, i: a.i, c: a.c };
+    // ③ 每次创建泳道都从同一快照填入累计，覆盖重新打开的历史会话。
+    if (newSessions.size) {
+      const totals = db.prepare(
+        "SELECT session_id, COUNT(*) n, SUM(output_tokens) o, SUM(reasoning_tokens) r," +
+        " SUM(input_tokens) i, SUM(cache_read_input_tokens) c," +
+        " COUNT(CASE WHEN query_source = 'main_turn' THEN 1 END) main_n," +
+        " SUM(CASE WHEN query_source = 'main_turn' THEN output_tokens ELSE 0 END) main_o," +
+        " SUM(CASE WHEN query_source = 'main_turn' THEN reasoning_tokens ELSE 0 END) main_r," +
+        " SUM(CASE WHEN query_source = 'main_turn' THEN input_tokens ELSE 0 END) main_i," +
+        " SUM(CASE WHEN query_source = 'main_turn' THEN cache_read_input_tokens ELSE 0 END) main_c" +
+        " FROM model_usage WHERE status = 'completed' AND session_id IN (SELECT value FROM json_each(?))" +
+        " GROUP BY session_id"
+      ).all(JSON.stringify([...newSessions]));
+      for (const row of totals) {
+        const lane = cache.lanes.get(row.session_id);
+        lane.all.totals = { n: row.n, o: row.o ?? 0, r: row.r ?? 0, i: row.i ?? 0, c: row.c ?? 0 };
+        lane.main.totals = { n: row.main_n, o: row.main_o ?? 0, r: row.main_r ?? 0, i: row.main_i ?? 0, c: row.main_c ?? 0 };
       }
     }
 
-    // ④ 物化全部泳道:session 表里无 usage 行的新会话(刚打开还没发消息)也占位,
-    //    part 探测与视图汇总都要覆盖它们
-    const sidsAll = [...new Set([...cache.lanes.keys(), ...known.keys()])];
-    for (const sid of sidsAll) {
-      if (!cache.lanes.has(sid)) cache.lanes.set(sid, newLaneState(known.get(sid)?.cwd || null));
+    // ④ 磁盘中没有新的会话或用量活动时，淘汰过期泳道。
+    for (const [sid, lane] of cache.lanes) {
+      if (!known.has(sid) && lane.all.lastAt <= activityStart) cache.lanes.delete(sid);
     }
 
     // ⑤ 生成中迹象之二:part 表有 running 的 tool part(首段在途时 usage 尚无行)。
@@ -487,8 +488,7 @@ function querySessions(opts = {}) {
 
     // ⑥ 汇总泳道视图(按最近活动排序)
     const lanes = [];
-    for (const sid of sidsAll) {
-      const lane = cache.lanes.get(sid);
+    for (const [sid, lane] of cache.lanes) {
       const st = lane.main.totals.n > 0 ? lane.main : lane.all; // main_turn 优先口径
       const lastAt = Math.max(lane.all.lastAt, known.get(sid)?.timeUpdated || 0);
       const status =
@@ -525,7 +525,7 @@ function querySessions(opts = {}) {
     }
     lanes.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
 
-    if (!opts.fresh) sessionsStore.set(DB_PATH, cache);
+    if (!opts.fresh) sessionsStore.set(withinMs, cache);
     return { ts: now, withinMs, sessions: lanes.slice(0, laneMax), total: lanes.length };
   } finally {
     db.close();

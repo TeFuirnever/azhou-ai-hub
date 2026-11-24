@@ -183,6 +183,35 @@ test("lane speed and single-turn speed use only valid timed samples", () => {
   assert.equal(turn.tokPerSec, queryTurn("sMixed").turn.tokPerSec);
 });
 
+test("expired cached lanes disappear and a reopened session retains lifetime usage", (t) => {
+  let time = NOW;
+  t.mock.method(Date, "now", () => time);
+  const query = () => querySessions({ withinMs: 24 * 3600_000, laneMax: 20 });
+  const lane = (result, id) => result.sessions.find((session) => session.sessionId === id);
+  assert.ok(lane(query(), "sA"));
+  assert.ok(lane(query(), "sNew"));
+
+  time += 26 * 3600_000;
+  assert.equal(lane(query(), "sA"), undefined);
+  assert.equal(lane(query(), "sNew"), undefined);
+
+  const db = new DatabaseSync(dbFile);
+  db.prepare("UPDATE session SET time_updated = ? WHERE id = 'sA'").run(time);
+  assert.equal(lane(query(), "sA").session.totalOutput, 490);
+  const insert = db.prepare(
+    "INSERT INTO model_usage VALUES (?, 'completed', 'main_turn', 'test-model', ?, 0, 0, 0, ?, ?, 100, ?)"
+  );
+  insert.run("sA", 150, time - 1000, time, "t_resumed");
+  insert.run("sOld", 60, time - 1000, time, "t_revived");
+  db.close();
+
+  for (const result of [query(), query(), querySessions({ fresh: true })]) {
+    assert.equal(lane(result, "sA").session.totalOutput, 640);
+    assert.equal(lane(result, "sA").turn.tokPerSec, 150);
+    assert.equal(lane(result, "sOld").session.totalOutput, 560);
+  }
+});
+
 test("旧库无 session 表(CLI 子进程):usage 行 distinct 出泳道,label 退化为会话号", () => {
   const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), "tps-sessions-nosess-"));
   const db2File = path.join(tmp2, "db.sqlite");
