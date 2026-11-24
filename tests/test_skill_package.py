@@ -36,6 +36,7 @@ SKILL_DIRS = (
     ROOT / "skills" / "super-diagram-design",
     ROOT / "skills" / "super-frontend-design",
     ROOT / "skills" / "super-brainstorming",
+    ROOT / "skills" / "super-grill-me",
 )
 PACKAGE_COUNT_WORDS = {
     "sixteen": 16,
@@ -48,6 +49,7 @@ PACKAGE_COUNT_WORDS = {
     "十八": 18,
     "十九": 19,
     "二十": 20,
+    "二十一": 21,
 }
 
 
