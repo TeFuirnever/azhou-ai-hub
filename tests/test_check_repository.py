@@ -483,6 +483,22 @@ class RenameResidueTest(unittest.TestCase):
             preview.write_text(literal + "// repo-pedant\n", encoding="utf-8")
             self.assertTrue(any("repo-pedant ->" in e for e in check_rename_residue([preview], root)))
 
+    def test_wayfinder_label_exception_is_exact_and_path_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tracker = root / "docs/agents/issue-tracker.md"
+            tracker.parent.mkdir(parents=True)
+            label_line = "Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`).\n"
+            tracker.write_text(label_line, encoding="utf-8")
+            self.assertEqual([], check_rename_residue([tracker], root))
+            tracker.write_text(label_line + "Ask grilling to review it.\n", encoding="utf-8")
+            self.assertTrue(any("grilling ->" in e for e in check_rename_residue([tracker], root)))
+            tracker.write_text(label_line + "Run repo-pedant reconcile.\n", encoding="utf-8")
+            self.assertTrue(any("repo-pedant ->" in e for e in check_rename_residue([tracker], root)))
+            other = root / "docs/other.md"
+            other.write_text(label_line, encoding="utf-8")
+            self.assertTrue(check_rename_residue([other], root))
+
     def test_old_name_outside_allowed_surfaces_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -851,6 +867,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-gh-axi" / "SKILL.md",
                 root / "skills" / "super-session-insights" / "SKILL.md",
                 root / "skills" / "super-brainstorming" / "SKILL.md",
+                root / "skills" / "super-grill-me" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
             bundled = [

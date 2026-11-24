@@ -141,6 +141,7 @@ class AzhouHubCliTest(unittest.TestCase):
                 "super-excalidraw-diagram",
                 "super-frontend-design",
                 "super-gh-axi",
+                "super-grill-me",
                 "super-i-have-adhd",
                 "super-imagegen",
                 "super-lavish",
