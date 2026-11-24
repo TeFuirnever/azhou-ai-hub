@@ -111,15 +111,15 @@ jobs:
         working-directory: site
         run: npm run build
 
-  session-monitor:
-    name: Azhou Session Monitor
+  agent-inspector:
+    name: Azhou Agent Inspector
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read
     defaults:
       run:
-        working-directory: packages/azhou-session-monitor
+        working-directory: packages/azhou-agent-inspector
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -260,7 +260,7 @@ jobs:
       - policy
       - verify-windows
       - pstack-native
-      - session-monitor
+      - agent-inspector
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
@@ -270,7 +270,7 @@ jobs:
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
       WINDOWS_RESULT: ${{ needs.verify-windows.result }}
-      SESSION_MONITOR_RESULT: ${{ needs.session-monitor.result }}
+      AGENT_INSPECTOR_RESULT: ${{ needs.agent-inspector.result }}
       PSTACK_RESULT: ${{ needs.pstack-native.result }}
     steps:
       - name: Require every CI gate
@@ -282,7 +282,7 @@ jobs:
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
           test "$PSTACK_RESULT" = "success"
-          test "$SESSION_MONITOR_RESULT" = "success"
+          test "$AGENT_INSPECTOR_RESULT" = "success"
           # Only a confirmed docs-only change can skip a platform gate.
           for result in "$WINDOWS_RESULT"; do
             case "$result" in

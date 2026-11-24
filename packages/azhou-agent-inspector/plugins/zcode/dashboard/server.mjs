@@ -1,0 +1,136 @@
+#!/usr/bin/env node
+// TPS 实时监控大屏服务:零依赖,Node >= 18。
+//   node dashboard/server.mjs [--port 7423]
+// 页面每秒轮询 /api/metrics;数据源同采集脚本(TPS_URL 环境变量,未设置时演示数据)。
+
+import http from "node:http";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { snapshot } from "../scripts/lib/collect-core.mjs";
+import { query as tokenRateQuery, queryTurn as tokenRateTurnQuery, querySessions as tokenRateSessions } from "../scripts/token-rate.mjs";
+
+// 状态文件:钩子(SessionStart/UserPromptSubmit)记录"用户最后所处的会话"
+const STATE_FILE = path.join(os.homedir(), ".zcode", "tps-monitor.last-session.json");
+
+function followedSessionId() {
+  try {
+    const st = JSON.parse(fs.readFileSync(STATE_FILE, "utf8"));
+    if (st && st.sessionId && Date.now() - (st.ts || 0) < 7 * 24 * 3600 * 1000) {
+      return { id: st.sessionId, source: st.source || "hook" };
+    }
+  } catch {}
+  return { id: null, source: "auto" };
+}
+
+const args = process.argv.slice(2);
+const portIdx = args.indexOf("--port");
+const PORT = portIdx !== -1 ? Number(args[portIdx + 1]) || 7423 : 7423;
+const HOST = "127.0.0.1";
+// 空闲自退:连续无 HTTP 请求超过该分钟数则自动退出,避免关闭会话后残留后台进程(0 = 不自退)
+const idleIdx = args.indexOf("--idle-exit");
+const IDLE_EXIT_MIN = idleIdx !== -1 ? Number(args[idleIdx + 1]) : 180;
+const here = path.dirname(fileURLToPath(import.meta.url));
+const indexHtml = fs.readFileSync(path.join(here, "index.html"), "utf8");
+
+// PID 文件:供 /tps-doctor 探测运行状态并提供停止方式
+const PID_FILE = path.join(os.homedir(), ".zcode", "tps-monitor.dashboard.pid");
+function writePid() {
+  try {
+    fs.mkdirSync(path.dirname(PID_FILE), { recursive: true });
+    fs.writeFileSync(PID_FILE, String(process.pid));
+  } catch {}
+}
+function cleanup() {
+  try {
+    if (fs.existsSync(PID_FILE) && fs.readFileSync(PID_FILE, "utf8").trim() === String(process.pid)) {
+      fs.unlinkSync(PID_FILE);
+    }
+  } catch {}
+}
+process.on("SIGINT", () => process.exit(0));
+process.on("SIGTERM", () => process.exit(0));
+process.on("exit", cleanup);
+
+let lastRequestAt = Date.now();
+const server = http.createServer(async (req, res) => {
+  lastRequestAt = Date.now();
+  if (req.url === "/" || req.url.startsWith("/index")) {
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+    res.end(indexHtml);
+    return;
+  }
+  if (req.url === "/azhou.webp") {
+    res.writeHead(200, { "Content-Type": "image/webp" });
+    res.end(fs.readFileSync(path.join(here, "azhou.webp")));
+    return;
+  }
+  if (req.url.startsWith("/api/metrics")) {
+    try {
+      const s = await snapshot();
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify(s));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+  if (req.url.startsWith("/api/token-rate")) {
+    try {
+      const followed = followedSessionId();
+      const r = tokenRateQuery(followed.id);
+      r.follow = followed;
+      // 最新一问(可能仍在生成中):usage 库按 turn 逐段实时入库,秒级轮询即可看到当前轮速率
+      try {
+        r.turn = tokenRateTurnQuery(followed.id).turn;
+      } catch {}
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify(r));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+  if (req.url.startsWith("/api/sessions")) {
+    // 多会话泳道(0.10.0):每会话 status/turn/latest/曲线/终身累计;增量缓存,
+    // 1s 轮询也只查新增行(详见 token-rate.mjs 的 querySessions)
+    try {
+      const r = tokenRateSessions();
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(JSON.stringify(r));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+  res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+  res.end("not found");
+});
+
+server.listen(PORT, HOST, () => {
+  const src = process.env.TPS_URL && !process.env.TPS_URL.startsWith("${")
+    ? `remote: ${process.env.TPS_URL}`
+    : "demo(内置演示数据)";
+  console.log(`[azhou-agent-inspector] 大屏已启动: http://${HOST}:${PORT}   数据源: ${src}`);
+  if (IDLE_EXIT_MIN > 0) {
+    console.log(`[azhou-agent-inspector] ${IDLE_EXIT_MIN} 分钟无访问将自动退出(--idle-exit 0 关闭该行为)`);
+  }
+  writePid();
+});
+
+// 空闲自退巡检:取空闲阈值的一半作为巡检间隔(夹紧在 1s~60s)
+if (IDLE_EXIT_MIN > 0) {
+  const tick = Math.min(60000, Math.max(1000, (IDLE_EXIT_MIN * 60 * 1000) / 2));
+  const timer = setInterval(() => {
+    if (Date.now() - lastRequestAt > IDLE_EXIT_MIN * 60 * 1000) {
+      console.log("[azhou-agent-inspector] 长时间无访问,大屏自动退出");
+      server.close(() => process.exit(0));
+      setTimeout(() => process.exit(0), 2000).unref();
+    }
+  }, tick);
+  timer.unref();
+}

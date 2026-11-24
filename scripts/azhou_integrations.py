@@ -15,7 +15,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTERS = {
     "pstack": "integration_pstack",
-    "azhou-session-monitor": "integration_session_monitor",
+    "azhou-agent-inspector": "integration_agent_inspector",
 }
 
 

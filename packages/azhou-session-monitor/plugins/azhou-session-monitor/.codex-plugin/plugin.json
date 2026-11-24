@@ -1,7 +1,0 @@
-{
-  "name": "azhou-session-monitor",
-  "version": "0.1.0",
-  "description": "Read-only performance details for the current desktop conversation",
-  "mcpServers": "./.mcp.json",
-  "interface": {"displayName": "阿舟的会话仪表", "shortDescription": "Current conversation timing and token usage"}
-}

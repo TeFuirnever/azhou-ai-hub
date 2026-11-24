@@ -2,7 +2,7 @@
 
 The 21 canonical Skills under `skills/` keep their existing independent install, discovery and invocation contracts. Optional entries are complete projects under `packages/`, not new Skills or a general package manager. `setup` does not enable them. The `integrations` command remains their stable operational entry.
 
-The packages include [Azhou Session Monitor](../packages/azhou-session-monitor/README.md) and [pstack-agent-harness](../packages/pstack-agent-harness/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
+The packages include [Azhou Agent Inspector](../packages/azhou-agent-inspector/README.md) and [pstack-agent-harness](../packages/pstack-agent-harness/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 
 
 ```sh
@@ -100,6 +100,6 @@ Model sheets in automatically loaded rule locations still inject instructions af
 
 `~/.agents/skills` is a shared Skills discovery directory, including for Codex processes with an isolated home. A skills-only pstack installation there has no native routing hook. Its presence alone does not establish automatic routing or require a native-plugin conversion; choose one workflow owner per task. A later shared installation must link to this Hub's maintained package, and its removal affects every runtime that reads the shared directory. This manual source-retirement procedure does not adopt unknown installations or replace the planned controlled-conversion lifecycle.
 
-## Azhou Session Monitor
+## Azhou Agent Inspector
 
-The session monitor supports read-only installation planning via `python scripts/azhou_hub.py integrations azhou-session-monitor plan --harness codex` (or `zcode`). Each native plugin manager owns installation.
+The session monitor supports read-only installation planning via `python scripts/azhou_hub.py integrations azhou-agent-inspector plan --harness codex` (or `zcode`). Each native plugin manager owns installation.

@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "azhou-agent-inspector": {
+      "command": "python3",
+      "args": [
+        "server.py"
+      ],
+      "cwd": ".",
+      "env_vars": [
+        "CODEX_HOME"
+      ]
+    }
+  }
+}

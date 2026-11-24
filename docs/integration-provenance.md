@@ -72,6 +72,6 @@ Updates happen in the canonical `packages/<name>/` project and remain subject to
 
 The [2026-10-25 acceptance record](../evidence/optional-integrations-2026-10-25.md) remains a historical snapshot of the inputs and machine observed then. The [2026-10-26 local handoff](../evidence/optional-integrations-local-handoff-2026-10-26.md) records the later Hub-root native installation checks; neither record proves playback, wallpaper, Pet selection or visual approval. Private paths, credentials, raw transcripts, artwork, build outputs, installation snapshots and receipts remain in ignored local state.
 
-## Azhou Session Monitor
+## Azhou Agent Inspector
 
-The [package notice](../packages/azhou-session-monitor/NOTICE.md) records the pinned ZCode import, retained MIT notice, artwork terms and upstream update procedure. The Codex adapter is maintained in the Hub.
+The [package notice](../packages/azhou-agent-inspector/NOTICE.md) records the pinned ZCode import, retained MIT notice, artwork terms and upstream update procedure. The Codex adapter is maintained in the Hub.

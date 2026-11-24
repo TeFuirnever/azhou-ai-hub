@@ -101,6 +101,6 @@ Model quality is not a support claim. Benchmark comparisons must freeze the prom
 
 Open a [bug report](https://github.com/TeFuirnever/azhou-ai-hub/issues/new?template=bug.yml) when an entry is stale. Include the harness version, skill commit and a redacted reproduction.
 
-## Azhou Session Monitor
+## Azhou Agent Inspector
 
 Codex Desktop: isolated native plugin installation, MCP App resource and per-thread tool invocation tested with synthetic counters. ZCode: isolated native marketplace registration, package installation and plugin discovery verified with the installed Desktop CLI. Composer events and dashboard behavior were checked in tests. Graphical host acceptance of this Hub distribution is pending for both.
