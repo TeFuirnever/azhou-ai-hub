@@ -1825,12 +1825,16 @@ if (styleCount(legit) !== 4) throw new Error('legit bake: expected baker + body 
 if (!legit.includes('fill: #102030') || !legit.includes('<rect class="c-n"')) throw new Error('legit bake lost declarations');
 const empty = bakeSvg(wrap('<style></style><rect width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
 if (styleCount(empty) !== 2) throw new Error('empty body style should only keep the baker style');
+const attrsKept = bakeSvg(wrap('<style id="c-n" type="text/css">.c-n{fill:#102030}</style><rect class="c-n" width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
+if (!attrsKept.includes('<style id="c-n" type="text/css">') || !attrsKept.includes('fill: #102030')) throw new Error('well-formed style attributes must survive baking');
 const hostile = [
   '<sty<style></style>le>.n{fill:red}</style><rect class="n" width="4" height="4"/>',
   '<style>.n{fill:red}<rect class="n" width="4" height="4"/>',
   '<rect width="4" height="4"/></style>',
   '<style><style>.n{fill:red}</style></style><rect width="4" height="4"/>',
   '<style x="<s>a</s y=">.n{fill:red}</style><rect width="4" height="4"/>',
+  '<style x="a>.n{fill:red}</style><rect class="n" width="4" height="4"/>',
+  "<style x='a>.n{fill:red}</style><rect class='n' width='4' height='4'/>",
 ];
 let threw = 0;
 for (const body of hostile) {
@@ -1849,7 +1853,7 @@ console.log(JSON.stringify({ styles: styleCount(legit), empty: styleCount(empty)
             capture_output=True, text=True, encoding="utf-8", timeout=30,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        self.assertEqual({"styles": 4, "empty": 2, "threw": 5, "expected": 5, "caseVariant": "neutralized", "passed": True}, json.loads(result.stdout))
+        self.assertEqual({"styles": 4, "empty": 2, "threw": 7, "expected": 7, "caseVariant": "neutralized", "passed": True}, json.loads(result.stdout))
 
     def test_story_scoping_rejects_style_reconstitution_and_terminators(self) -> None:
         program = r"""

@@ -539,6 +539,7 @@ export function bakeEmbeddedStylesheet(cssText, variables) {
 
 const PRESENTATION_VAR_RE = /\b(fill|stroke|stop-color|flood-color|color)="(var\([^"]*\))"/g;
 const INLINE_STYLE_RE = /\bstyle="([^"]*(?:var\(|color-mix\()[^"]*)"/g;
+const WELL_FORMED_ATTRS_RE = /^(?:[^"'<>]|"[^"<>]*"|'[^'<>]*')*$/;
 
 function bakeInlineStyle(style, lookup) {
   const declarations = [];
@@ -563,7 +564,7 @@ function bakeBodyStyles(body, variables) {
   const bakedBody = body
     .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (match, attrs, css) => {
       const baked = bakeEmbeddedStylesheet(css, variables);
-      if (/[<&]/.test(baked) || /[<>]/.test(attrs)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
+      if (/[<&]/.test(baked) || !WELL_FORMED_ATTRS_RE.test(attrs)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
       // Unmatched fragments (an unterminated or reassembled <style>) must not
       // survive into the output, where they could re-open a style element.
       if (!baked) return '';
