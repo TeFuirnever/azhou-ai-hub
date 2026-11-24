@@ -1269,6 +1269,28 @@ test('real Codex adapter through bootstrap and applicator reaches renderer with 
   assert.equal(page.observers.filter(observer => !observer.disconnected).length, 2);
 }));
 
+test('passive wallpaper observation leaves queued workspace changes undelivered', async () => onObservedPage(async page => {
+  await installRenderer(page.payload);
+  const controller = globalThis.__azhouWallpaper;
+  const sidebar = page.frame;
+  const query = page.applicationRoot.querySelectorAll.bind(page.applicationRoot);
+  page.applicationRoot.querySelectorAll = selector => selector === '#app-shell-sidebar' ? [sidebar] : query(selector);
+  const before = controller.observeSurfaces();
+  assert.deepEqual(before, {
+    bodyBackground: 'matched', sidebarBackground: 'clear', dotCentralBackground: 'unverified',
+    dotCentralMarker: 'unverified',
+  });
+  sidebar.styles.backgroundColor = 'rgb(24, 24, 24)';
+  page.main.styles.display = 'none';
+  const pending = [{ type: 'attributes', target: page.main, attributeName: 'style' }];
+  page.observers[0].records = pending;
+  const after = controller.observeSurfaces();
+  assert.deepEqual(after, { ...before, sidebarBackground: 'painted' });
+  assert.equal(page.observers[0].records, pending);
+  assert.equal(globalThis.__azhouWallpaper, controller);
+  assert.ok(page.main.getAttribute('data-azhou-wallpaper-plane'));
+}));
+
 test('observed workspace lost during decode cannot write styles or markers', async () => onObservedPage(async page => {
   const decode = page.image.decode;
   page.image.decode = async () => { await decode(); page.main.styles.display = 'none'; };

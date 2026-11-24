@@ -634,6 +634,23 @@ export async function installRenderer(offered) {
       // reported, never papered over with CSS.
       return [...flagged].sort();
     }
+    function bodyBackgroundMatched(layer) {
+      return layer.backgroundImage.includes(sceneURL)
+        && layer.getPropertyValue('--azhou-style-ready').trim() === 'ready';
+    }
+    function observeSurfaces() {
+      const { sidebar, dotCentral } = Reflect.apply(readWallpaperRegions, hostAdapter, [globalThis]);
+      const background = node => {
+        const layers = node ? paintedPlanes(node) : [];
+        if (layers.length === 0) return 'unverified';
+        return layers.every(backgroundQuiet) ? 'clear' : 'painted';
+      };
+      const marker = dotCentral?.getAttribute(markerNames.surface);
+      const dotCentralMarker = dotCentral && markerTargets.get(dotCentral)?.has(markerNames.surface) && marker === sceneURL
+        ? 'owned' : marker === null ? 'absent' : 'unverified';
+      return { bodyBackground: bodyBackgroundMatched(getComputedStyle(document.body)) ? 'matched' : 'unmatched',
+        sidebarBackground: background(sidebar), dotCentralBackground: background(dotCentral), dotCentralMarker };
+    }
     function probe() {
       if (dshSurface && sheetCommitted && !retired && !suspended && !dshCurrent()) return dispose();
       if (workspaceBound && sheetCommitted && !retired && !suspended && !workspaceCurrent()) return dispose();
@@ -670,8 +687,7 @@ export async function installRenderer(offered) {
       const decorationEffectsClear = planesFullyQuiet([...decorations]);
       const unknownLayers = unclassifiedLayers(decorations);
       const imageDecoded = scene.complete && scene.naturalWidth > 0 && scene.naturalHeight > 0;
-      const backgroundMatched = bodyLayer.backgroundImage.includes(sceneURL)
-        && bodyLayer.getPropertyValue('--azhou-style-ready').trim() === 'ready';
+      const backgroundMatched = bodyBackgroundMatched(bodyLayer);
       const washMatched = html.style.getPropertyValue(TINT_PROPERTY) === tintGradient
         && html.style.getPropertyPriority(TINT_PROPERTY) === '';
       // Background layer two is the scene itself: successful decoding says
@@ -844,6 +860,10 @@ export async function installRenderer(offered) {
       return surfaceOwned;
     }
     controller = { owner: controllerOwner, version: BUILD, status: probe, dispose, restore: dispose, updateSurface };
+    const readWallpaperRegions = slotValue(hostAdapter, 'readWallpaperRegions');
+    if (workspaceBound && typeof readWallpaperRegions === 'function') {
+      Object.defineProperty(controller, 'observeSurfaces', { value: observeSurfaces });
+    }
     Object.defineProperty(controller, RELEASE_KEY, { value: handOverForReplacement });
     Object.defineProperty(controller, MARKER_KEY, { value: sceneURL });
     Object.defineProperty(controller, PENDING_KEY, { value: () => activationPhase === 'pending' || disableOperation!==null });

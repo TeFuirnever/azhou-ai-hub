@@ -159,11 +159,28 @@ enum WallpaperValidation {
         let refusals = ["busy", "disabled", "no-request", "disposed", "unknown-owner", "owner-conflict", "timeout", "operation-cancelled"]
         return refusals.contains(reason) ? reason : "retry-failed"
     }
+    static func surfaceObservation(_ state: Any?) -> [String: String] {
+        let raw = state as? [String: Any] ?? [:]
+        let values = [
+            "attachment": ["present", "absent"],
+            "bodyBackground": ["matched", "unmatched"],
+            "sidebarBackground": ["clear", "painted"],
+            "dotCentralBackground": ["clear", "painted"],
+            "dotCentralMarker": ["owned", "absent"],
+        ]
+        var observation = values.mapValues { _ in "unverified" }
+        for (key, allowed) in values {
+            if let value = raw[key] as? String, allowed.contains(value) { observation[key] = value }
+        }
+        observation["pixels"] = "not-measured"
+        return observation
+    }
     static func diagnostic(_ state: [String: Any], index: Int, version: String?) -> [String: Any] {
         var result: [String: Any] = [
             "pageIndex": index, "version": versionString(state["version"]) ?? "",
             "applied": verifiedState(state, version: version),
             "verificationIssues": verificationIssues(state, version: version),
+            "surfaceObservation": surfaceObservation(state["surfaceObservation"]),
             // Forward only validated counts and fixed field names; never page
             // text, selectors, URLs or arbitrary renderer error strings.
             "unsupportedDecorationCount": (state["unsupportedDecorations"] as? [String]).map { min($0.count, 1_000_000) } ?? -1,
@@ -2353,12 +2370,16 @@ struct StartupConnector {
                      presentationFinished: () -> Bool,
                      releaseRequested: () -> Bool,
                      presentationFailure: () -> String? = { nil },
+                     workspaceOnly: () -> Bool = { false },
                      observeWorkspace: ((StartupProvisionalWorkspaceProof?) -> Void)? = nil) async throws -> StartupPreparedResult {
         guard StartupSettingsSnapshotReceiver.validNonce(runNonce), playbackReserve.isFinite,
               playbackReserve >= 0 else {
             throw StartupFailure(reason: "protocol-error", message: "原生启动身份或播放预算无效。")
         }
         var snapshotAccepted = false
+        func admissionDeadline() -> TimeInterval {
+            snapshotAccepted || workspaceOnly() ? deadline : deadline - playbackReserve - Self.completionObservationReserve
+        }
         // The normal Canvas path supplies no observer and keeps its prior behavior.
         var provisional: StartupProvisionalWorkspaceProof?
         func revokeProvisional() {
@@ -2370,32 +2391,30 @@ struct StartupConnector {
         return try await withAttachedPage(payload: payload, deadline: deadline) { selected, attempted, stage in
             defer { revokeProvisional() }
             if releaseRequested() { return .released }
-            let reserve = snapshotAccepted ? 0 : playbackReserve + Self.completionObservationReserve
-            let admissionDeadline = deadline - reserve
             var href = ""
             while href.isEmpty {
                 if releaseRequested() { return .released }
-                try validateOwnership(admissionDeadline)
-                let inspected = try await transport.evaluate(Self.inspectExpression, timeout: min(10, admissionDeadline - now()))
-                try requireBudget(admissionDeadline)
+                try validateOwnership(admissionDeadline())
+                let inspected = try await transport.evaluate(Self.inspectExpression, timeout: min(10, deadline - now()))
+                try requireBudget(admissionDeadline())
                 guard let observed = inspected["href"] as? String,
                       WallpaperValidation.mainPage(["type": "page", "url": observed]),
                       Self.boolean(inspected["controllerPresent"]) == false,
                       let shell = Self.boolean(inspected["shellReady"]) else {
                     throw StartupFailure(reason: "page-unsupported", message: "原生准备需要无冲突的可信工作区。")
                 }
-                if shell { href = observed } else { try await sleep(min(0.1, admissionDeadline - now())) }
+                if shell { href = observed } else { try await sleep(min(0.1, admissionDeadline() - now())) }
             }
-            _ = try await requireCurrentPage(selected, deadline: admissionDeadline)
-            try validateOwnership(admissionDeadline, signature: true)
+            _ = try await requireCurrentPage(selected, deadline: deadline)
+            try validateOwnership(admissionDeadline(), signature: true)
             if releaseRequested() { return .released }
             guard attempted.insert(selected.id).inserted else {
                 throw StartupFailure(reason: "startup-interrupted", message: "同一页面不能重复准备。")
             }
             stage = "native-install"
             let installed = try await transport.evaluate(try Self.installExpression(payload, expectedHref: href),
-                                                          timeout: min(10, admissionDeadline - now()))
-            try requireBudget(admissionDeadline)
+                                                          timeout: min(10, admissionDeadline() - now()))
+            try requireBudget(admissionDeadline())
             guard Self.boolean(installed["installed"]) == true,
                   Self.boolean(installed["alreadyActive"]) == false else {
                 throw StartupFailure(reason: "protocol-error", message: "页面未接受原生准备载荷。")
@@ -2409,7 +2428,7 @@ struct StartupConnector {
                 if releaseRequested() { return .released }
                 try requireBudget(deadline)
                 if let provisional, !provisional.isCurrent(at: now()) { revokeProvisional() }
-                let proofStartedAt = observeWorkspace == nil ? nil : now()
+                let proofStartedAt = observeWorkspace == nil || workspaceOnly() ? nil : now()
                 stage = "native-status"
                 let response = try await transport.evaluate(Self.statusExpression, timeout: min(10, deadline - now()))
                 try requireBudget(deadline)
@@ -2441,14 +2460,22 @@ struct StartupConnector {
                     }
                     workspaceRequested = true
                 }
-                if !snapshotAccepted {
+                if !snapshotAccepted && !workspaceOnly() {
                     if releaseRequested() { return .released }
                     stage = "native-snapshot"
-                    let snapshot = try await StartupSettingsSnapshotReceiver.receive(transport: transport, page: page,
-                        request: request, deadline: deadline - reserve, now: now)
-                    _ = try await requireCurrentPage(selected, deadline: deadline - reserve, recoverOverlap: true)
+                    let snapshot: StartupSettingsSnapshot
+                    do {
+                        snapshot = try await StartupSettingsSnapshotReceiver.receive(transport: transport, page: page,
+                            request: request, deadline: admissionDeadline(), now: now)
+                        if workspaceOnly() { continue }
+                        _ = try await requireCurrentPage(selected, deadline: admissionDeadline(), recoverOverlap: true)
+                    } catch let failure as StartupFailure
+                        where workspaceOnly() && failure.reason == "attach-timeout" && !failure.pageConnectionLost {
+                        continue
+                    }
                     if releaseRequested() { return .released }
-                    try requireBudget(deadline - reserve)
+                    if workspaceOnly() { continue }
+                    try requireBudget(admissionDeadline())
                     snapshotAccepted = true
                     do { try await acceptSnapshot(snapshot) }
                     catch {
@@ -2476,7 +2503,7 @@ struct StartupConnector {
                         revokeProvisional()
                     }
                 }
-                if presentationFinished(), shellReady, status.disposition != "pending" {
+                if presentationFinished() || workspaceOnly(), shellReady, status.disposition != "pending" {
                     return .observed(StartupPreparedWorkspace(pageID: selected.id, runID: status.runID,
                         wallpaperDisposition: status.disposition, wallpaperReason: status.reason))
                 }
@@ -2906,7 +2933,21 @@ enum WallpaperCLI {
       const wallpaperDescriptor=Object.getOwnPropertyDescriptor(globalThis,'__azhouWallpaper');
       const wallpaper=wallpaperDescriptor&&Object.hasOwn(wallpaperDescriptor,'value')?wallpaperDescriptor.value:null;
       let result={applied:false,imageDecoded:false,matchedSurfaces:0,backgroundMatched:false,reason:wallpaperDescriptor?'owner-conflict':'not-installed'};
+      const surfaceObservation={attachment:wallpaperDescriptor?'unverified':'absent'};
       if(wallpaper&&value(wallpaper,'owner')==='azhou.codex-startup-animation'&&['0.7.1','0.8.0','0.9.0'].includes(value(wallpaper,'version'))&&typeof value(wallpaper,'status')==='function'){
+        surfaceObservation.attachment='present';
+        const observe=value(wallpaper,'observeSurfaces');
+        if(typeof observe==='function'){
+          try{
+            const snapshot=observe.call(wallpaper);
+            const fields={bodyBackground:['matched','unmatched'],sidebarBackground:['clear','painted'],
+              dotCentralBackground:['clear','painted'],dotCentralMarker:['owned','absent']};
+            for(const [key, allowed] of Object.entries(fields)){
+              const entry=value(snapshot,key);
+              if(allowed.includes(entry))surfaceObservation[key]=entry;
+            }
+          } catch {}
+        }
         try{const state=value(wallpaper,'status').call(wallpaper);if(state&&typeof state==='object'&&typeof state.applied==='boolean')result=state;}
         catch{result={applied:false,imageDecoded:false,matchedSurfaces:0,backgroundMatched:false,reason:'owner-conflict'};}
       }
@@ -2930,8 +2971,7 @@ enum WallpaperCLI {
           }
         } catch {}
       }
-      result.startup=startup;
-      return result;
+      return {...result,startup,surfaceObservation};
     })()
     """
     static let applyGuardSource = """

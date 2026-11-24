@@ -2511,6 +2511,21 @@ private func wallpaperCLIRunChecks() -> Int {
     expect(statusTransport.closeCount == 1 && statusSession.closeCount == 1,
            "CLI completion closes the injected page and transport resources")
 
+    var inspected = goodState
+    inspected["surfaceObservation"] = [
+        "attachment": "present", "bodyBackground": "matched", "sidebarBackground": "painted",
+        "dotCentralBackground": "clear", "dotCentralMarker": "private", "pixels": "visible",
+    ]
+    let inspectedSession = FakeWallpaperPageSession(responses: [WallpaperCLI.statusSource: inspected])
+    let inspectedStatus = run(["--wallpaper-status"], resolver: FakeWallpaperTargetResolver(),
+                              system: FakeWallpaperSystem(),
+                              transport: FakeWallpaperOperationTransport(pages: [page], session: inspectedSession))
+    let inspectedPages = inspectedStatus.1?["pages"] as? [[String: Any]]
+    expect(inspectedStatus.0 == 0 && inspectedPages?.first?["surfaceObservation"] as? [String: String] == [
+        "attachment": "present", "bodyBackground": "matched", "sidebarBackground": "painted",
+        "dotCentralBackground": "clear", "dotCentralMarker": "unverified", "pixels": "not-measured",
+    ], "CLI status reports independent regional structural evidence and rejects untrusted fields")
+
     let applySession = FakeWallpaperPageSession(responses: [
         WallpaperCLI.applyGuardSource: ["state": "ready"],
         "unused-test-payload": goodState,

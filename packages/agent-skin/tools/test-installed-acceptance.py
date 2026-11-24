@@ -63,9 +63,9 @@ def cold_start_allowed(values: list[dict]) -> bool:
         and probes[0].get("running") == []
 
 
-def native_launch_verdict(values: list[dict], expected_launcher_path: str | None) -> dict | None:
+def native_launch_verdict(values: list[dict], expected_launcher_path: str | None, returncode: int | None = 0) -> dict | None:
     return runpy.run_path(str(Path(__file__).with_name("startup_event_verdict.py")))["assess_native_launch"](
-        values, 0, expected_launcher_path)
+        values, returncode, expected_launcher_path)
 
 
 def cold_start_observed(values: list[dict], expected_launcher_path: str | None = None) -> bool:
@@ -80,9 +80,14 @@ def cold_start_observed(values: list[dict], expected_launcher_path: str | None =
 
 
 def cold_wallpaper_target(launch: list[dict], probe: list[dict],
-                          expected_launcher_path: str) -> tuple[int, str] | None:
-    native = native_launch_verdict(launch, expected_launcher_path)
-    if native is None or native["status"] != "native-completed" or not cold_start_allowed(probe):
+                          expected_launcher_path: str, returncode: int | None = 0) -> tuple[int, str] | None:
+    native = native_launch_verdict(launch, expected_launcher_path, returncode)
+    if native is None or not cold_start_allowed(probe):
+        return None
+    if native["status"] != "native-completed" and not (
+        native["status"] == "partial" and native["startup"]["status"] == "interrupted"
+        and native["startup"]["workspace"] is not None
+    ):
         return None
     # The native verdict has already verified that exactly one opened PID
     # matches the terminal receipt and exit. The path comes from the unique
@@ -97,8 +102,8 @@ def observe_wallpaper(executable: Path, log: Path, target: tuple[int, str] | Non
     command = [str(executable), "--wallpaper-status", "--request-id", request_id]
     if target is not None:
         command.extend(["--target-pid", str(target[0]), "--target-bundle", target[1]])
-    ok, values = execute(command, log)
-    return ok and verified_wallpaper(values, request_id=request_id, target=target)
+    code, values = execute(command, log)
+    return code == 0 and verified_wallpaper(values, request_id=request_id, target=target)
 
 
 def dock_entries(value: dict, expected_path: Path) -> list[dict]:
@@ -115,14 +120,14 @@ def dock_entries(value: dict, expected_path: Path) -> list[dict]:
     return entries
 
 
-def execute(command: list[str], log: Path, timeout: int = 40) -> tuple[bool, list[dict]]:
+def execute(command: list[str], log: Path, timeout: int = 40) -> tuple[int | None, list[dict]]:
     try:
         result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, timeout=timeout, check=False)
         log.write_text(result.stdout + result.stderr, encoding="utf-8")
-        return result.returncode == 0, records(result.stdout)
+        return result.returncode, records(result.stdout)
     except (OSError, subprocess.TimeoutExpired) as error:
         log.write_text(str(error) + "\n", encoding="utf-8")
-        return False, []
+        return None, []
 
 
 def check(out: Path, cold_start: bool = False) -> dict:
@@ -131,8 +136,8 @@ def check(out: Path, cold_start: bool = False) -> dict:
     app = Path.home() / "Applications" / theme["identity"]["installationName"]
     executable = app / "Contents/MacOS/AzhouCodexStartup"
     cases = []
-    installed, installation = execute([sys.executable, "tools/install-macos.py", "--check"], out / "installation.log")
-    cases.append({"id": "FT-INSTALL", "status": "passed" if installed and unique_installation(installation) else "failed"})
+    install_code, installation = execute([sys.executable, "tools/install-macos.py", "--check"], out / "installation.log")
+    cases.append({"id": "FT-INSTALL", "status": "passed" if install_code == 0 and unique_installation(installation) else "failed"})
     # The real Finder API is read in the current system language. It does not
     # claim to have changed the machine language or examined Dock rendering.
     finder_probe = '''import Foundation
@@ -145,9 +150,9 @@ let result: [String: Any] = ["actual": actual, "expected": expected, "passed": a
 let data = try JSONSerialization.data(withJSONObject: result, options: [.sortedKeys])
 print(String(data: data, encoding: .utf8)!)
 '''
-    finder_ok, finder = execute(["xcrun", "swift", "-e", finder_probe, str(app),
+    finder_code, finder = execute(["xcrun", "swift", "-e", finder_probe, str(app),
         theme["identity"]["appName"]["zh-CN"], theme["identity"]["appName"]["en"]], out / "finder.log")
-    cases.append({"id": "FT-FINDER", "status": "passed" if finder_ok and len(finder) == 1
+    cases.append({"id": "FT-FINDER", "status": "passed" if finder_code == 0 and len(finder) == 1
                   and finder[0].get("passed") is True else "failed"})
     try:
         dock = plistlib.loads((Path.home() / "Library/Preferences/com.apple.dock.plist").read_bytes())
@@ -159,19 +164,18 @@ print(String(data: data, encoding: .utf8)!)
                   "next": "Review the actual pinned entry label after an upgrade; metadata alone is insufficient."})
     target = None
     if cold_start:
-        probe_ok, probe = execute([str(executable), "--probe"], out / "cold-probe.log")
-        if not installed or not unique_installation(installation) or not probe_ok or not cold_start_allowed(probe):
+        probe_code, probe = execute([str(executable), "--probe"], out / "cold-probe.log")
+        if install_code != 0 or not unique_installation(installation) or probe_code != 0 or not cold_start_allowed(probe):
             cases.append({"id": "FT-COLD", "status": "pending-human-exit",
                           "next": "Finish work, quit the official host yourself, then rerun --cold-start."})
         else:
-            launched, launch = execute([str(executable)], out / "cold-launch.log", timeout=75)
+            launch_code, launch = execute([str(executable)], out / "cold-launch.log", timeout=75)
             # Actual cold-start events and wallpaper are checked separately.
             # Hot activation caused by a race must never count as cold success.
-            cold = launched and cold_start_observed(launch, str(app.resolve()))
+            cold = launch_code == 0 and cold_start_observed(launch, str(app.resolve()))
             cases.append({"id": "FT-COLD", "status": "pending-visual-review" if cold else "failed",
                           "next": "Review the actual animation and workspace; preserve the event log."})
-            if cold:
-                target = cold_wallpaper_target(launch, probe, str(app.resolve()))
+            target = cold_wallpaper_target(launch, probe, str(app.resolve()), launch_code)
             deadline = time.monotonic() + 65
             poll = 0
             while target is not None and time.monotonic() < deadline:

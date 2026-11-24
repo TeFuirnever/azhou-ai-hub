@@ -236,6 +236,11 @@ class FunctionalVerdictTests(unittest.TestCase):
         launch = self.native_events()
         for event in launch:
             event["launcherPath"] = "/foreign/Agent Skin.app" if mode == "foreign" else str(app.resolve())
+        if mode in {"interrupted", "interrupted-no-workspace", "interrupted-wrong-exit"}:
+            launch[3].update(presentation="interrupted", reason="startup-interrupted", outcome="partial")
+            launch[4].update(outcome="partial", exitCode=2)
+            if mode == "interrupted-no-workspace":
+                launch[3].update(workspace=None, workspaceObserved=False)
         if mode == "missing-terminal":
             launch.pop(3)
         if mode == "malformed":
@@ -253,11 +258,11 @@ class FunctionalVerdictTests(unittest.TestCase):
         def execute(command, log, timeout=40):
             calls.append(command)
             if "--check" in command:
-                return mode != "install-failed", [installation]
+                return int(mode == "install-failed"), [installation]
             if command[0] == "xcrun":
-                return True, [{"passed": True}]
+                return 0, [{"passed": True}]
             if "--probe" in command:
-                return mode != "probe-failed", [{"event": "probe", "targetBundleID": "com.openai.codex",
+                return int(mode == "probe-failed"), [{"event": "probe", "targetBundleID": "com.openai.codex",
                     "targetPath": "/Applications/Codex.app", "running": [{}] if mode == "running" else []}]
             if "--wallpaper-status" in command:
                 request = command[command.index("--request-id") + 1] if "--request-id" in command else "legacy"
@@ -270,12 +275,14 @@ class FunctionalVerdictTests(unittest.TestCase):
                 responses.append(request)
                 log.write_text(json.dumps(response))
                 if mode == "wallpaper-failed":
-                    return False, [wallpaper]
+                    return 1, [wallpaper]
                 if mode == "wallpaper-unverified":
-                    return True, [{**wallpaper, "workspaceBackgroundClear": False}]
-                return True, [response]
+                    return 0, [{**wallpaper, "workspaceBackgroundClear": False}]
+                return 0, [response]
             self.assertEqual(command, [str(app / "Contents/MacOS/AzhouCodexStartup")])
-            return mode != "launch-failed", launch
+            if mode in {"interrupted", "interrupted-no-workspace"}:
+                return 2, launch
+            return int(mode == "launch-failed"), launch
         out = root / "new-evidence"
         with patch.object(acceptance.Path, "home", return_value=home), patch.object(acceptance, "execute", side_effect=execute), \
                 patch.object(acceptance.subprocess, "run") as child:
@@ -303,6 +310,15 @@ class FunctionalVerdictTests(unittest.TestCase):
                 self.assertIn("central conversation", wallpaper["next"])
                 self.assertFalse(any(any(word in argument for word in ("kill", "quit", "terminate"))
                                      for command in calls if command[0] != "xcrun" for argument in command))
+
+    def test_interrupted_cover_can_have_a_separately_verified_workspace(self):
+        for mode in ("interrupted", "interrupted-no-workspace", "interrupted-wrong-exit"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                result, calls = self.run_installed_check(Path(temporary), mode=mode)
+                by_id = {case["id"]: case for case in result["cases"]}
+                self.assertNotEqual("pending-visual-review", by_id["FT-COLD"]["status"])
+                self.assertEqual(mode == "interrupted", by_id["FT-WALLPAPER"]["runtimeStatusVerified"])
+                self.assertEqual(mode == "interrupted", any("--wallpaper-status" in c for c in calls))
 
     def test_cold_wallpaper_refuses_unbound_fresh_sample_and_keeps_poll_log(self):
         for mode in ("wrong-pid", "wrong-path", "wrong-action", "replayed", "no-target"):

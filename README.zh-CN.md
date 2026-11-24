@@ -151,7 +151,7 @@ python scripts/azhou_hub.py verify
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面冷启动时播放 12 秒阿舟启动动画并应用阿舟壁纸（视觉验收仍待人工确认；以[支持矩阵](docs/support-matrix.md#optional-integrations)为准）；组装好的 DeepSeek Harness 插件包把同样的外观带到 DSH。当前源码候选为 `0.9.0/build 43`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。 |
+| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面冷启动时播放 12 秒阿舟启动动画并应用阿舟壁纸（视觉验收仍待人工确认；以[支持矩阵](docs/support-matrix.md#optional-integrations)为准）；组装好的 DeepSeek Harness 插件包把同样的外观带到 DSH。当前源码候选为 `0.9.0/build 43`。源码候选在冷启动期间切换应用、释放封面后，仍可继续准备工作区。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。 |
 
 [阿舟外观](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary)可选用本机图片和阿舟 JSON 预设，不导入其他项目的主题，也不迁移其他项目的数据。
 

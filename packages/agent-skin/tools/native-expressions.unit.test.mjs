@@ -250,6 +250,34 @@ unitTest('bound native cleanup cannot dispose a replacement or an unproven contr
 });
 
 unitTest('the wallpaper status source validates page identity and reports owned application state', async t => {
+  await t.test('regional snapshot precedes active status and excludes renderer-supplied text', () => {
+    const context = pageContext();
+    let refreshed = false;
+    const api = wallpaperAPI({ status() {
+      refreshed = true;
+      return { applied: false };
+    } });
+    Object.defineProperty(api, 'observeSurfaces', { value() {
+      assert.equal(refreshed, false);
+      return { bodyBackground: 'matched', sidebarBackground: 'painted', dotCentralBackground: 'clear',
+        dotCentralMarker: 'owned', text: 'private', pixels: 'visible' };
+    } });
+    defineDataGlobal(context, '__azhouWallpaper', api);
+    const result = plain(evaluate('statusSource', context));
+    assert.equal(refreshed, true);
+    assert.deepEqual(result.surfaceObservation, {
+      attachment: 'present', bodyBackground: 'matched', sidebarBackground: 'painted',
+      dotCentralBackground: 'clear', dotCentralMarker: 'owned',
+    });
+  });
+
+  await t.test('a missing wallpaper attachment and a legacy attachment are distinguishable', () => {
+    const context = pageContext();
+    assert.deepEqual(plain(evaluate('statusSource', context)).surfaceObservation, { attachment: 'absent' });
+    defineDataGlobal(context, '__azhouWallpaper', wallpaperAPI());
+    assert.deepEqual(plain(evaluate('statusSource', context)).surfaceObservation, { attachment: 'present' });
+  });
+
   await t.test('wrong route does not inspect either owner', () => {
     let calls = 0;
     const context = pageContext({ href: 'app://-/index.html?initialRoute=%2Favatar' });

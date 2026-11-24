@@ -6063,7 +6063,8 @@ private func nativeColdLaunchChecks() async throws -> Int {
     defer { NSApp.mainMenu = originalMenu }
     for mode in ["complete", "media-fallback", "media-reduced", "media-complete", "media-expired", "media-late-skip", "media-motion-flip", "media-hold-motion", "media-stage-skip", "media-short-to-canvas", "skip", "failure", "bad-cover", "deadline", "preflight", "hot",
                  "cancel-open", "cancel-task", "short-preflight", "short-cover", "short-attach", "window-close",
-                 "host-activation", "interrupt-open", "interrupt-prepare", "interrupt-wait", "space-wait"] {
+                 "host-activation", "interrupt-open", "interrupt-prepare", "interrupt-transfer", "interrupt-wait", "space-wait"] {
+        let focusInterrupted = mode.hasPrefix("interrupt-") || mode == "space-wait"
         let runtime = FakeNativeAppRuntime(arguments: ["skin"], resourceURL: root)
         let app = FakeNativeApplication(pid: 4123, bundleIdentifier: key.bundleIdentifier, bundleURL: bundle,
             executableURL: key.executableURL, launchTime: 100)
@@ -6072,6 +6073,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
             bundleID: key.bundleIdentifier, launchTime: 100)
         let operationID = UUID()
         let world = StartupSnapshotWorld(); world.preparedMode = true; world.runNonce = operationID.uuidString
+        if focusInterrupted { world.preparedDisposition = "pending" }
         let transport = PreparedConnectorTransport(world)
         let system = FakeStartupSystem(expectedPID: 4123, ports: [49221])
         let presentation = FakeNativePlayerPresentation()
@@ -6115,7 +6117,11 @@ private func nativeColdLaunchChecks() async throws -> Int {
             if mode == "deadline" { presentation.schedules.last?.fire() }
             if mode == "cancel-open" { throw CancellationError() }
             if mode == "host-activation" { presentation.nativeHandler?.applicationActivated(app) }
-            if mode == "interrupt-open" { presentation.nativeHandler?.applicationActivated(unrelated) }
+            if mode == "interrupt-open" {
+                presentation.nativeHandler?.applicationActivated(unrelated)
+                expect(presentation.orderedOutCount == 1, "application switch during open releases the cover before the host returns")
+                runtime.uptime = 136
+            }
             if mode == "window-close" {
                 guard let window = closeWindow, let delegate = window.delegate as? NativeColdPlayer else {
                     preconditionFailure("actual cover window must bind NativeColdPlayer as its X delegate")
@@ -6186,6 +6192,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
         presentation.evaluationHook = { source in
             if source.contains("finishNativeSnapshot") {
                 if mode == "skip" { presentation.nativeHandler?.requestSkip() }
+                else if mode == "interrupt-transfer" { presentation.nativeHandler?.applicationActivated(unrelated) }
                 else if mode == "cancel-task" { withUnsafeCurrentTask { $0?.cancel() } }
                 else if mode == "failure" {
                     presentation.nativeHandler?.receive(body: ["action": "assetError", "runId": world.runNonce], isMainFrame: true)
@@ -6208,6 +6215,10 @@ private func nativeColdLaunchChecks() async throws -> Int {
                 return StartupConnector(target: target, expectedPort: port, system: system, transport: observing,
                     now: { runtime.uptime }, sleep: { _ in
                         let now = ProcessInfo.processInfo.systemUptime
+                        if focusInterrupted, !world.preparedExpiries.isEmpty {
+                            expect(presentation.orderedOutCount == 1, "wallpaper finishes after the cover releases")
+                            world.preparedDisposition = "applied"
+                        }
                         if mode == "media-hold-motion", heldFlipSample == nil,
                            let player = presentation.optionalTestPlayer, player.rate == 0,
                            player.currentTime().seconds >= 0.35, presentation.optionalReveals == 1 {
@@ -6298,7 +6309,24 @@ private func nativeColdLaunchChecks() async throws -> Int {
                    presentation.createdPlayers.isEmpty && presentation.optionalOpacity.isEmpty &&
                    optionalItemBuilds == 1 && presentation.optionalRestores == 1,
                    "expired optional media without full remaining Canvas cannot restart or report workspace success")
-        } else if mode == "cancel-open" || mode == "cancel-task" || mode.hasPrefix("interrupt-") || mode == "space-wait" {
+        } else if focusInterrupted {
+            expect(receipt.presentation == .interrupted && receipt.reason == "startup-interrupted"
+                   && receipt.workspace?.pageGeneration == "page-a" && receipt.workspace?.wallpaperDisposition == "applied",
+                "focus interruption preserves observed workspace preparation: \(mode)")
+            expect(world.operationLog.filter { $0 == "page-a:prepare" }.count == 1
+                   && !world.operationLog.contains("page-a:cancelWorkspace"),
+                "focus interruption prepares the verified workspace once without cancelling it")
+            expect(events.resolveNative(receipt, at: 110) == .partial(reason: "startup-interrupted") && transport.closed,
+                "focus interruption reports its own outcome and closes the bounded connection")
+            if mode == "interrupt-open" || mode == "interrupt-prepare" {
+                expect(!world.operationLog.contains("page-a:begin") && presentation.createdPlayers.isEmpty,
+                    "focus interruption before playback needs no settings export or new player")
+            } else {
+                let expectedStarts = mode == "interrupt-transfer" ? 0 : 1
+                expect(presentation.createdPlayers.count == 1 && sequence.filter { $0 == "play" }.count == expectedStarts,
+                    "focus interruption while mounting or playing cannot start or replay the animation")
+            }
+        } else if mode == "cancel-open" || mode == "cancel-task" {
             expect(receipt.presentation == .interrupted && receipt.reason == "startup-interrupted" && receipt.workspace == nil,
                 "actual driver distinguishes Task cancellation from protocol failure and user skip")
             expect(events.resolveNative(receipt, at: 110) == .partial(reason: "startup-interrupted"),
@@ -6306,7 +6334,7 @@ private func nativeColdLaunchChecks() async throws -> Int {
             if mode == "cancel-task" {
                 expect(world.operationLog.contains("page-a:cancelWorkspace"), "cancelled driver cleans up its bound workspace operation")
             }
-            expect(transport.closed || mode == "cancel-open" || mode == "interrupt-open", "interruption exits connector preparation or completion wait and releases transport")
+            expect(transport.closed || mode == "cancel-open", "cancellation exits connector preparation and releases transport")
         } else if mode == "skip" || mode == "window-close" {
             expect(receipt.presentation == .skipped && receipt.workspace == nil, "skip releases without inventing workspace readiness")
             expect(events.resolveNative(receipt, at: 110) == .skipped, "native user skip has its own terminal receipt")

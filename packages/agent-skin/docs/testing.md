@@ -60,7 +60,7 @@ python3 -B tools/test-unit-coverage.py
 
 **壁纸丢失取证（仅限独立测试会话）**：分别验证冷启动首次可见的 Dot 中央区，以及点到另一个 macOS App 前、离开期间、返回后的同一窗口左栏。记录实际前台 App 和窗口，保留不含会话内容的目标区域画面；Chromium 切页不能替代 macOS App 切换。
 
-先保存目标画面和被动的外观状态记录，再单独调用 `--wallpaper-status`。该调用会刷新状态，可能处理待送达的 DOM 变更并释放已失效的壁纸；`applied` 也不证明屏幕上有壁纸。记录调用的时点，不把调用后的画面当成调用前的现场。
+先保存目标画面，再单独调用 `--wallpaper-status`。`pages[].surfaceObservation` 在常规状态刷新前记录壁纸控制器是否存在、页面背景是否匹配、左栏与 Dot 中央容器各自的计算背景，以及 Dot 容器的壁纸标记。左栏与中央区分别判定，证据不足时为 `unverified`。`pixels` 始终为 `not-measured`。常规状态刷新可能处理待送达的 DOM 变更并释放已失效的壁纸。记录调用时点并区分刷新前后的画面。
 
 Finder/Dock 使用 **macOS 语言**；注入的动画和外观使用 **官方宿主页面语言**。这两条合同分别验收，不能用应用内按钮为英文推断 Finder/Dock 已通过。
 

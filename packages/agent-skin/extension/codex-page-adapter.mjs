@@ -822,12 +822,16 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
   }
 
   function observeWorkspace(host = hostEnvironment) {
+    return readWorkspace(host, false);
+  }
+
+  function readWorkspace(host, passive) {
     const unavailable = (kind, details = {}) => {
-      workspaceObservation = null;
+      if (!passive) workspaceObservation = null;
       return Object.freeze({ kind, ...details });
     };
     try {
-      const identity = identify(host);
+      const identity = passive ? { kind: isMainPage(host?.location?.href) ? 'matched' : 'unmatched' } : identify(host);
       if (identity.kind !== 'matched') return unavailable('unsupported', { reason: 'page-unsupported' });
       const shell = host.document?.getElementById('root');
       if (!shell?.isConnected || !host.document.body) return unavailable('pending', { reason: 'shell-missing', layoutTargets: Object.freeze([host.document.documentElement].filter(Boolean)) });
@@ -839,12 +843,6 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
       const activeMain = candidates[0];
       const frame = activeMain.closest('[data-app-shell-frame]');
       if (!frame || !shell.contains(frame)) return unavailable('unsupported', { reason: 'frame-missing' });
-      const layoutAncestors = [];
-      for (let node = activeMain; node && node !== shell; node = node.parentElement) layoutAncestors.push(node);
-      layoutAncestors.push(shell);
-      const layoutTargets = [...new Set([shell, ...layoutMains, ...layoutAncestors,
-        ...activeMain.querySelectorAll(['[data-app-shell-page-surface]', ...Object.values(workspaceSelectors)].join(','))])]
-        .filter(node => node.isConnected && !node.closest(protectedPaint));
       const visible = selector => [...activeMain.querySelectorAll(selector)]
         .filter(node => workspaceVisible(node, host) && !node.closest(protectedPaint));
       // The host uses a memory router: only its current destination marker
@@ -876,8 +874,16 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
           && !pane.closest(dotNonPaint)
           && !node.querySelector(dotHelperVeto + ', ' + dotMessagingShell);
       });
-      const dotPaint = primaryRoom && knownHelpersOnly && uniqueActiveDotDestination
-        && !activeMain.contains(activeDotDestination) ? primaryRoom.node : null;
+      const dotRoom = primaryRoom && uniqueActiveDotDestination && !activeMain.contains(activeDotDestination)
+        ? primaryRoom.node : null;
+      if (passive) return { dotCentral: dotRoom };
+      const dotPaint = knownHelpersOnly ? dotRoom : null;
+      const layoutAncestors = [];
+      for (let node = activeMain; node && node !== shell; node = node.parentElement) layoutAncestors.push(node);
+      layoutAncestors.push(shell);
+      const layoutTargets = [...new Set([shell, ...layoutMains, ...layoutAncestors,
+        ...activeMain.querySelectorAll(['[data-app-shell-page-surface]', ...Object.values(workspaceSelectors)].join(','))])]
+        .filter(node => node.isConnected && !node.closest(protectedPaint));
       const dotStructureNodes = primaryRoom ? [...primaryRoom.wrappers, primaryRoom.node,
         primaryRoom.threads[0].parentElement, primaryRoom.threads[0]] : [];
       const dotHelperNodes = dotPaint ? helpers.flatMap(node => [node, node.children[0]]) : [];
@@ -933,6 +939,18 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     } catch {
       return unavailable('unsupported', { reason: 'observation-unavailable' });
     }
+  }
+
+  function readWallpaperRegions(host = hostEnvironment) {
+    let sidebar = null;
+    try {
+      const shell = host.document?.getElementById('root');
+      if (isMainPage(host.location?.href) && shell?.isConnected) {
+        const sidebars = shell.querySelectorAll('#app-shell-sidebar');
+        if (sidebars.length === 1 && workspaceVisible(sidebars[0], host)) sidebar = sidebars[0];
+      }
+    } catch {}
+    return { sidebar, dotCentral: readWorkspace(host, true).dotCentral ?? null };
   }
 
   function readThemeGeometry(observation, host = hostEnvironment) {
@@ -1166,6 +1184,7 @@ export function createCodexPageAdapter(environment = globalThis, configuration =
     themeGeometryContract: 'codex-theme-geometry/v1',
     identify,
     observeWorkspace,
+    readWallpaperRegions,
     readThemeGeometry,
     watchWorkspace,
     isWorkspaceCurrent(observation, host = hostEnvironment) {

@@ -133,7 +133,6 @@ private final class CodexNativeRun {
     init(nonce: String, deadline: TimeInterval) { self.nonce = nonce; self.deadline = deadline }
     var failure: String? {
         if case .failed(let reason) = state { return reason }
-        if case .interrupted = state { return "startup-interrupted" }
         return nil
     }
     var interrupted: Bool { if case .interrupted = state { return true }; return false }
@@ -404,17 +403,17 @@ final class CodexSkinDriver: SkinHostDriver {
                         guard self.nativeRun === run, !run.released else { throw CancellationError() }
                         run.state = .preparing
                         do { try await presentation.play(snapshot, deadline: run.deadline) }
-                        catch { if !run.skipped { throw error } }
+                        catch { if !run.skipped && !run.interrupted { throw error } }
                         if let failure = run.failure { throw StartupFailure(reason: failure, message: "原生播放器失败。") }
-                    }, presentationFinished: { run.completed }, releaseRequested: { run.skipped || run.interrupted },
-                    presentationFailure: { run.failure }, observeWorkspace: proofObserver)
+                    }, presentationFinished: { run.completed }, releaseRequested: { run.skipped },
+                    presentationFailure: { run.failure }, workspaceOnly: { run.interrupted }, observeWorkspace: proofObserver)
                 if case .observed(let observed) = result {
                     workspace = SkinNativeWorkspaceObservation(pageGeneration: observed.pageID, runID: observed.runID,
                         wallpaperDisposition: observed.wallpaperDisposition, wallpaperReason: observed.wallpaperReason)
                 }
             }
         } catch {
-            if !run.skipped && run.failure == nil {
+            if !run.skipped && !run.interrupted && run.failure == nil {
                 if Task.isCancelled || error is CancellationError { run.state = .interrupted }
                 else { run.state = .failed((error as? StartupFailure)?.reason ?? "protocol-error") }
             }
@@ -422,7 +421,8 @@ final class CodexSkinDriver: SkinHostDriver {
         let end: SkinNativePresentationEnd = run.skipped ? .skipped : run.interrupted ? .interrupted
             : run.completed && workspace != nil ? .completed : .failed
         return .nativePresentation(SkinNativeLaunchReceipt(operationID: request.operationID, runNonce: run.nonce,
-            presentation: end, reason: run.failure, workspace: workspace, coverDrawCommitted: run.coverCommitted))
+            presentation: end, reason: run.interrupted ? "startup-interrupted" : run.failure,
+            workspace: workspace, coverDrawCommitted: run.coverCommitted))
     }
 
     // MARK: - inspect (read-only; never cold-starts the host or installs controllers)

@@ -106,6 +106,28 @@ test('skin transparency does not change structural workspace identity', () => {
   assert.equal(f.adapter.observeWorkspace(), observed);
 });
 
+test('passive region reads recognize only the active Dot room and do not retire workspace identity', () => {
+  const f = scene();
+  const sidebar = f.frame.append(new f.main.constructor('sidebar'));
+  const nav = sidebar.append(new f.main.constructor('nav', ['data-sidebar-destination']));
+  nav.getAttribute = name => name === 'data-sidebar-destination' ? 'builtin:orbit' : 'page';
+  const dot = f.main.append(new f.main.constructor('dot'));
+  dot.matches = selector => selector === '.messaging-root.messaging-embedded';
+  const thread = dot.append(new f.main.constructor('workspace')).append(new f.main.constructor('thread'));
+  const query = f.shell.querySelectorAll.bind(f.shell);
+  f.shell.querySelectorAll = selector => selector === '#app-shell-sidebar' ? [sidebar] : query(selector);
+  const initial = f.adapter.observeWorkspace();
+  assert.ok(initial.knownPaintPlanes.some(plane => plane.node === dot));
+  assert.deepEqual(f.adapter.readWallpaperRegions(), { sidebar, dotCentral: dot });
+  thread.hidden = true;
+  assert.deepEqual(f.adapter.readWallpaperRegions(), { sidebar, dotCentral: null });
+  thread.hidden = false;
+  assert.equal(f.adapter.observeWorkspace(), initial);
+  const secondSidebar = f.frame.append(new f.main.constructor('sidebar'));
+  f.shell.querySelectorAll = selector => selector === '#app-shell-sidebar' ? [sidebar, secondSidebar] : query(selector);
+  assert.deepEqual(f.adapter.readWallpaperRegions(), { sidebar: null, dotCentral: dot });
+});
+
 test('unavailable layout retires the prior observation without throwing', () => {
   const f = scene();
   const observed = f.adapter.observeWorkspace();
