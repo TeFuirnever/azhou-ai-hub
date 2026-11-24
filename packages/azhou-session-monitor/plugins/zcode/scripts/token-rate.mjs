@@ -685,8 +685,10 @@ if (process.argv[1] && process.argv[1].endsWith("token-rate.mjs")) {
     }
   } else if (turnOnly) {
     const r = queryTurn(sid, { current });
-    if (json) console.log(JSON.stringify(r, null, 2));
-    else if (card) {
+    if (json) {
+      const { turnId, turn, session, noCurrentTurnData } = r;
+      console.log(JSON.stringify({ turnId, turn, session, noCurrentTurnData }, null, 2));
+    } else if (card) {
       // --card --out <file>:有本问数据才落盘卡片(静默成功/失败,无输出即"无统计")
       if (r.turn && outFile) {
         try {
@@ -701,7 +703,8 @@ if (process.argv[1] && process.argv[1].endsWith("token-rate.mjs")) {
   } else {
     const r = query(sid);
     if (json) {
-      console.log(JSON.stringify(r, null, 2));
+      const { scoped, latest, session, history } = r;
+      console.log(JSON.stringify({ scoped, latest, session, history }, null, 2));
     } else {
       const s = r.session;
       console.log(formatLine(r));

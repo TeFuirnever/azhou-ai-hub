@@ -1,6 +1,7 @@
 // 单元测试:node --test test/
 // 用临时 SQLite 库做夹具,在导入被测模块前设置 ZCODE_USAGE_DB。
 import { test } from "node:test";
+import { execFileSync } from "node:child_process";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -249,5 +250,15 @@ test("doctor:夹具环境全部通过", async () => {
     else process.env.HOME = prevHome;
     if (prevUserProfile === undefined) delete process.env.USERPROFILE;
     else process.env.USERPROFILE = prevUserProfile;
+  }
+});
+
+test("explicit session selection keeps the raw session ID out of CLI metrics", () => {
+  for (const extra of [[], ["--turn"]]) {
+    const output = JSON.parse(execFileSync(process.execPath, [
+      path.join(PLUGIN, "scripts", "token-rate.mjs"), "--json", ...extra,
+    ], { env: { ...process.env, ZCODE_SESSION_ID: "s1" }, encoding: "utf8" }));
+    assert.equal(Object.hasOwn(output, "sessionId"), false);
+    assert.ok(output.session.totalOutput > 0);
   }
 });
