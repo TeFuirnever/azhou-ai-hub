@@ -24,4 +24,18 @@ Three runs are recorded (2026-11-24), one per configuration. Each gave a fresh a
 
 Each configuration has one sample on one model, so the runs show that each path can be met, not how often it is. No run reached an empty frontier, a later turn, a `complete` receipt or the success anchor. No run had a sub-agent or an environment to read, so the fact-finding path is untested. On earlier drafts of this package, one of three replies that received a plan did not word its questions that way. It asked open questions and told the reader that a "yes" answer accepts its recommendation.
 
-Next action: run one session past the first answer, to an empty frontier and a `complete` receipt, with a reader who answers for real, and record it here. The host check on Claude Code is recorded in [the receipt](../../evidence/super-grill-me-host-check-claude-2026-11-24.md).
+## Recorded multi-round session
+
+One session is recorded (2026-11-24 to 2026-11-25) on the shipped package bytes (`SKILL.md` SHA-256 `05e356f839278a294af9ec5dfd831c6fd3b42fba58b42fd0e49312b1859ffd4d`). A fresh host context received a synthetic project README that describes an upload service with a 30-day retention promise, and this package linked into that project's skill root. The host was Claude Code 2.1.330, headless, on the `xiaomi/mimo-v2.6-pro` route. The reader was scripted: it accepted every recommendation, later named a gate owner, and confirmed once as a standalone message.
+
+- Round 1 (429 s) emitted the startup line, the design-tree line, a facts line marked `source=self-check`, and the round line, then asked six numbered questions with a recommended answer each. Round 2 resumed the same session and asked six more (514 s). Twelve decisions settled in total.
+- Two confirmation attempts were refused. The first carried a background-task notification in the same turn, and the model would not record a confirmation it could not attribute to the reader. The second was refused on the same pattern. A third, standalone confirmation was accepted (160 s).
+- The run ended with a `complete_with_holds` receipt: `rounds: 2`, `open_questions: 1`, `confirmed_by: reader confirmation 2026-11-25 standalone message`, one hold for a cron mail delivery test with an owner and a next action, and a `verification` field that records the model's background completeness scan was stopped twice at turn boundaries, so frontier emptiness was never independently verified.
+- Two host quirks are part of the record. One resume returned an empty turn while a background-task notification was pending. One turn hit the host's weekly quota on the default model route, and the session continued on the `opus` alias.
+- Two other runs on these bytes, recorded Git-external, emitted a facts line marked `source=sub-agent`, which is the sub-agent path this session did not take.
+
+The turn transcripts and the verbatim receipts stay Git-external in the maintainer's evidence store.
+
+Limits: one session, one model, one scripted reader who is not a human and who accepted every recommendation instead of judging each one. The completeness scan never finished. The `complete` receipt, with an empty frontier and no holds, has not been observed.
+
+Next action: a session with a human reader, and a `complete` receipt, have not been observed. The host check on Claude Code is recorded in [the receipt](../../evidence/super-grill-me-host-check-claude-2026-11-24.md).
