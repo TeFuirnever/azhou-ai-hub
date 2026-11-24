@@ -322,12 +322,12 @@
     "references/delivery-contract.md": "418250feeb9a4d3e172e954822c16f7d02c9b1733fd06cfdaf41ac8f6ad1369c",
     "references/explainer-authoring.md": "cdc159e11582a516fa023bb2e57aabc4c280f3d9ea76183761e52dcd58e0e79e",
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
-    "references/provenance.md": "04921065e2647280944e95e4e019cb4d033fe26ecbcdb7fbebca5108ba715e7f",
+    "references/provenance.md": "deb49486894deb0c53a741db3032257be50bbae488118c388dca18f159679529",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
-    "references/setup.md": "9a1a373c923e0cd45280ef43dc9be7580a43c227a89f8bbdb21bfed19be1f12b",
+    "references/setup.md": "d721a58c5fdcbeeb031b218d4ed82f727ee1c99b9548d6d7079a6a9c1e477530",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
     "references/update-awareness.md": "16b437a47790fda48f0e74f6aa053715fb06b6e8cd1ba994d1c01ffefa12a76b",
-    "references/upstream-compatibility.md": "c7cdb12ad5cf779b26b1ee2608edddde506a709d3bd09ee52d51c4e53c68efab",
+    "references/upstream-compatibility.md": "0a877efab51d320369dd4afe587e0960442aec8b40fa3ba3673cfe5a71826bae",
     "references/viewer-runtime.md": "229e729444321e1ee2ecee54833b3ede90c1ad66315123fbbfdb08ab47742bba",
     "renderers/architecture/automatic-placement-candidates.mjs": "60d46fda8c075cf2ee68dd34f1d10398e30989beaff54d4a9b318da90fdcdff2",
     "renderers/architecture/automatic-placement.mjs": "4b9d9d158a410e2ee6818ecfccd96d2d053dcfe3372b842820706af887dd2713",
@@ -4396,7 +4396,7 @@
     {
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
-      "local_sha256": "04921065e2647280944e95e4e019cb4d033fe26ecbcdb7fbebca5108ba715e7f",
+      "local_sha256": "deb49486894deb0c53a741db3032257be50bbae488118c388dca18f159679529",
       "packaged_sha256": "0135326e4ff6723043a27bb548d6df915d6a869c4c806ab42d04137272251e17",
       "path": "references/provenance.md",
       "target_sha256": null
@@ -4412,7 +4412,7 @@
     {
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
-      "local_sha256": "a33984b89461b782acd2062f50e37d1b347febe80b9acfb98cde1dc8b15d2663",
+      "local_sha256": "d721a58c5fdcbeeb031b218d4ed82f727ee1c99b9548d6d7079a6a9c1e477530",
       "packaged_sha256": "9a1a373c923e0cd45280ef43dc9be7580a43c227a89f8bbdb21bfed19be1f12b",
       "path": "references/setup.md",
       "target_sha256": null
@@ -4436,7 +4436,7 @@
     {
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
-      "local_sha256": "9f3042e7d7b00d13c965ea1470c96f4680ddc76114826dc90caeb945ac218ce7",
+      "local_sha256": "0a877efab51d320369dd4afe587e0960442aec8b40fa3ba3673cfe5a71826bae",
       "packaged_sha256": "c7cdb12ad5cf779b26b1ee2608edddde506a709d3bd09ee52d51c4e53c68efab",
       "path": "references/upstream-compatibility.md",
       "target_sha256": null

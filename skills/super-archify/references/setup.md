@@ -44,3 +44,13 @@ node bin/archify.mjs finalize explainer /path/to/candidate.archify.md /path/to/a
 Tests can set `ARCHIFY_UPDATE_CHECK_DISABLED=1` in that process to keep update checks from writing the upstream cache. Normal update awareness remains bounded and advisory; it never installs an upgrade. The canonical installer and existing installation ownership stay unchanged.
 
 If a required check fails, report the exact failure and stop that delivery. Do not mix package files from different upstream versions. Reconstruct from the immutable stable source and the recorded local packaging delta.
+
+## Known upstream behavior at the pin
+
+The packaged files keep their upstream bytes, so these upstream behaviors ship as they are. The full record of five items is in [upstream-compatibility](upstream-compatibility.md#accepted-upstream-behavior-notes-at-the-pin).
+
+- **Export to a destination that cannot alias the input.** `export-svg` never compares the output path with the input specification, so an output path that is a symlink to the input JSON overwrites it with SVG and reports success.
+- **Keep view ids distinct from the story id.** A view named `walkthrough` (or named after the story) has its static SVGs overwritten by the story bake, and the receipt then carries duplicate asset ids with stale hashes.
+- **Confirm the sticky comment's author before attaching.** `--target comment` picks the first comment carrying a pack block regardless of author, so another participant's comment can be selected and patched.
+- **Expect verification controls to drop from a rebuilt PR snapshot.** Rebuilding a captured PR analysis with its review reloads the wrong comparison file; the findings and review state themselves are unaffected.
+- **Do not push while an attach is uploading.** The head is checked only before upload, so a concurrent push can publish a stale pack that still reports success; re-run the attach after pushes settle.
