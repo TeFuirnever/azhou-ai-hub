@@ -10,9 +10,10 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const codex = new URL("../plugins/azhou-agent-inspector/", import.meta.url);
 const zcode = new URL("../plugins/zcode/dashboard/", import.meta.url);
-const [panel, panelArt, dashboard, artwork] = await Promise.all([
+const [panel, panelArt, wallpaper, dashboard, artwork] = await Promise.all([
   readFile(new URL("panel.html", codex), "utf8"),
   readFile(new URL("azhou.webp", codex), "base64"),
+  readFile(new URL("wallpaper.webp", codex), "base64"),
   readFile(new URL("index.html", zcode), "utf8"),
   readFile(new URL("azhou.webp", zcode)),
 ]);
@@ -76,6 +77,12 @@ const codexPage = `<!doctype html><body>${harness}<script>
     await until(() => text("[data-metric=cacheHitPercent]") === "75%", "Codex did not render cache hit rate");
     await until(() => panel("header img")?.naturalWidth === panel("header img")?.naturalHeight &&
       panel("header img").naturalWidth > 0, "Codex did not load the square portrait");
+    const backdrop = frame.contentWindow.getComputedStyle(panel("body")).backgroundImage;
+    const wallpaperUrl = backdrop.match(/data:image\\/webp;base64,[A-Za-z0-9+/=]+/)?.[0];
+    if (!wallpaperUrl) throw new Error("Codex did not apply the bundled wallpaper");
+    const wallpaperImage = new frame.contentWindow.Image();
+    wallpaperImage.src = wallpaperUrl;
+    await wallpaperImage.decode();
     if (panel("[data-metric=durationMs]").getBoundingClientRect().top !== panel(".rate").getBoundingClientRect().top) {
       throw new Error("Codex key metrics were misaligned in the narrow sidebar");
     }
@@ -156,7 +163,7 @@ const zcodeCheck = `${harness}<script>
 
 const routes = {
   "/codex": codexPage,
-  "/codex-panel": panel.replace("__ART__", panelArt),
+  "/codex-panel": panel.replace("__ART__", panelArt).replace("__WALLPAPER__", wallpaper),
   "/zcode": dashboard.replace("<head>", "<head>" + zcodeHost).replace("</body>", zcodeCheck + "</body>"),
   "/azhou.webp": artwork,
 };
