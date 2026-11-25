@@ -32,6 +32,7 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
   );
   const now = Date.now();
   addRequest.run("sess-a", 83, now - 6000, now - 5968, 750, "turn-1");
+  db.prepare("UPDATE model_usage SET cache_read_input_tokens = 50 WHERE session_id = ?").run("sess-a");
   addRequest.run("sess-a", 15, now - 5000, now - 4974, 350, "turn-1");
 
   Object.defineProperty(process, "resourcesPath", { value: root, configurable: true });
@@ -96,8 +97,10 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
   assert.equal(current.display.get("sess-a"), "— tok/s");
   assert.match(current.tooltips.get("sess-a"), /会话 1 轮 · 最近一轮 2 段/);
   assert.match(current.tooltips.get("sess-a"), /首字 0.8 秒 · 总用时/);
+  assert.match(current.tooltips.get("sess-a"), /缓存命中 25% · Context — · Memory —/);
   current.setLocale("en-US");
   assert.match(current.tooltips.get("sess-a"), /TTFT 0.8 s · Total/);
+  assert.match(current.tooltips.get("app"), /Cache hit — · Context — · Memory —/);
   assert.match(current.tooltips.get("app"), /Open TPS monitor$/);
   current.setLocale("zh-TW");
   assert.equal(current.views.get("dashboard").entry, "./dashboard/index.html");

@@ -71,6 +71,7 @@ def snapshot(home, sid):
     totals = {}
     responses = set()
     last_completed = None
+    cumulative_tokens = turn_context = None
     result = {"state": "empty"}
     with path.open("rb") as events:
         first = json.loads(events.readline())
@@ -84,10 +85,27 @@ def snapshot(home, sid):
             if not isinstance(p, dict):
                 continue
             kind, event, turn = item.get("type"), p.get("type"), p.get("turn_id")
+            if kind == "event_msg" and event == "token_count":
+                info = p.get("info")
+                if not isinstance(info, dict):
+                    continue
+                total, last = info.get("total_token_usage"), info.get("last_token_usage")
+                if not isinstance(total, dict) or not isinstance(last, dict):
+                    continue
+                cumulative = nonnegative(total.get("total_tokens"))
+                if cumulative is None or cumulative == cumulative_tokens:
+                    continue
+                cumulative_tokens = cumulative
+                if result["state"] == "running":
+                    used = nonnegative(last.get("total_tokens"))
+                    window = nonnegative(info.get("model_context_window"))
+                    turn_context = round(100 * used / window, 1) if used is not None and window else None
+                continue
             if not isinstance(turn, str) or not turn:
                 continue
             if kind == "event_msg" and event == "task_started":
                 current, totals, responses = turn, {}, set()
+                turn_context = None
                 result = {"state": "running"}
             elif turn == current:
                 if kind == "token_usage_record":
@@ -107,6 +125,8 @@ def snapshot(home, sid):
                               "outputTokens": output, "responses": len(responses) or None,
                               "effectiveTps": round(output * 1000 / duration, 1)
                               if output is not None and duration else None}
+                    if totals and turn_context is not None:
+                        result["contextUsagePercent"] = turn_context
                     last_completed = result
                 elif kind == "event_msg" and event == "turn_aborted":
                     result = {"state": "interrupted"}
@@ -121,7 +141,7 @@ def dispatch(method, params, home):
         supported = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
         return {"protocolVersion": offered if offered in supported else supported[0],
                 "capabilities": {"tools": {}, "resources": {}},
-                "serverInfo": {"name": "azhou-agent-inspector", "version": "0.1.0"}}
+                "serverInfo": {"name": "azhou-agent-inspector", "version": "0.1.1"}}
     if method == "ping":
         return {}
     if method == "tools/list":

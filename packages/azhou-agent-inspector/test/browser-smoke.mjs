@@ -49,7 +49,7 @@ const codexPage = `<!doctype html><body>${harness}<script>
   const push = (data) => send({ method: "ui/notifications/tool-result", params: { structuredContent: data } });
   const usage = (effectiveTps) => ({
     state: "complete", effectiveTps, durationMs: 2000, outputTokens: 364,
-    ttftMs: 200, cacheHitPercent: 75, responses: 2,
+    ttftMs: 200, cacheHitPercent: 75, contextUsagePercent: 40.5, responses: 2,
   });
   let refreshMode = "interrupted";
   window.addEventListener("message", event => {
@@ -78,6 +78,12 @@ const codexPage = `<!doctype html><body>${harness}<script>
   checkUi(async () => {
     await until(() => text(".rate") === "42.5 tok/s", "Codex did not render the initial tool result");
     await until(() => text("[data-metric=cacheHitPercent]") === "75%", "Codex did not render cache hit rate");
+    const performance = panel("#performance");
+    for (const expected of ["速度（整轮） 42.5 tok/s", "缓存命中 75%", "Context 占用 40.5%", "Memory —"]) {
+      if (!performance.title.includes(expected)) throw new Error("Codex performance hover omitted " + expected);
+    }
+    performance.click();
+    if (!performance.parentElement.open) throw new Error("Codex did not expose performance to click and keyboard users");
     await until(() => panel("header img")?.naturalWidth === panel("header img")?.naturalHeight &&
       panel("header img").naturalWidth > 0, "Codex did not load the square portrait");
     const backdrop = frame.contentWindow.getComputedStyle(panel("body")).backgroundImage;
