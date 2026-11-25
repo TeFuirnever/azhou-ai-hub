@@ -47,3 +47,7 @@ The turn transcripts and the verbatim receipts stay Git-external in the maintain
 Limits: one session, one model route (`opus`, which resolves to `xiaomi/mimo-v2.6-pro:max[1m]`), one scripted reader who is not a human and who accepted every recommendation instead of judging each one. Turn 5 ran on the host's default route by driver error, hit the quota wall and produced no reply. The completeness scan never finished. The `complete` receipt, with an empty frontier and no holds, has not been observed.
 
 Next action: run one session with a human reader to an empty frontier and a `complete` receipt, and record it here. The host check on Claude Code is recorded in [the receipt](../../evidence/super-grill-me-host-check-claude-2026-11-24.md).
+
+## Next check
+
+Repeat the plan-given Claude Code probe in a disposable project when the configured model route is available. Check for one design-tree anchor and one `round=1` before the reader replies, and confirm that tool results do not advance the round. Record the tested package digest and whether the host opened the brand reference.
