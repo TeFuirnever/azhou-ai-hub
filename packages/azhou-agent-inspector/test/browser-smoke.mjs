@@ -76,6 +76,9 @@ const codexPage = `<!doctype html><body>${harness}<script>
     await until(() => text("[data-metric=cacheHitPercent]") === "75%", "Codex did not render cache hit rate");
     await until(() => panel("header img")?.naturalWidth === panel("header img")?.naturalHeight &&
       panel("header img").naturalWidth > 0, "Codex did not load the square portrait");
+    if (panel("[data-metric=durationMs]").getBoundingClientRect().top !== panel(".rate").getBoundingClientRect().top) {
+      throw new Error("Codex key metrics were misaligned in the narrow sidebar");
+    }
     panel("#refresh").click();
     await until(() => text(".rate") === "182 tok/s", "Codex refresh did not render the replacement sample");
     await until(() => !panel("#round").hidden && text("#round").includes("上一已完成轮"),

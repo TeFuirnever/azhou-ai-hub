@@ -61,9 +61,11 @@
       border-radius: 0.75rem;
       background: var(--surface);
     }
+    .summary div { display: flex; flex-direction: column; }
     .summary dt { font-weight: 550; }
     .summary dd {
-      margin-block-start: 0.15rem;
+      margin-block-start: auto;
+      padding-block-start: 0.15rem;
       font-size: clamp(1.25rem, 5vw, 1.5rem);
       font-weight: 650;
       line-height: 1.25;
@@ -97,7 +99,7 @@
     <section id="snapshot" aria-label="性能指标" hidden>
       <h2 id="round" class="round" hidden>数据来自上一已完成轮</h2>
       <dl class="summary">
-        <div><dt>整轮用时（含工具）</dt><dd data-metric="durationMs"></dd></div>
+        <div><dt>耗时（含工具）</dt><dd data-metric="durationMs"></dd></div>
         <div><dt>整轮输出吞吐</dt><dd class="rate" data-metric="effectiveTps"></dd></div>
       </dl>
       <dl class="details">
