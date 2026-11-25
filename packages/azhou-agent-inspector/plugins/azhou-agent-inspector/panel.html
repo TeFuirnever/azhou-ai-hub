@@ -1,58 +1,241 @@
 <!doctype html>
-<html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>阿舟 Agent 透视台</title>
-<style>
-:root{color-scheme:light dark;font:15px/1.5 system-ui,sans-serif;--ink:light-dark(#33281f,#f3eee8);--muted:light-dark(#655d53,#bdb8b2);--accent:light-dark(#8e470c,#ffc185)}
-*{box-sizing:border-box}body{margin:0;color:var(--ink);background:light-dark(#faf8f4,#1a2027)}main{max-width:36rem;margin:auto;padding:0 18px 16px}header img{width:100%;height:85px;object-fit:cover;object-position:50% 46%;border-radius:8px}h1{font-size:1.35rem;margin:14px 0 4px}p{color:var(--muted);margin:4px 0 12px}dl{margin:0}dl div{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;padding:7px 0;border-bottom:1px solid color-mix(in srgb,currentColor 16%,transparent)}dd{margin:0;font-variant-numeric:tabular-nums}dt{color:var(--muted)}.rate{color:var(--accent);font-size:1.45rem}button{font:inherit;border:1px solid currentColor;border-radius:6px;padding:4px 12px;background:transparent;color:var(--ink)}button:focus-visible{outline:3px solid var(--accent)}small{display:block;margin:14px 0;color:var(--muted);font-size:10px}
-</style>
-<main><header><img alt="" src="data:image/webp;base64,__ART__"><h1>阿舟 Agent 透视台</h1></header>
-<p id="state" role="status">正在读取当前会话…</p><dl id="rows"></dl><button type="button" id="refresh">刷新本轮数据</button>
-<small>Azhou artwork © 小亮（阿舟 / Azhou） · CC BY-NC-ND 4.0</small></main>
-<script>
-const notices={unbound:"宿主未提供可核对的会话身份。",unavailable:"未找到唯一匹配的本地会话记录。",running:"本轮进行中，等待完整统计。",interrupted:"本轮已中断。",complete:"最近完成的一轮",empty:"此会话尚无可用的轮次统计。"};
-const rows=document.querySelector("#rows"),state=document.querySelector("#state"),refresh=document.querySelector("#refresh");
-const seconds=n=>n<60000?(n/1000).toFixed(1)+" 秒":Math.floor(n/60000)+" 分 "+((n%60000)/1000).toFixed(1)+" 秒";
-function show(result){
- const d=result?.structuredContent;
- rows.replaceChildren();
- state.textContent=notices[d?.state]||"尚未收到宿主数据。";
- const s=d?.state==="complete"?d:d?.lastCompleted;
- if(!s)return;
- if(d.state!=="complete")state.textContent+=" 以下是上一已完成轮。";
- for(const [label,key,format] of [["整轮输出吞吐","effectiveTps",n=>n+" tok/s"],["首个 token 等待","ttftMs",seconds],["整轮用时（含工具）","durationMs",seconds],["模型响应数","responses",String],["输出 tokens","outputTokens",n=>n.toLocaleString()],["本轮输入缓存命中","cacheHitPercent",n=>n+"%"]]){
-  const row=document.createElement("div"),dt=document.createElement("dt"),dd=document.createElement("dd");
-  dt.textContent=label;dd.textContent=Number.isFinite(s[key])?format(s[key]):"—";if(key==="effectiveTps")dd.className="rate";row.append(dt,dd);rows.append(row);
- }
-}
-let seq=0,ready=false;const pending=new Map();
-function rpc(method,params){
- const id=++seq;return new Promise((resolve,reject)=>{
-  const timer=setTimeout(()=>{pending.delete(id);reject(Error("timeout"))},8000);
-  pending.set(id,{resolve,reject,timer});
-  parent.postMessage({jsonrpc:"2.0",id,method,params},"*");
- });
-}
-window.addEventListener("message",e=>{
- if(e.source!==parent||e.data?.jsonrpc!=="2.0")return;
- const m=e.data;
- if(m.method==="ui/notifications/tool-result")show(m.params);
- const p=pending.get(m.id);if(!p)return;
- clearTimeout(p.timer);pending.delete(m.id);if(m.error)p.reject(Error("host"));else p.resolve(m.result);
-});
-window.addEventListener("openai:set_globals",e=>{
- const data=e.detail?.globals?.toolOutput;if(data)show({structuredContent:data});
-});
-async function update(){
- refresh.disabled=true;
- try{if(ready)show(await rpc("tools/call",{name:"session_performance",arguments:{}}));
- else if(window.openai?.callTool)show(await window.openai.callTool("session_performance",{}));
- else throw Error("offline");}
- catch{show(null);state.textContent="宿主暂时无法刷新会话数据。";}finally{refresh.disabled=false;}
-}
-refresh.onclick=update;
-if(window.openai?.toolOutput)show({structuredContent:window.openai.toolOutput});
-if(parent!==window)rpc("ui/initialize",{appInfo:{name:"azhou-agent-inspector",version:"0.1.0"},protocolVersion:"2026-01-26",appCapabilities:{}}).then(()=>{
- ready=true;parent.postMessage({jsonrpc:"2.0",method:"ui/notifications/initialized",params:{}},"*");
-}).catch(()=>{if(!window.openai?.toolOutput&&!rows.childElementCount)show(null)});
-else show(null);
-</script></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>阿舟 Agent 透视台</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font: 100%/1.5 system-ui, sans-serif;
+      --background: light-dark(#faf8f5, #191d23);
+      --surface: light-dark(#f3eee7, #222831);
+      --ink: light-dark(#2e2620, #f4eee7);
+      --muted: light-dark(#645951, #bcb8b4);
+      --accent: light-dark(#8d440f, #ffc185);
+      --line: light-dark(#ded6cc, #3a414c);
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--background); }
+    [hidden] { display: none; }
+    main { max-inline-size: 40rem; margin-inline: auto; padding: clamp(0.75rem, 4vw, 1.5rem); }
+    header, .brand { display: flex; align-items: center; gap: 0.625rem; }
+    header { flex-wrap: wrap; justify-content: space-between; }
+    .brand { flex: 1 1 10rem; min-inline-size: 0; }
+    .brand img { flex: none; inline-size: 40px; block-size: 40px; border-radius: 0.5rem; }
+    h1 { margin: 0; font-size: 1rem; font-weight: 650; overflow-wrap: anywhere; }
+    button {
+      min-block-size: 2.25rem;
+      padding: 0.25em 0.65em;
+      border: 1px solid var(--line);
+      border-radius: 0.5rem;
+      font: inherit;
+      font-size: 0.875rem;
+      color: var(--ink);
+      background: transparent;
+      cursor: pointer;
+    }
+    @media (hover: hover) {
+      button:enabled:hover { background: var(--surface); }
+    }
+    button:enabled:active { border-color: var(--accent); }
+    button:disabled { color: var(--muted); cursor: default; }
+    button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .status, .feedback, .round, dt, footer { font-size: 0.8125rem; color: var(--muted); }
+    .status { margin: 1rem 0 0.625rem; }
+    .status[data-state="running"] { color: var(--accent); }
+    .feedback { margin: 0 0 0.625rem; }
+    .feedback:empty { margin: 0; }
+    .round { margin: 0 0 0.5rem; font-weight: 600; }
+    dl, dd { margin: 0; }
+    dd { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(6.5rem, 100%), 1fr));
+      gap: 0.75rem 1rem;
+      padding: 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 0.75rem;
+      background: var(--surface);
+    }
+    .summary dt { font-weight: 550; }
+    .summary dd {
+      margin-block-start: 0.15rem;
+      font-size: clamp(1.25rem, 5vw, 1.5rem);
+      font-weight: 650;
+      line-height: 1.25;
+    }
+    .summary .rate { color: var(--accent); }
+
+    .details { margin-block-start: 0.5rem; }
+    .details div {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) fit-content(54%);
+      align-items: baseline;
+      gap: 0.5rem;
+      padding: 0.5rem 0.125rem;
+      border-block-end: 1px solid var(--line);
+    }
+    .details dd { min-inline-size: 0; font-size: 0.875rem; text-align: end; }
+    footer { margin-block-start: 1rem; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="brand">
+        <img alt="" width="40" height="40" src="data:image/webp;base64,__ART__">
+        <h1>阿舟 Agent 透视台</h1>
+      </div>
+      <button type="button" id="refresh" aria-label="刷新会话数据">刷新</button>
+    </header>
+    <p id="state" class="status" role="status">正在读取当前会话…</p>
+    <p id="feedback" class="feedback" role="status"></p>
+    <section id="snapshot" aria-label="性能指标" hidden>
+      <h2 id="round" class="round" hidden>数据来自上一已完成轮</h2>
+      <dl class="summary">
+        <div><dt>整轮用时（含工具）</dt><dd data-metric="durationMs"></dd></div>
+        <div><dt>整轮输出吞吐</dt><dd class="rate" data-metric="effectiveTps"></dd></div>
+      </dl>
+      <dl class="details">
+        <div><dt>首个 token 等待</dt><dd data-metric="ttftMs"></dd></div>
+        <div><dt>输入缓存命中</dt><dd data-metric="cacheHitPercent"></dd></div>
+        <div><dt>输出 tokens</dt><dd data-metric="outputTokens"></dd></div>
+        <div><dt>模型响应数</dt><dd data-metric="responses"></dd></div>
+      </dl>
+    </section>
+    <footer>Azhou artwork © 小亮（阿舟 / Azhou） · CC BY-NC-ND 4.0</footer>
+  </main>
+  <script>
+    const notices = {
+      unbound: "宿主未提供可核对的会话身份。",
+      unavailable: "未找到唯一匹配的本地会话记录。",
+      running: "本轮进行中，完成后可刷新。",
+      interrupted: "本轮已中断。",
+      complete: "最近完成的一轮",
+      empty: "此会话尚无可用的轮次统计。",
+    };
+
+    const state = document.querySelector("#state");
+    const snapshot = document.querySelector("#snapshot");
+    const round = document.querySelector("#round");
+    const refresh = document.querySelector("#refresh");
+    const feedback = document.querySelector("#feedback");
+    const number = new Intl.NumberFormat(document.documentElement.lang, { maximumFractionDigits: 1 });
+    const decimal = new Intl.NumberFormat(document.documentElement.lang, {
+      minimumFractionDigits: 1, maximumFractionDigits: 1,
+    });
+    const seconds = milliseconds => {
+      const tenths = Math.round(milliseconds / 100);
+      const minutes = Math.floor(tenths / 600);
+      const remainder = decimal.format((tenths % 600) / 10) + " 秒";
+      return minutes ? number.format(minutes) + " 分 " + remainder : remainder;
+    };
+    const formats = {
+      durationMs: seconds,
+      effectiveTps: value => number.format(value) + " tok/s",
+      ttftMs: seconds,
+      cacheHitPercent: value => number.format(value) + "%",
+      outputTokens: value => number.format(value),
+      responses: value => number.format(value),
+    };
+    const metrics = document.querySelectorAll("[data-metric]");
+
+    let revision = 0;
+    function acceptSnapshot(data) {
+      if (data !== null && !Object.hasOwn(notices, data?.state)) return false;
+
+      revision += 1;
+      const status = data?.state ?? "";
+      const sample = status === "complete" ? data : data?.lastCompleted;
+      state.dataset.state = status;
+      state.textContent = notices[status] ?? "尚未收到宿主数据。";
+      snapshot.hidden = !sample;
+      round.hidden = status === "complete";
+      for (const metric of metrics) {
+        const key = metric.dataset.metric;
+        const value = sample?.[key];
+        metric.textContent = Number.isFinite(value) ? formats[key](value) : "—";
+      }
+      feedback.textContent = "";
+      return true;
+    }
+
+    let sequence = 0;
+    let ready = false;
+    const pending = new Map();
+    function rpc(method, params) {
+      const id = ++sequence;
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(Error("timeout"));
+        }, 8000);
+        pending.set(id, { resolve, reject, timer });
+        parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+      });
+    }
+
+    window.addEventListener("message", event => {
+      if (event.source !== parent || event.data?.jsonrpc !== "2.0") return;
+      const message = event.data;
+      if (message.method === "ui/notifications/tool-result") {
+        acceptSnapshot(message.params?.structuredContent);
+      }
+      const request = pending.get(message.id);
+      if (!request) return;
+      clearTimeout(request.timer);
+      pending.delete(message.id);
+      if (message.error) request.reject(Error("host"));
+      else request.resolve(message.result);
+    });
+
+    window.addEventListener("openai:set_globals", event => {
+      acceptSnapshot(event.detail?.globals?.toolOutput);
+    });
+
+    async function update() {
+      const requestedAt = revision;
+      refresh.disabled = true;
+      feedback.textContent = "正在刷新…";
+      try {
+        let result;
+        if (ready) result = await rpc("tools/call", { name: "session_performance", arguments: {} });
+        else if (window.openai?.callTool) result = await window.openai.callTool("session_performance", {});
+        else throw Error("offline");
+
+        // A host push may already have replaced the visible session while the call was pending.
+        if (revision === requestedAt && !acceptSnapshot(result?.structuredContent)) {
+          throw Error("missing snapshot");
+        }
+      } catch {
+        if (revision === requestedAt) {
+          feedback.textContent = snapshot.hidden ? "刷新失败，请重试。" : "刷新失败，仍显示上次读取的数据。";
+        }
+      } finally {
+        refresh.disabled = false;
+      }
+    }
+
+    refresh.addEventListener("click", update);
+    acceptSnapshot(window.openai?.toolOutput);
+    if (parent !== window) {
+      rpc("ui/initialize", {
+        appInfo: { name: "azhou-agent-inspector", version: "0.1.0" },
+        protocolVersion: "2026-01-26",
+        appCapabilities: {},
+      }).then(() => {
+        ready = true;
+        parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized", params: {} }, "*");
+      }).catch(() => {
+        if (!revision) acceptSnapshot(null);
+      });
+    } else if (!revision) {
+      acceptSnapshot(null);
+    }
+  </script>
+</body>
+</html>
