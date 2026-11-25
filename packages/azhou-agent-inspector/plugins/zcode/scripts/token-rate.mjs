@@ -211,6 +211,19 @@ function countSessionTurns(db, sid) {
   }
 }
 
+function turnCacheHit(rows) {
+  let input = 0;
+  let cached = 0;
+  for (const row of rows) {
+    const { input_tokens, cache_read_input_tokens } = row;
+    if (!Number.isSafeInteger(input_tokens) || !Number.isSafeInteger(cache_read_input_tokens) ||
+        input_tokens < 0 || cache_read_input_tokens < 0 || cache_read_input_tokens > input_tokens) return null;
+    input += input_tokens;
+    cached += cache_read_input_tokens;
+  }
+  return input > 0 ? Math.round((cached / input) * 1000) / 10 : null;
+}
+
 function queryTurn(sessionId, opts = {}) {
   const db = openDb();
   try {
@@ -279,6 +292,7 @@ function queryTurn(sessionId, opts = {}) {
       tokPerSec: rated.length ? Math.round((ratedTokens / ratedGenMs) * 10000) / 10 : null,
       peak: rated.length ? Math.max(...rated.map((i) => i.tokPerSec)) : null,
       spark: STATS_CFG.spark ? sparkBars(sparkRates) : "",
+      ...(opts.composer ? { cacheHitPercent: turnCacheHit(turnRows) } : {}),
     };
     return { sessionId: sid, turnId, turn, session, ...composer };
   } finally {

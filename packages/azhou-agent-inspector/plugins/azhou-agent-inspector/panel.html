@@ -103,6 +103,9 @@
     }
     .details div + div { border-block-start: 1px solid var(--line); }
     .details dd { min-inline-size: 0; font-size: 0.875rem; text-align: end; }
+    .performance { margin-block-start: 0.625rem; font-size: 0.875rem; }
+    .performance summary { cursor: pointer; width: fit-content; padding: 0.25rem; }
+    .performance summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     footer { margin-block-start: 1rem; overflow-wrap: anywhere; }
   </style>
 </head>
@@ -130,6 +133,15 @@
         <div><dt>模型响应数</dt><dd data-metric="responses"></dd></div>
       </dl>
     </section>
+    <details class="performance">
+      <summary id="performance">性能速览</summary>
+      <dl class="details">
+        <div><dt>速度（整轮）</dt><dd data-metric="effectiveTps">—</dd></div>
+        <div><dt>缓存命中</dt><dd data-metric="cacheHitPercent">—</dd></div>
+        <div><dt>Context 占用</dt><dd data-metric="contextUsagePercent">—</dd></div>
+        <div><dt>Memory</dt><dd>—</dd></div>
+      </dl>
+    </details>
     <footer>Azhou artwork © 小亮（阿舟 / Azhou） · CC BY-NC-ND 4.0</footer>
   </main>
   <script>
@@ -147,6 +159,7 @@
     const round = document.querySelector("#round");
     const refresh = document.querySelector("#refresh");
     const feedback = document.querySelector("#feedback");
+    const performanceToggle = document.querySelector("#performance");
     const number = new Intl.NumberFormat(document.documentElement.lang, { maximumFractionDigits: 1 });
     const decimal = new Intl.NumberFormat(document.documentElement.lang, {
       minimumFractionDigits: 1, maximumFractionDigits: 1,
@@ -162,6 +175,7 @@
       effectiveTps: value => number.format(value) + " tok/s",
       ttftMs: seconds,
       cacheHitPercent: value => number.format(value) + "%",
+      contextUsagePercent: value => number.format(value) + "%",
       outputTokens: value => number.format(value),
       responses: value => number.format(value),
     };
@@ -183,6 +197,8 @@
         const value = sample?.[key];
         metric.textContent = Number.isFinite(value) ? formats[key](value) : "—";
       }
+      performanceToggle.title = Array.from(performanceToggle.parentElement.querySelectorAll("dt"),
+        term => term.textContent + " " + term.nextElementSibling.textContent).join("\n");
       feedback.textContent = "";
       return true;
     }

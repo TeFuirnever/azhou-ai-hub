@@ -66,6 +66,10 @@ class PanelTests(unittest.TestCase):
             events = [
                 ("session_meta", {"id": sid}),
                 ("event_msg", {"type": "task_started", "turn_id": "first"}),
+                ("event_msg", {"type": "token_count", "info": {
+                    "total_token_usage": {"total_tokens": 800},
+                    "last_token_usage": {"total_tokens": 60}, "model_context_window": 100,
+                }}),
                 ("token_usage_record", {"turn_id": "first", "response_id": "same",
                                         "turn_token_usage": {"output_tokens": 10}}),
                 ("token_usage_record", {"turn_id": "first", "response_id": "same",
@@ -81,7 +85,7 @@ class PanelTests(unittest.TestCase):
             self.assertEqual("running", running["state"])
             self.assertEqual({"state": "complete", "effectiveTps": 30.0, "ttftMs": 400,
                               "durationMs": 2000, "responses": 1, "outputTokens": 60,
-                              "cacheHitPercent": 25.0}, running["lastCompleted"])
+                              "cacheHitPercent": 25.0, "contextUsagePercent": 60.0}, running["lastCompleted"])
             with path.open("a", encoding="utf8") as stream:
                 stream.write(json.dumps({"type": "event_msg", "payload": {
                     "type": "turn_aborted", "turn_id": "second"}}) + "\n")
@@ -89,6 +93,14 @@ class PanelTests(unittest.TestCase):
             interrupted = monitor.snapshot(home, sid)
             self.assertEqual("interrupted", interrupted["state"])
             self.assertEqual(running["lastCompleted"], interrupted["lastCompleted"])
+            # A rate-limit event can replay the preceding turn's cumulative usage.
+            repeated = events[2][1]
+            second = [*events, ("event_msg", repeated),
+                      ("token_usage_record", {"turn_id": "second", "turn_token_usage": {"output_tokens": 1}}),
+                      ("event_msg", {"type": "task_complete", "turn_id": "second", "duration_ms": 1000})]
+            path.write_text("".join(json.dumps({"type": kind, "payload": payload}) + "\n"
+                                    for kind, payload in second), encoding="utf8")
+            self.assertNotIn("contextUsagePercent", monitor.snapshot(home, sid))
 
     def test_resource_is_registered_and_self_contained(self):
         listed = monitor.dispatch("tools/list",{},None)["tools"][0]

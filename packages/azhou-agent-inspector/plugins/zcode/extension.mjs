@@ -27,6 +27,7 @@ const chinese = {
   total: "总用时",
   seconds: "秒",
   milliseconds: "毫秒",
+  cache: "缓存命中",
   open: "点击打开监控面板",
 };
 
@@ -47,6 +48,7 @@ const english = {
   total: "Total",
   seconds: "s",
   milliseconds: "ms",
+  cache: "Cache hit",
   open: "Open TPS monitor",
 };
 
@@ -66,13 +68,11 @@ function rateTooltip(text, summary, rateLabel, copy) {
       lines.push(`${turns} · ${current ? copy.waiting : copy.empty}`);
     }
   }
-  const tooltip = [...lines, "", copy.open].join("\n");
-  // Fit long English cards without cutting a value or the monitor action.
-  if (tooltip.length <= 200) return tooltip;
-  const body = lines.filter(Boolean).join("\n");
-  const limit = 199 - copy.open.length;
-  const end = body.length <= limit ? body.length : Math.max(0, body.lastIndexOf("\n", limit));
-  return `${body.slice(0, end)}\n${copy.open}`;
+  const cacheHit = summary?.turn?.cacheHitPercent;
+  const stats = `${copy.cache} ${cacheHit == null ? "—" : `${cacheHit}%`} · Context — · Memory —`;
+  const tooltip = [...lines, stats, "", copy.open].join("\n");
+  // A long session summary can be omitted. Keep every metric and the monitor action.
+  return tooltip.length <= 200 ? tooltip : [lines[0], stats, "", copy.open].join("\n");
 }
 
 function supportsDesktopVersion(version) {
