@@ -1,6 +1,6 @@
 {
   "name": "azhou-agent-inspector",
-  "version": "0.1.1",
+  "version": "0.12.5",
   "description": "Read-only performance details for the current desktop conversation",
   "mcpServers": "./.mcp.json",
   "interface": {"displayName": "阿舟 Agent 透视台", "shortDescription": "Current conversation timing and token usage"}

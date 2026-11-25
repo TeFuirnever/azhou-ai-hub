@@ -102,6 +102,25 @@ class PanelTests(unittest.TestCase):
                                     for kind, payload in second), encoding="utf8")
             self.assertNotIn("contextUsagePercent", monitor.snapshot(home, sid))
 
+    def test_inspector_surfaces_report_the_same_release(self):
+        package = monitor.ROOT.parents[1]
+        manifests = [
+            package / "hub-package.json",
+            package / "plugins/zcode/.zcode-plugin/plugin.json",
+            monitor.ROOT / ".codex-plugin/plugin.json",
+        ]
+        versions = [json.loads(path.read_text("utf8"))["version"] for path in manifests]
+        marketplace = json.loads((package / "marketplace.json").read_text("utf8"))
+        versions += [entry["version"] for entry in marketplace["plugins"] if entry["name"] == "azhou-agent-inspector"]
+        self.assertEqual(4, len(versions))
+        self.assertEqual(1, len(set(versions)), versions)
+        version = versions[0]
+        hello = monitor.dispatch("initialize", {}, None)
+        self.assertEqual(version, hello["serverInfo"]["version"])
+        html = monitor.dispatch("resources/read", {"uri": monitor.URI}, None)["contents"][0]["text"]
+        self.assertIn(f'version: {json.dumps(version)}', html)
+        self.assertNotIn("__PLUGIN_VERSION__", html)
+
     def test_resource_is_registered_and_self_contained(self):
         listed = monitor.dispatch("tools/list",{},None)["tools"][0]
         self.assertEqual([{"type":"thread"}],listed["_meta"]["openai/ui"]["entrypoints"])

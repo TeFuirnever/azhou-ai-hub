@@ -263,7 +263,7 @@
     acceptSnapshot(window.openai?.toolOutput);
     if (parent !== window) {
       rpc("ui/initialize", {
-        appInfo: { name: "azhou-agent-inspector", version: "0.1.0" },
+        appInfo: { name: "azhou-agent-inspector", version: __PLUGIN_VERSION__ },
         protocolVersion: "2026-01-26",
         appCapabilities: {},
       }).then(() => {

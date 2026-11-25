@@ -10,13 +10,14 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const codex = new URL("../plugins/azhou-agent-inspector/", import.meta.url);
 const zcode = new URL("../plugins/zcode/dashboard/", import.meta.url);
-const [panel, panelArt, wallpaper, dashboard, artwork, zcodeWallpaper] = await Promise.all([
+const [panel, panelArt, wallpaper, dashboard, artwork, zcodeWallpaper, manifest] = await Promise.all([
   readFile(new URL("panel.html", codex), "utf8"),
   readFile(new URL("azhou.webp", codex), "base64"),
   readFile(new URL("wallpaper.webp", codex), "base64"),
   readFile(new URL("index.html", zcode), "utf8"),
   readFile(new URL("azhou.webp", zcode)),
   readFile(new URL("wallpaper.webp", zcode)),
+  readFile(new URL(".codex-plugin/plugin.json", codex), "utf8"),
 ]);
 assert.equal(artwork.toString("base64"), panelArt, "The two dashboards use the same portrait");
 assert.equal(zcodeWallpaper.toString("base64"), wallpaper, "The two dashboards use the same wallpaper");
@@ -225,7 +226,8 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
 
 const routes = {
   "/codex": codexPage,
-  "/codex-panel": panel.replace("__ART__", panelArt).replace("__WALLPAPER__", wallpaper),
+  "/codex-panel": panel.replace("__ART__", panelArt).replace("__WALLPAPER__", wallpaper)
+    .replace("__PLUGIN_VERSION__", JSON.stringify(JSON.parse(manifest).version)),
   "/zcode": zcodePage,
   "/zcode-panel": dashboard.replace("<head>", "<head>" + zcodeHost),
 };
