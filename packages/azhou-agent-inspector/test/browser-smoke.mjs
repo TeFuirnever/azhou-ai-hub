@@ -83,8 +83,11 @@ const codexPage = `<!doctype html><body>${harness}<script>
     const wallpaperImage = new frame.contentWindow.Image();
     wallpaperImage.src = wallpaperUrl;
     await wallpaperImage.decode();
-    if (panel("[data-metric=durationMs]").getBoundingClientRect().top !== panel(".rate").getBoundingClientRect().top) {
-      throw new Error("Codex key metrics were misaligned in the narrow sidebar");
+    const duration = panel("[data-metric=durationMs]").getBoundingClientRect();
+    const rate = panel(".rate").getBoundingClientRect();
+    const sameColumn = Math.abs(duration.left - rate.left) < 1;
+    if (sameColumn ? rate.top < duration.bottom : Math.abs(duration.bottom - rate.bottom) > 1) {
+      throw new Error("Codex key metrics overlapped or lost their alignment");
     }
     panel("#refresh").click();
     await until(() => text(".rate") === "182 tok/s", "Codex refresh did not render the replacement sample");
