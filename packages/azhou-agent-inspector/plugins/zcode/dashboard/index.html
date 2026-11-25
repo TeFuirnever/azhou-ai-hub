@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>阿舟 Agent 透视台 · ZCode</title>
+<title>阿舟 Agent 工作台 · ZCode</title>
 <script>
   /* 主题预置:样式应用前读持久化选择,避免日间用户看到暗色闪屏 */
   try {
@@ -226,7 +226,7 @@
   <header class="top reveal" style="--d:.02s">
     <div class="brand">
       <img id="brandPortrait" hidden alt="" width="40" height="40">
-      <h1 data-i18n="heading">阿舟 Agent 透视台</h1>
+      <h1 data-i18n="heading">阿舟 Agent 工作台</h1>
     </div>
     <div class="clockbox">
       <button class="theme-toggle" id="themeBtn" type="button">🌙 夜间</button>
@@ -304,8 +304,8 @@ const $ = (id) => document.getElementById(id);
 const HIST_SPARK = 20; // 泳道迷你曲线取最近 20 段
 const translations = {
   "zh-CN": {
-    title: "阿舟 Agent 透视台 · ZCode",
-    heading: "阿舟 Agent 透视台",
+    title: "阿舟 Agent 工作台 · ZCode",
+    heading: "阿舟 Agent 工作台",
     turnDuration: "整轮用时",
     night: "🌙 夜间",
     day: "☀️ 日间",
@@ -355,8 +355,8 @@ const translations = {
     cores: (n) => `${n} 核`,
   },
   "en-US": {
-    title: "Token Rate by Session · Azhou Agent Inspector",
-    heading: "Azhou Agent Inspector",
+    title: "Token Rate by Session · Azhou Agent Workbench",
+    heading: "Azhou Agent Workbench",
     turnDuration: "Turn duration",
     night: "🌙 Night",
     day: "☀️ Day",
