@@ -10,13 +10,16 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const codex = new URL("../plugins/azhou-agent-inspector/", import.meta.url);
 const zcode = new URL("../plugins/zcode/dashboard/", import.meta.url);
-const [panel, panelArt, wallpaper, dashboard, artwork] = await Promise.all([
+const [panel, panelArt, wallpaper, dashboard, artwork, zcodeWallpaper] = await Promise.all([
   readFile(new URL("panel.html", codex), "utf8"),
   readFile(new URL("azhou.webp", codex), "base64"),
   readFile(new URL("wallpaper.webp", codex), "base64"),
   readFile(new URL("index.html", zcode), "utf8"),
   readFile(new URL("azhou.webp", zcode)),
+  readFile(new URL("wallpaper.webp", zcode)),
 ]);
+assert.equal(artwork.toString("base64"), panelArt, "The two dashboards use the same portrait");
+assert.equal(zcodeWallpaper.toString("base64"), wallpaper, "The two dashboards use the same wallpaper");
 
 const harness = `
 <output id="smoke-result" data-result="pending"></output>
@@ -130,9 +133,12 @@ const codexPage = `<!doctype html><body>${harness}<script>
 
 const zcodeHost = `<script>
   let empty = false;
+  window.addEventListener("message", (event) => { if (event.data === "smoke-empty") empty = true; });
   const lane = (sessionId, rate) => ({
     sessionId, label: "Smoke " + sessionId, model: "Fixture", cwd: "/fixtures/" + sessionId,
     status: "active", latest: { tokPerSec: rate, outputTokens: 200, genMs: 1000, completedAt: Date.now() },
+    turn: { tokPerSec: rate, totalMs: rate * 10, genMs: 600, ttftMs: 100, totalOutput: 200,
+      totalReasoning: 0, requests: 1, rated: true, peak: rate },
     session: { avg: rate, max: rate, totalOutput: 200, totalReasoning: 0, requests: 1 },
     history: [rate - 2, rate],
   });
@@ -150,25 +156,70 @@ const zcodeHost = `<script>
     },
   };
 </script>`;
-const zcodeCheck = `${harness}<script>
-  const value = (id) => document.getElementById(id).textContent;
+const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard" src="/zcode-panel"></iframe><script>
+  const frame = document.querySelector("iframe");
+  const doc = () => frame.contentDocument;
+  const value = (id) => doc()?.getElementById(id)?.textContent;
   checkUi(async () => {
     await until(() => value("dName") === "Smoke B" && Number(value("dRate")) === 200, "ZCode did not follow the focused session");
+    if (value("dDuration") !== "2.0 s") throw new Error("ZCode did not show the focused turn duration");
+    const portrait = doc().querySelector(".brand img");
+    await until(() => portrait.naturalWidth > 0, "ZCode portrait did not load");
+    if (!portrait.naturalWidth || portrait.naturalWidth !== portrait.naturalHeight) {
+      throw new Error("ZCode did not load the square portrait");
+    }
+    const wallpaper = new frame.contentWindow.Image();
+    wallpaper.src = "./wallpaper.webp";
+    await until(() => wallpaper.naturalWidth > 0, "ZCode wallpaper did not load");
+    const root = doc().documentElement;
+    const startTheme = root.dataset.theme;
+    for (const theme of ["light", "dark"]) {
+      if (root.dataset.theme !== theme) doc().getElementById("themeBtn").click();
+      const backdrop = frame.contentWindow.getComputedStyle(doc().body, "::before").backgroundImage;
+      if (root.dataset.theme !== theme || !backdrop.includes("wallpaper.webp")) {
+        throw new Error("ZCode did not apply its wallpaper in " + theme);
+      }
+      for (const width of [240, 360, 684, 920, 1200]) {
+        frame.style.width = width + "px";
+        for (const fontSize of ["100%", "200%"]) {
+          root.style.fontSize = fontSize;
+          if (root.scrollWidth > root.clientWidth + 1) {
+            throw new Error("ZCode dashboard overflow at " + width + "px / " + fontSize + " / " + theme);
+          }
+          const duration = doc().querySelector("#dDuration").getBoundingClientRect();
+          if (width <= 920 && duration.top >= doc().querySelector(".session-list").getBoundingClientRect().top) {
+            throw new Error("ZCode did not prioritize the selected session's metrics in the narrow pane");
+          }
+          const rate = doc().querySelector(".hero .rate").getBoundingClientRect();
+          const stacked = Math.abs(duration.left - rate.left) < 1;
+          if (stacked ? rate.top < duration.bottom : Math.abs(duration.bottom - rate.bottom) > 1) {
+            throw new Error("ZCode primary metrics overlapped or lost their alignment");
+          }
+          if (fontSize === "100%" && (width === 240 && !stacked || width === 1200 && stacked)) {
+            throw new Error("ZCode primary metrics did not adapt to the available width");
+          }
+        }
+      }
+    }
+    root.style.removeProperty("font-size");
+    if (root.dataset.theme !== startTheme) doc().getElementById("themeBtn").click();
     await until(() => value("cpu") === "—" && value("mem") === "4.0 / 8 GB", "ZCode did not render memory when CPU was unavailable");
-    document.querySelector("#lanes .lane").click();
+    doc().querySelector("#lanes .lane").click();
     await until(() => value("dName") === "Smoke A" && Number(value("dRate")) === 100, "ZCode did not switch the focused session");
-    empty = true;
-    await until(() => value("dName") === "No sessions" && value("dRate") === "--" &&
+    frame.contentWindow.postMessage("smoke-empty", "*");
+    await until(() => value("dName") === "No sessions" && value("dRate") === "—" && value("dDuration") === "—" &&
       !value("dDir") && !value("dModel") && value("cCum") === "--" &&
-      document.getElementById("follow").hidden, "ZCode kept details from an expired session");
+      doc().getElementById("follow").hidden, "ZCode kept details from an expired session");
   });
 </script>`;
 
 const routes = {
   "/codex": codexPage,
   "/codex-panel": panel.replace("__ART__", panelArt).replace("__WALLPAPER__", wallpaper),
-  "/zcode": dashboard.replace("<head>", "<head>" + zcodeHost).replace("</body>", zcodeCheck + "</body>"),
+  "/zcode": zcodePage,
+  "/zcode-panel": dashboard.replace("<head>", "<head>" + zcodeHost),
   "/azhou.webp": artwork,
+  "/wallpaper.webp": zcodeWallpaper,
 };
 const server = createServer((request, response) => {
   const body = Object.hasOwn(routes, request.url) ? routes[request.url] : null;

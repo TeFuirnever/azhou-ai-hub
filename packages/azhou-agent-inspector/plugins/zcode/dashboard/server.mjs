@@ -61,9 +61,9 @@ const server = http.createServer(async (req, res) => {
     res.end(indexHtml);
     return;
   }
-  if (req.url === "/azhou.webp") {
+  if (req.url === "/azhou.webp" || req.url === "/wallpaper.webp") {
     res.writeHead(200, { "Content-Type": "image/webp" });
-    res.end(fs.readFileSync(path.join(here, "azhou.webp")));
+    res.end(fs.readFileSync(path.join(here, req.url.slice(1))));
     return;
   }
   if (req.url.startsWith("/api/metrics")) {

@@ -74,4 +74,4 @@ The [2026-10-25 acceptance record](../evidence/optional-integrations-2026-10-25.
 
 ## Azhou Agent Inspector
 
-The [package notice](../packages/azhou-agent-inspector/NOTICE.md) records the pinned ZCode import, retained MIT notice, artwork terms and upstream update procedure. The Codex adapter is maintained in the Hub.
+The [package notice](../packages/azhou-agent-inspector/NOTICE.md) records the pinned ZCode import, retained MIT notice, artwork terms and upstream update procedure. The Codex adapter is maintained in the Hub. ZCode 0.12.1 packages byte-identical copies of the Codex portrait and wallpaper for its independent native install. The [artwork record](../packages/azhou-agent-inspector/plugins/zcode/dashboard/ARTWORK.md) links to the original sources, license and conversion instructions.
