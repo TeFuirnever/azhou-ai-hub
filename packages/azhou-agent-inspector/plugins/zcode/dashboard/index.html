@@ -621,8 +621,13 @@ function renderDetail(s) {
       [copy.reasoning, fmtNum(t.totalReasoning) + " tok"],
       [zh ? "请求段数" : "Request segments", String(t.requests)],
       [copy.peak, t.rated ? rate1(t.peak) + " tok/s" : "—"],
-      [s.composerTurn ? (zh ? "有效段均速" : "Mean rated segment speed") : (zh ? "整轮生成均速" : "Turn generation rate"), Number.isFinite(t.tokPerSec) ? rate1(t.tokPerSec) + " tok/s" : "—"],
     ];
+    if (s.requestRate != null || !Number.isFinite(t.tokPerSec)) {
+      rows.push([
+        s.composerTurn ? (zh ? "有效段均速" : "Mean rated segment speed") : (zh ? "整轮生成均速" : "Turn generation rate"),
+        Number.isFinite(t.tokPerSec) ? rate1(t.tokPerSec) + " tok/s" : "—",
+      ]);
+    }
     const list = document.createElement("dl");
     for (const [label, value] of rows) {
       const term = document.createElement("dt"), detail = document.createElement("dd");
