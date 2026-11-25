@@ -188,6 +188,7 @@ async function main() {
       assert.equal(art.headers.get("content-type"), "image/webp");
       assert.deepEqual(Buffer.from(await art.arrayBuffer()), fs.readFileSync(path.join(here, "..", name)));
     }
+    assert.equal((await fetch(dashboard + "/unregistered.webp")).status, 404);
     const usage = await fetch(dashboard + "/api/sessions");
     assert.equal(usage.status, 200);
     const { sessions } = await usage.json();

@@ -33,6 +33,10 @@ const idleIdx = args.indexOf("--idle-exit");
 const IDLE_EXIT_MIN = idleIdx !== -1 ? Number(args[idleIdx + 1]) : 180;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const indexHtml = fs.readFileSync(path.join(here, "index.html"), "utf8");
+const artwork = new Map([
+  ["/azhou.webp", path.join(here, "azhou.webp")],
+  ["/wallpaper.webp", path.join(here, "wallpaper.webp")],
+]);
 
 // PID 文件:供 /tps-doctor 探测运行状态并提供停止方式
 const PID_FILE = path.join(os.homedir(), ".zcode", "tps-monitor.dashboard.pid");
@@ -61,9 +65,10 @@ const server = http.createServer(async (req, res) => {
     res.end(indexHtml);
     return;
   }
-  if (req.url === "/azhou.webp" || req.url === "/wallpaper.webp") {
+  const artPath = artwork.get(req.url);
+  if (artPath) {
     res.writeHead(200, { "Content-Type": "image/webp" });
-    res.end(fs.readFileSync(path.join(here, req.url.slice(1))));
+    res.end(fs.readFileSync(artPath));
     return;
   }
   if (req.url.startsWith("/api/metrics")) {
