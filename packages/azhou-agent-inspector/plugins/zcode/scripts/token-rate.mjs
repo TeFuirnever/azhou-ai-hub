@@ -540,7 +540,11 @@ function querySessions(opts = {}) {
     lanes.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
 
     if (!opts.fresh) sessionsStore.set(withinMs, cache);
-    return { ts: now, withinMs, sessions: lanes.slice(0, laneMax), total: lanes.length };
+    const result = { ts: now, withinMs, sessions: lanes.slice(0, laneMax), total: lanes.length };
+    if (opts.focusedSessionId != null) {
+      result.focusedSession = lanes.find((session) => session.sessionId === opts.focusedSessionId) ?? null;
+    }
+    return result;
   } finally {
     db.close();
   }

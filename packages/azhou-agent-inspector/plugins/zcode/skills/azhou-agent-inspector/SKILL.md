@@ -3,7 +3,7 @@ name: azhou-agent-inspector
 description: Token 输出速率与吞吐监控。当用户询问 token 速率、生成速度、tok/s、模型输出快慢、TTFT(首 token 延迟),或 TPS、QPS、吞吐、接口延迟、想看实时监控大屏时使用。Token 速率读取 ZCode usage 数据库,是真实数据;业务 TPS 支持指标接口或演示数据。
 ---
 
-# Azhou Agent Inspector(token 速率 + 业务吞吐)
+# Azhou Agent Workbench(token 速率 + 业务吞吐)
 
 两类指标:
 
@@ -20,7 +20,7 @@ description: Token 输出速率与吞吐监控。当用户询问 token 速率、
    ```
    可设 `ZCODE_SESSION_ID` 环境变量只统计当前会话;钩子已自动这么做。
 2. 业务 TPS:MCP 工具 `tps_snapshot`/`tps_watch`,或 `node <插件目录>/scripts/collect.mjs [--watch N]`。
-3. 实时大屏(浏览器,**多会话泳道**:每个会话一条泳道与三态状态,右侧聚焦会话详情,每秒刷新):
+3. 会话仪表盘（浏览器，每秒刷新最新活动会话的统计和生成速率曲线）：
    ```
    node <插件目录>/dashboard/server.mjs   # http://127.0.0.1:7423
    ```

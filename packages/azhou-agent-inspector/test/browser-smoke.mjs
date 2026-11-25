@@ -139,8 +139,10 @@ const codexPage = `<!doctype html><body>${harness}<script>
 </script>`;
 
 const zcodeHost = `<script>
-  let empty = false;
-  window.addEventListener("message", (event) => { if (event.data === "smoke-empty") empty = true; });
+  let focusedSessionId = "B";
+  window.addEventListener("message", (event) => {
+    if (event.data?.type === "smoke-focus") focusedSessionId = event.data.sessionId;
+  });
   const lane = (sessionId, rate, requestRate) => ({
     sessionId, label: "Smoke " + sessionId, model: "Fixture", cwd: "/fixtures/" + sessionId, requestRate,
     status: "active", latest: { tokPerSec: rate, outputTokens: 200, genMs: 1000, completedAt: Date.now() },
@@ -161,9 +163,10 @@ const zcodeHost = `<script>
         cpuPercent: null, memUsedMB: 4096, memTotalMB: 8192, memPercent: 50,
         hostUptimeHours: 1, platform: "fixture", cpuCores: 4,
       } } };
-      return { structuredContent: empty
-        ? { sessions: [], total: 0 }
-        : { sessions: [lane("A", 100, 125), lane("B", 200)], total: 2, focusedSessionId: "B" } };
+      const recent = lane("A", 100, 125);
+      const focusedSession = focusedSessionId === "B" ? lane("B", 200)
+        : focusedSessionId === "A" ? recent : null;
+      return { structuredContent: { sessions: [recent], total: 2, focusedSessionId, focusedSession } };
     },
   };
 </script>`;
@@ -174,6 +177,9 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
   checkUi(async () => {
     await until(() => value("dName") === "Smoke B" && Number(value("dRate")) === 200, "ZCode did not follow the focused session");
     if (value("dDuration") !== "2.0 s") throw new Error("ZCode did not show the focused turn duration");
+    if (doc().querySelector(".session-list, #lanes, #follow")) {
+      throw new Error("ZCode rendered a second session navigation list");
+    }
     if (value("dSub").includes("Turn generation rate")) {
       throw new Error("ZCode repeated the turn rate already shown in the headline");
     }
@@ -201,9 +207,6 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
             throw new Error("ZCode dashboard overflow at " + width + "px / " + fontSize + " / " + theme);
           }
           const duration = doc().querySelector("#dDuration").getBoundingClientRect();
-          if (width <= 920 && duration.top >= doc().querySelector(".session-list").getBoundingClientRect().top) {
-            throw new Error("ZCode did not prioritize the selected session's metrics in the narrow pane");
-          }
           const rate = doc().querySelector(".hero .rate").getBoundingClientRect();
           const stacked = Math.abs(duration.left - rate.left) < 1;
           if (stacked ? rate.top < duration.bottom : Math.abs(duration.bottom - rate.bottom) > 1) {
@@ -218,16 +221,17 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     root.style.removeProperty("font-size");
     if (root.dataset.theme !== startTheme) doc().getElementById("themeBtn").click();
     await until(() => value("cpu") === "—" && value("mem") === "4.0 / 8 GB", "ZCode did not render memory when CPU was unavailable");
-    doc().querySelector("#lanes .lane").click();
-    await until(() => value("dName") === "Smoke A" && Number(value("dRate")) === 125, "ZCode did not switch the focused session");
+    frame.contentWindow.postMessage({type: "smoke-focus", sessionId: "A"}, "*");
+    await until(() => value("dName") === "Smoke A" && Number(value("dRate")) === 125, "Dashboard did not follow a ZCode session change");
     const turnRate = [...doc().querySelectorAll("#dSub dt")].find(term => term.textContent === "Turn generation rate");
     if (turnRate?.nextElementSibling?.textContent !== "100.0 tok/s") {
       throw new Error("ZCode hid the turn rate while the headline showed the request rate");
     }
-    frame.contentWindow.postMessage("smoke-empty", "*");
-    await until(() => value("dName") === "No sessions" && value("dRate") === "—" && value("dDuration") === "—" &&
-      !value("dDir") && !value("dModel") && value("cCum") === "--" &&
-      doc().getElementById("follow").hidden, "ZCode kept details from an expired session");
+    frame.contentWindow.postMessage({type: "smoke-focus", sessionId: "no-usage"}, "*");
+    await until(() => value("dName") === "No session data" && value("dRate") === "—" && value("dDuration") === "—" &&
+      !value("dDir") && !value("dModel") && value("cCum") === "--", "An empty session displayed stats from a different session");
+    frame.contentWindow.postMessage({type: "smoke-focus", sessionId: null}, "*");
+    await until(() => value("dName") === "Smoke A", "An unscoped dashboard did not show the latest session");
   });
 </script>`;
 

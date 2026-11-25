@@ -160,15 +160,21 @@ export async function activate(ctx) {
       sessions: {
         async run(_input, { view }) {
           const { querySessions } = await import("./scripts/token-rate.mjs");
-          const data = querySessions();
-          const sessions = data.sessions.map((session) => {
+          const focusedSessionId = view.sessionId;
+          const data = querySessions({ focusedSessionId });
+          const withLiveRate = (session) => {
             const estimate = estimates.get(session.sessionId)?.rate;
             const requestRate = estimate ?? completed.get(session.sessionId);
             const saved = summaries.get(session.sessionId);
             const turn = saved ? saved.turn : session.turn;
             return { ...session, turn, composerTurn: Boolean(saved), requestRate, requestRateEstimated: estimate != null };
-          });
-          return { ...data, sessions, focusedSessionId: view.sessionId };
+          };
+          return {
+            ...data,
+            sessions: data.sessions.map(withLiveRate),
+            focusedSessionId,
+            focusedSession: data.focusedSession && withLiveRate(data.focusedSession),
+          };
         },
       },
       metrics: { run: () => snapshot({}) },

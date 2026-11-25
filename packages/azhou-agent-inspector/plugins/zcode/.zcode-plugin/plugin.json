@@ -1,10 +1,10 @@
 {
   "name": "azhou-agent-inspector",
-  "version": "0.12.6",
-  "description": "Shows tokens per second for the current conversation in the ZCode Desktop composer. Requires ZCode 3.18.2 or later. Includes /tps, a multi-session dashboard, and MCP tools.",
+  "version": "0.12.7",
+  "description": "Shows tokens per second for the current conversation in the ZCode Desktop composer. Requires ZCode 3.18.2 or later. Includes /tps, a conversation dashboard, and MCP tools.",
   "description_i18n": {
-    "en": "Shows tokens per second for the current conversation in the ZCode Desktop composer. Requires ZCode 3.18.2 or later. Includes /tps, a multi-session dashboard, and MCP tools.",
-    "zh-CN": "在 ZCode 桌面端输入框底部显示当前会话的 tok/s。要求 ZCode 3.18.2 或更高版本，另提供 /tps、多会话大屏和 MCP 工具。"
+    "en": "Shows tokens per second for the current conversation in the ZCode Desktop composer. Requires ZCode 3.18.2 or later. Includes /tps, a conversation dashboard, and MCP tools.",
+    "zh-CN": "在 ZCode 桌面端输入框底部显示当前会话的 tok/s。要求 ZCode 3.18.2 或更高版本，另提供 /tps、会话仪表盘和 MCP 工具。"
   },
   "author": {
     "name": "Azhou AI Hub"
@@ -41,8 +41,8 @@
         {
           "id": "dashboard",
           "title": {
-            "zh-CN": "阿舟 Agent 透视台",
-            "en-US": "Azhou Agent Inspector"
+            "zh-CN": "阿舟 Agent 工作台",
+            "en-US": "Azhou Agent Workbench"
           },
           "icon": "activity"
         }
