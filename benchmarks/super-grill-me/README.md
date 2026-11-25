@@ -1,6 +1,6 @@
 # super-grill-me benchmark contract
 
-Exploratory manual benchmark; **not** wired into `scripts/verify.py`. This file records a walkthrough contract a contributor can run by hand; executed runs are logged under [Recorded walkthrough](#recorded-walkthrough).
+Exploratory manual benchmark; **not** wired into `scripts/verify.py`. This file records a walkthrough contract a contributor can run by hand; executed runs are logged under [Recorded walkthrough](#recorded-walkthrough) and [Recorded multi-round session](#recorded-multi-round-session).
 
 ## Manual walkthrough contract
 
@@ -32,10 +32,18 @@ One session is recorded (2026-11-24 to 2026-11-25) on the shipped package bytes 
 - Two confirmation attempts were refused. The first carried a background-task notification in the same turn, and the model would not record a confirmation it could not attribute to the reader. The second was refused on the same pattern. A third, standalone confirmation was accepted (160 s).
 - The run ended with a `complete_with_holds` receipt: `rounds: 2`, `open_questions: 1`, `confirmed_by: reader confirmation 2026-11-25 standalone message`, one hold for a cron mail delivery test with an owner and a next action, and a `verification` field that records the model's background completeness scan was stopped twice at turn boundaries, so frontier emptiness was never independently verified.
 - Two host quirks are part of the record. One resume returned an empty turn while a background-task notification was pending. One turn hit the host's weekly quota on the default model route, and the session continued on the `opus` alias.
-- Two other runs on these bytes, recorded Git-external, emitted a facts line marked `source=sub-agent`, which is the sub-agent path this session did not take.
+- Two other runs on these bytes (2026-11-24, 1298.9 s and 902.9 s, on the same model route), recorded Git-external, emitted a facts line marked `source=sub-agent`, which is the sub-agent path this session did not take.
 
-The turn transcripts and the verbatim receipts stay Git-external in the maintainer's evidence store.
+Evidence fields of the recorded session:
+
+- Inputs, with the SHA-256 of each text: the synthetic project README `37df9ab05e47b492e246400add94eee2594efcc5021cf3450393848120d80f1f`; the first message, the same text as message b of the host-check receipt, `bcd730c381ccf1ca7651f0b835cf1f9dc90ffa026500fac3d57a3178e4399ab1`; the reader's answer for each round `0d33e41abca88f8579a2b5c52f433c9dc77b9e6dd3230deabfadd97dead41dae`; the final standalone confirmation `8ac3443370d3cbf6b14fef05e7d9ec8f3b90c40315888e0370b89418f73bfb50`.
+- Tool permission: the host's `permissionMode` was `auto`, the maintainer's own configuration. No permission flag was passed.
+- Bounds: each turn was bounded at 1800 s, with a 180 s quiet stop.
+- Receipt: the SHA-256 of the terminal receipt block is `80ac049644c87b6251736599bfc652e042d2fbb339208c19633f7d27aab14e0f`.
+- Named human check: none at record time. The independent machine judge named in the host-check receipt covered a different record.
+
+The turn transcripts and the verbatim receipts stay Git-external in the maintainer's evidence store, under `.planning/grill-me-followup-20261124/host-runs/e2-session/`.
 
 Limits: one session, one model, one scripted reader who is not a human and who accepted every recommendation instead of judging each one. The completeness scan never finished. The `complete` receipt, with an empty frontier and no holds, has not been observed.
 
-Next action: a session with a human reader, and a `complete` receipt, have not been observed. The host check on Claude Code is recorded in [the receipt](../../evidence/super-grill-me-host-check-claude-2026-11-24.md).
+Next action: run one session with a human reader to an empty frontier and a `complete` receipt, and record it here. The host check on Claude Code is recorded in [the receipt](../../evidence/super-grill-me-host-check-claude-2026-11-24.md).
