@@ -97,11 +97,11 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
   assert.equal(current.display.get("sess-a"), "— tok/s");
   assert.match(current.tooltips.get("sess-a"), /会话 1 轮 · 最近一轮 2 段/);
   assert.match(current.tooltips.get("sess-a"), /首字 0.8 秒 · 总用时/);
-  assert.match(current.tooltips.get("sess-a"), /缓存命中 25% · Context — · Memory —/);
+  assert.match(current.tooltips.get("sess-a"), /缓存命中 25%/);
   current.setLocale("en-US");
   assert.match(current.tooltips.get("sess-a"), /TTFT 0.8 s · Total/);
-  assert.match(current.tooltips.get("app"), /Cache hit — · Context — · Memory —/);
-  assert.match(current.tooltips.get("app"), /Open TPS monitor$/);
+  assert.doesNotMatch(current.tooltips.get("app"), /Cache hit|Context|Memory/);
+  assert.match(current.tooltips.get("app"), /Open Agent Workbench$/);
   current.setLocale("zh-TW");
   const dashboard = current.views.get("dashboard");
   assert.equal(dashboard.entry, "./dashboard/index.html");
@@ -152,7 +152,7 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
   await current.generate("sess-large", "final", 2_500_000_000);
   const tooltip = current.tooltips.get("sess-large");
   assert.match(tooltip, /^2\.5B tok\/s · 最近一段\n/);
-  assert.match(tooltip, /\n\n点击打开监控面板$/);
+  assert.match(tooltip, /\n\n打开 Agent 工作台$/);
   assert.ok(tooltip.length <= 200);
 
   const localized = await load("3.19.0", "sess-large", "en-US");

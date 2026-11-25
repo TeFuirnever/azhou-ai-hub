@@ -12,20 +12,11 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——17 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
-
-https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
-
 </div>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-install.zh-CN-dark.jpg">
-  <img src="assets/github/readme-banner-install.zh-CN.jpg" alt="安装：一条命令，装一个 skill" width="100%">
-</picture>
 
 ### 在 Codex 里首次安装
 
-先登录 Codex，并确认电脑已安装带 `npx` 的 Node.js；所有命令都在你想要安装 Ask Azhou 的项目目录下执行。示例命令均为 POSIX shell：Windows 请在 Git Bash 中运行（[Windows 说明](docs/installation.md#windows-notes)）；仓库 gate 与随附脚本覆盖哪些平台，见[操作系统支持表](docs/support-matrix.md#operating-system-support-deterministic-gate)。
+先登录 Codex，并确认电脑已安装带 `npx` 的 Node.js；所有命令都在你想要安装 Ask Azhou 的项目目录下执行。示例命令均为 POSIX shell：Windows 请在 Git Bash 中运行（[Windows 说明](docs/installation.md#windows-notes)）。
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
@@ -37,37 +28,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 
 应看到它推荐 `super-archify`。如果找不到 Ask Azhou，先看[首次安装排查](docs/installation.md#first-install-in-codex)；已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
 
-四个 Foundation Skill 用同样的方式安装：
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
-~~~
-
-其余的包用同样的方式安装：
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
-npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
-npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
-npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
-npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
-npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
-npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
-npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
-~~~
-
-每个 skill 只选一种安装方式（[单一路径规则](docs/installation.md#one-path-rule)）。包管理器安装解析的是可变默认分支，不留 Hub 回执。四个 `super-azhou-*` 包只是薄封装：npx 命令装的是 Skill，但调用时执行的是本仓库 checkout 里的 Foundation CLI（`scripts/azhou_hub.py`），所以磁盘上仍需要这份 checkout（clone 一次即可）。
+想安装 Ask Azhou 推荐的技能时，按[单个技能安装指南](docs/installation.md#package-manager-install)操作。每个技能只选[一种安装方式](docs/installation.md#one-path-rule)。四个 `super-azhou-*` 技能还需要一份本地仓库 checkout。
 
 上面的走查以 Codex 为目标。其余受维护的 harness——Claude Code、MiMo Code（`mimo`）、DeepSeek Harness（`dsh`）、zcode——各自的已验证安装路线与证据见[支持矩阵](docs/support-matrix.md)；也可以用仓库 checkout 走 [checkout 辅助安装](docs/installation.md#checkout-assisted-setup)或[手动复制](docs/installation.md#manual-copy)。
 
@@ -90,7 +51,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | 从上游资料起草、校准并评审架构文档。 | 确定性脚手架、收尾门检查器与黄金用例。 |
 | [Session Insights](skills/super-session-insights/SKILL.md) | 从本机会话存储产出事实绑定的使用报告；对已授权材料做反思。 | 合成存储接线套件；反思合同检查。 |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的结构规则改写面向 agent 的英文。 | 上游钉定（SHA-256）；确定性的 `ste-lint.py` gate。 |
-| [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成交互图示地图 HTML。 | 上游 v3.2.0 同步（git tag + SHA-256）；收尾/校验 gate。 |
+| [Archify](skills/super-archify/SKILL.md) | 把系统、代码库或 Mermaid 草图做成交互架构图。 | 上游 v3.2.0 同步（git tag + SHA-256）；收尾/校验 gate。 |
 | [Lavish](skills/super-lavish/SKILL.md) | 把回答变成可审阅的 HTML；浏览器标注反馈回到 agent。 | 锁定的上游发布（SHA-256 + npm 钉定）；完整性测试。 |
 | [Imagegen](skills/super-imagegen/SKILL.md) | 经本机已安装的私有 `azhou-imagegen` skill 执行准备好的生图请求；缺该 skill 或其 doctor gate 时 fail-closed。 | 仅契约层包；基线哈希钉定；fail-closed。 |
 | [Rederive](skills/super-rederive/SKILL.md) | 通过重新推导设计来练习理解代码。 | 上游钉定（SHA-256）；仅探索性观察。 |
@@ -104,6 +65,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
 [逐 skill 平台汇总](docs/skill-platform-view.md) · [评测合同](docs/eval-case-contract.md)
 
 ### 上手试试
+
+https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
 下表“必须返回什么”中的两个固定说法：hold＝明确挂起、留待后续处理的事项；稳定收据＝一次运行留下的可核对结果记录。
 

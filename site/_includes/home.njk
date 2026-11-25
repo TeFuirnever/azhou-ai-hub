@@ -1,0 +1,75 @@
+---
+layout: base.njk
+---
+
+{% set zh = lang == 'zh' %}
+<section class="band">
+  <div class="wrap">
+    <h1>{{ '给 Agent 装上你需要的技能' if zh else 'Give your agent a skill for the job' }}</h1>
+    <p class="lede">{{ '从画架构图到检查代码仓库，从手头的任务出发，按需安装。' if zh else 'Draw an architecture diagram, check a repository, or find a skill for another task.' }}</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="#install">{{ '在 Codex 开始' if zh else 'Start in Codex' }}</a>
+      <a class="btn btn-outline" href="{{ site.routes[lang].skills | url }}">{{ '浏览技能' if zh else 'Browse skills' }}</a>
+    </div>
+    <a href="{{ site.routes[lang].support | url }}">{{ '使用其他 Agent 工具' if zh else 'Using another agent host?' }}</a>
+  </div>
+</section>
+<section class="sec">
+  <div class="wrap">
+    <h2 id="install" tabindex="-1">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</h2>
+    <p>{{ '登录 Codex。用装有 Node.js 和 npx 的终端进入你的项目目录，再运行下面的命令。这个命令只为当前项目安装。' if zh else 'Sign in to Codex. Open your project folder in a terminal with Node.js and npx, then run this command. It installs in the current project.' }}</p>
+    {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
+    <div class="copy-block">
+      <button class="btn btn-outline" type="button" hidden data-copy="install-command">{{ '复制命令' if zh else 'Copy command' }}</button>
+      <pre class="wrap-text"><code id="install-command">npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
+    </div>
+    <p>{{ '在同一项目打开新的 Codex 会话，粘贴这句话。看到它推荐 super-archify，就说明 Ask Azhou 装好了。' if zh else 'Open a new Codex chat in the same project and paste this question. A recommendation for super-archify confirms Ask Azhou is installed.' }}</p>
+    <div class="copy-block">
+      <button class="btn btn-outline" type="button" hidden data-copy="try-prompt">{{ '复制示例' if zh else 'Copy example' }}</button>
+      <pre class="wrap-text"><code id="try-prompt">{{ '$super-ask-azhou 我有一段 Mermaid，想做成交互架构图。该用哪个技能？' if zh else '$super-ask-azhou I have a Mermaid diagram. Which skill turns it into an interactive architecture diagram?' }}</code></pre>
+    </div>
+    <details>
+      <summary>{{ '安装上面推荐的技能' if zh else 'Install the recommended skill' }}</summary>
+      <div class="copy-block">
+        <button class="btn btn-outline" type="button" hidden data-copy="install-recommended">{{ '复制命令' if zh else 'Copy command' }}</button>
+        <pre class="wrap-text"><code id="install-recommended">npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex</code></pre>
+      </div>
+    </details>
+    <details>
+      <summary>{{ '排查安装、更新或卸载' if zh else 'Troubleshoot, update, or uninstall' }}</summary>
+      <ul>
+        <li><a href="{{ installGuide }}#alternate-installer">{{ '下载超时' if zh else 'Repository download timed out' }}</a></li>
+        <li><a href="{{ installGuide }}#first-install-in-codex">{{ 'Codex 找不到技能' if zh else 'Codex cannot find the skill' }}</a></li>
+        <li><a href="{{ installGuide }}#upgrade-or-uninstall">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
+      </ul>
+    </details>
+  </div>
+</section>
+<script>
+  for (const button of document.querySelectorAll("[data-copy]")) {
+    if (!navigator.clipboard?.writeText) continue;
+    button.hidden = false;
+    const status = document.createElement("span");
+    status.className = "copy-status";
+    status.setAttribute("role", "status");
+    button.after(status);
+    let pending = false;
+    let reset;
+    button.addEventListener("click", async () => {
+      if (pending) return;
+      pending = true;
+      clearTimeout(reset);
+      status.textContent = {{ ('正在复制…' if zh else 'Copying…') | dump | safe }};
+      const source = document.getElementById(button.dataset.copy);
+      try {
+        await navigator.clipboard.writeText(source.textContent);
+        status.textContent = {{ ('已复制' if zh else 'Copied') | dump | safe }};
+      } catch {
+        status.textContent = {{ ('复制失败。请选中下方文字手动复制。' if zh else 'Copy failed. Select the text below to copy it manually.') | dump | safe }};
+      } finally {
+        pending = false;
+      }
+      reset = setTimeout(() => { status.textContent = ""; }, 3500);
+    });
+  }
+</script>

@@ -32,6 +32,17 @@ The catalog below is generated from every canonical skill's frontmatter descript
 
 Match the request to a family first, then to the catalog's intent keywords: install, diagnose, or prove the hub itself (发行基建); produce or polish a visible artifact (内容生产力); keep knowledge and quality honest across sessions (工程纪律); and this skill for routing questions.
 
+When several visual Skills accept the same input, choose by what the user will do with the result. Use the requested output or next action to resolve a tie before asking a question.
+
+- Send feedback by marking up a page in the browser → `super-lavish`.
+- Edit the original drawing in Excalidraw later → `super-excalidraw-diagram`.
+- Explain a topic to a reader with no background, using pictures and a few words → `super-eli5`.
+- Generate or edit a raster image → `super-imagegen` when its local prerequisites are available.
+- Produce a polished diagram in a specific visual format, such as a Wardley map, or convert a draw.io file → `super-diagram-design`.
+- Explore a system or process in interactive HTML, or read a structured one-page explanation → `super-archify`.
+
+When someone requests the finished artifact, recommend the owning Skill in terms of that result. Avoid asking them to pick among the input formats that Skill already supports.
+
 <!-- generated-routing-index:begin -->
 - `super-arch-doc` — Azhou skill. Renamed from arch-doc (the old name still triggers this skill). End-to-end authoring and calibration of an architecture design document from upstream sources. MUST trigger for 写架构设计文档, 架构说明书, ARCH 文档, 软件实现架构说明书, 架构文档补时序图, PlantUML 时序图（架构文档内）, 交叉校准, 回源核对, 上游研读, 上游真源, 最佳实践评审, 架构评审对标, 架构文档模板, PRD 模板, 产品需求文档模板, 功能详细设计模板, 校准架构文档, 质量场景卡, or whenever a repository needs a software-implementation-architecture document drafted, calibrated against upstream design docs, or reviewed against industry best practices. Distilled from the MCC ARCH-2026-001 authoring pipeline. Output shaping for a reader with ADHD belongs to super-i-have-adhd.
 - `super-archify` — Azhou skill. Create validated architecture, workflow, sequence, data-flow, lifecycle/state, ERD, class, tree, timeline and waterfall diagrams as explorable standalone HTML with dark/light themes, motion and image/SVG/WebM export. Accept requirements or Mermaid; inspect repository evidence for code-backed diagrams. Use when visualizing systems, API calls, pipelines, schemas, histories, timings, or everyday steps, parts, relationships and states. Also turn an answer into a one-page explainer with the conclusion first, structured panels, native diagrams and charts, when the user asks for a page, an explainer or answer to share (做成一页, 用页面讲), or proactively when the user's rules opt in with an [archify explainer: ...] line. Not for dashboards. Editable .excalidraw source scenes and scene editing belong to super-excalidraw-diagram; this skill delivers read-only diagrams and explainer pages; a human-annotated browser feedback loop on a generated page belongs to super-lavish; raster images belong to super-imagegen.

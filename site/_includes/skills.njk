@@ -1,0 +1,52 @@
+---
+layout: base.njk
+---
+
+{% set zh = lang == 'zh' %}
+<article class="doc-card">
+  <h1>{{ title }}</h1>
+  <p>{{ '按任务找技能，或让 Ask Azhou 为你推荐。' if zh else 'Find a skill by task, or ask Ask Azhou to recommend one.' }}
+    <a href="{{ site.routes[lang].home | url }}#install">{{ '在 Codex 开始' if zh else 'Start in Codex' }}</a>
+  </p>
+  <div id="skill-filter" hidden>
+    <label for="skill-search">{{ '搜索任务或包名' if zh else 'Search tasks or package names' }}</label>
+    <input id="skill-search" type="search" autocomplete="off">
+    <p id="skill-count" role="status"
+       data-all="{{ skills.length }} {{ '个技能' if zh else 'skills' }}"
+       data-results="{{ '找到 {count} 个技能' if zh else '{count} of ' ~ skills.length ~ ' skills' }}"
+       data-empty="{{ '没找到技能。试试更短的关键词，或者清空搜索框。' if zh else 'No skills found. Try a shorter search or clear the field.' }}"></p>
+  </div>
+  <ul class="cardgrid" id="skill-list">
+    {%- for skill in skills %}
+    <li id="{{ skill.name }}">
+      <a class="gcard" href="{{ skill.url }}">
+        <span class="gcard-t">{{ skill.summary[lang].title | escape }}</span>
+        <span class="gcard-d">{{ skill.summary[lang].task | escape }}</span>
+        <code class="skill-name">{{ skill.name }}</code>
+      </a>
+    </li>
+    {%- endfor %}
+  </ul>
+</article>
+<script>
+  const input = document.getElementById("skill-search");
+  const count = document.getElementById("skill-count");
+  const items = Array.from(document.querySelectorAll("#skill-list > li"), element => ({
+    element,
+    keywords: element.textContent.toLowerCase(),
+  }));
+  function updateSkills() {
+    const terms = input.value.toLowerCase().trim().split(/\s+/);
+    let found = 0;
+    for (const { element, keywords } of items) {
+      element.hidden = !terms.every(term => keywords.includes(term));
+      if (!element.hidden) found += 1;
+    }
+    count.textContent = found === items.length ? count.dataset.all :
+      found ? count.dataset.results.replace("{count}", found) : count.dataset.empty;
+  }
+  input.addEventListener("input", updateSkills);
+  window.addEventListener("pageshow", updateSkills);
+  updateSkills();
+  document.getElementById("skill-filter").hidden = false;
+</script>

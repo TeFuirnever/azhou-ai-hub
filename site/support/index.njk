@@ -1,21 +1,9 @@
 ---
-layout: base.njk
+layout: support.njk
+route: support
 lang: en
 bodyClass: doc
 title: "Support"
-description: "The maintained agent-harness set of the Azhou AI Hub, with deep links into the support matrix."
+description: "Check what works in your agent host."
 permalink: "support/index.html"
 ---
-
-<article class="doc-card">
-  <nav class="crumbs" aria-label="Breadcrumb">
-    <a href="{{ '/' | url }}">azhou-ai-hub</a>
-    <span aria-hidden="true">/</span>
-    <span aria-current="page">Support</span>
-  </nav>
-  <h1>Support</h1>
-  <div class="callout note">
-    <p>{{ supportMatrix.intro | safe }}</p>
-  </div>
-  <p class="doc-source">Quoted from <code>docs/support-matrix.md</code> · <a href="{{ site.blobBase }}/docs/support-matrix.md">Support matrix</a> · <a href="{{ site.blobBase }}/docs/skill-platform-view.md">Per-skill platform view</a></p>
-</article>

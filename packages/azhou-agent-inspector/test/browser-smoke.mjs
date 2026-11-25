@@ -25,8 +25,8 @@ assert.equal(zcodeWallpaper.toString("base64"), wallpaper, "The two dashboards u
 const harness = `
 <output id="smoke-result" data-result="pending"></output>
 <script>
-  async function until(predicate, description) {
-    for (let attempt = 0; attempt < 100; attempt++) {
+  async function until(predicate, description, attempts = 100) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
       if (predicate()) return;
       await new Promise(resolve => setTimeout(resolve, 25));
     }
@@ -80,11 +80,17 @@ const codexPage = `<!doctype html><body>${harness}<script>
     await until(() => text(".rate") === "42.5 tok/s", "Codex did not render the initial tool result");
     await until(() => text("[data-metric=cacheHitPercent]") === "75%", "Codex did not render cache hit rate");
     const performance = panel("#performance");
-    for (const expected of ["速度（整轮） 42.5 tok/s", "缓存命中 75%", "Context 占用 40.5%", "Memory —"]) {
+    for (const expected of ["首个 token 等待 0.2 秒", "缓存命中 75%", "Context 占用 40.5%"]) {
       if (!performance.title.includes(expected)) throw new Error("Codex performance hover omitted " + expected);
     }
+    if (performance.title.includes("Memory") || performance.title.includes("42.5 tok/s")) {
+      throw new Error("Codex repeated or invented metrics in its performance details");
+    }
     performance.click();
-    if (!performance.parentElement.open) throw new Error("Codex did not expose performance to click and keyboard users");
+    if (!performance.parentElement.open) throw new Error("Codex did not expose performance details on click");
+    performance.click();
+    if (performance.parentElement.open) throw new Error("Codex performance details did not close");
+    performance.click();
     await until(() => panel("header img")?.naturalWidth === panel("header img")?.naturalHeight &&
       panel("header img").naturalWidth > 0, "Codex did not load the square portrait");
     const backdrop = frame.contentWindow.getComputedStyle(panel("body")).backgroundImage;
@@ -99,20 +105,26 @@ const codexPage = `<!doctype html><body>${harness}<script>
     if (sameColumn ? rate.top < duration.bottom : Math.abs(duration.bottom - rate.bottom) > 1) {
       throw new Error("Codex key metrics overlapped or lost their alignment");
     }
+    panel("#refresh").focus();
     panel("#refresh").click();
-    await until(() => text(".rate") === "182 tok/s", "Codex refresh did not render the replacement sample");
+    if (text("#feedback") !== "正在刷新…" || panel("#refresh").getAttribute("aria-disabled") !== "true") {
+      throw new Error("Codex did not show that refresh was pending");
+    }
+    await until(() => text(".rate") === "182 tok/s" && text("#feedback") === "已刷新。", "Codex refresh did not render the replacement sample");
     await until(() => !panel("#round").hidden && text("#round").includes("上一已完成轮"),
       "Codex lost the previous-turn label after interruption");
 
+    if (frame.contentDocument.activeElement !== panel("#refresh")) throw new Error("Codex refresh stole focus");
+
     refreshMode = "failed";
     panel("#refresh").click();
-    await until(() => text("#feedback").includes("刷新失败") && !panel("#refresh").disabled,
+    await until(() => text("#feedback").includes("刷新失败") && !panel("#refresh").hasAttribute("aria-disabled"),
       "Codex did not recover from a failed refresh");
     if (text(".rate") !== "182 tok/s") throw new Error("A failed refresh cleared the last valid snapshot");
 
     refreshMode = "switch";
     panel("#refresh").click();
-    await until(() => !panel("#refresh").disabled, "Codex refresh did not finish after a new host result");
+    await until(() => !panel("#refresh").hasAttribute("aria-disabled"), "Codex refresh did not finish after a new host result");
     if (!panel("#snapshot").hidden || !text("#state").includes("尚无可用")) {
       throw new Error("Late refresh response restored the previous session's metrics");
     }
@@ -121,7 +133,8 @@ const codexPage = `<!doctype html><body>${harness}<script>
       outputTokens: 123456789012, ttftMs: null, cacheHitPercent: 0 } });
     await until(() => text(".rate") === "12,345.6 tok/s" && !panel("#snapshot").hidden,
       "Codex did not update when host data returned");
-    if (text("[data-metric=ttftMs]") !== "—" || text("[data-metric=cacheHitPercent]") !== "0%" ||
+    if (panel("[data-metric=ttftMs]").parentElement.getClientRects().length ||
+        !panel("[data-metric=cacheHitPercent]").parentElement.getClientRects().length || text("[data-metric=cacheHitPercent]") !== "0%" ||
         panel("#round").hidden || !text("#state").includes("进行中")) {
       throw new Error("Codex lost the running state, missing value, or measured zero");
     }
@@ -140,6 +153,13 @@ const codexPage = `<!doctype html><body>${harness}<script>
 
 const zcodeHost = `<script>
   let focusedSessionId = "B";
+  let slowSessionRead;
+  let failMetrics = true;
+  window.smoke = { reads: 0, metrics: 0, hold: false,
+    release() { slowSessionRead?.(); },
+    failMetrics() { failMetrics = true; },
+    recoverMetrics() { failMetrics = false; },
+  };
   window.addEventListener("message", (event) => {
     if (event.data?.type === "smoke-focus") focusedSessionId = event.data.sessionId;
   });
@@ -159,14 +179,24 @@ const zcodeHost = `<script>
         portrait: "data:image/webp;base64,${panelArt}",
         wallpaper: "data:image/webp;base64,${wallpaper}",
       } };
-      if (name === "metrics") return { structuredContent: { system: {
-        cpuPercent: null, memUsedMB: 4096, memTotalMB: 8192, memPercent: 50,
-        hostUptimeHours: 1, platform: "fixture", cpuCores: 4,
-      } } };
+      if (name === "metrics") {
+        window.smoke.metrics += 1;
+        if (failMetrics) throw new Error("metrics unavailable");
+        return { structuredContent: { system: {
+          cpuPercent: null, memUsedMB: 4096, memTotalMB: 8192, memPercent: 50,
+          hostUptimeHours: 1, platform: "fixture", cpuCores: 4,
+        } } };
+      }
+      window.smoke.reads += 1;
       const recent = lane("A", 100, 125);
       const focusedSession = focusedSessionId === "B" ? lane("B", 200)
         : focusedSessionId === "A" ? recent : null;
-      return { structuredContent: { sessions: [recent], total: 2, focusedSessionId, focusedSession } };
+      const result = { structuredContent: { sessions: [recent], total: 2, focusedSessionId, focusedSession } };
+      if (window.smoke.hold) {
+        window.smoke.hold = false;
+        await new Promise(resolve => { slowSessionRead = resolve; });
+      }
+      return result;
     },
   };
 </script>`;
@@ -176,6 +206,10 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
   const value = (id) => doc()?.getElementById(id)?.textContent;
   checkUi(async () => {
     await until(() => value("dName") === "Smoke B" && Number(value("dRate")) === 200, "ZCode did not follow the focused session");
+    await until(() => value("resourceStatus") === "System resources unavailable", "ZCode did not report first resource read failure");
+    if (!doc().getElementById("resourceReadings").hidden) throw new Error("ZCode displayed placeholders after the first resource read failed");
+    frame.contentWindow.smoke.recoverMetrics();
+    doc().dispatchEvent(new frame.contentWindow.Event("visibilitychange"));
     if (value("dDuration") !== "2.0 s") throw new Error("ZCode did not show the focused turn duration");
     if (doc().querySelector(".session-list, #lanes, #follow")) {
       throw new Error("ZCode rendered a second session navigation list");
@@ -232,6 +266,27 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
       !value("dDir") && !value("dModel") && value("cCum") === "--", "An empty session displayed stats from a different session");
     frame.contentWindow.postMessage({type: "smoke-focus", sessionId: null}, "*");
     await until(() => value("dName") === "Smoke A", "An unscoped dashboard did not show the latest session");
+
+    const host = frame.contentWindow.smoke;
+    const before = host.reads;
+    host.hold = true;
+    host.failMetrics();
+    await until(() => host.reads > before, "ZCode did not start the held request");
+    await new Promise(resolve => setTimeout(resolve, 1250));
+    if (host.reads !== before + 1) throw new Error("ZCode overlapped reads of the same session data");
+    frame.contentWindow.postMessage({type: "smoke-focus", sessionId: "B"}, "*");
+    await until(() => value("resourceStatus").includes("last reading"),
+      "ZCode did not label stale resource readings on failure");
+    if (value("mem") !== "4.0 / 8 GB") throw new Error("A failed resource read cleared the last valid data");
+    host.recoverMetrics();
+    doc().dispatchEvent(new frame.contentWindow.Event("visibilitychange"));
+    await until(() => !value("resourceStatus").includes("last reading"),
+      "ZCode did not refresh resources as soon as it became visible");
+    await until(() => value("liveTxt") === "Disconnected", "ZCode did not report its timed-out session read", 320);
+    await until(() => value("dName") === "Smoke B", "ZCode did not recover after a session read timed out");
+    host.release();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    if (value("dName") !== "Smoke B") throw new Error("ZCode applied a response after its deadline");
   });
 </script>`;
 
@@ -256,7 +311,7 @@ try {
   for (const host of ["codex", "zcode"]) {
     const { stdout } = await run(process.env.CHROME_BIN || "google-chrome", [
       "--headless", "--no-first-run", "--disable-background-networking",
-      `--user-data-dir=${join(profile, host)}`, "--virtual-time-budget=12000",
+      `--user-data-dir=${join(profile, host)}`, "--virtual-time-budget=18000",
       "--dump-dom", `http://127.0.0.1:${port}/${host}`,
     ], { timeout: 30_000, maxBuffer: 4_000_000 });
     const result = stdout.match(/<output id="smoke-result"[^>]*>[\s\S]*?<\/output>/)?.[0];

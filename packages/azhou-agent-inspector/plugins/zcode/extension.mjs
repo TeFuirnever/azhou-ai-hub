@@ -28,7 +28,7 @@ const chinese = {
   seconds: "秒",
   milliseconds: "毫秒",
   cache: "缓存命中",
-  open: "点击打开监控面板",
+  open: "打开 Agent 工作台",
 };
 
 const english = {
@@ -49,7 +49,7 @@ const english = {
   seconds: "s",
   milliseconds: "ms",
   cache: "Cache hit",
-  open: "Open TPS monitor",
+  open: "Open Agent Workbench",
 };
 
 const copyForLocale = (locale) => /^zh(?:[-_]|$)/i.test(locale) ? chinese : english;
@@ -69,10 +69,9 @@ function rateTooltip(text, summary, rateLabel, copy) {
     }
   }
   const cacheHit = summary?.turn?.cacheHitPercent;
-  const stats = `${copy.cache} ${cacheHit == null ? "—" : `${cacheHit}%`} · Context — · Memory —`;
-  const tooltip = [...lines, stats, "", copy.open].join("\n");
-  // A long session summary can be omitted. Keep every metric and the monitor action.
-  return tooltip.length <= 200 ? tooltip : [lines[0], stats, "", copy.open].join("\n");
+  const stats = Number.isFinite(cacheHit) ? [`${copy.cache} ${cacheHit}%`] : [];
+  const tooltip = [...lines, ...stats, "", copy.open].join("\n");
+  return tooltip.length <= 200 ? tooltip : [lines[0], ...stats, "", copy.open].join("\n");
 }
 
 function supportsDesktopVersion(version) {

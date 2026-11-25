@@ -1,0 +1,30 @@
+---
+layout: base.njk
+---
+
+{% set zh = lang == 'zh' %}
+<article class="doc-card">
+  <h1>{{ title }}</h1>
+  <ul class="doclist">
+    <li><a href="{{ site.routes[lang].home | url }}#install">{{ '在 Codex 开始' if zh else 'Start in Codex' }}</a></li>
+    <li><a href="{{ site.blobBase }}/docs/installation.md#upgrade-or-uninstall">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
+    <li><a href="{{ site.routes[lang].support | url }}">{{ '查看 Agent 工具的支持情况' if zh else 'Check agent host support' }}</a></li>
+    <li><a href="{{ site.blobBase }}/docs/foundations.md">{{ '诊断、安装或验证本地仓库' if zh else 'Diagnose, set up, or verify a checkout' }}</a></li>
+  </ul>
+  {%- if zh %}
+  <p><a href="{{ site.blobBase }}/docs/README.md" hreflang="en">{{ '完整文档目录（英文）' }}</a></p>
+  {%- else %}
+  <details>
+    <summary>Full documentation index</summary>
+    <ul class="doclist">
+      {%- for row in docsIndex %}
+      <li>{{ row.need | escape }} —
+        {%- for source in row.sources %}
+        <a href="{{ source.url }}">{{ source.label | escape }}</a>{% if not loop.last %} and {% endif %}
+        {%- endfor %}
+      </li>
+      {%- endfor %}
+    </ul>
+  </details>
+  {%- endif %}
+</article>
