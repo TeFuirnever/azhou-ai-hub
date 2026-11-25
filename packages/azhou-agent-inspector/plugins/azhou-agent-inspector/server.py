@@ -135,8 +135,10 @@ def dispatch(method, params, home):
     if method == "resources/templates/list":
         return {"resourceTemplates": []}
     if method == "resources/read" and params.get("uri") == URI:
-        art = base64.b64encode((ROOT / "azhou.webp").read_bytes()).decode()
-        html = (ROOT / "panel.html").read_text("utf8").replace("__ART__", art)
+        html = (ROOT / "panel.html").read_text("utf8")
+        for placeholder, filename in (("__ART__", "azhou.webp"), ("__WALLPAPER__", "wallpaper.webp")):
+            encoded = base64.b64encode((ROOT / filename).read_bytes()).decode("ascii")
+            html = html.replace(placeholder, encoded)
         return {"contents": [{"uri": URI, "mimeType": MIME, "text": html}]}
     if method == "tools/call" and params.get("name") == TOOL:
         if params.get("arguments"):

@@ -1,3 +1,4 @@
+import base64
 import importlib.util
 import json
 import sqlite3
@@ -93,5 +94,8 @@ class PanelTests(unittest.TestCase):
         listed = monitor.dispatch("tools/list",{},None)["tools"][0]
         self.assertEqual([{"type":"thread"}],listed["_meta"]["openai/ui"]["entrypoints"])
         html = monitor.dispatch("resources/read",{"uri":monitor.URI},None)["contents"][0]["text"]
-        self.assertIn("data:image/webp;base64,UklG",html)
-        self.assertNotIn("__ART__",html)
+        for filename in ("azhou.webp", "wallpaper.webp"):
+            data = base64.b64encode((monitor.ROOT / filename).read_bytes()).decode("ascii")
+            self.assertIn(f"data:image/webp;base64,{data}", html)
+        self.assertNotIn("__ART__", html)
+        self.assertNotIn("__WALLPAPER__", html)
