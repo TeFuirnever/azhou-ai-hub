@@ -150,7 +150,7 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `azhou-agent-inspector` | [Azhou Agent Inspector](packages/azhou-agent-inspector/README.md) | Codex 会话侧面板与 ZCode 输入框状态项，按宿主独立安装。 |
+| `azhou-agent-inspector` | [Azhou Agent Inspector](packages/azhou-agent-inspector/README.md) | Codex 会话侧面板、ZCode 输入框状态项与多会话仪表盘。两个面板共用阿舟头像与壁纸，按宿主独立安装。 |
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
 
 

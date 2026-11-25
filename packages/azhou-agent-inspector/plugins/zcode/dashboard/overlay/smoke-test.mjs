@@ -180,11 +180,15 @@ async function main() {
   const dashboard = await startServer(TMP, {}, path.join(here, "..", "server.mjs"));
   await check("Dashboard renders the shipped page and artwork and serves fixture usage", async function () {
     const page = await fetch(dashboard + "/");
-    assert.match(await page.text(), /azhou\.webp/);
-    const art = await fetch(dashboard + "/azhou.webp");
-    assert.equal(art.status, 200);
-    assert.equal(art.headers.get("content-type"), "image/webp");
-    assert.deepEqual(Buffer.from(await art.arrayBuffer()), fs.readFileSync(path.join(here, "..", "azhou.webp")));
+    const html = await page.text();
+    for (const name of ["azhou.webp", "wallpaper.webp"]) {
+      assert.ok(html.includes(name), name);
+      const art = await fetch(dashboard + "/" + name);
+      assert.equal(art.status, 200);
+      assert.equal(art.headers.get("content-type"), "image/webp");
+      assert.deepEqual(Buffer.from(await art.arrayBuffer()), fs.readFileSync(path.join(here, "..", name)));
+    }
+    assert.equal((await fetch(dashboard + "/unregistered.webp")).status, 404);
     const usage = await fetch(dashboard + "/api/sessions");
     assert.equal(usage.status, 200);
     const { sessions } = await usage.json();
