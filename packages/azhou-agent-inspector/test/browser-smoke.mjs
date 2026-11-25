@@ -152,6 +152,10 @@ const zcodeHost = `<script>
     locale: "en-US",
     ready: async () => {},
     async callTool(name) {
+      if (name === "artwork") return { structuredContent: {
+        portrait: "data:image/webp;base64,${panelArt}",
+        wallpaper: "data:image/webp;base64,${wallpaper}",
+      } };
       if (name === "metrics") return { structuredContent: { system: {
         cpuPercent: null, memUsedMB: 4096, memTotalMB: 8192, memPercent: 50,
         hostUptimeHours: 1, platform: "fixture", cpuCores: 4,
@@ -175,14 +179,14 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
       throw new Error("ZCode did not load the square portrait");
     }
     const wallpaper = new frame.contentWindow.Image();
-    wallpaper.src = "./wallpaper.webp";
+    wallpaper.src = "data:image/webp;base64,${wallpaper}";
     await until(() => wallpaper.naturalWidth > 0, "ZCode wallpaper did not load");
     const root = doc().documentElement;
     const startTheme = root.dataset.theme;
     for (const theme of ["light", "dark"]) {
       if (root.dataset.theme !== theme) doc().getElementById("themeBtn").click();
       const backdrop = frame.contentWindow.getComputedStyle(doc().body, "::before").backgroundImage;
-      if (root.dataset.theme !== theme || !backdrop.includes("wallpaper.webp")) {
+      if (root.dataset.theme !== theme || !backdrop.includes("data:image/webp;base64,")) {
         throw new Error("ZCode did not apply its wallpaper in " + theme);
       }
       for (const width of [240, 360, 684, 920, 1200]) {
@@ -224,8 +228,6 @@ const routes = {
   "/codex-panel": panel.replace("__ART__", panelArt).replace("__WALLPAPER__", wallpaper),
   "/zcode": zcodePage,
   "/zcode-panel": dashboard.replace("<head>", "<head>" + zcodeHost),
-  "/azhou.webp": artwork,
-  "/wallpaper.webp": zcodeWallpaper,
 };
 const server = createServer((request, response) => {
   const body = Object.hasOwn(routes, request.url) ? routes[request.url] : null;

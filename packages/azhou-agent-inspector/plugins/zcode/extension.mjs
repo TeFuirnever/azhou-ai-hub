@@ -153,6 +153,7 @@ export async function activate(ctx) {
     show(null);
     for (const sessionId of new Set([...completed.keys(), ...estimates.keys()])) show(sessionId);
   });
+  let panelArtwork;
   ctx.views.register("dashboard", {
     entry: "./dashboard/index.html",
     tools: {
@@ -171,6 +172,14 @@ export async function activate(ctx) {
         },
       },
       metrics: { run: () => snapshot({}) },
+      artwork: {
+        run() {
+          // The native view does not serve sibling files from the packaged HTML entry.
+          const image = (file) => "data:image/webp;base64," +
+            readFileSync(new URL("./dashboard/" + file, import.meta.url), "base64");
+          return panelArtwork ??= { portrait: image("azhou.webp"), wallpaper: image("wallpaper.webp") };
+        },
+      },
     },
   });
   ctx.commands.register("open-dashboard", ({ scope }) => {
