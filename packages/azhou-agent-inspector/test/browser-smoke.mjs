@@ -10,9 +10,10 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const codex = new URL("../plugins/azhou-agent-inspector/", import.meta.url);
 const zcode = new URL("../plugins/zcode/dashboard/", import.meta.url);
-const [panel, panelArt, dashboard, artwork] = await Promise.all([
+const [panel, panelArt, wallpaper, dashboard, artwork] = await Promise.all([
   readFile(new URL("panel.html", codex), "utf8"),
   readFile(new URL("azhou.webp", codex), "base64"),
+  readFile(new URL("wallpaper.webp", codex), "base64"),
   readFile(new URL("index.html", zcode), "utf8"),
   readFile(new URL("azhou.webp", zcode)),
 ]);
@@ -42,32 +43,88 @@ const harness = `
 const codexPage = `<!doctype html><body>${harness}<script>
   const frame = document.createElement("iframe");
   const send = (message) => frame.contentWindow.postMessage({ jsonrpc: "2.0", ...message }, "*");
+  const push = (data) => send({ method: "ui/notifications/tool-result", params: { structuredContent: data } });
   const usage = (effectiveTps) => ({
     state: "complete", effectiveTps, durationMs: 2000, outputTokens: 364,
     ttftMs: 200, cacheHitPercent: 75, responses: 2,
   });
-  let refreshed = false;
+  let refreshMode = "interrupted";
   window.addEventListener("message", event => {
     if (event.source !== frame.contentWindow || event.data?.jsonrpc !== "2.0") return;
     const { method, id, params } = event.data;
     if (method === "ui/initialize") {
       send({ id, result: { protocolVersion: "2026-01-26", hostCapabilities: {} } });
     } else if (method === "ui/notifications/initialized") {
-      send({ method: "ui/notifications/tool-result", params: { structuredContent: usage(42.5) } });
+      push(usage(42.5));
     } else if (method === "tools/call" && params.name === "session_performance") {
-      refreshed = true;
-      send({ id, result: { structuredContent: { state: "interrupted", lastCompleted: usage(182) } } });
+      if (refreshMode === "failed") {
+        send({ id, error: { code: -32603, message: "Fixture failure" } });
+      } else if (refreshMode === "switch") {
+        push({ state: "empty" });
+        send({ id, result: { structuredContent: usage(999) } });
+      } else {
+        send({ id, result: { structuredContent: { state: "interrupted", lastCompleted: usage(182) } } });
+      }
     }
   });
   frame.src = "/codex-panel";
+  frame.style.cssText = "width: 280px; height: 420px; border: 0";
   document.body.append(frame);
-  const text = (selector) => frame.contentDocument?.querySelector(selector)?.textContent;
+  const panel = (selector) => frame.contentDocument?.querySelector(selector);
+  const text = (selector) => panel(selector)?.textContent;
   checkUi(async () => {
-    await until(() => text("#rows .rate") === "42.5 tok/s", "Codex did not render the initial tool result");
-    await until(() => text("#rows").includes("75%"), "Codex did not render cache hit rate");
-    frame.contentDocument.querySelector("#refresh").click();
-    await until(() => refreshed && text("#rows .rate") === "182 tok/s", "Codex refresh did not render the replacement sample");
-    await until(() => text("#state").includes("上一已完成轮"), "Codex lost the previous-turn label after interruption");
+    await until(() => text(".rate") === "42.5 tok/s", "Codex did not render the initial tool result");
+    await until(() => text("[data-metric=cacheHitPercent]") === "75%", "Codex did not render cache hit rate");
+    await until(() => panel("header img")?.naturalWidth === panel("header img")?.naturalHeight &&
+      panel("header img").naturalWidth > 0, "Codex did not load the square portrait");
+    const backdrop = frame.contentWindow.getComputedStyle(panel("body")).backgroundImage;
+    const wallpaperUrl = backdrop.match(/data:image\\/webp;base64,[A-Za-z0-9+/=]+/)?.[0];
+    if (!wallpaperUrl) throw new Error("Codex did not apply the bundled wallpaper");
+    const wallpaperImage = new frame.contentWindow.Image();
+    wallpaperImage.src = wallpaperUrl;
+    await wallpaperImage.decode();
+    const duration = panel("[data-metric=durationMs]").getBoundingClientRect();
+    const rate = panel(".rate").getBoundingClientRect();
+    const sameColumn = Math.abs(duration.left - rate.left) < 1;
+    if (sameColumn ? rate.top < duration.bottom : Math.abs(duration.bottom - rate.bottom) > 1) {
+      throw new Error("Codex key metrics overlapped or lost their alignment");
+    }
+    panel("#refresh").click();
+    await until(() => text(".rate") === "182 tok/s", "Codex refresh did not render the replacement sample");
+    await until(() => !panel("#round").hidden && text("#round").includes("上一已完成轮"),
+      "Codex lost the previous-turn label after interruption");
+
+    refreshMode = "failed";
+    panel("#refresh").click();
+    await until(() => text("#feedback").includes("刷新失败") && !panel("#refresh").disabled,
+      "Codex did not recover from a failed refresh");
+    if (text(".rate") !== "182 tok/s") throw new Error("A failed refresh cleared the last valid snapshot");
+
+    refreshMode = "switch";
+    panel("#refresh").click();
+    await until(() => !panel("#refresh").disabled, "Codex refresh did not finish after a new host result");
+    if (!panel("#snapshot").hidden || !text("#state").includes("尚无可用")) {
+      throw new Error("Late refresh response restored the previous session's metrics");
+    }
+
+    push({ state: "running", lastCompleted: { ...usage(12345.6), durationMs: 9725112,
+      outputTokens: 123456789012, ttftMs: null, cacheHitPercent: 0 } });
+    await until(() => text(".rate") === "12,345.6 tok/s" && !panel("#snapshot").hidden,
+      "Codex did not update when host data returned");
+    if (text("[data-metric=ttftMs]") !== "—" || text("[data-metric=cacheHitPercent]") !== "0%" ||
+        panel("#round").hidden || !text("#state").includes("进行中")) {
+      throw new Error("Codex lost the running state, missing value, or measured zero");
+    }
+    const root = frame.contentDocument.documentElement;
+    for (const width of [240, 280, 320, 684]) {
+      frame.style.width = width + "px";
+      for (const fontSize of ["100%", "200%"]) {
+        root.style.fontSize = fontSize;
+        if (root.scrollWidth > root.clientWidth) throw new Error("Codex sidebar overflow at " + width + "px / " + fontSize);
+        const refresh = panel("#refresh").getBoundingClientRect();
+        if (refresh.right > width || refresh.width === 0) throw new Error("Codex refresh button moved off-screen");
+      }
+    }
   });
 </script>`;
 
@@ -109,7 +166,7 @@ const zcodeCheck = `${harness}<script>
 
 const routes = {
   "/codex": codexPage,
-  "/codex-panel": panel.replace("__ART__", panelArt),
+  "/codex-panel": panel.replace("__ART__", panelArt).replace("__WALLPAPER__", wallpaper),
   "/zcode": dashboard.replace("<head>", "<head>" + zcodeHost).replace("</body>", zcodeCheck + "</body>"),
   "/azhou.webp": artwork,
 };
