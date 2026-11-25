@@ -99,7 +99,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
 | [Diagram Design](skills/super-diagram-design/SKILL.md) | 51 种视觉类型下创建品牌化、编辑级的 HTML/SVG 图表，支持 .drawio/Mermaid/.excalidraw/PlantUML 导入。 | 上游 vendored（commit 钉定 + 逐文件 SHA-256）；包内 `self_check.py` 门禁。 |
 | [Frontend Design](skills/super-frontend-design/SKILL.md) | 为新 UI 或界面改版产出独特、非模板化的视觉设计方向：色板、字体排印、布局，以及避开 AI 默认观感的评审流程。 | 在 anthropics/skills 的钉定 commit 上 faithful 引入：上游指导正文逐字保留，Apache-2.0 许可逐字节 vendored，配 SHA-256 完整性测试。尚无行为 benchmark。 |
 | [Brainstorming](skills/super-brainstorming/SKILL.md) | 在动手前探清读者真正想要什么与为什么：枚举方案、写设计文档、守审批门。 | 上游 adapted（tag 钉定 + 逐文件 SHA-256 锚）；六处记录在案 delta；完整性测试。尚无行为 benchmark。 |
-| [Grill Me](skills/super-grill-me/SKILL.md) | 按轮拷问用户的方案、决定或想法：前提已定的问题逐个附上推荐答案，事实去查，决策留给用户。 | 上游 adapted（tag 钉定；上游触发句逐字保留；正文除一句外逐字保留）；SHA-256 完整性测试。尚无行为 benchmark。 |
+| [Grill Me](skills/super-grill-me/SKILL.md) | 按轮拷问用户的方案、决定或想法：前提已定的问题逐个附上推荐答案，事实去查，决策留给用户。 | 上游 adapted（tag 钉定；上游触发句逐字保留；正文除一句外逐字保留）；SHA-256 完整性测试。尚无行为 benchmark。 [Claude Code 宿主实测](evidence/super-grill-me-host-check-claude-2026-11-24.md). |
 
 [逐 skill 平台汇总](docs/skill-platform-view.md) · [评测合同](docs/eval-case-contract.md)
 
