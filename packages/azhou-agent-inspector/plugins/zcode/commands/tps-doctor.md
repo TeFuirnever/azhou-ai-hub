@@ -6,9 +6,9 @@ description: 自检 azhou-agent-inspector 插件:数据库、依赖与运行状�
 
 执行步骤:
 
-1. 运行自检脚本(本命令文件所在目录的 `../../scripts/doctor.mjs`):
+1. 运行自检脚本(本命令文件所在目录的 `../scripts/doctor.mjs`):
    ```bash
-   node ../../scripts/doctor.mjs
+   node ../scripts/doctor.mjs
    ```
 2. 逐项解读输出(✅/❌):Node 版本、usage 数据库、会话状态文件、配置文件、大屏进程。
 3. 对 ❌ 项,按脚本给出的 hint 给出修复建议(常见:Node 升级到 ≥22.5、设置 ZCODE_USAGE_DB、重装插件后重开会话)。
