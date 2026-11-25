@@ -1320,7 +1320,8 @@ class AzhouHubCliTest(unittest.TestCase):
             with redirect_stdout(preview):
                 result = azhou_hub.main(["uninstall", *common], root=root)
             self.assertEqual(0, result)
-            self.assertIn(f'[WILL REMOVE] sample at "{target.resolve() / "sample"}"', preview.getvalue())
+            destination = json.dumps(str(target.resolve() / "sample"), ensure_ascii=False)
+            self.assertIn(f"[WILL REMOVE] sample at {destination}", preview.getvalue())
             self.assertIn("No files changed.", preview.getvalue())
             self.assertTrue((target / "sample").is_dir())
 
@@ -1328,7 +1329,7 @@ class AzhouHubCliTest(unittest.TestCase):
             with redirect_stdout(preview):
                 result = azhou_hub.main(["migrate", *common, "--mode", "link"], root=root)
             self.assertEqual(0, result)
-            self.assertIn(f'[PLANNED] sample at "{target.resolve() / "sample"}"', preview.getvalue())
+            self.assertIn(f"[PLANNED] sample at {destination}", preview.getvalue())
 
             (target / "sample/SKILL.md").write_text("user-owned", encoding="utf-8")
             refused = io.StringIO()
@@ -1356,7 +1357,7 @@ class AzhouHubCliTest(unittest.TestCase):
             with redirect_stdout(preview):
                 result = azhou_hub.main(["migrate-receipts", "--target", str(target)], root=root)
             self.assertEqual(0, result)
-            self.assertIn(str(legacy_receipt.parent), preview.getvalue())
+            self.assertIn(legacy_receipt.parent.resolve().as_posix(), preview.getvalue())
             self.assertIn(f"--apply --plan-id {planned['planId']}", preview.getvalue())
             self.assertTrue(legacy_receipt.is_file())
             self.assertFalse(current_receipt.exists())

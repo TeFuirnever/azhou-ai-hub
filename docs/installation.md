@@ -51,7 +51,7 @@ This example installs Super Archify for Codex in the current project. For anothe
 If Skills CLI times out cloning the repository, use Codex's bundled skill installer to fetch just Ask Azhou. Run this from your Codex project directory.
 
 ~~~bash
-python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-ask-azhou --method git --dest "$PWD/.agents/skills"
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-ask-azhou --method git --dest "$PWD/.agents/skills"
 ~~~
 
 Open a new chat in the project and [try Ask Azhou](#first-install-in-codex). The installer stops if the destination already exists. To install a different skill, use its path from the [skill catalog](../README.md#skills).
