@@ -1775,7 +1775,9 @@ def _print_lifecycle(command: str, payload: dict[str, Any], target: Path) -> Non
 
     if status == "dry_run":
         print("No files changed.")
-        if not payload.get("details"):
+        if command == "repair" and all(row["status"] == "current" for row in payload["skills"]):
+            print("No repairs are needed.")
+        elif not payload.get("details"):
             print("Review the paths above before running again with --apply.")
     if status in {"planned", "migrated", "already-current", "conflict"}:
         print(f"From: {json.dumps(payload['source'], ensure_ascii=False)}")
