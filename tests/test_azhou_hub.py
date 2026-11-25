@@ -1312,6 +1312,32 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(1, result)
             self.assertEqual("fail", payload["status"])
 
+    def test_lifecycle_text_explains_uninstall_plan_and_migration_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            common = ["--target", str(target), "--receipt", str(receipt)]
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(["uninstall", *common], root=root)
+            self.assertEqual(0, result)
+            self.assertIn(f'[WILL REMOVE] sample at "{target.resolve() / "sample"}"', preview.getvalue())
+            self.assertIn("No files changed.", preview.getvalue())
+            self.assertTrue((target / "sample").is_dir())
+
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(["migrate", *common, "--mode", "link"], root=root)
+            self.assertEqual(0, result)
+            self.assertIn(f'[PLANNED] sample at "{target.resolve() / "sample"}"', preview.getvalue())
+
+            (target / "sample/SKILL.md").write_text("user-owned", encoding="utf-8")
+            refused = io.StringIO()
+            with redirect_stdout(refused):
+                result = azhou_hub.main(["migrate", *common, "--mode", "link", "--apply"], root=root)
+            self.assertEqual(1, result)
+            self.assertIn("managed copy digest differs", refused.getvalue())
+            self.assertEqual("user-owned", (target / "sample/SKILL.md").read_text(encoding="utf-8"))
+
     def test_legacy_receipts_require_explicit_reviewed_namespace_migration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, current_receipt = self._managed_fixture(directory, mode="copy")
@@ -1326,6 +1352,12 @@ class AzhouHubCliTest(unittest.TestCase):
             )
             self.assertEqual(0, result, planned)
             self.assertEqual("planned", planned["status"])
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(["migrate-receipts", "--target", str(target)], root=root)
+            self.assertEqual(0, result)
+            self.assertIn(str(legacy_receipt.parent), preview.getvalue())
+            self.assertIn(f"--apply --plan-id {planned['planId']}", preview.getvalue())
             self.assertTrue(legacy_receipt.is_file())
             self.assertFalse(current_receipt.exists())
 

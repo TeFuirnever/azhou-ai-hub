@@ -1752,6 +1752,51 @@ def _print_setup(payload: dict[str, Any]) -> None:
         print("No files changed. The destination already links an identical canonical package from another checkout; resolve the duplicate checkout or choose a different target before applying.")
 
 
+def _print_lifecycle(command: str, payload: dict[str, Any], target: Path) -> None:
+    status = payload["status"]
+    if status == "nothing-to-migrate":
+        print(payload.get("message") or "nothing to migrate")
+        return
+
+    print(status)
+    if payload.get("error"):
+        print(json.dumps(payload["error"], ensure_ascii=False))
+    if payload.get("details"):
+        print(payload["details"])
+    for row in payload.get("skills", []):
+        destination = row.get("destination") or str(target.expanduser().resolve() / row["name"])
+        path = json.dumps(destination, ensure_ascii=False)
+        label = row["status"].upper()
+        if status == "dry_run" and command == "uninstall" and row["status"] == "current":
+            label = "WILL REMOVE"
+        details = row.get("details")
+        suffix = f": {json.dumps(details, ensure_ascii=False)}" if details else ""
+        print(f"[{label}] {row['name']} at {path}{suffix}")
+
+    if status == "dry_run":
+        print("No files changed.")
+        if not payload.get("details"):
+            print("Review the paths above before running again with --apply.")
+    if status in {"planned", "migrated", "already-current", "conflict"}:
+        print(f"From: {json.dumps(payload['source'], ensure_ascii=False)}")
+        print(f"To: {json.dumps(payload['target'], ensure_ascii=False)}")
+    for conflict in payload.get("conflicts", []):
+        print(f"[CONFLICT] {conflict}")
+    if status == "planned":
+        print(f"No files changed. Review the paths above, then run again with --apply --plan-id {payload['planId']}.")
+
+    recovery = payload.get("recovery")
+    if recovery:
+        print(f"Receipt: {json.dumps(recovery['receipt'], ensure_ascii=False)}")
+        print(f"Expected directory: {json.dumps(recovery['expected_directory'], ensure_ascii=False)}")
+        print(f"Observed record directory (may have changed): {json.dumps(recovery['observed_directory'], ensure_ascii=False)}")
+        print(f"Record name: {recovery['record_name']}; state: {recovery['record_state']}")
+        print(f"Directory identity: {recovery['directory_identity']}")
+        print(f"Record identity: {recovery['record_identity']}; receipt identity: {recovery['receipt_identity']}")
+    if status == "partial":
+        print((recovery or payload).get("next_action", "Stop concurrent changes and inspect the receipt and target manually; do not automatically delete or retry."))
+
+
 def run_verifier(root: Path, python: str) -> int:
     command = [python, str(root / "scripts/verify.py"), "--python", python]
     try:
@@ -2149,7 +2194,10 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
 
     if args.command in {"repair", "migrate", "migrate-receipts", "uninstall"} and not args.target.is_absolute():
         payload = _lifecycle_report("fail", [], error="--target must be an absolute path")
-        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_lifecycle(args.command, payload, args.target)
         return 1
 
     if args.command == "setup":
@@ -2237,17 +2285,7 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            print(payload["status"])
-            if args.command == "uninstall" and payload["status"] == "partial":
-                print(json.dumps(payload.get("error", "uninstall did not complete"), ensure_ascii=True))
-                recovery = payload.get("recovery")
-                if recovery:
-                    print(f"Receipt: {json.dumps(recovery['receipt'], ensure_ascii=True)}; expected directory: {json.dumps(recovery['expected_directory'], ensure_ascii=True)}")
-                    print(f"Observed record directory (may have changed): {json.dumps(recovery['observed_directory'], ensure_ascii=True)}")
-                    print(f"Record name: {recovery['record_name']}; state: {recovery['record_state']}")
-                    print(f"Directory identity: {recovery['directory_identity']}")
-                    print(f"Record identity: {recovery['record_identity']}; receipt identity: {recovery['receipt_identity']}")
-                print((recovery or payload).get("next_action", "Stop concurrent changes and inspect the receipt and target manually; do not automatically delete or retry."))
+            _print_lifecycle(args.command, payload, args.target)
         return 0 if payload["status"] in {"pass", "dry_run"} else 1
 
     if args.command == "migrate":
@@ -2261,7 +2299,10 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
                     payload = migrate_receipt(receipt_path=args.receipt, target=args.target, root=root, mode=args.mode, apply=args.apply)
             except PackageError as exc:
                 payload = _lifecycle_report("fail", [], error=str(exc))
-        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_lifecycle(args.command, payload, args.target)
         return 0 if payload["status"] in {"pass", "dry_run"} else 1
 
     if args.command == "migrate-receipts":
@@ -2278,10 +2319,8 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             payload = {"status": "fail", "applied": False, "error": str(exc)}
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
-        elif payload["status"] == "nothing-to-migrate":
-            print(payload.get("message") or "nothing to migrate")
         else:
-            print(payload["status"])
+            _print_lifecycle(args.command, payload, args.target)
         return 0 if payload["status"] in {"planned", "migrated", "already-current", "nothing-to-migrate"} else 1
 
     if args.command == "verify":
