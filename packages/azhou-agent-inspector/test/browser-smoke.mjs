@@ -141,8 +141,8 @@ const codexPage = `<!doctype html><body>${harness}<script>
 const zcodeHost = `<script>
   let empty = false;
   window.addEventListener("message", (event) => { if (event.data === "smoke-empty") empty = true; });
-  const lane = (sessionId, rate) => ({
-    sessionId, label: "Smoke " + sessionId, model: "Fixture", cwd: "/fixtures/" + sessionId,
+  const lane = (sessionId, rate, requestRate) => ({
+    sessionId, label: "Smoke " + sessionId, model: "Fixture", cwd: "/fixtures/" + sessionId, requestRate,
     status: "active", latest: { tokPerSec: rate, outputTokens: 200, genMs: 1000, completedAt: Date.now() },
     turn: { tokPerSec: rate, totalMs: rate * 10, genMs: 600, ttftMs: 100, totalOutput: 200,
       totalReasoning: 0, requests: 1, rated: true, peak: rate },
@@ -163,7 +163,7 @@ const zcodeHost = `<script>
       } } };
       return { structuredContent: empty
         ? { sessions: [], total: 0 }
-        : { sessions: [lane("A", 100), lane("B", 200)], total: 2, focusedSessionId: "B" } };
+        : { sessions: [lane("A", 100, 125), lane("B", 200)], total: 2, focusedSessionId: "B" } };
     },
   };
 </script>`;
@@ -174,6 +174,9 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
   checkUi(async () => {
     await until(() => value("dName") === "Smoke B" && Number(value("dRate")) === 200, "ZCode did not follow the focused session");
     if (value("dDuration") !== "2.0 s") throw new Error("ZCode did not show the focused turn duration");
+    if (value("dSub").includes("Turn generation rate")) {
+      throw new Error("ZCode repeated the turn rate already shown in the headline");
+    }
     const portrait = doc().querySelector(".brand img");
     await until(() => portrait.naturalWidth > 0, "ZCode portrait did not load");
     if (!portrait.naturalWidth || portrait.naturalWidth !== portrait.naturalHeight) {
@@ -216,7 +219,11 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     if (root.dataset.theme !== startTheme) doc().getElementById("themeBtn").click();
     await until(() => value("cpu") === "—" && value("mem") === "4.0 / 8 GB", "ZCode did not render memory when CPU was unavailable");
     doc().querySelector("#lanes .lane").click();
-    await until(() => value("dName") === "Smoke A" && Number(value("dRate")) === 100, "ZCode did not switch the focused session");
+    await until(() => value("dName") === "Smoke A" && Number(value("dRate")) === 125, "ZCode did not switch the focused session");
+    const turnRate = [...doc().querySelectorAll("#dSub dt")].find(term => term.textContent === "Turn generation rate");
+    if (turnRate?.nextElementSibling?.textContent !== "100.0 tok/s") {
+      throw new Error("ZCode hid the turn rate while the headline showed the request rate");
+    }
     frame.contentWindow.postMessage("smoke-empty", "*");
     await until(() => value("dName") === "No sessions" && value("dRate") === "—" && value("dDuration") === "—" &&
       !value("dDir") && !value("dModel") && value("cCum") === "--" &&
