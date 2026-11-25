@@ -93,6 +93,16 @@ test("会话枚举:窗口内全出现、窗口外不出现,按最近活动排序
   assert.equal(r.total >= 4, true, "total 不少于泳道数");
 });
 
+test("a scoped session is returned outside the recent-session limit", () => {
+  const recent = querySessions({ fresh: true, laneMax: 1 });
+  const scoped = querySessions({ fresh: true, laneMax: 1, focusedSessionId: "sA" });
+  assert.deepEqual(scoped.sessions, recent.sessions);
+  assert.equal(scoped.focusedSession.sessionId, "sA");
+  assert.equal(scoped.focusedSession.turn.tokPerSec, 187.5);
+  const missing = querySessions({ fresh: true, laneMax: 1, focusedSessionId: "missing" });
+  assert.equal(missing.focusedSession, null);
+});
+
 test("每会话独立统计:同目录主会话与 actor 互不串数据,口径 main_turn 优先", () => {
   const r = querySessions({ fresh: true });
   const by = Object.fromEntries(r.sessions.map((s) => [s.sessionId, s]));

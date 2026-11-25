@@ -150,7 +150,7 @@ Optional integrations live under `packages/`. These projects are not Skills, and
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
-| `azhou-agent-inspector` | [Azhou Agent Workbench](packages/azhou-agent-inspector/README.md) | Codex conversation panel and ZCode composer status with a multi-session dashboard. Both views share the Azhou portrait, wallpaper, and four-field performance preview. Native installation is per harness. |
+| `azhou-agent-inspector` | [Azhou Agent Workbench](packages/azhou-agent-inspector/README.md) | Codex conversation panel and ZCode composer status with a conversation dashboard. Both views share the Azhou portrait, wallpaper, and four-field performance preview. Native installation is per harness. |
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **candidate**: native Codex/Claude plugins, a zcode plugin with bundled skills, and shared Skills discovery for MiMo and DeepSeek Harness (the maintainer host's shared-root pstack links were retired on 2026-11-14; serving pstack that way moves to a separately scoped task, and other skills sharing the root are unaffected). Dated evidence and limits: [support matrix](docs/support-matrix.md#optional-integrations). |
 
 

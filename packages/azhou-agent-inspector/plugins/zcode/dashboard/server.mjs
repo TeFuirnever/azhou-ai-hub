@@ -100,7 +100,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (req.url.startsWith("/api/sessions")) {
-    // 多会话泳道(0.10.0):每会话 status/turn/latest/曲线/终身累计;增量缓存,
+    // 会话统计包括状态、轮次、曲线与累计。增量缓存
     // 1s 轮询也只查新增行(详见 token-rate.mjs 的 querySessions)
     try {
       const r = tokenRateSessions();
