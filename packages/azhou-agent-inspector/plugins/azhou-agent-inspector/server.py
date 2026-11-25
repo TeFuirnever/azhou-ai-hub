@@ -8,6 +8,7 @@ import sqlite3
 import sys
 
 ROOT = Path(__file__).resolve().parent
+VERSION = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text("utf8"))["version"]
 URI = "ui://azhou/session.html"
 MIME = "text/html;profile=mcp-app"
 TOOL = "session_performance"
@@ -141,7 +142,7 @@ def dispatch(method, params, home):
         supported = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
         return {"protocolVersion": offered if offered in supported else supported[0],
                 "capabilities": {"tools": {}, "resources": {}},
-                "serverInfo": {"name": "azhou-agent-inspector", "version": "0.1.1"}}
+                "serverInfo": {"name": "azhou-agent-inspector", "version": VERSION}}
     if method == "ping":
         return {}
     if method == "tools/list":
@@ -155,7 +156,7 @@ def dispatch(method, params, home):
     if method == "resources/templates/list":
         return {"resourceTemplates": []}
     if method == "resources/read" and params.get("uri") == URI:
-        html = (ROOT / "panel.html").read_text("utf8")
+        html = (ROOT / "panel.html").read_text("utf8").replace("__PLUGIN_VERSION__", json.dumps(VERSION))
         for placeholder, filename in (("__ART__", "azhou.webp"), ("__WALLPAPER__", "wallpaper.webp")):
             encoded = base64.b64encode((ROOT / filename).read_bytes()).decode("ascii")
             html = html.replace(placeholder, encoded)
