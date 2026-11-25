@@ -38,33 +38,13 @@ If you need Ask Azhou in a project where it is unavailable, use the single-skill
 
 ## Package-manager install
 
-Install only the skill you need:
+Choose the package name in the [skill catalog](../README.md#skills). The four `super-azhou-*` skills require a local copy of this repository to run. In a terminal opened in your agent's project folder, run this example with the chosen package name.
 
 ~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
-npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
-npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
-npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
-npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
-npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
-npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
-npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
-npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
+npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex
 ~~~
 
-See [First install in Codex](#first-install-in-codex) for the target, first invocation, and troubleshooting steps. Skills CLI installations use the selected scope and carry no Hub receipt.
+This example installs Super Archify for Codex in the current project. For another host, check its installation route in the [support matrix](support-matrix.md). Use the original scope when updating. Skills CLI resolves the default branch. Check the installed files if you need to verify a revision.
 
 ## Alternate installer
 

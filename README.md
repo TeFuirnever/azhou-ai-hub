@@ -12,20 +12,11 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 17 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
-
-https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
-
 </div>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-install-dark.jpg">
-  <img src="assets/github/readme-banner-install.jpg" alt="Install: one command per skill" width="100%">
-</picture>
 
 ### First install in Codex
 
-Have Codex signed in and Node.js with `npx` available, and run commands from the project folder where you want Ask Azhou installed. The shell examples are POSIX: on Windows, run them in Git Bash ([Windows notes](docs/installation.md#windows-notes)); the [OS-support table](docs/support-matrix.md#operating-system-support-deterministic-gate) records the platforms the repository gate and shipped scripts cover.
+Have Codex signed in and Node.js with `npx` available, and run commands from the project folder where you want Ask Azhou installed. The shell examples are POSIX: on Windows, run them in Git Bash ([Windows notes](docs/installation.md#windows-notes)).
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
@@ -37,37 +28,7 @@ Open a new Codex chat in that project and try the following question.
 
 Look for a recommendation of `super-archify`. If Ask Azhou is missing, check the [first-install guide](docs/installation.md#first-install-in-codex). For an existing installation, see [check, update, or uninstall](docs/installation.md#upgrade-or-uninstall).
 
-The four Foundation Skills install the same way:
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
-~~~
-
-The remaining packages install the same way:
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
-npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
-npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
-npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
-npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
-npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
-npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
-npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
-~~~
-
-Choose one installation method per skill ([one-path rule](docs/installation.md#one-path-rule)). A package-manager install resolves the mutable default branch and carries no Hub receipt. The four `super-azhou-*` packages are thin wrappers: the npx command installs the Skill, but invoking it runs the Foundation CLI (`scripts/azhou_hub.py`) from a checkout of this repository, so that checkout must still be on disk (clone it once).
+When you want to use a recommended skill, follow the [single-skill install guide](docs/installation.md#package-manager-install). Use [one installation method per skill](docs/installation.md#one-path-rule). The four `super-azhou-*` skills also require a local checkout.
 
 The walkthrough above targets Codex. For the other maintained harnesses — Claude Code, MiMo Code (`mimo`), DeepSeek Harness (`dsh`) and zcode — the verified install route and evidence per harness live in the [support matrix](docs/support-matrix.md), and a repository checkout can install via [checkout-assisted setup](docs/installation.md#checkout-assisted-setup) or [manual copy](docs/installation.md#manual-copy).
 
@@ -90,7 +51,7 @@ Every adapted package records its upstream provenance in `skills/<name>/referenc
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | Draft, calibrate and review an architecture document from upstream sources. | Deterministic scaffold, closing-gate checker and golden case. |
 | [Session Insights](skills/super-session-insights/SKILL.md) | Fact-bound usage reports from local session stores; reflection on authorized material. | Synthetic-store wiring suite; reflection contract checks. |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | Rewrite agent-facing English under ASD-STE100-derived structural rules. | Pinned upstream (SHA-256); deterministic `ste-lint.py` gate. |
-| [Archify](skills/super-archify/SKILL.md) | Turn systems, plans or codebases into interactive diagram-map HTML. | Upstream v3.2.0 sync (git tag + SHA-256); finalize/validate gates. |
+| [Archify](skills/super-archify/SKILL.md) | Turn a system, codebase, or Mermaid sketch into an interactive architecture diagram. | Upstream v3.2.0 sync (git tag + SHA-256); finalize/validate gates. |
 | [Lavish](skills/super-lavish/SKILL.md) | Turn responses into reviewable HTML; browser annotations return to the agent. | Locked upstream release (SHA-256 + npm pins); integrity tests. |
 | [Imagegen](skills/super-imagegen/SKILL.md) | Run prepared image-generation requests through the machine's already-installed private `azhou-imagegen` skill; without that skill or its doctor gate, the package fails closed. | Contract-only package; baseline hashes pinned; fails closed. |
 | [Rederive](skills/super-rederive/SKILL.md) | Practice understanding code by re-deriving its design. | Pinned upstream (SHA-256); exploratory observation only. |
@@ -104,6 +65,8 @@ Every adapted package records its upstream provenance in `skills/<name>/referenc
 [Per-skill platform view](docs/skill-platform-view.md) · [Evaluation contract](docs/eval-case-contract.md)
 
 ### Try it
+
+https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
 In the results below, a *hold* is an explicitly flagged unresolved item, and a *stable receipt* is the checkable record of what a run produced.
 
