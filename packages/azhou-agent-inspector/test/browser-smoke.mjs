@@ -25,8 +25,8 @@ assert.equal(zcodeWallpaper.toString("base64"), wallpaper, "The two dashboards u
 const harness = `
 <output id="smoke-result" data-result="pending"></output>
 <script>
-  async function until(predicate, description) {
-    for (let attempt = 0; attempt < 100; attempt++) {
+  async function until(predicate, description, attempts = 100) {
+    for (let attempt = 0; attempt < attempts; attempt++) {
       if (predicate()) return;
       await new Promise(resolve => setTimeout(resolve, 25));
     }
@@ -133,7 +133,8 @@ const codexPage = `<!doctype html><body>${harness}<script>
       outputTokens: 123456789012, ttftMs: null, cacheHitPercent: 0 } });
     await until(() => text(".rate") === "12,345.6 tok/s" && !panel("#snapshot").hidden,
       "Codex did not update when host data returned");
-    if (!panel("[data-metric=ttftMs]").parentElement.hidden || text("[data-metric=cacheHitPercent]") !== "0%" ||
+    if (panel("[data-metric=ttftMs]").parentElement.getClientRects().length ||
+        !panel("[data-metric=cacheHitPercent]").parentElement.getClientRects().length || text("[data-metric=cacheHitPercent]") !== "0%" ||
         panel("#round").hidden || !text("#state").includes("进行中")) {
       throw new Error("Codex lost the running state, missing value, or measured zero");
     }
@@ -153,7 +154,7 @@ const codexPage = `<!doctype html><body>${harness}<script>
 const zcodeHost = `<script>
   let focusedSessionId = "B";
   let slowSessionRead;
-  let failMetrics = false;
+  let failMetrics = true;
   window.smoke = { reads: 0, metrics: 0, hold: false,
     release() { slowSessionRead?.(); },
     failMetrics() { failMetrics = true; },
@@ -187,14 +188,15 @@ const zcodeHost = `<script>
         } } };
       }
       window.smoke.reads += 1;
+      const recent = lane("A", 100, 125);
+      const focusedSession = focusedSessionId === "B" ? lane("B", 200)
+        : focusedSessionId === "A" ? recent : null;
+      const result = { structuredContent: { sessions: [recent], total: 2, focusedSessionId, focusedSession } };
       if (window.smoke.hold) {
         window.smoke.hold = false;
         await new Promise(resolve => { slowSessionRead = resolve; });
       }
-      const recent = lane("A", 100, 125);
-      const focusedSession = focusedSessionId === "B" ? lane("B", 200)
-        : focusedSessionId === "A" ? recent : null;
-      return { structuredContent: { sessions: [recent], total: 2, focusedSessionId, focusedSession } };
+      return result;
     },
   };
 </script>`;
@@ -204,6 +206,10 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
   const value = (id) => doc()?.getElementById(id)?.textContent;
   checkUi(async () => {
     await until(() => value("dName") === "Smoke B" && Number(value("dRate")) === 200, "ZCode did not follow the focused session");
+    await until(() => value("resourceStatus") === "System resources unavailable", "ZCode did not report first resource read failure");
+    if (!doc().getElementById("resourceReadings").hidden) throw new Error("ZCode displayed placeholders after the first resource read failed");
+    frame.contentWindow.smoke.recoverMetrics();
+    doc().dispatchEvent(new frame.contentWindow.Event("visibilitychange"));
     if (value("dDuration") !== "2.0 s") throw new Error("ZCode did not show the focused turn duration");
     if (doc().querySelector(".session-list, #lanes, #follow")) {
       throw new Error("ZCode rendered a second session navigation list");
@@ -268,7 +274,7 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     await until(() => host.reads > before, "ZCode did not start the held request");
     await new Promise(resolve => setTimeout(resolve, 1250));
     if (host.reads !== before + 1) throw new Error("ZCode overlapped reads of the same session data");
-    host.release();
+    frame.contentWindow.postMessage({type: "smoke-focus", sessionId: "B"}, "*");
     await until(() => value("resourceStatus").includes("last reading"),
       "ZCode did not label stale resource readings on failure");
     if (value("mem") !== "4.0 / 8 GB") throw new Error("A failed resource read cleared the last valid data");
@@ -276,6 +282,11 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     doc().dispatchEvent(new frame.contentWindow.Event("visibilitychange"));
     await until(() => !value("resourceStatus").includes("last reading"),
       "ZCode did not refresh resources as soon as it became visible");
+    await until(() => value("liveTxt") === "Disconnected", "ZCode did not report its timed-out session read", 320);
+    await until(() => value("dName") === "Smoke B", "ZCode did not recover after a session read timed out");
+    host.release();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    if (value("dName") !== "Smoke B") throw new Error("ZCode applied a response after its deadline");
   });
 </script>`;
 
@@ -300,7 +311,7 @@ try {
   for (const host of ["codex", "zcode"]) {
     const { stdout } = await run(process.env.CHROME_BIN || "google-chrome", [
       "--headless", "--no-first-run", "--disable-background-networking",
-      `--user-data-dir=${join(profile, host)}`, "--virtual-time-budget=12000",
+      `--user-data-dir=${join(profile, host)}`, "--virtual-time-budget=18000",
       "--dump-dom", `http://127.0.0.1:${port}/${host}`,
     ], { timeout: 30_000, maxBuffer: 4_000_000 });
     const result = stdout.match(/<output id="smoke-result"[^>]*>[\s\S]*?<\/output>/)?.[0];

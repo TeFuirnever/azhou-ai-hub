@@ -151,6 +151,7 @@
   /* 系统条 */
   .sys { display: flex; gap: 0.75rem 1.5rem; flex-wrap: wrap; align-items: center; margin-top: 14px; padding: 13px 18px;
     border: 1px solid var(--hair); border-radius: 0.75rem; background: var(--surface); font-size: 12px; color: var(--dim); }
+  .sys-readings { display: contents; }
   .sys b { color: var(--ink); font-weight: 600; font-family: var(--mono); font-variant-numeric: tabular-nums; margin-left: 5px; }
   .sys .meter { width: 84px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .07); overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 8px; }
   .sys .meter i { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--bl); transition: width .8s var(--ease); }
@@ -227,10 +228,12 @@
 
   <div class="sys reveal" style="--d:.34s" id="sys" hidden>
     <span id="resourceStatus" role="status">本机资源</span>
-    <span>CPU<b id="cpu">--%</b><span class="meter" id="cpuBar"><i></i></span></span>
-    <span><span data-i18n="memory">内存</span><b id="mem">--</b><span class="meter" id="memBar"><i></i></span></span>
-    <span><span data-i18n="uptime">运行</span><b id="up">--</b></span>
-    <span id="plat"></span>
+    <div class="sys-readings" id="resourceReadings" hidden>
+      <span>CPU<b id="cpu">--%</b><span class="meter" id="cpuBar"><i></i></span></span>
+      <span><span data-i18n="memory">内存</span><b id="mem">--</b><span class="meter" id="memBar"><i></i></span></span>
+      <span><span data-i18n="uptime">运行</span><b id="up">--</b></span>
+      <span id="plat"></span>
+    </div>
   </div>
 
   <footer data-i18n="footer">每秒刷新 · 数据源:ZCode usage 数据库(真实)· 各会话独立统计 · 隐藏标签页时自动暂停</footer>
@@ -271,6 +274,7 @@ const translations = {
     chart: "生成速率曲线",
     resources: "本机资源",
     resourcesStale: "本机资源（上次读取）",
+    resourcesUnavailable: "本机资源暂时无法读取",
     memory: "内存",
     uptime: "运行",
     footer: "每秒刷新 · 数据源:ZCode usage 数据库(真实)· 各会话独立统计 · 隐藏标签页时自动暂停",
@@ -317,6 +321,7 @@ const translations = {
     chart: "Generation rate",
     resources: "System resources",
     resourcesStale: "System resources (last reading)",
+    resourcesUnavailable: "System resources unavailable",
     memory: "Memory",
     uptime: "Uptime",
     footer: "Updates every second · ZCode usage database · Per-session stats · Pauses when hidden",
@@ -519,7 +524,7 @@ function syncHostLanguage() {
 
 /* ---------- 轮询 ---------- */
 let languageHost;
-async function readDashboardData(name) {
+async function readDashboardData(name, signal) {
   const host = window.zcode;
   if (host?.callTool) {
     if (host !== languageHost) {
@@ -527,12 +532,13 @@ async function readDashboardData(name) {
       host.subscribe?.(syncHostLanguage);
     }
     await host.ready();
+    signal?.throwIfAborted();
     syncHostLanguage();
     const result = await host.callTool(name, {});
     if (result.isError || !result.structuredContent) throw new Error("Dashboard data unavailable");
     return result.structuredContent;
   }
-  const res = await fetch("/api/" + name, { cache: "no-store" });
+  const res = await fetch("/api/" + name, { cache: "no-store", signal });
   if (!res.ok) throw new Error("Dashboard data unavailable");
   return res.json();
 }
@@ -577,26 +583,41 @@ function setStatus(id, text) {
 
 let resourcesStale = false;
 function renderResourceStatus() {
-  $("sys").hidden = !lastSystem;
-  if (lastSystem) setStatus("resourceStatus", resourcesStale ? copy.resourcesStale : copy.resources);
+  $("sys").hidden = !lastSystem && !resourcesStale;
+  $("resourceReadings").hidden = !lastSystem;
+  const label = lastSystem ? (resourcesStale ? copy.resourcesStale : copy.resources) : copy.resourcesUnavailable;
+  setStatus("resourceStatus", label);
 }
 
-function poll(name, receive, onError) {
+function poll(name, interval, receive, onError) {
   let pending = false;
-  return async () => {
-    if (document.hidden || pending) return;
+  let scheduled;
+  return async function tick() {
+    if (pending) return;
+    clearTimeout(scheduled);
+    if (document.hidden) return;
     pending = true;
+    const controller = new AbortController();
+    let timeout;
     try {
-      receive(await readDashboardData(name));
+      const deadline = new Promise((_, reject) => {
+        timeout = setTimeout(() => {
+          controller.abort();
+          reject(new Error("Dashboard request timed out"));
+        }, 5000);
+      });
+      receive(await Promise.race([readDashboardData(name, controller.signal), deadline]));
     } catch {
       onError();
     } finally {
+      clearTimeout(timeout);
       pending = false;
+      if (!document.hidden) scheduled = setTimeout(tick, interval);
     }
   };
 }
 
-const tickSessions = poll("sessions", result => {
+const tickSessions = poll("sessions", 1000, result => {
   renderSessions(result);
   lastSessions = result;
   connection = "live";
@@ -606,7 +627,7 @@ const tickSessions = poll("sessions", result => {
   renderConnection();
 });
 
-const tickSys = poll("metrics", ({ system }) => {
+const tickSys = poll("metrics", 2000, ({ system }) => {
   renderSystem(system);
   lastSystem = system;
   resourcesStale = false;
@@ -634,8 +655,6 @@ clock();
 loadArtwork();
 refreshVisibleData();
 setInterval(clock, 1000);
-setInterval(tickSessions, 1000);
-setInterval(tickSys, 2000);
 </script>
 </body>
 </html>

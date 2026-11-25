@@ -34,7 +34,7 @@
     @media (forced-colors: active) {
       body { background-image: none; }
     }
-    [hidden] { display: none; }
+    [hidden] { display: none !important; }
     main { max-inline-size: 40rem; margin-inline: auto; padding: clamp(0.75rem, 4vw, 1.5rem); }
     header, .brand { display: flex; align-items: center; gap: 0.625rem; }
     header { flex-wrap: wrap; justify-content: space-between; }
@@ -53,9 +53,9 @@
       cursor: pointer;
     }
     @media (hover: hover) {
-      button:enabled:hover { border-color: var(--muted); }
+      button:not([aria-disabled="true"]):hover { border-color: var(--muted); }
     }
-    button:enabled:active { border-color: var(--accent); }
+    button:not([aria-disabled="true"]):active { border-color: var(--accent); }
     button[aria-disabled="true"] { color: var(--muted); cursor: default; }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -179,6 +179,7 @@
     const metrics = document.querySelectorAll("[data-metric]");
 
     let revision = 0;
+    let feedbackReset;
     function acceptSnapshot(data) {
       if (data !== null && !Object.hasOwn(notices, data?.state)) return false;
 
@@ -203,6 +204,7 @@
         const [term, value] = row.children;
         return term.textContent + " " + value.textContent;
       }).join("\n");
+      clearTimeout(feedbackReset);
       feedback.textContent = "";
       return true;
     }
@@ -243,6 +245,7 @@
     async function update() {
       if (refresh.getAttribute("aria-disabled") === "true") return;
       const requestedAt = revision;
+      clearTimeout(feedbackReset);
       refresh.setAttribute("aria-disabled", "true");
       feedback.textContent = "正在刷新…";
       try {
@@ -255,6 +258,7 @@
         if (revision === requestedAt) {
           if (!acceptSnapshot(result?.structuredContent)) throw Error("missing snapshot");
           feedback.textContent = "已刷新。";
+          feedbackReset = setTimeout(() => { feedback.textContent = ""; }, 3500);
         }
       } catch {
         if (revision === requestedAt) {
