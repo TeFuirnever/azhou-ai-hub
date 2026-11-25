@@ -34,7 +34,7 @@ The existing Skill installation paths below remain independent. For the optional
 
 If a book skill is missing from the Azhou AI Hub checkout, check the current branch and the files under `.agents/skills/`. Update the checkout or restore the tracked files from the intended revision. These book skills ship with the project. Installing Ask Azhou by itself adds the router. To use a specific book in a different project, install it there from [agent-rules-books](https://github.com/ciembor/agent-rules-books).
 
-If you need Ask Azhou in a project where it is unavailable, use the single-skill install below. A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
+If Ask Azhou is missing from a project, follow [First install in Codex](#first-install-in-codex). A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
 
 ## Package-manager install
 
@@ -48,13 +48,13 @@ This example installs Super Archify for Codex in the current project. For anothe
 
 ## Alternate installer
 
-If the repository download fails, Codex users can install Rederive into the current project with the bundled skill installer and a sparse Git checkout:
+If Skills CLI times out cloning the repository, use Codex's bundled skill installer to fetch just Ask Azhou. Run this from your Codex project directory.
 
 ~~~bash
-python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-rederive --method git --dest "$PWD/.agents/skills"
+python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-ask-azhou --method git --dest "$PWD/.agents/skills"
 ~~~
 
-The destination must not already contain `super-rederive`; this command does not update an existing install.
+Open a new chat in the project and [try Ask Azhou](#first-install-in-codex). The installer stops if the destination already exists. To install a different skill, use its path from the [skill catalog](../README.md#skills).
 
 ## Verify what you installed
 

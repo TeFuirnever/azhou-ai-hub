@@ -37,7 +37,8 @@ When several visual Skills accept the same input, choose by what the user will d
 - Send feedback by marking up a page in the browser → `super-lavish`.
 - Edit the original drawing in Excalidraw later → `super-excalidraw-diagram`.
 - Explain a topic to a reader with no background, using pictures and a few words → `super-eli5`.
-- Produce a specific professional diagram format, such as a Wardley map, or convert a draw.io file → `super-diagram-design`.
+- Generate or edit a raster image → `super-imagegen` when its local prerequisites are available.
+- Produce a polished diagram in a specific visual format, such as a Wardley map, or convert a draw.io file → `super-diagram-design`.
 - Explore a system or process in interactive HTML, or read a structured one-page explanation → `super-archify`.
 
 When someone requests the finished artifact, recommend the owning Skill in terms of that result. Avoid asking them to pick among the input formats that Skill already supports.

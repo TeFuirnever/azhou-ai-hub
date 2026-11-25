@@ -6,7 +6,7 @@ layout: base.njk
 {% set matrix = site.blobBase ~ '/docs/support-matrix.md' %}
 <article class="doc-card">
   <h1>{{ title }}</h1>
-  <p>{{ '不同 Agent 工具支持的功能有差别。先查你要用的技能或功能，再按安装指南操作。' if zh else 'Available features vary by agent host. Check the skill or capability you need before installing.' }}</p>
+  <p>{{ '不同 Agent 工具支持的功能有差别。先查你要用的技能或功能，再按安装指南操作。下面的表格为英文。' if zh else 'Available features vary by agent host. Check the skill or capability you need before installing.' }}</p>
   <ul class="doclist">
     <li><a href="{{ site.blobBase }}/docs/skill-platform-view.md">{{ '查某个技能支持哪些工具' if zh else 'Check a skill by agent host' }}</a></li>
     <li><a href="{{ matrix }}">{{ '查工具支持哪些功能' if zh else 'Compare host capabilities' }}</a></li>
