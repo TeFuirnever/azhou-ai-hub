@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -103,7 +103,13 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
   assert.match(current.tooltips.get("app"), /Cache hit — · Context — · Memory —/);
   assert.match(current.tooltips.get("app"), /Open TPS monitor$/);
   current.setLocale("zh-TW");
-  assert.equal(current.views.get("dashboard").entry, "./dashboard/index.html");
+  const dashboard = current.views.get("dashboard");
+  assert.equal(dashboard.entry, "./dashboard/index.html");
+  const { portrait, wallpaper } = await dashboard.tools.artwork.run();
+  for (const [data, filename] of [[portrait, "azhou.webp"], [wallpaper, "wallpaper.webp"]]) {
+    const image = readFileSync(new URL("../plugins/zcode/dashboard/" + filename, import.meta.url), "base64");
+    assert.equal(data, "data:image/webp;base64," + image);
+  }
   await current.commands.get("open-dashboard")({ scope: { kind: "session", sessionId: "sess-a" } });
   assert.deepEqual(current.opened, [{ id: "dashboard", scope: { sessionId: "sess-a" } }]);
   writeFileSync(join(root, "sessions", "sess-a.json"), JSON.stringify({ ts: now, promptTs: now - 1800 }));

@@ -48,7 +48,7 @@
   }
   body::before {
     content: ""; position: fixed; inset: 0; pointer-events: none;
-    background-image: linear-gradient(110deg, var(--scrim-start), var(--scrim-end)), url("./wallpaper.webp");
+    background-image: linear-gradient(110deg, var(--scrim-start), var(--scrim-end)), var(--wallpaper, none);
     background-position: center, 72% center;
     background-size: cover;
   }
@@ -225,7 +225,7 @@
 <div class="shell">
   <header class="top reveal" style="--d:.02s">
     <div class="brand">
-      <img src="./azhou.webp" alt="" width="40" height="40">
+      <img id="brandPortrait" hidden alt="" width="40" height="40">
       <h1 data-i18n="heading">阿舟 Agent 透视台</h1>
     </div>
     <div class="clockbox">
@@ -690,6 +690,18 @@ async function readDashboardData(name) {
   return res.json();
 }
 
+async function loadArtwork() {
+  try {
+    const { portrait, wallpaper } = window.zcode?.callTool
+      ? await readDashboardData("artwork")
+      : { portrait: "./azhou.webp", wallpaper: "./wallpaper.webp" };
+    const img = $("brandPortrait");
+    img.addEventListener("load", () => { img.hidden = false; }, { once: true });
+    img.src = portrait;
+    document.body.style.setProperty("--wallpaper", "url(" + JSON.stringify(wallpaper) + ")");
+  } catch {}
+}
+
 function renderSessions(r) {
   const list = r.sessions || [];
   let current = focusLock && list.find((session) => session.sessionId === focusSid);
@@ -759,7 +771,7 @@ function loop() {
   setInterval(() => { if (vis) tickSessions(); }, 1000);
   setInterval(() => { if (vis) tickSys(); }, 2000);
 }
-clock(); tickSessions(); tickSys(); loop();
+clock(); loadArtwork(); tickSessions(); tickSys(); loop();
 </script>
 </body>
 </html>
