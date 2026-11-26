@@ -1,0 +1,158 @@
+{
+  "approved_at": "2026-11-26T09:10:38Z",
+  "articles": [
+    {
+      "author": null,
+      "id": "0081372827db667e89613677",
+      "kind": "research",
+      "lang": "en",
+      "note": "月之暗面展示 K2.6 在长任务编程、界面设计和多代理协作方面的表现。",
+      "note_en": "Moonshot AI describes K2.6’s work on long coding tasks, interface design, and agent coordination.",
+      "published": "2026-04-20",
+      "scope": "link",
+      "sources": [
+        "kimi"
+      ],
+      "title": "Kimi K2.6: Advancing Open-Source Coding",
+      "url": "https://www.kimi.ai/blog/kimi-k2-6"
+    },
+    {
+      "author": null,
+      "id": "5241013974fb8a5d16f2d290",
+      "kind": "announcement",
+      "lang": "zh-CN",
+      "note": "智谱回顾手机助手的演进，并介绍 AutoGLM 开源项目的设计取舍。",
+      "note_en": "Zhipu traces the development of its phone assistant and explains design choices behind Open-AutoGLM.",
+      "published": "2025-12-08",
+      "scope": "link",
+      "sources": [
+        "zhipu"
+      ],
+      "title": "AutoGLM开源：每台手机，都可以成为AI手机",
+      "url": "https://www.zhipuai.cn/zh/research/145"
+    },
+    {
+      "author": null,
+      "id": "8befc30ac765ba8adae65db9",
+      "kind": "announcement",
+      "lang": "en",
+      "note": "介绍 MCP 服务如何向 Claude 提供技能和长时间运行的任务。",
+      "note_en": "Explains how MCP servers can provide skills and long-running tasks to Claude.",
+      "published": "2026-11-24",
+      "scope": "link",
+      "sources": [
+        "claude"
+      ],
+      "title": "MCP servers can now ship skills, run tasks, and more with Claude",
+      "url": "https://claude.com/resources/articles/skills-over-mcp-tasks-and-more"
+    },
+    {
+      "author": null,
+      "id": "9342dbf934e428aa00c16520",
+      "kind": "article",
+      "lang": "en",
+      "note": "工程团队介绍如何借助 Codex 发现和处理性能回退。",
+      "note_en": "OpenAI engineering describes how it uses Codex to find and address performance regressions.",
+      "published": "2026-11-19",
+      "scope": "link",
+      "sources": [
+        "openai"
+      ],
+      "title": "How OpenAI’s Performance Factory keeps ChatGPT fast",
+      "url": "https://openai.com/index/how-openai-performance-factory-keeps-chatgpt-fast"
+    },
+    {
+      "author": null,
+      "id": "9f5eec6cb13ed6b93c895b6c",
+      "kind": "article",
+      "lang": "en",
+      "note": "介绍 MiMo Code 如何组织推理计算、会话记忆和长任务工作流。",
+      "note_en": "Describes how MiMo Code handles computation, conversation memory, and long-running workflows.",
+      "published": "2026-06-10",
+      "scope": "link",
+      "sources": [
+        "mimo"
+      ],
+      "title": "MiMo Code: Scaling Coding Agents to Long-Horizon Tasks",
+      "url": "https://mimo.xiaomi.com/blog/mimo-code-long-horizon"
+    },
+    {
+      "archive_revision": "2a4788499beac1f69c70636cd132cd3f70b88b585dc4b6c20b62e95d632dc0dd",
+      "author": "Amanda Askell",
+      "body_file": "claude-constitution.html",
+      "body_sha256": "5723d143244feef5323b782c121473d414638ea9370de4c31979e2afaf7520da",
+      "id": "aca39f813eea9ac6a3e8e498",
+      "kind": "research",
+      "lang": "en",
+      "license": "CC0 1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "note": "Anthropic 发布的 Claude 行为规范全文。归档只包含 CC0 正文七章。",
+      "note_en": "Anthropic’s published guidelines for Claude. This archive contains the seven CC0 chapters.",
+      "published": null,
+      "scope": "full",
+      "sections": [
+        {
+          "id": "overview",
+          "title": "Overview"
+        },
+        {
+          "id": "being-helpful",
+          "title": "Being helpful"
+        },
+        {
+          "id": "following-anthropics-guidelines",
+          "title": "Following Anthropic’s guidelines"
+        },
+        {
+          "id": "being-broadly-ethical",
+          "title": "Being broadly ethical"
+        },
+        {
+          "id": "being-broadly-safe",
+          "title": "Being broadly safe"
+        },
+        {
+          "id": "claudes-nature",
+          "title": "Claude’s nature"
+        },
+        {
+          "id": "concluding-thoughts",
+          "title": "Concluding thoughts"
+        }
+      ],
+      "source_response_sha256": "9ace0311edf0c16cc281042a198dcdd8512d4418c91aeb48facd90d1c588412a",
+      "sources": [
+        "anthropic"
+      ],
+      "title": "Claude’s Constitution",
+      "url": "https://www.anthropic.com/constitution"
+    }
+  ],
+  "sources": {
+    "anthropic": {
+      "home": "https://www.anthropic.com/",
+      "name": "Anthropic"
+    },
+    "claude": {
+      "home": "https://claude.com/resources/articles",
+      "name": "Claude Resources"
+    },
+    "kimi": {
+      "home": "https://www.kimi.ai/blog/",
+      "name": "Kimi"
+    },
+    "mimo": {
+      "home": "https://mimo.xiaomi.com/",
+      "name": "小米 MiMo"
+    },
+    "openai": {
+      "home": "https://openai.com/news/",
+      "name": "OpenAI News"
+    },
+    "zhipu": {
+      "home": "https://www.zhipuai.cn/zh",
+      "name": "智谱"
+    }
+  },
+  "state": "approved"
+}
