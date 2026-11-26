@@ -22,7 +22,7 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 | [Azhou Agent Workbench](packages/azhou-agent-inspector/README.md) | Inspect turn duration, speed and available performance details in Codex and ZCode. |
 | [pstack](packages/pstack-agent-harness/README.md) | Use engineering workflows for implementation, review and pull request follow-up. |
 | [Agent Rules Books](#agent-rules-books) | Apply 14 sets of book-inspired engineering rules to a design, code change or review. |
-| [Azhou Source Library](https://tefuirnever.github.io/azhou-ai-hub/library/) | Browse official AI sources and subscribe to selections through RSS. |
+| [Azhou Source Library](https://tefuirnever.github.io/azhou-ai-hub/library/) | Search official AI selections, subscribe via RSS, or read the [Agent index](https://tefuirnever.github.io/azhou-ai-hub/llms.txt). |
 
 Maintainers can use the [Source Library tools](packages/source-library/README.md) to check sources, retain selected publisher pages on demand, import saved HTML and back up a private catalog.
 

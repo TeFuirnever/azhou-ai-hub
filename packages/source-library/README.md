@@ -44,6 +44,10 @@ uv run --locked python library.py --data "$azhou_catalog" backup /path/to/new-ba
 
 官网的双语页面、搜索和 [RSS](https://tefuirnever.github.io/azhou-ai-hub/library/rss.xml) 使用同一份已批准的清单。撤回线上条目时更新清单并部署，再核对条目页、搜索和 RSS。
 
+## 供 Agent 和程序读取
+
+从 [llms.txt](https://tefuirnever.github.io/azhou-ai-hub/llms.txt) 找到[中文 Markdown](https://tefuirnever.github.io/azhou-ai-hub/zh/library/agent.md)、[英文 Markdown](https://tefuirnever.github.io/azhou-ai-hub/library/agent.md)和 [JSON 目录](https://tefuirnever.github.io/azhou-ai-hub/library/catalog.json)。目录包含条目 ID、来源、日期、原文链接、导读和公开范围。已授权的站内全文可沿条目链接阅读。每次正式构建按同一份已批准的清单重建这四个文件，撤回也随清单生效。带私有输入的预览不生成这些文件。
+
 ```sh
 uv run --locked python -m unittest -v test_library
 ```

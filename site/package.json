@@ -4,7 +4,8 @@
   "private": true,
   "description": "Static documentation site for the Azhou AI Hub repository, built with Eleventy.",
   "scripts": {
-    "build": "eleventy"
+    "build": "eleventy",
+    "test": "node --test"
   },
   "devDependencies": {
     "@11ty/eleventy": "3.1.8",
