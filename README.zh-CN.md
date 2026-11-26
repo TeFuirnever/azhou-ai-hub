@@ -24,6 +24,8 @@
 | [Agent Rules Books](#agent-rules-books) | 用 14 套书籍工程规则指导设计、代码改动和评审。 |
 | [阿舟来源库](https://tefuirnever.github.io/azhou-ai-hub/zh/library/) | 浏览 AI 官方信源，通过 RSS 订阅选文。 |
 
+维护者可用[来源库工具](packages/source-library/README.md)试抓信源、归档已保存的网页和备份私有目录。
+
 ## 在 Codex 里首次安装
 
 想一次装齐 Hub Skills、pstack 和 Agent Rules Books，或按需选择其中几套，可以使用 [Codex 统一安装命令](docs/installation.md#install-hub-components-in-codex)。
