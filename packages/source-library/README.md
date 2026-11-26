@@ -19,25 +19,14 @@ RSS 和网页列表遇到短暂网络故障或部分上游服务器错误时，�
 
 ## 手动读取 JSON 信源
 
-JSON 信源和外部批量导入需要 Node.js 22.20 或更新版本。把字段映射存为本机配置文件。下面的 URL 是占位示例，使用时填写已登记信源的官方 HTTPS JSON 地址。正文链接也须符合该信源现有的文章网址规则。
+JSON 信源和外部批量导入需要 Node.js 22.20 或更新版本。可以直接使用 [Claude Resources 配置](json-sources/claude-resources.json)，读取官网资源搜索接口的英文文章第一页。[Claude Resources 文章页](https://claude.com/resources/articles)
 
-```json
-{
-  "url": "https://openai.com/path-to-official-json",
-  "itemsPath": "data.articles",
-  "titlePaths": ["title", "headline"],
-  "urlTemplate": "{raw:url}",
-  "urlTemplateFallback": "/index/{slug}/",
-  "publishedAtPath": "publishedAt"
-}
-```
-
-`itemsPath` 用点号访问嵌套字段或数组下标，省略时读取根数组。标题按 `titlePaths` 顺序取第一个可用值。链接可以来自完整网址或模板，相对地址按接口地址解析。发布日期字段可选。
+配置中的 `itemsPath` 用点号访问嵌套字段或数组下标，省略时读取根数组。标题按 `titlePaths` 顺序取第一个可用值。Claude Resources 优先使用接口给出的外部链接，接口没有提供时再由文章 slug 生成站内链接。只有符合已登记信源文章网址规则的条目会被登记。
 
 ```sh
 azhou_catalog="$HOME/.local/share/azhou-source-library/catalog"
-uv run --locked python library.py preview openai --json-config /path/to/feed-config.json
-uv run --locked python library.py --data "$azhou_catalog" sync openai --json-config /path/to/feed-config.json
+uv run --locked python library.py preview claude --json-config json-sources/claude-resources.json
+uv run --locked python library.py --data "$azhou_catalog" sync claude --json-config json-sources/claude-resources.json
 ```
 
 试抓和正式登记使用同一份解析规则。正式登记会更新信源状态，同时沿用现有的候选去重。
