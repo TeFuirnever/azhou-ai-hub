@@ -107,9 +107,37 @@ jobs:
       - name: Install site dependencies
         working-directory: site
         run: npm ci
+      - name: Test site
+        working-directory: site
+        run: npm test
       - name: Build site
         working-directory: site
         run: npm run build
+
+  source-library:
+    name: Source library tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.15.0"
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.11.14"
+          python-version: "3.11"
+          enable-cache: false
+      - name: Test source library
+        working-directory: packages/source-library
+        run: uv run --locked python -m unittest -v test_library
 
   agent-inspector:
     name: Azhou Agent Inspector
@@ -260,6 +288,8 @@ jobs:
     needs:
       - changes
       - tests
+      - site-build
+      - source-library
       - benchmarks
       - policy
       - verify-windows
@@ -271,6 +301,8 @@ jobs:
       CHANGES_RESULT: ${{ needs.changes.result }}
       DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
       TESTS_RESULT: ${{ needs.tests.result }}
+      SITE_BUILD_RESULT: ${{ needs.site-build.result }}
+      SOURCE_LIBRARY_RESULT: ${{ needs.source-library.result }}
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
       WINDOWS_RESULT: ${{ needs.verify-windows.result }}
@@ -283,6 +315,8 @@ jobs:
           # failed detector must never read as an all-clear.
           test "$CHANGES_RESULT" = "success"
           test "$TESTS_RESULT" = "success"
+          test "$SITE_BUILD_RESULT" = "success"
+          test "$SOURCE_LIBRARY_RESULT" = "success"
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
           test "$PSTACK_RESULT" = "success"
