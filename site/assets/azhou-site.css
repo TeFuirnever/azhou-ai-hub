@@ -144,9 +144,35 @@
 .list-arrow { color: var(--az-brand-text); font-size: 1.25rem; }
 .capability-link:active { background: var(--az-accent-surface); }
 @media (hover: hover) and (pointer: fine) {
-  .gcard:not(:active):hover, .capability-link:not(:active):hover {
-    background: var(--az-card);
+  .btn-primary { --az-hover-fill: var(--az-accent-hover); }
+  :is(.gcard, .capability-link) { --az-hover-fill: var(--az-card); }
+  :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link) {
+    position: relative;
+    isolation: isolate;
+  }
+  :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link)::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--az-hover-fill, var(--az-bg-3));
+    pointer-events: none;
+    opacity: 0;
+  }
+  :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link):hover {
     text-decoration: none;
+  }
+  :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link):hover:not(:active, :disabled)::before {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link)::before {
+      transition: opacity var(--motion-feedback) var(--motion-ease);
+    }
+    :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link):is(:active, :disabled)::before {
+      transition: none;
+    }
   }
 }
 .library-intro {
@@ -258,6 +284,7 @@
 .library-results-head { margin-block-end: .8rem; align-items: baseline; }
 .library-results-head h2 { margin: 0; }
 #library-status { margin: 0; color: var(--az-text-2); }
+:is(#library-status, .copy-status)[data-state="error"] { color: var(--az-brand-text); }
 @media (prefers-reduced-motion: no-preference) {
   #library-status:is([data-state="done"], [data-state="empty"], [data-state="error"]) {
     animation: state-arrive var(--motion-feedback) var(--motion-ease);

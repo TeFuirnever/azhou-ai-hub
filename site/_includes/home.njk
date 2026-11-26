@@ -165,7 +165,7 @@ layout: base.njk
         reset = setTimeout(() => showStatus("", ""), 3500);
       } catch {
         if (current !== attempt) return;
-        showStatus({{ ('复制失败，请选中下方文字复制。' if zh else 'Copy failed. Select the text below.') | dump | safe }}, "error");
+        showStatus({{ ('复制失败。请手动复制下方文字。' if zh else 'Copy failed. Copy the text below manually.') | dump | safe }}, "error");
       } finally {
         if (current === attempt) clearTimeout(pending);
       }
