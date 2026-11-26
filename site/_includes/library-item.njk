@@ -1,0 +1,13 @@
+{%- set entryPath = site.routes[lang].library ~ 'articles/' ~ item.id ~ '/' -%}
+<li class="edition-item" data-entry-id="{{ item.id | escape }}">
+  <div class="entry-meta">
+    <span>{{ item.sourceName | escape }}</span>
+    {% if item.published %}<time datetime="{{ item.published | escape }}">{{ item.published | truncate(10, true, '') | escape }}</time>{% endif %}
+  </div>
+  <h3><a href="{{ entryPath | url }}" lang="{{ item.lang | escape }}">{{ item.title | escape }}</a></h3>
+  {% if item.scope == "full" %}
+    <span class="entry-type">{{ '可读归档' if lang == 'zh' else 'Archived text' }}</span>
+  {% else %}
+    <span class="entry-type">{{ '导读与原文链接' if lang == 'zh' else 'Reading note and source link' }}</span>
+  {% endif %}
+</li>

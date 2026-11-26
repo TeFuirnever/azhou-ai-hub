@@ -1,0 +1,26 @@
+{
+  "anthropic": {
+    "home": "https://www.anthropic.com/news",
+    "name": "Anthropic"
+  },
+  "claude": {
+    "home": "https://claude.com/resources/articles",
+    "name": "Claude Resources"
+  },
+  "kimi": {
+    "home": "https://www.kimi.ai/blog/",
+    "name": "Kimi"
+  },
+  "mimo": {
+    "home": "https://mimo.xiaomi.com/",
+    "name": "小米 MiMo"
+  },
+  "openai": {
+    "home": "https://openai.com/news/",
+    "name": "OpenAI News"
+  },
+  "zhipu": {
+    "home": "https://www.zhipuai.cn/zh/research",
+    "name": "智谱"
+  }
+}

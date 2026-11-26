@@ -6,20 +6,53 @@ layout: base.njk
 {% macro copyControl(source, label) %}
 <div class="copy-actions" hidden>
   <button class="btn btn-outline" type="button" data-copy="{{ source }}">{{ label }}</button>
-  <span class="copy-status" role="status"></span>
+  <span class="copy-status" role="status"><span class="copy-check" aria-hidden="true">✓</span><span data-copy-message></span></span>
 </div>
 {% endmacro %}
-<section class="band">
-  <div class="wrap">
+<section class="home-hero">
+  <div class="wrap home-hero-inner">
+    <div>
     <h1>{{ '给 Agent 装上你需要的技能' if zh else 'Give your agent a skill for the job' }}</h1>
-    <p class="lede">{{ '从画架构图到检查代码仓库，从手头的任务出发，按需安装。' if zh else 'Draw an architecture diagram, check a repository, or find a skill for another task.' }}</p>
+    <p class="lede">{{ '查 AI 官方原文，找适合当前任务的技能。' if zh else 'Find original AI publications and the agent skills to put what you learn to work.' }}</p>
     <div class="cta">
-      <a class="btn btn-primary" href="#install">{{ '在 Codex 开始' if zh else 'Start in Codex' }}</a>
-      <a class="btn btn-outline" href="{{ site.routes[lang].skills | url }}">{{ '浏览技能' if zh else 'Browse skills' }}</a>
+      <a class="btn btn-primary" href="{{ site.routes[lang].skills | url }}">{{ '浏览技能' if zh else 'Browse skills' }}</a>
+      <a class="btn btn-outline" href="{{ site.routes[lang].library | url }}">{{ '打开来源库' if zh else 'Explore the Source Library' }}</a>
     </div>
-    <a href="{{ site.routes[lang].support | url }}">{{ '使用其他 Agent 工具' if zh else 'Using another agent host?' }}</a>
+    <a href="#install">{{ '在 Codex 安装 Ask Azhou' if zh else 'Install Ask Azhou in Codex' }}</a>
+    </div>
+    <img class="home-art" src="{{ '/assets/azhou-workspace.png' | url }}" width="1672" height="941"
+      alt="{{ '阿舟在桌前的工作场景' if zh else 'Azhou at the workspace' }}" fetchpriority="high">
   </div>
 </section>
+{% if sourceLibrary.entries.length %}
+<section class="sec home-edition">
+  <div class="wrap">
+    <div class="library-section-head">
+      <h2>{{ '首发选文' if zh else 'The first edition' }}</h2>
+      <a href="{{ '/library/rss.xml' | url }}">{{ '订阅 RSS' if zh else 'Subscribe by RSS' }}</a>
+    </div>
+    <div{% if sourceLibrary.featured %} class="home-edition-grid"{% endif %}>
+      {% if sourceLibrary.featured %}
+      {% set feature = sourceLibrary.featured %}
+      <article class="edition-feature">
+        <p class="entry-meta">{{ feature.sourceName | escape }} <a href="{{ feature.license_url | escape }}">{{ feature.license | escape }}</a></p>
+        <h3 lang="{{ feature.lang | escape }}">{{ feature.title | escape }}</h3>
+        <p>{{ (feature.note if zh else feature.noteEn) | escape }}</p>
+        <a class="btn btn-primary" href="{{ (site.routes[lang].library ~ 'articles/' ~ feature.id ~ '/') | url }}">
+          {{ '阅读归档' if zh else 'Read the archive' }}
+        </a>
+      </article>
+      {% endif %}
+      <ul class="edition-list">
+        {% for item in sourceLibrary.entries %}
+        {% if not sourceLibrary.featured or item.id != sourceLibrary.featured.id %}{% include "library-item.njk" %}{% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+    <p><a href="{{ site.routes[lang].library | url }}">{{ '搜索全部来源' if zh else 'Search all sources' }}</a></p>
+  </div>
+</section>
+{% endif %}
 <section class="sec">
   <div class="wrap">
     <h2 id="capabilities">{{ '能力' if zh else 'Capabilities' }}</h2>
@@ -92,29 +125,35 @@ layout: base.njk
     if (!navigator.clipboard?.writeText) continue;
     const actions = button.parentElement;
     const status = actions.querySelector('[role="status"]');
+    const message = status.querySelector("[data-copy-message]");
     actions.hidden = false;
+    let attempt = 0;
     let reset;
-    function showStatus(message, state) {
+    let pending;
+    function showStatus(text, state) {
       status.dataset.state = state;
-      status.textContent = message;
+      if (message.textContent !== text) message.textContent = text;
     }
     button.addEventListener("click", async () => {
-      if (button.hasAttribute("aria-disabled")) return;
-      button.setAttribute("aria-disabled", "true");
+      const current = ++attempt;
       clearTimeout(reset);
-      const showPending = setTimeout(() => {
-        showStatus({{ ('正在复制…' if zh else 'Copying…') | dump | safe }}, "pending");
-      }, 120);
+      clearTimeout(pending);
+      if (status.dataset.state !== "pending") {
+        pending = setTimeout(() => {
+          showStatus({{ ('正在复制…' if zh else 'Copying…') | dump | safe }}, "pending");
+        }, 120);
+      }
       const source = document.getElementById(button.dataset.copy);
       try {
         await navigator.clipboard.writeText(source.textContent);
+        if (current !== attempt) return;
         showStatus({{ ('已复制' if zh else 'Copied') | dump | safe }}, "success");
-        reset = setTimeout(() => { status.textContent = ""; }, 3500);
+        reset = setTimeout(() => showStatus("", ""), 3500);
       } catch {
+        if (current !== attempt) return;
         showStatus({{ ('复制失败，请选中下方文字复制。' if zh else 'Copy failed. Select the text below.') | dump | safe }}, "error");
       } finally {
-        clearTimeout(showPending);
-        button.removeAttribute("aria-disabled");
+        if (current === attempt) clearTimeout(pending);
       }
     });
   }

@@ -3,6 +3,10 @@ permalink: "robots.txt"
 eleventyExcludeFromCollections: true
 ---
 User-agent: *
+{% if sourceLibrary.preview -%}
+Disallow: /
+{% else -%}
 Allow: /
 
 Sitemap: {{ site.siteUrl }}/sitemap.xml
+{% endif -%}

@@ -1,0 +1,35 @@
+---
+layout: base.njk
+route: library
+pagination:
+  data: sourceLibrary.sourcePages
+  size: 1
+  alias: channel
+  addAllPagesToCollections: true
+permalink: "{{ channel.path }}index.html"
+eleventyComputed:
+  lang: "{{ channel.locale }}"
+  title: "{{ channel.name }}"
+  alternatePaths:
+    en: "{{ channel.alternate.en }}"
+    zh: "{{ channel.alternate.zh }}"
+  sourceFeed: "/library/sources/{{ channel.id }}/rss.xml"
+---
+{% set zh = lang == 'zh' %}
+<section class="library-intro">
+  <div class="wrap">
+    <a href="{{ site.routes[lang].library | url }}">{{ '来源库' if zh else 'Source Library' }}</a>
+    <h1>{{ channel.name | escape }}</h1>
+    <div class="library-actions">
+      <a class="btn btn-primary" href="{{ sourceFeed | url }}">{{ '订阅 RSS' if zh else 'Subscribe by RSS' }}</a>
+      <a href="{{ channel.home | escape }}">{{ '访问官网' if zh else 'Visit the source website' }}</a>
+    </div>
+  </div>
+</section>
+<section class="wrap library-source-content">
+  <h2>{{ '选文' if zh else 'Selections' }}</h2>
+  <ul class="edition-list">
+    {% for item in channel.entries %}{% include "library-item.njk" %}{% endfor %}
+  </ul>
+  {% if not channel.entries.length %}<p>{{ '此来源的首批条目待发布。' if zh else 'The first selection from this source is awaiting publication.' }}</p>{% endif %}
+</section>

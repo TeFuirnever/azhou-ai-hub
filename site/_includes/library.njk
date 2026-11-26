@@ -1,0 +1,58 @@
+---
+layout: base.njk
+---
+{% set zh = lang == 'zh' %}
+<section class="library-intro">
+  <div class="wrap">
+    <div class="library-section-head">
+      <h1>{{ '阿舟来源库' if zh else 'Azhou Source Library' }}</h1>
+      <a class="library-feed" href="{{ '/library/rss.xml' | url }}">{{ '全库 RSS' if zh else 'All RSS' }}</a>
+    </div>
+    <p class="lede">{{ '搜索 AI 官方文章，阅读已获准的原文归档，或订阅选文更新。' if zh else 'Search official AI articles, read licensed archives, or subscribe to new selections.' }}</p>
+  </div>
+</section>
+<div class="wrap library-grid">
+  <section class="library-main" aria-labelledby="results-title">
+    {% if sourceLibrary.entries.length %}
+    <form id="library-search" class="library-search" role="search" action="{{ site.routes[lang].library | url }}"
+      method="get" data-index="{{ '/pagefind/pagefind.js' | url }}" data-library="{{ site.routes[lang].library | url }}"
+      data-locale="{{ lang }}">
+      <label for="library-query">{{ '搜索标题、正文或导读' if zh else 'Search titles, archived text, or notes' }}</label>
+      <div class="library-query">
+        <input type="search" id="library-query" name="q">
+        <button class="btn btn-primary" type="submit">{{ '搜索' if zh else 'Search' }}</button>
+      </div>
+      <div class="library-filters">
+        <label>{{ '来源' if zh else 'Source' }}<select name="source">
+          <option value="">{{ '全部来源' if zh else 'All sources' }}</option>
+          {% for source in sourceLibrary.channels %}<option value="{{ source.id }}">{{ source.name | escape }}</option>{% endfor %}
+        </select></label>
+        <label>{{ '类型' if zh else 'Type' }}<select name="kind">
+          <option value="">{{ '全部类型' if zh else 'All types' }}</option>
+          <option value="article">{{ '文章' if zh else 'Article' }}</option>
+          <option value="announcement">{{ '发布公告' if zh else 'Announcement' }}</option>
+          <option value="research">{{ '研究与文档' if zh else 'Research and documents' }}</option>
+        </select></label>
+        <label>{{ '起始日期' if zh else 'From date' }}<input name="from" type="date"></label>
+        <label>{{ '结束日期' if zh else 'Through date' }}<input name="to" type="date"></label>
+      </div>
+    </form>
+    <script id="library-data" type="application/json">{{ sourceLibrary.searchRows | scriptJson | safe }}</script>
+    <script type="module" src="{{ '/assets/library-search.js' | url }}"></script>
+    {% endif %}
+    <h2 id="results-title">{{ '选文' if zh else 'Selections' }}</h2>
+    {% if sourceLibrary.entries.length %}<p id="library-status" role="status"></p>{% endif %}
+    <ul id="library-results" class="edition-list">
+      {% for item in sourceLibrary.entries %}{% include "library-item.njk" %}{% endfor %}
+    </ul>
+    {% if not sourceLibrary.entries.length %}<p>{{ '首批条目待发布。' if zh else 'The first selections are awaiting publication.' }}</p>{% endif %}
+  </section>
+  <aside class="library-sidebar" aria-labelledby="sources-title">
+    <h2 id="sources-title">{{ '按来源浏览' if zh else 'Browse sources' }}</h2>
+    <ul class="channel-list">
+      {% for source in sourceLibrary.channels %}
+      <li><a href="{{ (site.routes[lang].library ~ 'sources/' ~ source.id ~ '/') | url }}">{{ source.name | escape }}</a><a href="{{ ('/library/sources/' ~ source.id ~ '/rss.xml') | url }}" aria-label="{{ source.name | escape }} RSS">RSS</a></li>
+      {% endfor %}
+    </ul>
+  </aside>
+</div>
