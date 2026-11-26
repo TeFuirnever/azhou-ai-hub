@@ -1,6 +1,6 @@
 {
   "anthropic": {
-    "home": "https://www.anthropic.com/news",
+    "home": "https://www.anthropic.com/",
     "name": "Anthropic"
   },
   "claude": {
@@ -20,7 +20,7 @@
     "name": "OpenAI News"
   },
   "zhipu": {
-    "home": "https://www.zhipuai.cn/zh/research",
+    "home": "https://www.zhipuai.cn/zh",
     "name": "智谱"
   }
 }

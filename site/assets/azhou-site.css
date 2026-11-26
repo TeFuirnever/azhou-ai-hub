@@ -78,8 +78,18 @@
 .home-hero .lede { color: #d0e3e0; }
 .home-hero :where(a):not(.btn) { color: #b9e2cf; }
 .home-hero .cta { margin-block: 1.5rem 1rem; }
-.home-hero .btn-outline { color: #f2f8f6; border-color: #7ca29b; }
-.home-hero .btn-primary { color: #183a2d; background: #b9e2cf; }
+.home-hero .btn-outline {
+  --az-text: #f2f8f6;
+  --az-border: #7ca29b;
+  --az-bg-3: #294651;
+  --az-accent-surface: #355965;
+}
+.home-hero .btn-primary {
+  --az-btn-text: #183a2d;
+  --az-accent: #b9e2cf;
+  --az-accent-hover: #cbeddd;
+  --az-accent-active: #a2cdb8;
+}
 .home-hero .btn:focus-visible, .home-hero a:focus-visible { outline-color: #d0ebdc; }
 .home-art {
   border: 1px solid #55737c;

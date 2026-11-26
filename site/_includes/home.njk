@@ -13,7 +13,11 @@ layout: base.njk
   <div class="wrap home-hero-inner">
     <div>
     <h1>{{ '给 Agent 装上你需要的技能' if zh else 'Give your agent a skill for the job' }}</h1>
-    <p class="lede">{{ '查 AI 官方原文，找适合当前任务的技能。' if zh else 'Find original AI publications and the agent skills to put what you learn to work.' }}</p>
+    {% if sourceLibrary.entries.length %}
+    <p class="lede">{{ '查 AI 官方原文，找适合当前任务的技能。' if zh else 'Find original AI publications and agent skills for the task at hand.' }}</p>
+    {% else %}
+    <p class="lede">{{ '找适合当前任务的技能，订阅 AI 官方信源的选文更新。' if zh else 'Find agent skills for the task at hand and subscribe to selections from official AI sources.' }}</p>
+    {% endif %}
     <div class="cta">
       <a class="btn btn-primary" href="{{ site.routes[lang].skills | url }}">{{ '浏览技能' if zh else 'Browse skills' }}</a>
       <a class="btn btn-outline" href="{{ site.routes[lang].library | url }}">{{ '打开来源库' if zh else 'Explore the Source Library' }}</a>

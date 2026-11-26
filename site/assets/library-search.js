@@ -7,6 +7,7 @@ const byId = new Map(entries.map((entry) => [entry.id, entry]));
 const rows = new Map(Array.from(results.children, (row) => [row.dataset.entryId, row]));
 const zh = form.dataset.locale === "zh";
 const query = form.elements.namedItem("q");
+const languageLink = document.getElementById("switch-language");
 let sequence = 0;
 let indexReady;
 let pending;
@@ -110,8 +111,11 @@ async function search(updateUrl = true) {
   const eligible = (entry) => entry && (!source || entry.sources.includes(source)) &&
     (!kind || entry.kind === kind) && (!from || entry.published?.slice(0, 10) >= from) &&
     (!to || entry.published?.slice(0, 10) <= to);
+  const params = new URLSearchParams([...data].filter(([, value]) => value));
+  const alternate = new URL(languageLink.href);
+  alternate.search = params.toString();
+  if (languageLink.href !== alternate.href) languageLink.href = alternate.href;
   if (updateUrl) {
-    const params = new URLSearchParams([...data].filter(([, value]) => value));
     const next = location.pathname + (params.size ? "?" + params : "") + location.hash;
     if (next !== location.pathname + location.search + location.hash) {
       try {
@@ -177,8 +181,12 @@ form.addEventListener("submit", (event) => {
 form.addEventListener("change", ({ target }) => {
   if (target.name !== "q") search();
 });
-const params = new URLSearchParams(location.search);
-for (const key of ["q", "source", "kind", "from", "to"]) {
-  if (params.has(key)) form.elements.namedItem(key).value = params.get(key);
+function restoreSearch() {
+  const params = new URLSearchParams(location.search);
+  for (const key of ["q", "source", "kind", "from", "to"]) {
+    form.elements.namedItem(key).value = params.get(key) ?? "";
+  }
+  search(false);
 }
-if (params.size) search(false);
+window.addEventListener("popstate", restoreSearch);
+if (location.search) restoreSearch();

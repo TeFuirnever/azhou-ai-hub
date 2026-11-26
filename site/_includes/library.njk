@@ -8,7 +8,11 @@ layout: base.njk
       <h1>{{ '阿舟来源库' if zh else 'Azhou Source Library' }}</h1>
       <a class="library-feed" href="{{ '/library/rss.xml' | url }}">{{ '全库 RSS' if zh else 'All RSS' }}</a>
     </div>
+    {% if sourceLibrary.entries.length %}
     <p class="lede">{{ '搜索 AI 官方文章，阅读已获准的原文归档，或订阅选文更新。' if zh else 'Search official AI articles, read licensed archives, or subscribe to new selections.' }}</p>
+    {% else %}
+    <p class="lede">{{ '浏览 AI 官方信源，订阅来源库的选文更新。' if zh else 'Browse official AI sources and subscribe to new selections.' }}</p>
+    {% endif %}
   </div>
 </section>
 <div class="wrap library-grid">
