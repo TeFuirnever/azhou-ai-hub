@@ -18,16 +18,16 @@ def private_path(path):
     return directory
 
 
-def preview(source, url=None, fetcher=fetch):
+def preview(source, url=None, fetcher=None):
     if url:
-        article, _, _, _ = read_article(SOURCES[source], url, fetcher)
+        article, _, _, _ = read_article(SOURCES[source], url, fetcher or fetch)
         return [Candidate(article["url"], article["title"], article["published"])]
     if not any(key in SOURCES[source] for key in ("feed", "lists")):
         raise CollectionError("this source is checked by article link; supply --url")
-    return discover(SOURCES[source], fetcher)
+    return discover(SOURCES[source]) if fetcher is None else discover(SOURCES[source], fetcher)
 
 
-def sync(catalog, sources, url=None, fetcher=fetch):
+def sync(catalog, sources, url=None, fetcher=None):
     results = {}
     for source in sources:
         try:
@@ -57,10 +57,13 @@ def parse_args():
     commands = sub.add_parser("inspect", help="view private article metadata, retained body and revision")
     commands.add_argument("id")
     commands.add_argument("--revision")
-    commands = sub.add_parser("archive", help="retain the text of an article saved from the publisher")
+    commands = sub.add_parser("archive", help="retain a selected publisher article in the private catalog")
     commands.add_argument("source", choices=SOURCES)
     commands.add_argument("url")
-    commands.add_argument("--saved-html", type=Path, required=True)
+    archive_input = commands.add_mutually_exclusive_group(required=True)
+    archive_input.add_argument("--saved-html", type=Path, help="import previously saved HTML")
+    archive_input.add_argument("--fetch-original", action="store_true", help="fetch this official article once")
+    commands.add_argument("--include-images", action="store_true", help="also retain allowed images when the basis covers them")
     commands.add_argument("--basis", required=True)
     commands = sub.add_parser("review", help="approve exactly the fields and revision eligible for release")
     commands.add_argument("id")
@@ -80,6 +83,8 @@ def parse_args():
         parser.error("--data is required for maintenance commands")
     if args.action == "sync" and args.source == "all" and args.url:
         parser.error("use --url with a single source")
+    if args.action == "archive" and args.include_images and not args.fetch_original:
+        parser.error("--include-images requires --fetch-original")
     return args
 
 
@@ -98,16 +103,17 @@ def run(args):
             sources = [choice for choice in SOURCES if choice != "mimo"] if args.source == "all" else [args.source]
             return sync(store, sources, args.url)
         if args.action == "archive":
+            if args.saved_html is None:
+                return store.archive(args.source, args.url, args.basis, fetch, keep_images=args.include_images)
+
             def saved_page(url, _hosts, limit=8_000_000):
-                if url != args.url:
-                    raise CollectionError("external media is excluded from saved-page imports")
                 with args.saved_html.expanduser().open("rb") as source:
                     raw = source.read(limit + 1)
                 if len(raw) > limit:
                     raise CollectionError("saved page exceeded the byte limit")
                 return raw, url, "text/html"
 
-            return store.archive(args.source, args.url, args.basis, saved_page)
+            return store.archive(args.source, args.url, args.basis, saved_page, keep_images=False)
         if args.action == "review":
             store.approve(args.id, args.scope, args.basis, args.note, args.revision, args.kind)
             return {"approved": args.id, "scope": args.scope}

@@ -24,7 +24,7 @@
 | [Agent Rules Books](#agent-rules-books) | 用 14 套书籍工程规则指导设计、代码改动和评审。 |
 | [阿舟来源库](https://tefuirnever.github.io/azhou-ai-hub/zh/library/) | 浏览 AI 官方信源，通过 RSS 订阅选文。 |
 
-维护者可用[来源库工具](packages/source-library/README.md)试抓信源、归档已保存的网页和备份私有目录。
+维护者可用[来源库工具](packages/source-library/README.md)试抓信源、手动抓取选文留存、导入另存的网页和备份私有目录。
 
 ## 在 Codex 里首次安装
 

@@ -133,7 +133,7 @@ class Catalog:
             temp_name.replace(target)
         return name
 
-    def archive(self, source_key, url, basis, fetcher):
+    def archive(self, source_key, url, basis, fetcher, *, keep_images=True):
         if not basis.strip():
             raise CollectionError("provide the basis for retaining this article")
         source = SOURCES[source_key]
@@ -143,6 +143,8 @@ class Catalog:
         media_hosts.add(urlsplit(landed).hostname)
 
         def archive_image(image_url):
+            if not keep_images:
+                raise CollectionError("image retrieval was not selected")
             if image_url not in media:
                 image, _, mime = fetcher(image_url, media_hosts, limit=8_000_000)
                 if mime not in IMAGE_TYPES:
