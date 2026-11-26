@@ -15,4 +15,6 @@ The completed walkthrough used the `azhou-agent-tools` registration.
 
 ## Codex Desktop 26.1120.50957
 
-The plugin manager reported 0.12.10. Its panel and server matched the Hub source. A separate Codex App Server check verified A → B → A thread binding with disposable numeric fixtures. The browser tests exercised the panel's narrow layout, manual refresh and performance disclosure. The native desktop walkthrough is pending.
+The plugin manager reported 0.12.10. Its panel and server matched the Hub source. A separate Codex App Server check verified A → B → A thread binding with disposable numeric fixtures. The browser tests exercised the panel's narrow layout, manual refresh and performance disclosure. A capture supplied during the walkthrough showed the native panel with performance details expanded. The panel displayed the last completed turn while the current turn was running, and its values matched the MCP response.
+
+The maintainer then confirmed the remaining native checks in two completed test chats. In a narrow pane, the metrics and controls remained usable. The displayed metrics followed A → B → A chat switching. Manual refresh showed feedback, and performance details could be opened and closed.
