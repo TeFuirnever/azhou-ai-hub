@@ -159,6 +159,7 @@
     background: var(--az-hover-fill, var(--az-bg-3));
     pointer-events: none;
     opacity: 0;
+    transition: none;
   }
   :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link):hover {
     text-decoration: none;
