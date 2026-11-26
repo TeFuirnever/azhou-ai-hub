@@ -13,11 +13,11 @@ uv run --locked python library.py --data "$HOME/.local/share/azhou-source-librar
 uv run --locked python library.py --data "$HOME/.local/share/azhou-source-library/catalog" status
 ```
 
-`preview` 返回本次匹配数和最多 20 条元数据。手动运行 `sync` 后可查看「有更新」「无更新」或「抓取失败」。失败时保留上次成功时间，成功重试按文章身份去重。小米 MiMo 可用 `preview mimo --url <官方文章地址>` 检查单篇链接。
+`preview` 返回本次匹配数和最多 20 条元数据，不写入目录或信源状态。`sync` 只登记候选文章及采集状态，正文由后续 `archive` 导入。状态分为「有更新」「无更新」和「抓取失败」。失败时保留上次成功时间，成功重试按文章身份去重。`sync all` 检查五个可从 RSS 或网页列表发现文章的来源。小米 MiMo 需提供官方文章地址，用 `preview mimo --url <地址>` 试抓，或用 `sync mimo --url <地址>` 登记。
 
 ## 私有留存和备份
 
-逐篇核对留存依据，再从浏览器另存作者发布的网页 HTML。导入会保存原始 HTML 与可读正文，并记录未随正文保留的媒体。
+逐篇核对留存依据，再从浏览器另存作者发布的网页 HTML。导入会保存原始 HTML 与可读正文。命令不会联网补抓外部媒体，缺项会记录在对应版本里。
 
 ```sh
 azhou_catalog="$HOME/.local/share/azhou-source-library/catalog"
@@ -36,7 +36,9 @@ uv run --locked python library.py --data "$azhou_catalog" backup /path/to/new-ba
 
 旧版归档可继续查看。若旧版归档缺少对应版本的标题和作者等记录，重新导入当时保存的网页，再按新版本摘要审核全文。
 
-`export <新目录>` 生成一份仅含已审核条目的交接包。维护者再核对权利范围，把获准条目纳入[官网发布清单](../../site/library-content/first-edition.json)，由常规 PR 和 Pages 流程发布。线上下架同样通过修改官网发布清单并部署验证。
+`export <新目录>` 生成一份仅含已审核条目的交接包，供维护者核对和转录。上线时由维护者更新[官网发布清单](../../site/library-content/first-edition.json)和获准公开的正文文件，经常规 PR 和 Pages 流程发布。当前官网构建只接受注明 CC0 1.0 且通过校验的全文文件。首发授权与正文范围见[选文说明](../../site/library-content/NOTICE.md)。
+
+官网的双语页面、搜索和 [RSS](https://tefuirnever.github.io/azhou-ai-hub/library/rss.xml) 使用同一份已批准的清单。撤回线上条目时更新清单并部署，再核对条目页、搜索和 RSS。
 
 ```sh
 uv run --locked python -m unittest -v test_library
