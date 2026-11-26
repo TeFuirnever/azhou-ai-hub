@@ -1838,6 +1838,11 @@ const quoted = bakeSvg(wrap('<style data-x=\'a"b\' data-y="c&amp;d">.c-n{fill:#1
 if (!quoted.includes("data-x='a\"b'") || !quoted.includes('data-y="c&amp;d"')) throw new Error('quoted style attribute values must survive baking');
 const spaced = bakeSvg(wrap('<style  >.c-n{fill:#102030}</style><rect width="4" height="4"/>'), { theme: 'dark', preset: 'classic' });
 if (!spaced.includes('<style>.c-n { fill: #102030; }')) throw new Error('whitespace-only style attributes must bake to a plain tag');
+const styleLiteral = `[data-example='style="var(--bg)"']`;
+const separated = bakeSvg(wrap(`<style>${styleLiteral}{fill:#102030}</style><rect fill="var(--bg)" width="4" height="4"/>`), { theme: 'dark', preset: 'classic' });
+if (!separated.includes(styleLiteral) || separated.includes('<rect fill="var(--bg)"')) {
+  throw new Error('attribute baking must leave CSS selector text intact and resolve SVG presentation values');
+}
 const hostile = [
   '<sty<style></style>le>.n{fill:red}</style><rect class="n" width="4" height="4"/>',
   '<style>.n{fill:red}<rect class="n" width="4" height="4"/>',
@@ -1924,15 +1929,16 @@ import path from 'node:path';
 import vm from 'node:vm';
 import {pathToFileURL} from 'node:url';
 const root = process.argv[1];
-const {parseStylesheet} = await import(pathToFileURL(path.join(root, 'renderers/shared/svg-bake.mjs')));
+const {parseStylesheet, rewriteEmbeddedStyles} = await import(pathToFileURL(path.join(root, 'renderers/shared/svg-bake.mjs')));
 const source = fs.readFileSync(path.join(root, 'pr/story-svg.mjs'), 'utf8');
 const start = source.indexOf('function scopeEmbeddedStyles(svg, key) {'), end = source.indexOf('function annotateEdgePaths(svg) {', start);
 assert.ok(start >= 0 && end > start);
-const scopeEmbeddedStyles = vm.runInNewContext('(' + source.slice(start, end) + ')', { parseStylesheet });
+const scopeEmbeddedStyles = vm.runInNewContext('(' + source.slice(start, end) + ')', { parseStylesheet, rewriteEmbeddedStyles });
 const cases = [
   ['<svg><style>.c-n{fill:var(--x)}</style><rect class="c-n"/></svg>', '<svg><style><![CDATA[[data-native-key="native-1"] :is(.c-n){fill:var(--x)}]]></style><rect class="c-n"/></svg>'],
   ['<svg><style></style><rect/></svg>', '<svg><rect/></svg>'],
   ['<svg><style><![CDATA[.c-node{fill:red}]]></style><rect class="c-node"/></svg>', '<svg><style><![CDATA[[data-native-key="native-1"] :is(.c-node){fill:red}]]></style><rect class="c-node"/></svg>'],
+  ['<svg><style-preview>.sample{fill:blue}</style-preview><style>.actual{fill:red}</style></svg>', '<svg><style-preview>.sample{fill:blue}</style-preview><style><![CDATA[[data-native-key="native-1"] :is(.actual){fill:red}]]></style></svg>'],
 ];
 for (const [input, expected] of cases) assert.equal(scopeEmbeddedStyles(input, 'native-1'), expected);
 const hostile = [
@@ -1959,7 +1965,7 @@ console.log(JSON.stringify({ cases: cases.length, threw, expected: hostile.lengt
             capture_output=True, text=True, encoding="utf-8", timeout=30,
         )
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        self.assertEqual({"cases": 3, "threw": 4, "expected": 4, "caseVariant": "neutralized", "passed": True}, json.loads(result.stdout))
+        self.assertEqual({"cases": 4, "threw": 4, "expected": 4, "caseVariant": "neutralized", "passed": True}, json.loads(result.stdout))
 
     def test_render_tag_tokenizer_is_equivalent_and_linear(self) -> None:
         program = r"""
@@ -2044,6 +2050,7 @@ let cases = 0;
 const check = (value) => {
   cases += 1;
   const out = stripTags(value);
+  assert.equal(out, value.replace(/<[^>]*>/g, ''), JSON.stringify(value));
   assert.doesNotMatch(out, TAG, JSON.stringify(value) + ' -> ' + JSON.stringify(out));
 };
 for (let len = 0; len <= 6; len += 1) {
@@ -2064,6 +2071,8 @@ for (const payload of [
   '<<in>img src=x onerror=alert(1)>',
   'i<3<t>ag>',
 ]) check(payload);
+const incomplete = '<'.repeat(200_000);
+assert.equal(stripTags('Title ' + incomplete), 'Title ' + incomplete);
 console.log(JSON.stringify({ cases, passed: true }));
 """
         result = subprocess.run(

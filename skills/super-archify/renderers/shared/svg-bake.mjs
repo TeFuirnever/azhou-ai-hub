@@ -542,6 +542,7 @@ const INLINE_STYLE_RE = /\bstyle="([^"]*(?:var\(|color-mix\()[^"]*)"/g;
 const ATTR_NAME_RE = /[A-Za-z_:][A-Za-z0-9._:-]*/y;
 const ATTR_ENTITY_RE = /&(?:amp|lt|gt|quot|apos|#x[0-9A-Fa-f]+|#[0-9]+);/y;
 const ATTR_SEPARATORS = ' \t\n\r';
+const STYLE_TAG = /<(\/?)style(?=[\s/>]|$)/gi;
 
 function parseStyleAttrs(text) {
   const attrs = [];
@@ -606,24 +607,44 @@ function bakeInlineStyle(style, lookup) {
   return declarations.join('; ');
 }
 
+export function rewriteEmbeddedStyles(svg, rewriteStyle, error, rewriteMarkup = (markup) => markup) {
+  const parts = [];
+  let cursor = 0;
+  let emitted = 0;
+  let opening = null;
+  for (const tag of svg.matchAll(STYLE_TAG)) {
+    if (!tag[1]) {
+      if (opening) throw new Error(error);
+      opening = tag;
+      continue;
+    }
+    const end = tag.index + tag[0].length;
+    if (!opening || svg[end] !== '>') throw new Error(error);
+    const attrsStart = opening.index + opening[0].length;
+    const attrsEnd = svg.indexOf('>', attrsStart);
+    if (attrsEnd === -1 || attrsEnd >= tag.index) throw new Error(error);
+    const attrs = parseStyleAttrs(svg.slice(attrsStart, attrsEnd));
+    if (!attrs) throw new Error(error);
+    parts.push(rewriteMarkup(svg.slice(cursor, opening.index)));
+    const style = rewriteStyle(attrs, svg.slice(attrsEnd + 1, tag.index));
+    if (style) {
+      parts.push(style);
+      emitted += 1;
+    }
+    cursor = end + 1;
+    opening = null;
+  }
+  if (opening) throw new Error(error);
+  parts.push(rewriteMarkup(svg.slice(cursor)));
+  const result = parts.join('');
+  // Joining the gaps left by an empty stylesheet can create a new tag.
+  if ((result.match(STYLE_TAG) || []).length !== 2 * emitted) throw new Error(error);
+  return result;
+}
+
 function bakeBodyStyles(body, variables) {
   const lookup = (name) => variables.get(name) ?? null;
-  let emitted = 0;
-  // A <style> fragment reassembled by this pass is left unmatched, so the
-  // completeness count below rejects it
-  // (test_static_bake_cannot_reconstitute_embedded_style_elements).
-  // codeql[js/incomplete-multi-character-sanitization]
-  const bakedBody = body
-    .replace(/<style\b([^>]*)>([\s\S]*?)<\/style>/gi, (match, attrs, css) => {
-      const parsed = parseStyleAttrs(attrs);
-      const baked = bakeEmbeddedStylesheet(css, variables);
-      if (!parsed || /[<&]/.test(baked)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
-      // Unmatched fragments (an unterminated or reassembled <style>) must not
-      // survive into the output, where they could re-open a style element.
-      if (!baked) return '';
-      emitted += 1;
-      return `<style${emitStyleAttrs(parsed)}>${baked}</style>`;
-    })
+  const bakeAttributes = (markup) => markup
     .replace(PRESENTATION_VAR_RE, (match, attribute, value) => {
       const resolved = substituteVariables(value, lookup);
       return resolved === null ? match : `${attribute}="${escapeAttribute(compileColorMix(resolved))}"`;
@@ -632,10 +653,11 @@ function bakeBodyStyles(body, variables) {
       const baked = bakeInlineStyle(style, lookup);
       return baked ? `style="${escapeAttribute(baked)}"` : '';
     });
-  if ((bakedBody.match(/<\/?style\b/gi) || []).length !== 2 * emitted) {
-    throw new Error('svg-bake: embedded style elements did not parse completely');
-  }
-  return bakedBody;
+  return rewriteEmbeddedStyles(body, (attrs, css) => {
+    const baked = bakeEmbeddedStylesheet(css, variables);
+    if (/[<&]/.test(baked)) throw new Error('svg-bake: embedded stylesheet contains markup characters');
+    return baked ? `<style${bakeAttributes(emitStyleAttrs(attrs))}>${baked}</style>` : '';
+  }, 'svg-bake: embedded style elements did not parse completely', bakeAttributes);
 }
 
 export function authoredPreset(svg) {

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { runGit } from '../renderers/shared/repository-evidence.mjs';
 import { layoutReportFromSvg } from '../renderers/shared/layout-report.mjs';
 import { softwareNotices } from '../renderers/shared/software-notices.mjs';
-import { assertCamoSafeSvg, loadViewerStyles, parseStylesheet, resolveThemeVariables } from '../renderers/shared/svg-bake.mjs';
+import { assertCamoSafeSvg, loadViewerStyles, parseStylesheet, resolveThemeVariables, rewriteEmbeddedStyles } from '../renderers/shared/svg-bake.mjs';
 import { failPrPack } from './errors.mjs';
 import { assertNoRiskVerdict } from './markdown.mjs';
 
@@ -648,12 +648,7 @@ function namespaceSubSvgIds(svg, key) {
 }
 
 function scopeEmbeddedStyles(svg, key) {
-  let emitted = 0;
-  // A <style> fragment reassembled by this pass is left unmatched, so the
-  // completeness count below rejects it
-  // (test_story_scoping_rejects_style_reconstitution_and_terminators).
-  // codeql[js/incomplete-multi-character-sanitization]
-  const scopedSvg = svg.replace(/<style[^>]*>([\s\S]*?)<\/style>/gi, (_, css) => {
+  return rewriteEmbeddedStyles(svg, (_, css) => {
     const clean = css.replace(/^\s*<!\[CDATA\[|\]\]>\s*$/g, '');
     const scoped = parseStylesheet(clean).map((rule) => {
       const decls = rule.declarations.map((d) => `${d.property}:${d.value}${d.important ? '!important' : ''}`).join(';');
@@ -661,17 +656,10 @@ function scopeEmbeddedStyles(svg, key) {
       const body = `[data-native-key="${key}"] :is(${rule.selector}){${decls}}`;
       return rule.media ? `${rule.media}{${body}}` : body;
     }).filter(Boolean).join('');
-    // Re-serialized CSS becomes CDATA text: a surviving terminator would close
-    // it early, and unmatched <style> fragments would re-open a style element.
+    // A terminator in the scoped CSS would close its CDATA section early.
     if (scoped.includes(']]>')) throw new Error('story-svg: scoped stylesheet contains a CDATA terminator');
-    if (!scoped) return '';
-    emitted += 1;
-    return `<style><![CDATA[${scoped}]]></style>`;
-  });
-  if ((scopedSvg.match(/<\/?style\b/gi) || []).length !== 2 * emitted) {
-    throw new Error('story-svg: embedded style elements did not parse completely');
-  }
-  return scopedSvg;
+    return scoped ? `<style><![CDATA[${scoped}]]></style>` : '';
+  }, 'story-svg: embedded style elements did not parse completely');
 }
 
 function annotateEdgePaths(svg) {

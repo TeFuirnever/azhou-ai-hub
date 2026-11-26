@@ -1906,9 +1906,17 @@ function isPoint(point) {
 }
 
 function stripTags(value) {
-  // Any intact <...> span is consumed whole and an unconsumed < has no later
-  // >, so removals cannot join text into a tag
-  // (test_strip_tags_cannot_leave_a_complete_tag).
-  // codeql[js/incomplete-multi-character-sanitization]
-  return value.replace(/<[^>]*>/g, '');
+  const plainText = [];
+  let cursor = 0;
+  // Consume complete spans for text measurement without rescanning an unfinished tail.
+  while (cursor < value.length) {
+    const start = value.indexOf('<', cursor);
+    if (start === -1) break;
+    const end = value.indexOf('>', start + 1);
+    if (end === -1) break;
+    plainText.push(value.slice(cursor, start));
+    cursor = end + 1;
+  }
+  plainText.push(value.slice(cursor));
+  return plainText.join('');
 }

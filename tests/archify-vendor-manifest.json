@@ -313,7 +313,7 @@
     "pr/markdown.mjs": "35c441ac845eeae8411b00865bf824bbfcb5af8a06c78317e9ff21fbf75c3da1",
     "pr/metadata.mjs": "24142c0aa2216b928f37e12f50a48e4ef0b0469e4552c9c61321d900ac01dba0",
     "pr/preflight.mjs": "bbe34f782c78826531115708d8aceb239cfab64a8c4dcfaeb9e26877cc45a7e0",
-    "pr/story-svg.mjs": "ed3354743848ecf2c65ccf8264cbf2113b5b4dae7aa6d3f4b9af9adeb438c43a",
+    "pr/story-svg.mjs": "29471db35da17d048b2a93480affe84575b411984823033bb8c59be69d2bd301",
     "recipes/scenarios.mjs": "a63fc08ddca0b6d89c95be9ed6f472fb123830de80a35453a169cb5bb7ce01bd",
     "references/architecture-layout-repair.md": "dc1811a145d5749ce17628b19a805ac922f4f2e047b7e562718f58f9c7bcf0de",
     "references/authoring-contract.md": "e78b524d7dbaf3afe27a8be7df0a6175d43567a9784dffd977eab6ae6bd8fbdc",
@@ -322,12 +322,12 @@
     "references/delivery-contract.md": "418250feeb9a4d3e172e954822c16f7d02c9b1733fd06cfdaf41ac8f6ad1369c",
     "references/explainer-authoring.md": "cdc159e11582a516fa023bb2e57aabc4c280f3d9ea76183761e52dcd58e0e79e",
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
-    "references/provenance.md": "ec522aeb10e9704f9ab1270d31c7aff719f786a8e46f304e04dfb1a62095de56",
+    "references/provenance.md": "41271ef1f12751e40dd103c6b9b7c75f01d3b23d1e412597cbae54b00ffaf47e",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
     "references/setup.md": "58958433d8f054a3c91cde05b3ba5cbbc2bad61aeb3811f50a47561ea913df5c",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
     "references/update-awareness.md": "16b437a47790fda48f0e74f6aa053715fb06b6e8cd1ba994d1c01ffefa12a76b",
-    "references/upstream-compatibility.md": "197882b8cfafd7d2b1dea89cd379f573851ef4553c85c8d3b56c79dd77c282d0",
+    "references/upstream-compatibility.md": "2a1920214b92c1a71c604df143ce807c74bcae8441d60fdc57fd15b7cc251e0f",
     "references/viewer-runtime.md": "229e729444321e1ee2ecee54833b3ede90c1ad66315123fbbfdb08ab47742bba",
     "renderers/architecture/automatic-placement-candidates.mjs": "60d46fda8c075cf2ee68dd34f1d10398e30989beaff54d4a9b318da90fdcdff2",
     "renderers/architecture/automatic-placement.mjs": "4b9d9d158a410e2ee6818ecfccd96d2d053dcfe3372b842820706af887dd2713",
@@ -382,7 +382,7 @@
     "renderers/shared/sidecar-path.mjs": "c23cac8bcc265a74e2920c58d0968d1ffa06c1328bdd9cfd07755d4df2f22974",
     "renderers/shared/software-notices.mjs": "8bfc9ee3dc35eb0aa9860f71e7038f15647ed24d6ce7386e0e24870766e10bfe",
     "renderers/shared/spatial-grid.mjs": "e728bf6a729972f95ae09e368ea370490d10ff94d49debe2fab2e9bac923ee1a",
-    "renderers/shared/svg-bake.mjs": "7254e147a8333686fd6a38b0984adf42bac57bd8d8729bfc5e7e3725f7670148",
+    "renderers/shared/svg-bake.mjs": "99a7607e7c9a808356baac8694c038f005b219ed02e41cef3730ac4e0da8a7b9",
     "renderers/shared/svg-export.mjs": "80fb4004b1492f469b27ebd4f8b35c1c58c83d431ca75092cceb41c3d12127a1",
     "renderers/shared/svg-path-analysis.mjs": "dce96da166651de28498fedf6e8f4c934368a1aded81db2406cd73e7247f3421",
     "renderers/shared/text-fit.mjs": "ebd499072ef4fe31c9aabf45a01c204a9c2c142d45f087c3240673f90f477038",
@@ -414,7 +414,7 @@
     "schemas/tree.schema.json": "d487f1b8271173768905bd4fd939af0bdbd80eddfc6fe6c92f94336370f65755",
     "schemas/waterfall.schema.json": "05930ded2ec89df4bc54d72a01d7cdd5acd8cddd385ccb1e0dd9c5cd43c3cd1a",
     "schemas/workflow.schema.json": "d77542cef3c1226eb1c4fb2548582f0ff0a956039b65280353d2057e3aa34fd6",
-    "scripts/check-render-output.mjs": "90bac500a562cc5a213edd4980a3026453e85e10f778501076754f3c3b678f1f",
+    "scripts/check-render-output.mjs": "6292aa906179efd03593781e628b80e0c743e6688856cbf228374c52c5019f5f",
     "scripts/check-update.mjs": "a1ed8be99a484d81964c9d66938f813fb3726690aace3e982e777ea8bca5ebbc",
     "scripts/delivery-update-child.mjs": "ec231c992ab9b548c735698f209cb350d4b137aad2a5e8cb1374e692b6b38064",
     "scripts/generate-brand-marks.mjs": "192005549a15af101aede192e37a30fc66df1e3e27cb1bd281fc332aafd533dd",
@@ -4334,10 +4334,10 @@
       "base_sha256": null,
       "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "ed3354743848ecf2c65ccf8264cbf2113b5b4dae7aa6d3f4b9af9adeb438c43a",
+      "packaged_sha256": "29471db35da17d048b2a93480affe84575b411984823033bb8c59be69d2bd301",
       "path": "pr/story-svg.mjs",
       "target_sha256": "044835d4fa03d50142ecd59bfabb3e4b88cbf88766d639bd0bef7df959c80470",
-      "resolution": "scopeEmbeddedStyles rejects CDATA terminators in re-serialized CSS and unmatched <style> fragments so scoped styles stay inside their CDATA section; scoping output on well-formed styles unchanged; the rewrite carries an in-place codeql[js/incomplete-multi-character-sanitization] suppression, justified by the completeness count and the CDATA-terminator rejection"
+      "resolution": "Scope only paired SVG style elements and reject CDATA terminators in the serialized stylesheet; preserve differently named elements and reject reassembled style tags."
     },
     {
       "base_sha256": "1e93ba15d0782be535251bfb406cf8cc056291d84d77d33ca9dca01df743528f",
@@ -4409,7 +4409,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "a913a7e229478bfbb4896621babc825e42999c72763a5d34d4d6caa1e185e83e",
-      "packaged_sha256": "ec522aeb10e9704f9ab1270d31c7aff719f786a8e46f304e04dfb1a62095de56",
+      "packaged_sha256": "41271ef1f12751e40dd103c6b9b7c75f01d3b23d1e412597cbae54b00ffaf47e",
       "path": "references/provenance.md",
       "target_sha256": null
     },
@@ -4449,7 +4449,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "197882b8cfafd7d2b1dea89cd379f573851ef4553c85c8d3b56c79dd77c282d0",
-      "packaged_sha256": "c7cdb12ad5cf779b26b1ee2608edddde506a709d3bd09ee52d51c4e53c68efab",
+      "packaged_sha256": "2a1920214b92c1a71c604df143ce807c74bcae8441d60fdc57fd15b7cc251e0f",
       "path": "references/upstream-compatibility.md",
       "target_sha256": null
     },
@@ -4897,10 +4897,10 @@
       "base_sha256": null,
       "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "7254e147a8333686fd6a38b0984adf42bac57bd8d8729bfc5e7e3725f7670148",
+      "packaged_sha256": "99a7607e7c9a808356baac8694c038f005b219ed02e41cef3730ac4e0da8a7b9",
       "path": "renderers/shared/svg-bake.mjs",
       "target_sha256": "63d77552c4d5be5a8c675fcbe5ed3010a97f0f8eda938cd4d47688fb1b0f3cf7",
-      "resolution": "bakeBodyStyles rejects markup characters in re-emitted style attributes and any unmatched or reassembled <style> fragment so a baked body cannot re-open a style element; declarations, theme baking and clean-input bytes unchanged; the rewrite carries an in-place codeql[js/incomplete-multi-character-sanitization] suppression, justified by the completeness count that rejects any unmatched or reassembled <style> fragment; second pass rejects unbalanced quotes in the re-emitted style attributes alongside angle brackets, so a re-emitted open tag cannot swallow its </style> closer and the completeness count stays parse-faithful; third pass rebuilds the re-emitted open tag from parsed attributes (valid names, whitespace-separated, quoted values only, no solidus outside values), so the emitted tag cannot self-close or orphan its end tag"
+      "resolution": "Pair style tags, validate opening attributes, check for reassembled tags after removing empty styles, and bake SVG attributes separately from CSS selectors and declarations."
     },
     {
       "base_sha256": null,
@@ -5160,10 +5160,10 @@
       "base_sha256": "dcfb6c8eccd08bd7ce4b9fc1928cd4c3a6794b49a512e0afa1aea87e1e332195",
       "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": "dcfb6c8eccd08bd7ce4b9fc1928cd4c3a6794b49a512e0afa1aea87e1e332195",
-      "packaged_sha256": "90bac500a562cc5a213edd4980a3026453e85e10f778501076754f3c3b678f1f",
+      "packaged_sha256": "6292aa906179efd03593781e628b80e0c743e6688856cbf228374c52c5019f5f",
       "path": "scripts/check-render-output.mjs",
       "target_sha256": "37a79af93faccab3a0f991a66d726423ac8c4f548432b9a692e110c9a1d7265e",
-      "resolution": "SVG_TAG_TOKEN splits its two = alternatives with a lookahead so each character has one way to match (linear on repeated =\"\" input); token language preserved on the corpus and 40k fuzz inputs outside the one documented degenerate corner; stripTags is otherwise unchanged and carries an in-place codeql[js/incomplete-multi-character-sanitization] suppression, justified by the exhaustive completeness regression"
+      "resolution": "Keep the linear SVG_TAG_TOKEN lookahead and its documented tokenization corner. Use equivalent forward text extraction in stripTags so an unfinished tail is not repeatedly scanned."
     },
     {
       "base_sha256": "a1ed8be99a484d81964c9d66938f813fb3726690aace3e982e777ea8bca5ebbc",
