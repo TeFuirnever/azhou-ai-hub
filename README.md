@@ -14,7 +14,16 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 
 </div>
 
-### First install in Codex
+## Capabilities
+
+| Capability | What you can do |
+|---|---|
+| [Hub Skills](#skills) | Choose from 21 installable packages for tasks such as drawing diagrams, exploring ideas and reviewing a repository. |
+| [Azhou Agent Workbench](packages/azhou-agent-inspector/README.md) | Inspect turn duration, speed and available performance details in Codex and ZCode. |
+| [pstack](packages/pstack-agent-harness/README.md) | Use engineering workflows for implementation, review and pull request follow-up. |
+| [Agent Rules Books](#agent-rules-books) | Apply 14 sets of book-inspired engineering rules to a design, code change or review. |
+
+## First install in Codex
 
 Sign in to Codex and use Node.js 22.20 or later. Run the command from your project folder and confirm the project install when prompted. On Windows, use Git Bash for the [shell examples](docs/installation.md#windows-notes).
 
@@ -75,6 +84,39 @@ In the results below, a *hold* is an explicitly flagged unresolved item, and a *
 | Super Repo Pedant | <code>This phase is done. Run super-repo-pedant reconcile.</code> | Reconciled knowledge surfaces, named checks, explicit holds and a stable receipt. [Run the demo](docs/demos/super-repo-pedant.md). |
 | Excalidraw Diagram | <code>Use super-excalidraw-diagram to draw a login sequence. Deliver editable source and PNG.</code> | Editable <code>.excalidraw</code>, a real render/export, deterministic gates, visual review status and a stable receipt. [Run the demo](docs/demos/super-excalidraw-diagram.md). |
 | Arch Doc | <code>Use super-arch-doc to draft this repository's architecture document from its upstream design docs.</code> | Research notes with per-fact provenance, a template scaffold with accounted diagram captions, PlantUML-only diagrams, deterministic closing gates and a stable receipt. [Run the demo](docs/demos/super-arch-doc.md). |
+
+## Agent Rules Books
+
+Choose a skill for the engineering decision you want help with.
+
+- `a-philosophy-of-software-design` helps you simplify module boundaries and APIs.
+- `clean-architecture` helps you keep business rules independent of frameworks, databases and UI.
+- `clean-code` helps you improve names, functions and code readability.
+- `code-complete` helps you review control flow, defensive code and tests.
+- `designing-data-intensive-applications` helps you reason about consistency, replication and reliability.
+- `domain-driven-design` helps you model a complex domain and define bounded contexts.
+- `domain-driven-design-distilled` helps you map subdomains and their relationships.
+- `implementing-domain-driven-design` helps you implement aggregates, domain events and repositories.
+- `patterns-of-enterprise-application-architecture` helps you choose service layers, transaction scripts and data mappers.
+- `refactoring` helps you improve existing code while preserving observable behavior.
+- `refactoring-guru` helps you identify code smells and choose a refactoring technique.
+- `release-it` helps you review timeouts, retries, circuit breakers and failure recovery.
+- `the-pragmatic-programmer` helps you shorten feedback loops and decide what to automate.
+- `working-effectively-with-legacy-code` helps you change hard-to-test code using seams and characterization tests.
+
+### Use the rules in Azhou AI Hub
+
+The repository ships a pinned copy under `.agents/skills/`. In a Codex session opened in this checkout, try `$refactoring Review this change and suggest the smallest refactor that preserves behavior.` Ask Azhou can also recommend a book skill when it can verify the skill is enabled in this workspace.
+
+### Install the rules in another project
+
+With Node.js and npm, run this from your project directory to install one skill from the upstream repository. Select your agent host and project scope if the installer prompts you.
+
+~~~bash
+npx skills add ciembor/agent-rules-books --skill refactoring
+~~~
+
+Open a new session in that project and confirm the skill appears before invoking it. For other hosts, manual setup or the full collection, see the [upstream installation guide](https://github.com/ciembor/agent-rules-books#installation-as-skills).
 
 ## Why trust it
 
@@ -157,7 +199,7 @@ The [Azhou Skill Standard](docs/skill-standard.md) is the single project authori
 
 ## Develop
 
-In Codex, `$refactoring` applies refactoring guidance to a change and `$release-it` reviews failure recovery; the 14 [book-inspired skills](THIRD_PARTY_NOTICES.md#agent-rules-books) ship with the repository under `.agents/skills/` — project-local, not among the 21 installable packages under `skills/` — and load their rules on demand.
+Hub contributors can use a Hub Skill for a specific task, such as reconciling repository docs, or use an installed pstack workflow to drive implementation or a review. Choose one workflow to lead each task. Bring in an [Agent Rules Books](#agent-rules-books) rule when you need guidance for a specific engineering decision. See the [book import and license record](THIRD_PARTY_NOTICES.md#agent-rules-books).
 
 Python 3.11+ is enough for the repository gate:
 
