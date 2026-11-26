@@ -54,7 +54,7 @@ const english = {
 
 const copyForLocale = (locale) => /^zh(?:[-_]|$)/i.test(locale) ? chinese : english;
 
-function rateTooltip(text, summary, rateLabel, copy) {
+function rateTooltip(text, summary, rateLabel, streaming, copy) {
   const lines = [rateLabel ? `${text} · ${rateLabel}` : text];
   if (summary) {
     const { sessionTurns, turn, current } = summary;
@@ -65,7 +65,7 @@ function rateTooltip(text, summary, rateLabel, copy) {
         `${copy.first} ${seconds(turn.ttftMs, copy.seconds)} · ${copy.total} ${seconds(turn.totalMs, copy.seconds)}`,
       );
     } else {
-      lines.push(`${turns} · ${current ? copy.waiting : copy.empty}`);
+      lines.push(`${turns} · ${streaming ? copy.waiting : copy.empty}`);
     }
   }
   const cacheHit = summary?.turn?.cacheHitPercent;
@@ -108,6 +108,7 @@ export async function activate(ctx) {
   const completed = new Map();
   const estimates = new Map();
   const summaries = new Map();
+  const finalRefreshes = new Map();
   const contextReadings = new Map();
 
   // The dashboard already polls for display updates. Query the host only on
@@ -135,19 +136,34 @@ export async function activate(ctx) {
     const rate = estimate?.rate ?? completed.get(sessionId);
     const text = rate == null ? "— tok/s" : `${rateValue(rate)} tok/s`;
     const rateLabel = estimate ? copy.live : rate == null ? "" : copy.last;
-    const tooltip = rateTooltip(text, summaries.get(sessionId), rateLabel, copy);
+    const tooltip = rateTooltip(text, summaries.get(sessionId), rateLabel, Boolean(estimate), copy);
     ctx.slots.update("tps", { text, tooltip }, sessionId ? { sessionId } : "app");
   }
 
-  async function refreshStats(sessionId, current = false) {
+  async function refreshStats(sessionId, current = false, refresh) {
     try {
       const { queryTurn } = await import("./scripts/token-rate.mjs");
+      if (refresh && finalRefreshes.get(sessionId) !== refresh) return;
       current ||= estimates.has(sessionId);
-      summaries.set(sessionId, { ...queryTurn(sessionId, { current, composer: true }), current });
+      const summary = { ...queryTurn(sessionId, { current, composer: true }), current };
+      summaries.set(sessionId, summary);
       show(sessionId);
+      return summary;
     } catch (error) {
       ctx.log.warn("Could not refresh TPS details", error);
     }
+  }
+
+  // The final model event can precede the usage database write.
+  const retryDelays = [200, 600, 1500];
+  async function reconcileFinalStats(sessionId, refresh, attempt = 0) {
+    const summary = await refreshStats(sessionId, true, refresh);
+    if (finalRefreshes.get(sessionId) !== refresh) return;
+    if (summary?.turn || attempt === retryDelays.length) {
+      finalRefreshes.delete(sessionId);
+      return;
+    }
+    setTimeout(() => void reconcileFinalStats(sessionId, refresh, attempt + 1), retryDelays[attempt]).unref();
   }
 
   function restore(sessionId) {
@@ -228,28 +244,36 @@ export async function activate(ctx) {
     return restoreVisible(sessions);
   });
   ctx.models.onDidGenerate(({ sessionId, requestId, phase, outputTokensPerSecond: rate }) => {
-    if (!Number.isFinite(rate) || rate <= 0) return;
+    const hasRate = Number.isFinite(rate) && rate > 0;
     const previous = estimates.get(sessionId);
-    const newRequest = !previous || previous.requestId !== requestId;
-    if (newRequest) summaries.delete(sessionId);
     if (phase === "streaming") {
+      finalRefreshes.delete(sessionId);
+      if (!hasRate) return;
+      const newRequest = !previous || previous.requestId !== requestId;
+      if (newRequest) summaries.delete(sessionId);
       estimates.set(sessionId, { requestId, rate });
       show(sessionId);
       return newRequest ? refreshStats(sessionId, true) : undefined;
     }
+    if (previous && previous.requestId !== requestId) return;
 
     estimates.delete(sessionId);
-    completed.set(sessionId, rate);
+    if (!previous) summaries.delete(sessionId);
+    if (hasRate) completed.set(sessionId, rate);
     show(sessionId);
-    const destination = fileFor(sessionId);
-    try {
-      mkdirSync(directory, { recursive: true });
-      writeFileSync(`${destination}.tmp`, JSON.stringify(rate), { mode: 0o600 });
-      renameSync(`${destination}.tmp`, destination);
-    } catch (error) {
-      ctx.log.warn("Could not save completed token rate", error);
+    if (hasRate) {
+      const destination = fileFor(sessionId);
+      try {
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(`${destination}.tmp`, JSON.stringify(rate), { mode: 0o600 });
+        renameSync(`${destination}.tmp`, destination);
+      } catch (error) {
+        ctx.log.warn("Could not save completed token rate", error);
+      }
     }
-    return refreshStats(sessionId, true);
+    const refresh = {};
+    finalRefreshes.set(sessionId, refresh);
+    return reconcileFinalStats(sessionId, refresh);
   });
   await restoreVisible(await ctx.workbench.visibleSessions());
 }

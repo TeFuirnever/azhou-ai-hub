@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { test } from "node:test";
+import { setTimeout as delay } from "node:timers/promises";
 import { activate } from "../plugins/zcode/extension.mjs";
 
 test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", async (t) => {
@@ -85,7 +86,7 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
       opened,
       setLocale: (locale) => changeLocale({ locale }),
       switchTo: (id) => select({ sessions: [{ sessionId: id }] }),
-      generate: (id, phase, rate) => receive({ sessionId: id, requestId: "request-1", phase, outputTokensPerSecond: rate }),
+      generate: (id, phase, rate, requestId = "request-1") => receive({ sessionId: id, requestId, phase, outputTokensPerSecond: rate }),
     };
   }
 
@@ -213,6 +214,29 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
   const english = localized.tooltips.get("sess-large");
   assert.match(english, /^2\.5B tok\/s · Last segment\n1 turn · 1 segment last turn/);
   assert.ok(english.length <= 200);
+
+  const late = await load("4.0.0", "sess-late", "en-US");
+  const lateState = join(root, "sessions", "sess-late.json");
+  writeFileSync(lateState, JSON.stringify({ ts: now, promptTs: now - 700 }));
+  addMessage.run("sess-late", JSON.stringify({ role: "user" }));
+  await late.generate("sess-late", "streaming", 30);
+  assert.match(late.tooltips.get("sess-late"), /Waiting for request to finish/);
+  await late.generate("sess-late", "final", 40);
+  assert.match(late.tooltips.get("sess-late"), /^40\.0 tok\/s · Last segment/);
+  assert.doesNotMatch(late.tooltips.get("sess-late"), /Waiting for request to finish/);
+  addRequest.run("sess-late", 8, now - 650, now - 450, 30, "late-turn");
+  for (let attempt = 0; attempt < 50 && !late.tooltips.get("sess-late").includes("1 segment this turn"); attempt++) {
+    await delay(25);
+  }
+  assert.match(late.tooltips.get("sess-late"), /1 segment this turn/);
+
+  writeFileSync(lateState, JSON.stringify({ ts: now, promptTs: now - 200 }));
+  await late.generate("sess-late", "streaming", 35, "request-2");
+  await late.generate("sess-late", "final", 50, "request-1");
+  assert.match(late.tooltips.get("sess-late"), /^35\.0 tok\/s · Live estimate/);
+  await late.generate("sess-late", "final", null, "request-2");
+  assert.match(late.tooltips.get("sess-late"), /^40\.0 tok\/s · Last segment/);
+  assert.doesNotMatch(late.tooltips.get("sess-late"), /Waiting for request to finish|Live estimate/);
 
   const system = await load("3.18.2", "sess-b", null);
   assert.equal(system.display.get("sess-b"), "112.6 tok/s");
