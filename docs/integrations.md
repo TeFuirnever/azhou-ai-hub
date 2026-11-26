@@ -24,6 +24,16 @@ The adapters do not modify package source files. Any runtime input change change
 
 ## pstack: local source to native plugin
 
+| Host | Start here |
+|---|---|
+| Codex | Preview a [dedicated installation](#preview-the-codex-installation) below. |
+| Claude Code | Use the [native plugin commands](../packages/pstack-agent-harness/README.md#install). |
+| ZCode | Use the [bundled plugin](../packages/pstack-agent-harness/README.md#install). |
+
+Already installed? Check the [transition guide](#reviewing-an-existing-installation-before-any-transition) before switching sources or homes.
+
+### Preview the Codex installation
+
 Use the maintained Hub package as the source for new pstack installations. Upstream repositories remain provenance and update inputs. The [package install guide](../packages/pstack-agent-harness/README.md#install) covers the maintained installation targets. Only the Codex adapter below has a Hub-managed lifecycle; the other targets use native registration or an explicit Skills root. Imported formats for other harnesses remain source history, outside current support. Existing external installations require their native owner's removal or an explicitly reviewed source transition; copying the package into this repository does not adopt them.
 
 Set task-specific paths. `PSTACK_HOME` must be a dedicated target below the workspace's `.azhou/hub/` or an explicitly selected separate home; do not point it at the project itself. The package source defaults to `packages/pstack-agent-harness`; `--source` is optional and only asserts that canonical path. For the installed runtime, `CODEX_HOME` below is set only for that one process.
@@ -35,18 +45,18 @@ PSTACK_WORKSPACE=/absolute/test-project
 PSTACK_HOME="$PSTACK_WORKSPACE/.azhou/hub/targets/pstack"
 CODEX_BIN=/absolute/path/to/verified/codex
 
-python scripts/azhou_hub.py integrations pstack plan \
+python scripts/azhou_hub.py integrations pstack plan --text \
   --workspace "$PSTACK_WORKSPACE" \
   --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN"
-python scripts/azhou_hub.py integrations pstack apply \
-  --workspace "$PSTACK_WORKSPACE" \
-  --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN" --plan-id PLAN_ID
-python scripts/azhou_hub.py integrations pstack doctor \
-  --workspace "$PSTACK_WORKSPACE" --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN"
+```
+
+Review the Codex home, workspace and operation. Copy the printed apply command into the same POSIX shell when you are ready. Omit `--text` for the full JSON plan and its `plan_id`. After applying, launch Codex with the dedicated home.
+
+```sh
 env CODEX_HOME="$PSTACK_HOME" "$CODEX_BIN" -C "$PSTACK_WORKSPACE"
 ```
 
-Replace `PLAN_ID` with the current plan output. The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack-azhouzhou@azhou-hub`. The marketplace was renamed from the fork-era `pstack-claude` to `azhou-hub` on 2026-11-12; installs registered under the old name keep their recorded identity and are removed or verified through it, while the reviewed local source path always determines the installed bytes. The adapter verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
+The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack-azhouzhou@azhou-hub`. The marketplace was renamed from the fork-era `pstack-claude` to `azhou-hub` on 2026-11-12; installs registered under the old name keep their recorded identity and are removed or verified through it, while the reviewed local source path always determines the installed bytes. The adapter verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
 
 After opening the dedicated session, inspect native Skills and invoke `pstack-azhouzhou:how` or another selected workflow. `doctor` proves installed files and registration; it does not prove invocation. `/setup-pstack` owns model-sheet setup. On Codex the native sheet is `<codex-home>/pstack-models.md` (the active `${CODEX_HOME:-$HOME/.codex}/pstack-models.md`); the upstream Cursor `.mdc` instructions do not apply, and model rows must not be copied to `AGENTS.md`. Review the rows and actual host-supported model aliases before dispatch; only a sheet-declared, host-supported fallback is permitted. The Hub does not invent a universal model table.
 

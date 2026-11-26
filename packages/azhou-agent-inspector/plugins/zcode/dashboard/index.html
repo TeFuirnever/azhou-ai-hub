@@ -115,7 +115,7 @@
   .state.act { color: var(--bl); border: 1px solid rgba(96, 165, 250, .3); background: rgba(96, 165, 250, .07); }
   .state.idl { color: var(--dim); border: 1px solid var(--hair2); background: var(--core); }
   .dhead .mdl { font-size: 11px; color: var(--dim); }
-  .dhead .dir { font-size: 11px; color: var(--dim); margin-left: auto; opacity: .8; font-family: var(--mono); max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .session-dir { margin: 4px 0 0; font-size: 0.75rem; color: var(--dim); font-family: var(--mono); overflow-wrap: anywhere; }
 
   .hero {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr));
@@ -189,8 +189,8 @@
           <span class="nm" id="dName" data-i18n="waiting">等待数据…</span>
           <span class="state idl" id="dState" hidden></span>
           <span class="mdl" id="dModel"></span>
-          <span class="dir" id="dDir"></span>
         </div>
+        <p class="session-dir" id="dDir" hidden></p>
         <dl class="hero" hidden>
           <div>
             <dt data-i18n="turnDuration">整轮用时</dt>
@@ -452,7 +452,10 @@ function renderDetail(s) {
   s ??= { label: copy.noSessions, sessionId: "", status: "idle" };
   $("dName").textContent = s.label;
   $("dModel").textContent = s.model ? "· " + s.model : "";
-  $("dDir").textContent = s.cwd || s.sessionId;
+  const directory = $("dDir");
+  const location = s.cwd || s.sessionId;
+  if (directory.textContent !== location) directory.textContent = location;
+  directory.hidden = !location;
   const st = $("dState");
   st.hidden = !hasSession;
   st.className = "state " + (s.status === "generating" ? "gen" : s.status === "active" ? "act" : "idl");

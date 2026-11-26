@@ -73,6 +73,14 @@ For engineering questions, compare the [book skill names](references/book-skills
 
 Match the task to the local entry's description. Recommend the closest fit, give one reason tied to the user's situation, and show `$<name>` for direct use in the default mini mode. If the user specifically asks for something they can use here, verify any fallback skill is available to this project too. If nothing available fits, lead with that result. Mention a missing prerequisite only to explain the outcome. Reserve book recommendations and invocation commands for verified, usable entries.
 
+## Give the next action
+
+Lead the routing answer with the recommended Skill and why it fits. Give one next action in the user's language. Put the required receipt fields on one compact line. Give the invocation or installation instruction once.
+
+- If the host reports that the Skill is available in this project, give its invocation using that host's syntax. Do not add installation instructions.
+- If the Skill is confirmed missing, give the documented install route for the current host and the recommended Skill. For a project-scope package-manager install in Codex, use `npx skills add TeFuirnever/azhou-ai-hub --skill <canonical-name> --agent codex` from the project directory. Other hosts and existing installations use their documented route. Mention any prerequisite that changes the next action, such as the local checkout required by the Foundation Skills.
+- If availability is unknown, say so briefly. Give the most useful check, such as looking for the Skill in the current host's Skill picker. Do not infer that it is missing from the install state of another project.
+
 ## Boundaries
 
 - Recommendation only: name the skill and its mode; the user stays in control of what runs.

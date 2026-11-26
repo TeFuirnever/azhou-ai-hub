@@ -117,7 +117,7 @@ Optional integrations live under `packages/`. These projects are not Skills, and
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **candidate**: native Codex/Claude plugins, a zcode plugin with bundled skills, and shared Skills discovery for MiMo and DeepSeek Harness (the maintainer host's shared-root pstack links were retired on 2026-11-14; serving pstack that way moves to a separately scoped task, and other skills sharing the root are unaffected). Dated evidence and limits: [support matrix](docs/support-matrix.md#optional-integrations). |
 
 
-[Azhou mouse cursors 3.6.1](assets/cursors/azhou-double-hug/README.md) are available as a standalone Mousecape theme for macOS.
+[Azhou mouse cursors 3.6.1](assets/cursors/azhou-double-hug/README.md) are available as a standalone Mousecape theme for macOS. The guide covers downloading, applying and restoring the system cursors.
 
 Run these from a clone of this repository, as above:
 

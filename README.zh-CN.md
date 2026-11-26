@@ -117,7 +117,7 @@ python scripts/azhou_hub.py verify
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
 
 
-[阿舟鼠标指针 3.6.1](assets/cursors/azhou-double-hug/README.md) 是一套适用于 macOS 的独立 Mousecape 皮肤。
+[阿舟鼠标指针 3.6.1](assets/cursors/azhou-double-hug/README.md) 是一套适用于 macOS 的独立 Mousecape 皮肤。主题指南提供下载、安装和恢复系统指针的入口。
 
 同样在本仓库的 clone 中执行：
 

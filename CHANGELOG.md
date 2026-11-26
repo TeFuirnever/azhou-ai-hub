@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+- Ask Azhou gives one next action based on whether the recommended Skill is available. Foundation's uninstall preview distinguishes an uninstall that still needs recording from an already finished uninstall.
+- The pstack Codex adapter can print a readable plan and the exact apply command for a POSIX shell. JSON remains the default.
+- Azhou Agent Workbench 0.12.10 keeps the full ZCode session path visible in narrow panels. Both site homepages link to the macOS cursor theme download, setup guide and restore instructions.
+
 - Simplified the Codex quickstart and made the bilingual skill catalog keep the search and skill link when switching languages. Foundation setup prints the reviewed apply arguments when work is needed and reports when the selected skills are already installed. [PR #594](https://github.com/TeFuirnever/azhou-ai-hub/pull/594), [PR #595](https://github.com/TeFuirnever/azhou-ai-hub/pull/595), [Pages deployment](https://github.com/TeFuirnever/azhou-ai-hub/actions/runs/45732450085).
 - Updated Azhou Agent Workbench to 0.12.9. ZCode performance details open on demand and stay in place during an unchanged refresh. The standalone overlay keeps its pause state during a one-shot refresh. [Support and verification](docs/support-matrix.md#azhou-agent-workbench).
 

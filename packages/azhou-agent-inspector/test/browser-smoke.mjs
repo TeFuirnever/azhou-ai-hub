@@ -165,7 +165,9 @@ const zcodeHost = `<script>
     if (event.data?.type === "smoke-focus") focusedSessionId = event.data.sessionId;
   });
   const lane = (sessionId, rate, requestRate) => ({
-    sessionId, label: "Smoke " + sessionId, model: "Fixture", cwd: "/fixtures/" + sessionId, requestRate,
+    sessionId, label: "Smoke " + sessionId, model: "Fixture",
+    cwd: "/fixtures/engineering/shared/long-checkout-path/.treehouse/" + sessionId + "/same-project-name",
+    requestRate,
     status: "active", latest: { tokPerSec: rate, outputTokens: 200, genMs: 1000, completedAt: Date.now() },
     turn: { tokPerSec: rate, totalMs: rate * 10, genMs: sessionId === "A" ? 600 : 0,
       ttftMs: sessionId === "A" ? 100 : null, totalOutput: 200,
@@ -265,6 +267,14 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
           if (root.scrollWidth > root.clientWidth + 1) {
             throw new Error("ZCode dashboard overflow at " + width + "px / " + fontSize + " / " + theme);
           }
+          const directory = doc().getElementById("dDir");
+          const pathRange = doc().createRange();
+          pathRange.selectNodeContents(directory);
+          if (!directory.textContent.endsWith("/B/same-project-name") ||
+              directory.scrollWidth > directory.clientWidth + 1 ||
+              (width === 240 && pathRange.getClientRects().length < 2)) {
+            throw new Error("ZCode clipped the focused session path");
+          }
           const duration = doc().querySelector("#dDuration").getBoundingClientRect();
           const rate = doc().querySelector(".hero .rate").getBoundingClientRect();
           const stacked = Math.abs(duration.left - rate.left) < 1;
@@ -282,6 +292,7 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     await until(() => value("cpu") === "—" && value("mem") === "4.0 / 8 GB", "ZCode did not render memory when CPU was unavailable");
     frame.contentWindow.postMessage({type: "smoke-focus", sessionId: "A"}, "*");
     await until(() => value("dName") === "Smoke A" && Number(value("dRate")) === 125, "Dashboard did not follow a ZCode session change");
+    if (!value("dDir").endsWith("/A/same-project-name")) throw new Error("ZCode retained the previous working directory");
     const turnRate = [...doc().querySelectorAll("#dSub dt")].find(term => term.textContent === "Turn generation rate");
     if (turnRate?.nextElementSibling?.textContent !== "100.0 tok/s") {
       throw new Error("ZCode hid the turn rate while the headline showed the request rate");
