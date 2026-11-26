@@ -81,6 +81,14 @@ function supportsDesktopVersion(version) {
   return major > 3 || (major === 3 && (minor > 18 || (minor === 18 && patch >= 2)));
 }
 
+function measuredContextPercent(composition, sessionId) {
+  if (composition?.sessionId !== sessionId || composition.phase !== "request") return undefined;
+  const used = composition.providerContextTokens;
+  const window = composition.model?.contextWindow;
+  if (!Number.isSafeInteger(used) || used < 0 || !Number.isSafeInteger(window) || window <= 0) return undefined;
+  return Math.round(1000 * (used / window)) / 10;
+}
+
 export async function activate(ctx) {
   // The extension API version is also 1.4.0 on ZCode 3.18.0 and 3.18.1.
   let version;
@@ -100,6 +108,25 @@ export async function activate(ctx) {
   const completed = new Map();
   const estimates = new Map();
   const summaries = new Map();
+  const contextReadings = new Map();
+
+  // The dashboard already polls for display updates. Query the host only on
+  // first use or invalidation, without blocking the other performance readings.
+  function contextFor(sessionId) {
+    if (!ctx.context?.get || !ctx.context?.onDidChange) return undefined;
+    const reading = contextReadings.get(sessionId);
+    if (reading) return reading.percent;
+    const next = {};
+    contextReadings.set(sessionId, next);
+    void Promise.resolve().then(() => ctx.context.get({ sessionId })).then((composition) => {
+      next.percent = measuredContextPercent(composition, sessionId);
+    }).catch(() => {
+      if (contextReadings.get(sessionId) === next) contextReadings.delete(sessionId);
+    });
+    return undefined;
+  }
+  ctx.context?.onDidChange?.(({ sessionId }) => contextReadings.delete(sessionId));
+
   let copy = copyForLocale(Intl.DateTimeFormat().resolvedOptions().locale);
   const fileFor = (sessionId) => join(directory, `${encodeURIComponent(sessionId)}.json`);
 
@@ -168,11 +195,14 @@ export async function activate(ctx) {
             const turn = saved ? saved.turn : session.turn;
             return { ...session, turn, composerTurn: Boolean(saved), requestRate, requestRateEstimated: estimate != null };
           };
+          const focusedSession = data.focusedSession && withLiveRate(data.focusedSession);
+          const contextUsagePercent = focusedSession ? contextFor(focusedSessionId) : undefined;
+          if (contextUsagePercent !== undefined) focusedSession.contextUsagePercent = contextUsagePercent;
           return {
             ...data,
             sessions: data.sessions.map(withLiveRate),
             focusedSessionId,
-            focusedSession: data.focusedSession && withLiveRate(data.focusedSession),
+            focusedSession,
           };
         },
       },
@@ -193,7 +223,10 @@ export async function activate(ctx) {
         : "app";
     return ctx.views.open("dashboard", target);
   });
-  ctx.workbench.onDidChange(({ sessions }) => restoreVisible(sessions));
+  ctx.workbench.onDidChange(({ sessions }) => {
+    contextReadings.clear();
+    return restoreVisible(sessions);
+  });
   ctx.models.onDidGenerate(({ sessionId, requestId, phase, outputTokensPerSecond: rate }) => {
     if (!Number.isFinite(rate) || rate <= 0) return;
     const previous = estimates.get(sessionId);

@@ -193,7 +193,7 @@ const zcodeHost = `<script>
       }
       window.smoke.reads += 1;
       const recent = lane("A", 100, 125);
-      const focusedSession = focusedSessionId === "B" ? lane("B", 200)
+      const focusedSession = focusedSessionId === "B" ? { ...lane("B", 200), contextUsagePercent: 27.4 }
         : focusedSessionId === "A" ? recent : null;
       const result = { structuredContent: { sessions: [recent], total: 2, focusedSessionId, focusedSession } };
       if (window.smoke.hold) {
@@ -231,6 +231,11 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     const detailLabels = [...doc().querySelectorAll("#dSub dt")].map(term => term.textContent);
     if (!details.open || detailLabels.includes("TTFT") || detailLabels.includes("Generation") || !value("dSub").includes("reasoning0 tok")) {
       throw new Error("ZCode did not expose measured values including zero while omitting missing values");
+    }
+    const contextReading = () => [...doc().querySelectorAll("#dSub dt")]
+      .find(term => term.textContent === "Context usage")?.nextElementSibling?.textContent;
+    if (contextReading() !== "27.4%" || detailLabels.includes("Memory")) {
+      throw new Error("ZCode did not render measured Context or showed an unknown Memory count");
     }
     const detailList = doc().querySelector("#dSub dl");
     const selection = doc().getSelection();
@@ -293,6 +298,7 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     frame.contentWindow.postMessage({type: "smoke-focus", sessionId: "A"}, "*");
     await until(() => value("dName") === "Smoke A" && Number(value("dRate")) === 125, "Dashboard did not follow a ZCode session change");
     if (!value("dDir").endsWith("/A/same-project-name")) throw new Error("ZCode retained the previous working directory");
+    if (contextReading() !== undefined) throw new Error("Context leaked to another session");
     const turnRate = [...doc().querySelectorAll("#dSub dt")].find(term => term.textContent === "Turn generation rate");
     if (turnRate?.nextElementSibling?.textContent !== "100.0 tok/s") {
       throw new Error("ZCode hid the turn rate while the headline showed the request rate");

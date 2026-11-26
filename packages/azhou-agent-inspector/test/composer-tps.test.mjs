@@ -42,7 +42,7 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
     rmSync(root, { recursive: true, force: true });
   });
 
-  async function load(version, sessionId, locale = "zh-CN") {
+  async function load(version, sessionId, locale = "zh-CN", context) {
     writeFileSync(join(app, "package.json"), JSON.stringify({ version }));
     const display = new Map();
     const tooltips = new Map();
@@ -70,6 +70,7 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
           tooltips.set(scope.sessionId ?? scope, tooltip);
         },
       },
+      context,
       workbench: {
         async visibleSessions() { return [{ sessionId }]; },
         onDidChange(listener) { select = listener; },
@@ -104,6 +105,59 @@ test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", as
   assert.match(current.tooltips.get("app"), /Open Agent Workbench$/);
   current.setLocale("zh-TW");
   const dashboard = current.views.get("dashboard");
+  const firstContext = {
+    sessionId: "sess-a", phase: "request", providerContextTokens: 13_160,
+    model: { contextWindow: 80_000 }, categories: [{ id: "meta_user_context" }],
+  };
+  let composition = firstContext;
+  let changeContext;
+  const reads = [];
+  const context = {
+    async get({ sessionId }) {
+      reads.push(sessionId);
+      return composition;
+    },
+    onDidChange(listener) { changeContext = listener; },
+  };
+  const withContext = await load("4.0.0", "sess-a", "en-US", context);
+  const dashboardRead = withContext.views.get("dashboard").tools.sessions.run;
+  const focused = async (sessionId = "sess-a") => (await dashboardRead({ sessionId: "wrong" }, {
+    view: { sessionId },
+  })).focusedSession;
+  const readAgain = async () => {
+    await focused();
+    await new Promise(resolve => setImmediate(resolve));
+    return focused();
+  };
+  assert.equal((await readAgain()).contextUsagePercent, 16.5);
+  assert.deepEqual(reads, ["sess-a"]);
+  for (const invalid of [
+    { ...firstContext, sessionId: "another-session" },
+    { ...firstContext, phase: "draft-preview" },
+    { ...firstContext, providerContextTokens: undefined, providerInputTokens: 400 },
+    { ...firstContext, model: { contextWindow: 0 } },
+  ]) {
+    composition = invalid;
+    changeContext({ sessionId: "sess-a" });
+    assert.equal((await readAgain()).contextUsagePercent, undefined);
+  }
+  composition = { ...firstContext, providerContextTokens: 0 };
+  changeContext({ sessionId: "sess-a" });
+  assert.equal((await readAgain()).contextUsagePercent, 0);
+
+  let finishOldRead;
+  composition = new Promise(resolve => { finishOldRead = resolve; });
+  changeContext({ sessionId: "sess-a" });
+  assert.equal((await focused()).contextUsagePercent, undefined);
+  composition = { ...firstContext, providerContextTokens: 20_000 };
+  changeContext({ sessionId: "sess-a" });
+  assert.equal((await readAgain()).contextUsagePercent, 25);
+  finishOldRead(firstContext);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal((await focused()).contextUsagePercent, 25);
+  assert.equal((await focused()).categories, undefined);
+  assert.equal((await dashboard.tools.sessions.run({}, { view: { sessionId: "sess-a" } }))
+    .focusedSession.contextUsagePercent, undefined);
   assert.equal(dashboard.entry, "./dashboard/index.html");
   const { portrait, wallpaper } = await dashboard.tools.artwork.run();
   for (const [data, filename] of [[portrait, "azhou.webp"], [wallpaper, "wallpaper.webp"]]) {

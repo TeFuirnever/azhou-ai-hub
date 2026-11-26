@@ -271,6 +271,7 @@ const translations = {
     turnRate: "本轮即时速率",
     segmentRate: "最近一段速率",
     performanceDetails: "性能详情",
+    contextUsage: "Context 占用",
     recentAvg: "近段均值",
     recentPeak: "近段峰值",
     sessionOutput: "会话累计输出",
@@ -319,6 +320,7 @@ const translations = {
     turnRate: "Current turn rate",
     segmentRate: "Latest segment rate",
     performanceDetails: "Performance details",
+    contextUsage: "Context usage",
     recentAvg: "Recent average",
     recentPeak: "Recent peak",
     sessionOutput: "Session output",
@@ -495,6 +497,8 @@ function renderDetail(s) {
     addMetric(copy.generation, s.latest.genMs, sec);
     addMetric(copy.completedAt, s.latest.completedAt, hhmmss);
   }
+
+  addMetric(copy.contextUsage, s.contextUsagePercent, v => fmtNum(v) + "%");
 
   const details = $("performanceDetails");
   details.hidden = rows.length === 0;
