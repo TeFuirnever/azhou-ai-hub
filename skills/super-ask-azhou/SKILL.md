@@ -101,8 +101,8 @@ For a standalone router installation, use its own `scripts/record_unrouted.py` a
 
 The routing catalog is generated from the canonical skills manifest, so it cannot go stale silently: adding, renaming, or re-describing a skill requires regenerating this file, and the router-coverage plus generated-index parity checks in `scripts/check_repository.py` fail closed otherwise (removal is caught by discovery parity). The router-pattern source pin and update path live in [provenance.md](references/provenance.md).
 
-End with this single-line receipt. Replace every placeholder with a short value. Keep all fields on the same line.
+End with this single-line receipt. Replace every placeholder with a short value. For a match, use `artifacts/changes=none`. If you recorded a miss, name the local telemetry update without quoting the request.
 
 ```text
-schema=<schema> · status=<status> · current truth=<state> · artifacts/changes=none · verification=<check> · holds=<holds> · next action=<action> · learning signal=<signal>
+schema=<schema> · status=<status> · current truth=<state> · artifacts/changes=<changes> · verification=<check> · holds=<holds> · next action=<action> · learning signal=<signal>
 ```
