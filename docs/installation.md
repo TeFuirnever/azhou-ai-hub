@@ -28,6 +28,20 @@ npx skills list --agent codex
 
 Add `--global` for a user-wide install. If `super-ask-azhou` is absent, check the terminal folder and the installation output. If it is listed, compare the displayed scope and path with the project open in Codex, then try the question in a fresh chat.
 
+## Install Hub components in Codex
+
+Keep a checkout of Azhou AI Hub as the installation source. Use Python 3.11 or later and, when selecting pstack, a Codex CLI that supports native plugin management. Run the command in the project where you want to use the components. Replace the script path with the path in your Hub checkout.
+
+~~~bash
+python /path/to/azhou-ai-hub/scripts/azhou_hub.py install --all
+~~~
+
+Use `--component hub-skills agent-rules-books` in place of `--all` to select those two components. The available choices are `hub-skills`, `pstack` and `agent-rules-books`. Use `--workspace /path/to/project` to select another existing project directory. Review the paths and component plan, then enter `y` in the same command to install. Add `--dry-run` to exit after the preview.
+
+The installer copies Hub Skills and Agent Rules Books into the project's `.agents/skills/` directory. pstack uses the native Codex plugin manager and a dedicated home at `.azhou/hub/targets/pstack` in that project. The command prints how to launch Codex with that home. In that session, pstack is available on demand and SessionStart auto-routing is off. Use `--codex-bin` or `--codex-home` to select a different executable or a dedicated target explicitly.
+
+If either component plan is blocked, resolve the reported conflict before retrying. If pstack fails after the skill copies have completed, the copies remain available. Resolve the pstack error and repeat the same selection. Matching skill copies are reused. For other pstack hosts and ongoing plugin management, see the [native integration guide](integrations.md#pstack-local-source-to-native-plugin).
+
 ## Optional external integrations
 
 The existing Skill installation paths below remain independent. For the optional pstack integration, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.

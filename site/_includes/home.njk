@@ -42,6 +42,7 @@ layout: base.njk
     <h2 id="install" tabindex="-1">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</h2>
     <p>{{ '登录 Codex。在终端进入项目目录，使用 Node.js 22.20 或更新版本运行下面的命令。出现安装提示时，确认安装到当前项目。' if zh else 'Sign in to Codex. In a terminal, open your project folder and run this command with Node.js 22.20 or later. When prompted, confirm the install for this project.' }}</p>
     {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
+    <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ '一次安装或按需选择三个组件（英文）' if zh else 'Install Hub Skills, pstack and Agent Rules Books together or separately' }}</a></p>
     <div class="copy-block">
       <button class="btn btn-outline" type="button" hidden data-copy="install-command">{{ '复制安装命令' if zh else 'Copy install command' }}</button>
       <pre class="wrap-text"><code id="install-command">npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>

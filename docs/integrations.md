@@ -1,6 +1,6 @@
 # Optional integrations / 可选能力接入
 
-The 21 canonical Skills under `skills/` keep their existing independent install, discovery and invocation contracts. Optional entries are complete projects under `packages/`, not new Skills or a general package manager. `setup` does not enable them. The `integrations` command remains their stable operational entry.
+The 21 canonical Skills under `skills/` keep their independent install, discovery and invocation contracts. Optional entries are complete projects under `packages/`. Codex users can select pstack in the [unified installer](installation.md#install-hub-components-in-codex), which delegates to the existing pstack adapter. The `integrations` command remains the operational entry for native installation and lifecycle management.
 
 The packages include [Azhou Agent Workbench](../packages/azhou-agent-inspector/README.md) and [pstack-agent-harness](../packages/pstack-agent-harness/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 

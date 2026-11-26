@@ -101,6 +101,10 @@ Model quality is not a support claim. Benchmark comparisons must freeze the prom
 
 Open a [bug report](https://github.com/TeFuirnever/azhou-ai-hub/issues/new?template=bug.yml) when an entry is stale. Include the harness version, skill commit and a redacted reproduction.
 
+## Unified installer
+
+The [unified installer](installation.md#install-hub-components-in-codex) supports a Codex project. On 2026-11-26, an `install --all` run in a disposable macOS project copied the 21 Hub Skills and 14 book packages with matching package digests and registered pstack using Codex CLI 0.171.0-alpha.13.2. The native adapter verified registration and the dedicated home's installed files. This evidence covers installation.
+
 ## Agent Rules Books
 
 The 14 book skills ship from the Hub repository under `.agents/skills/`. Hub contributors use the checkout's copy. External projects install selected skills from the same source through the [Agent Rules Books install path](installation.md#install-agent-rules-books).

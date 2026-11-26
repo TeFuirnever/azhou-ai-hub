@@ -25,6 +25,8 @@
 
 ## 在 Codex 里首次安装
 
+想一次装齐 Hub Skills、pstack 和 Agent Rules Books，或按需选择其中几套，可以使用 [Codex 统一安装命令](docs/installation.md#install-hub-components-in-codex)。
+
 先登录 Codex，并确认电脑已安装 Node.js 22.20 或更新版本。在项目目录运行下面的命令，看到提示后确认安装到当前项目。Windows 用户请在 Git Bash 中运行[示例命令](docs/installation.md#windows-notes)。
 
 ~~~bash

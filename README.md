@@ -25,6 +25,8 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 
 ## First install in Codex
 
+To install Hub Skills, pstack and Agent Rules Books together or choose components individually, use the [unified Codex installer](docs/installation.md#install-hub-components-in-codex).
+
 Sign in to Codex and use Node.js 22.20 or later. Run the command from your project folder and confirm the project install when prompted. On Windows, use Git Bash for the [shell examples](docs/installation.md#windows-notes).
 
 ~~~bash
