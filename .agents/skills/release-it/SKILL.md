@@ -2,8 +2,6 @@
 name: release-it
 description: Apply Michael T. Nygard-inspired production reliability rules when designing failure handling, timeouts, retries, circuit breakers, observability, or deployment behavior.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Release It! Skill

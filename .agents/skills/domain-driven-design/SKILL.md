@@ -2,8 +2,6 @@
 name: domain-driven-design
 description: Apply Eric Evans-inspired DDD rules when modeling a complex domain, defining bounded contexts, protecting ubiquitous language, or designing aggregates.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Domain-Driven Design Skill

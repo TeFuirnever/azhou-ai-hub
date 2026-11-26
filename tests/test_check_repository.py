@@ -12,6 +12,7 @@ from scripts.check_repository import (
     MEMORY_CREDIT_SURFACES,
     SKILL_BRAND_CONTRACTS,
     check_action_pins,
+    check_book_skill_packages,
     check_chat_presentation_examples,
     check_command_surface,
     check_fidelity_axis, check_azhou_description_brand,
@@ -454,6 +455,28 @@ class SkillFrontmatterYamlTest(unittest.TestCase):
             )
             self.assertEqual([], check_internal_skill_metadata(root))
             self.assertTrue(parse_skill_frontmatter(skill.read_text(encoding="utf-8"))["metadata"]["internal"])
+
+    def test_public_book_skill_requires_discovery_and_the_upstream_notice(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            notice = root / "LICENSES/agent-rules-books-MIT.txt"
+            notice.parent.mkdir()
+            notice.write_bytes(b"upstream copyright and permission notice\n")
+            relative = ".agents/skills/refactoring/SKILL.md"
+            skill = root / relative
+            skill.parent.mkdir(parents=True)
+            book = "---\nname: refactoring\ndescription: Refactor code.\n"
+            skill.write_text(book + "metadata:\n  internal: true\n---\n# Probe\n", encoding="utf-8")
+            self.assertEqual(
+                [
+                    f"book skill must be publicly discoverable: {relative}",
+                    "book skill must include its upstream notice: .agents/skills/refactoring/LICENSE",
+                ],
+                check_book_skill_packages(root),
+            )
+            skill.write_text(book + "---\n# Probe\n", encoding="utf-8")
+            skill.with_name("LICENSE").write_bytes(notice.read_bytes())
+            self.assertEqual([], check_book_skill_packages(root))
 
     def test_missing_frontmatter_fails_closed(self) -> None:
         with self.assertRaises(SkillFrontmatterError):

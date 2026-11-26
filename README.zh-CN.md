@@ -14,7 +14,18 @@
 
 </div>
 
-### 在 Codex 里首次安装
+## 能力
+
+| 能力 | 可以做什么 |
+|---|---|
+| [Hub Skills](#skills) | 有 21 个可安装包，支持架构绘图、方案探索和仓库检查等任务。 |
+| [阿舟 Agent 工作台](packages/azhou-agent-inspector/README.md) | 在 Codex 和 ZCode 查看整轮耗时、速率及可用的性能详情。 |
+| [pstack](packages/pstack-agent-harness/README.md) | 用工程工作流完成实现、评审和 PR 跟进。 |
+| [Agent Rules Books](#agent-rules-books) | 用 14 套书籍工程规则指导设计、代码改动和评审。 |
+
+## 在 Codex 里首次安装
+
+想一次装齐 Hub Skills、pstack 和 Agent Rules Books，或按需选择其中几套，可以使用 [Codex 统一安装命令](docs/installation.md#install-hub-components-in-codex)。
 
 先登录 Codex，并确认电脑已安装 Node.js 22.20 或更新版本。在项目目录运行下面的命令，看到提示后确认安装到当前项目。Windows 用户请在 Git Bash 中运行[示例命令](docs/installation.md#windows-notes)。
 
@@ -75,6 +86,39 @@ https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 | Super Repo Pedant | <code>这个阶段做完了，跑一次 super-repo-pedant reconcile。</code> | 已对齐的知识面、具名检查、明确 hold 和稳定收据。[运行 demo](docs/demos/super-repo-pedant.md)。 |
 | Excalidraw Diagram | <code>用 super-excalidraw-diagram 画登录时序图，交付可编辑源图和 PNG。</code> | 可编辑 <code>.excalidraw</code>、真实渲染/导出、确定性 gate、视觉复核状态和稳定收据。[运行 demo](docs/demos/super-excalidraw-diagram.md)。 |
 | Arch Doc | <code>用 super-arch-doc 从这个仓库的上游设计文档产出架构说明书。</code> | 带出处的研究笔记、图注全记账的模板骨架、仅 PlantUML 的图纪律、确定性收尾门禁和稳定收据。[运行 demo](docs/demos/super-arch-doc.md)。 |
+
+## Agent Rules Books
+
+从下面 14 套书籍工程规则中，选一套来处理眼前的工程问题。
+
+- `a-philosophy-of-software-design` 用来简化模块边界和 API。
+- `clean-architecture` 用来让业务规则独立于框架、数据库和界面。
+- `clean-code` 用来改进命名、函数和代码可读性。
+- `code-complete` 用来检查控制流、防御性代码和测试。
+- `designing-data-intensive-applications` 用来分析数据一致性、复制和可靠性。
+- `domain-driven-design` 用来为复杂业务建模、划分限界上下文。
+- `domain-driven-design-distilled` 用来梳理子域和上下文之间的关系。
+- `implementing-domain-driven-design` 用来实现聚合、领域事件和仓储。
+- `patterns-of-enterprise-application-architecture` 用来选择服务层、事务脚本和数据映射器等模式。
+- `refactoring` 用来改进现有代码结构，同时保留可观察的行为。
+- `refactoring-guru` 用来识别代码坏味道、选择重构手法。
+- `release-it` 用来评审超时、重试、熔断和故障恢复。
+- `the-pragmatic-programmer` 用来缩短反馈周期、判断哪些工作值得自动化。
+- `working-effectively-with-legacy-code` 用来通过接缝和刻画测试安全修改难以测试的代码。
+
+### 在 Azhou AI Hub 开发时使用
+
+Hub 维护的版本在 `.agents/skills/`。开发 Hub 时，直接使用当前 checkout 自带的规则。在这个 checkout 打开的 Codex 会话里，可以输入 `$refactoring 检查这次改动，建议一项能保持行为的最小重构。` Ask Azhou 核实当前工作区已启用对应规则后，也可以推荐它。
+
+### 在其他项目安装
+
+准备好 Node.js 和 npm 后，在自己的项目目录运行下面的命令，为 Codex 安装 Hub 维护的版本。把 `refactoring` 换成上面任意一个规则名即可。如果安装器询问安装范围，请选当前项目。
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
+~~~
+
+在同一项目里打开新会话，确认能找到该技能后再调用。安装器默认从 Hub 的默认分支取规则。要与某个 Hub checkout 的版本完全一致，在仓库名后加 `@<commit>`。[安装和更新说明](https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-agent-rules-books)
 
 ## 为什么可信
 
@@ -157,7 +201,7 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 
 ## 开发
 
-在 Codex 中，`$refactoring` 把重构指南落到一次改动上，`$release-it` 评审故障恢复；14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库放在 `.agents/skills/` 下——属于项目本地内容，不在 `skills/` 的 21 个可安装包之列——按需读取。
+开发 Hub 时，可以用 Hub Skill 完成仓库文档对齐等具体任务，也可以用已安装的 pstack 工作流推进实现或评审。每项任务由一套工作流主导，遇到具体工程判断时按需调用 [Agent Rules Books](#agent-rules-books)。[书籍规则来源与许可](THIRD_PARTY_NOTICES.md#agent-rules-books)
 
 仓库级 gate 只需要 Python 3.11+：
 

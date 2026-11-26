@@ -2,8 +2,6 @@
 name: a-philosophy-of-software-design
 description: Apply John Ousterhout-inspired software design rules when reducing complexity, designing module boundaries, or reviewing APIs and abstractions.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # A Philosophy of Software Design Skill

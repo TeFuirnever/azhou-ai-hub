@@ -16,9 +16,33 @@ layout: base.njk
 </section>
 <section class="sec">
   <div class="wrap">
+    <h2 id="capabilities">{{ '能力' if zh else 'Capabilities' }}</h2>
+    <ul class="cardgrid">
+      <li><a class="gcard" href="{{ site.routes[lang].skills | url }}">
+        <span class="gcard-t">Hub Skills</span>
+        <span class="gcard-d">{{ '按任务选用绘图、方案探索或仓库检查等技能。' if zh else 'Choose a skill for diagramming, exploring ideas or checking a repository.' }}</span>
+      </a></li>
+      <li><a class="gcard" href="{{ site.blobBase }}/packages/azhou-agent-inspector/README.md">
+        <span class="gcard-t">{{ '阿舟 Agent 工作台' if zh else 'Azhou Agent Workbench' }}</span>
+        <span class="gcard-d">{{ '在 Codex 和 ZCode 查看耗时、速率及性能详情。' if zh else 'See turn duration, speed and performance details in Codex and ZCode.' }}</span>
+      </a></li>
+      <li><a class="gcard" href="{{ site.blobBase }}/packages/pstack-agent-harness/README.md">
+        <span class="gcard-t">pstack</span>
+        <span class="gcard-d">{{ '用工程工作流推进实现、评审和 PR 跟进。' if zh else 'Use engineering workflows for implementation, review and pull request follow-up.' }}</span>
+      </a></li>
+      <li><a class="gcard" href="{{ site.routes[lang].books | url }}">
+        <span class="gcard-t">Agent Rules Books</span>
+        <span class="gcard-d">{{ '用书籍工程规则指导架构设计、重构和故障恢复。' if zh else 'Apply book-inspired rules to architecture, refactoring and failure recovery.' }}</span>
+      </a></li>
+    </ul>
+  </div>
+</section>
+<section class="sec">
+  <div class="wrap">
     <h2 id="install" tabindex="-1">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</h2>
     <p>{{ '登录 Codex。在终端进入项目目录，使用 Node.js 22.20 或更新版本运行下面的命令。出现安装提示时，确认安装到当前项目。' if zh else 'Sign in to Codex. In a terminal, open your project folder and run this command with Node.js 22.20 or later. When prompted, confirm the install for this project.' }}</p>
     {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
+    <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ '一次安装或按需选择三个组件（英文）' if zh else 'Install Hub Skills, pstack and Agent Rules Books together or separately' }}</a></p>
     <div class="copy-block">
       <button class="btn btn-outline" type="button" hidden data-copy="install-command">{{ '复制安装命令' if zh else 'Copy install command' }}</button>
       <pre class="wrap-text"><code id="install-command">npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>

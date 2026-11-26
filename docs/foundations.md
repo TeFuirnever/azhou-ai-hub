@@ -28,6 +28,7 @@ python scripts/azhou_hub.py verify
 - `version` reports only the provable Git revision and dirty state. It does not invent installed or released version metadata.
 - `doctor` is read-only. It checks repository shape, Python, Git metadata, canonical package presence, and optional install-target package integrity. It does not claim that package-specific runtimes, host activation, Node, Chromium, hooks, or harness tools are ready. With `--verify`, it runs the public deterministic repository gate. The verification subprocess has a 600-second deadline. Doctor retains the last 8 KiB of combined output and reports the last nonempty line when available. On timeout, it fails the check and stops the verifier. On POSIX it signals the verifier's process group. On Windows it stops the direct verifier process and reports that the state of its descendants is unverified.
 - `verify` delegates to `python scripts/verify.py` and preserves its exit code. The default mode is reproducible from a clean public checkout: it checks repository policy, unit tests, checked-in benchmark integrity, and Git whitespace without private evidence.
+- `install` is the [unified entry for Codex projects](installation.md#install-hub-components-in-codex). It previews the selected Skill copies and native pstack installation, then applies the reviewed plans after confirmation.
 
 ### Codex Skill discovery
 
