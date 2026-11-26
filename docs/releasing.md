@@ -37,3 +37,12 @@ GitHub categories come from [.github/release.yml](../.github/release.yml). Every
 - full changelog comparison.
 
 The signing mechanism is decided and rehearsed: keyless sigstore (Fulcio OIDC bound to the repository's own workflow identity, Rekor bundles), exercised end to end on 2026-10-17 via the "Signed release rehearsal" workflow — see [the rehearsal evidence](../evidence/signed-release-rehearsal-2026-10-17.md). Release artifacts are signed through this path once downloadable artifacts ship. The repository must not claim a tag or release is signed before GitHub shows verifiable signature evidence for that specific artifact; Git tags themselves remain unsigned until a tag-signing step is added and separately rehearsed.
+
+The signing job runs on `main`, installs Sigstore with hash verification, and checks the bundle identity before handing the files to the draft job. The signing job can request an OIDC token. The draft job alone can write releases.
+
+The CI Python locks in [`.github/requirements/`](../.github/requirements/) target CPython 3.11 on Ubuntu x86-64. To refresh one, run the following on that platform with the desired top-level Coverage or Sigstore pin. Review the resolved wheel versions and hashes before replacing the pinned rows.
+
+~~~bash
+python -m pip install --dry-run --ignore-installed --only-binary=:all: --report wheels.json 'coverage==7.6.1'
+jq -r '.install[] | "\(.metadata.name)==\(.metadata.version) --hash=sha256:\(.download_info.archive_info.hashes.sha256)"' wheels.json | sort -f
+~~~
