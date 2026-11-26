@@ -1312,6 +1312,27 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(1, result)
             self.assertEqual("fail", payload["status"])
 
+    def test_setup_text_only_prompts_to_apply_when_there_is_work(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            command = ["setup", "--target", str(target), "--skill", "sample", "--mode", "copy"]
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(command, root=root)
+            self.assertEqual(0, result)
+            self.assertFalse(target.exists())
+            args = next(line.split() for line in preview.getvalue().splitlines() if line.startswith("  --apply "))
+            result, installed = self._json_main([*command, *args, "--json"], root=root, auto_plan=False)
+            self.assertEqual(0, result, installed)
+            self.assertTrue((target / "sample" / "SKILL.md").is_file())
+
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(command, root=root)
+            self.assertEqual(0, result)
+            self.assertIn("The selected skills are already installed. No action needed.", preview.getvalue())
+            self.assertNotIn("--apply", preview.getvalue())
+
     def test_lifecycle_text_explains_uninstall_plan_and_migration_refusal(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, receipt = self._managed_fixture(directory, mode="copy")
@@ -1323,6 +1344,7 @@ class AzhouHubCliTest(unittest.TestCase):
             destination = json.dumps(str(target.resolve() / "sample"), ensure_ascii=False)
             self.assertIn(f"[WILL REMOVE] sample at {destination}", preview.getvalue())
             self.assertIn("No files changed.", preview.getvalue())
+            self.assertIn("If they change after this preview, run the preview again.", preview.getvalue())
             self.assertTrue((target / "sample").is_dir())
 
             preview = io.StringIO()

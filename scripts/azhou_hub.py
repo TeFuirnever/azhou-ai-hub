@@ -1747,7 +1747,12 @@ def _print_setup(payload: dict[str, Any]) -> None:
     for row in payload["skills"]:
         print(f"[{row['status'].upper()}] {row['name']}: {row['details']}")
     if payload["status"] == "dry_run":
-        print("No files changed. Re-run with --apply --plan-id <reviewed-planId> to execute this plan.")
+        print("No files changed.")
+        if any(row["status"] == "planned" for row in payload["skills"]):
+            print("To install the planned skills, add the following arguments to the same command.")
+            print(f"  --apply --plan-id {payload['planId']}")
+        else:
+            print("The selected skills are already installed. No action needed.")
     elif payload["status"] == "dry_run_same_source":
         print("No files changed. The destination already links an identical canonical package from another checkout; resolve the duplicate checkout or choose a different target before applying.")
 
@@ -1778,6 +1783,8 @@ def _print_lifecycle(command: str, payload: dict[str, Any], target: Path) -> Non
         if command == "repair" and all(row["status"] == "current" for row in payload["skills"]):
             print("No repairs are needed.")
         elif not payload.get("details"):
+            if command in {"migrate", "uninstall"}:
+                print("Apply checks the current files again. If they change after this preview, run the preview again.")
             print("Review the paths above before running again with --apply.")
     if status in {"planned", "migrated", "already-current", "conflict"}:
         print(f"From: {json.dumps(payload['source'], ensure_ascii=False)}")

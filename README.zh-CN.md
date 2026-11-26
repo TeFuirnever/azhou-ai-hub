@@ -16,17 +16,17 @@
 
 ### 在 Codex 里首次安装
 
-先登录 Codex，并确认电脑已安装带 `npx` 的 Node.js；所有命令都在你想要安装 Ask Azhou 的项目目录下执行。示例命令均为 POSIX shell：Windows 请在 Git Bash 中运行（[Windows 说明](docs/installation.md#windows-notes)）。
+先登录 Codex，并确认电脑已安装 Node.js 22.20 或更新版本。在项目目录运行下面的命令，看到提示后确认安装到当前项目。Windows 用户请在 Git Bash 中运行[示例命令](docs/installation.md#windows-notes)。
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 ~~~
 
-在同一项目打开一个新的 Codex 会话，试着问下面的问题。
+在同一项目打开一个新的 Codex 会话。先输入 `$super-ask-azhou`，确认 Codex 找得到它，再试试下面的问题。
 
 > `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub Skill？
 
-应看到它推荐 `super-archify`。如果找不到 Ask Azhou，先看[首次安装排查](docs/installation.md#first-install-in-codex)；已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
+正常情况下，它会推荐 `super-archify`。如果 Codex 找不到 Ask Azhou，可以[检查安装](docs/installation.md#if-codex-cannot-find-ask-azhou)。已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
 
 想安装 Ask Azhou 推荐的技能时，按[单个技能安装指南](docs/installation.md#package-manager-install)操作。每个技能只选[一种安装方式](docs/installation.md#one-path-rule)。四个 `super-azhou-*` 技能还需要一份本地仓库 checkout。
 
@@ -113,7 +113,7 @@ python scripts/azhou_hub.py verify
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
-| `azhou-agent-inspector` | [阿舟 Agent 工作台](packages/azhou-agent-inspector/README.md) | Codex 会话侧面板、ZCode 输入框状态项与会话仪表盘。两个面板共用阿舟头像、壁纸和四项性能速览，按宿主独立安装。 |
+| `azhou-agent-inspector` | [阿舟 Agent 工作台](packages/azhou-agent-inspector/README.md) | Codex 会话侧面板、ZCode 输入框状态项与会话仪表盘。两个面板都显示整轮耗时和速率，可按需展开性能详情。通过各宿主自己的插件管理器安装。 |
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
 
 

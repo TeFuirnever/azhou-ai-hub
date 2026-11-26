@@ -178,10 +178,13 @@
     details summary { cursor: pointer; width: fit-content; padding-block: .5rem; color: var(--az-accent); }
     #skill-filter { margin-top: 24px; }
     #skill-filter label { display: block; margin-block-end: .25rem; }
+    .skill-search-controls { display: flex; align-items: center; gap: .5rem; }
     #skill-search {
-      width: min(100%, 24rem); min-height: 44px; padding: .5rem .75rem; border-radius: 4px;
+      width: min(100%, 24rem); min-width: 0; min-height: 44px; padding: .5rem .75rem; border-radius: 4px;
       border: 1px solid var(--az-text-2); background: var(--az-bg); color: var(--az-text); font: inherit;
     }
+    #skill-search::-webkit-search-cancel-button { appearance: none; }
+    #clear-skill-search { flex: none; cursor: pointer; min-height: 44px; padding-inline: .75rem; }
     #skill-count { color: var(--az-text-2); margin: .5rem 0 0; }
     .skill-name { align-self: flex-start; margin-block-start: auto; overflow-wrap: anywhere; font-size: 12px; }
     .gcard:active { background: var(--az-accent-surface); }
@@ -225,21 +228,8 @@
       max-width: 1072px;
     }
     .doc-card h1 { font: 500 32px/40px var(--az-font); letter-spacing: 0; margin: 0 0 24px; }
-    .crumbs {
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline;
-      margin: 0 0 16px;
-      font: 400 13px/20px var(--az-font);
-      color: var(--az-text-2);
-    }
-    .crumbs a { color: var(--az-accent); text-decoration: none; }
-    .crumbs [aria-current="page"] { color: var(--az-text); }
     .doclist { list-style: none; padding: 0; margin: 16px 0 24px; }
     .doclist li { padding: 8px 0; border-bottom: 1px solid var(--az-border-2); }
-    .doc-source {
-      margin: 40px 0 0; padding: 16px 0 0;
-      border-top: 1px solid var(--az-border);
-      font: 400 13px/20px var(--az-font); color: var(--az-text-2);
-    }
     .site-foot { border-top: 0; }
     .site-foot .wrap { padding-top: 32px; padding-bottom: 48px; font: 400 13px/20px var(--az-font); color: var(--az-text-2); }
     body.doc .site-foot .wrap { max-width: 1440px; }

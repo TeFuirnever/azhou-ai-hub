@@ -10,7 +10,7 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const codex = new URL("../plugins/azhou-agent-inspector/", import.meta.url);
 const zcode = new URL("../plugins/zcode/dashboard/", import.meta.url);
-const [panel, panelArt, wallpaper, dashboard, artwork, zcodeWallpaper, manifest] = await Promise.all([
+const [panel, panelArt, wallpaper, dashboard, artwork, zcodeWallpaper, manifest, overlay] = await Promise.all([
   readFile(new URL("panel.html", codex), "utf8"),
   readFile(new URL("azhou.webp", codex), "base64"),
   readFile(new URL("wallpaper.webp", codex), "base64"),
@@ -18,6 +18,7 @@ const [panel, panelArt, wallpaper, dashboard, artwork, zcodeWallpaper, manifest]
   readFile(new URL("azhou.webp", zcode)),
   readFile(new URL("wallpaper.webp", zcode)),
   readFile(new URL(".codex-plugin/plugin.json", codex), "utf8"),
+  readFile(new URL("overlay/overlay.html", zcode), "utf8"),
 ]);
 assert.equal(artwork.toString("base64"), panelArt, "The two dashboards use the same portrait");
 assert.equal(zcodeWallpaper.toString("base64"), wallpaper, "The two dashboards use the same wallpaper");
@@ -166,7 +167,8 @@ const zcodeHost = `<script>
   const lane = (sessionId, rate, requestRate) => ({
     sessionId, label: "Smoke " + sessionId, model: "Fixture", cwd: "/fixtures/" + sessionId, requestRate,
     status: "active", latest: { tokPerSec: rate, outputTokens: 200, genMs: 1000, completedAt: Date.now() },
-    turn: { tokPerSec: rate, totalMs: rate * 10, genMs: 600, ttftMs: 100, totalOutput: 200,
+    turn: { tokPerSec: rate, totalMs: rate * 10, genMs: sessionId === "A" ? 600 : 0,
+      ttftMs: sessionId === "A" ? 100 : null, totalOutput: 200,
       totalReasoning: 0, requests: 1, rated: true, peak: rate },
     session: { avg: rate, max: rate, totalOutput: 200, totalReasoning: 0, requests: 1 },
     history: [rate - 2, rate],
@@ -217,6 +219,29 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     if (value("dSub").includes("Turn generation rate")) {
       throw new Error("ZCode repeated the turn rate already shown in the headline");
     }
+    const details = doc().getElementById("performanceDetails");
+    const summary = details.querySelector("summary");
+    if (details.hidden || details.open || summary.textContent !== "Performance details") {
+      throw new Error("ZCode did not start with a closed performance disclosure");
+    }
+    summary.focus();
+    summary.click();
+    const detailLabels = [...doc().querySelectorAll("#dSub dt")].map(term => term.textContent);
+    if (!details.open || detailLabels.includes("TTFT") || detailLabels.includes("Generation") || !value("dSub").includes("reasoning0 tok")) {
+      throw new Error("ZCode did not expose measured values including zero while omitting missing values");
+    }
+    const detailList = doc().querySelector("#dSub dl");
+    const selection = doc().getSelection();
+    selection.selectAllChildren(detailList);
+    const selectedText = selection.toString();
+    const initialReads = frame.contentWindow.smoke.reads;
+    await until(() => frame.contentWindow.smoke.reads >= initialReads + 2, "ZCode did not refresh the same session");
+    if (!selectedText || selection.toString() !== selectedText || doc().activeElement !== summary || !details.open) {
+      throw new Error("A ZCode refresh disturbed the current disclosure, focus, or selected text");
+    }
+    selection.removeAllRanges();
+    summary.click();
+    if (details.open) throw new Error("ZCode performance details did not close");
     const portrait = doc().querySelector(".brand img");
     await until(() => portrait.naturalWidth > 0, "ZCode portrait did not load");
     if (!portrait.naturalWidth || portrait.naturalWidth !== portrait.naturalHeight) {
@@ -264,6 +289,10 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     frame.contentWindow.postMessage({type: "smoke-focus", sessionId: "no-usage"}, "*");
     await until(() => value("dName") === "No session data" && value("dRate") === "—" && value("dDuration") === "—" &&
       !value("dDir") && !value("dModel") && value("cCum") === "--", "An empty session displayed stats from a different session");
+    if (!doc().querySelector(".hero").hidden || !doc().querySelector(".session-history").hidden ||
+        !details.hidden || !doc().getElementById("dEmpty").hidden) {
+      throw new Error("An empty session showed placeholders or an unrelated request status");
+    }
     frame.contentWindow.postMessage({type: "smoke-focus", sessionId: null}, "*");
     await until(() => value("dName") === "Smoke A", "An unscoped dashboard did not show the latest session");
 
@@ -290,15 +319,65 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
   });
 </script>`;
 
+const overlayHost = `<script>
+  window.smoke = { reads: 0, fail: false };
+  window.fetch = async () => {
+    const rate = 150 + ++window.smoke.reads;
+    const data = location.search ? { status: "no-data" } : {
+      status: "idle", turn: { tokPerSec: rate, totalOutput: 200, requests: 1 },
+      history: [100, rate],
+    };
+    return { ok: !window.smoke.fail, json: async () => data };
+  };
+</script>`;
+const overlayPage = `<!doctype html><body>${harness}<iframe title="Overlay" src="/overlay-panel"></iframe><script>
+  const frame = document.querySelector("iframe");
+  const byId = id => frame.contentDocument?.getElementById(id);
+  checkUi(async () => {
+    await until(() => byId("num")?.textContent === "151", "Overlay did not load its first reading");
+    const state = byId("state"), pause = byId("btnPause"), refresh = byId("btnRefresh"), spark = byId("btnSpark");
+    const host = frame.contentWindow.smoke;
+    pause.click();
+    refresh.click();
+    await until(() => byId("num").textContent === "152", "Overlay did not refresh while paused");
+    if (state.textContent !== "已暂停" || pause.getAttribute("aria-pressed") !== "true") {
+      throw new Error("One-shot refresh resumed automatic polling");
+    }
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    if (host.reads !== 2) throw new Error("Paused overlay kept polling");
+    spark.click();
+    const points = byId("sparkline").getAttribute("points");
+    spark.click();
+    spark.click();
+    if (!points || byId("sparkline").getAttribute("points") !== points || spark.getAttribute("aria-pressed") !== "true") {
+      throw new Error("Overlay did not restore the cached sparkline while paused");
+    }
+    host.fail = true;
+    refresh.click();
+    await until(() => state.textContent.includes("刷新失败"), "Overlay did not announce manual refresh failure");
+    if (byId("num").textContent !== "152") throw new Error("Overlay replaced its last reading on failure");
+    host.fail = false;
+    Object.defineProperty(frame.contentDocument, "hidden", { value: true });
+    pause.click();
+    await until(() => host.reads >= 5 && state.textContent === "空闲", "Overlay did not resume polling in the background");
+    frame.src = "/overlay-panel?style=line";
+    await until(() => byId("info")?.textContent === "暂无会话数据", "Overlay line mode did not render the empty state");
+    if (byId("btnSpark").getClientRects().length) throw new Error("Line mode exposed a control with no effect");
+  });
+</script>`;
+
 const routes = {
   "/codex": codexPage,
   "/codex-panel": panel.replace("__ART__", panelArt).replace("__WALLPAPER__", wallpaper)
     .replace("__PLUGIN_VERSION__", JSON.stringify(JSON.parse(manifest).version)),
   "/zcode": zcodePage,
   "/zcode-panel": dashboard.replace("<head>", "<head>" + zcodeHost),
+  "/overlay": overlayPage,
+  "/overlay-panel": overlay.replace("<head>", "<head>" + overlayHost),
 };
 const server = createServer((request, response) => {
-  const body = Object.hasOwn(routes, request.url) ? routes[request.url] : null;
+  const pathname = new URL(request.url, "http://127.0.0.1").pathname;
+  const body = Object.hasOwn(routes, pathname) ? routes[pathname] : null;
   const contentType = Buffer.isBuffer(body) ? "image/webp" : "text/html; charset=utf-8";
   response.writeHead(body ? 200 : 404, { "content-type": contentType });
   response.end(body);
@@ -308,7 +387,7 @@ try {
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const { port } = server.address();
-  for (const host of ["codex", "zcode"]) {
+  for (const host of ["codex", "zcode", "overlay"]) {
     const { stdout } = await run(process.env.CHROME_BIN || "google-chrome", [
       "--headless", "--no-first-run", "--disable-background-networking",
       `--user-data-dir=${join(profile, host)}`, "--virtual-time-budget=18000",

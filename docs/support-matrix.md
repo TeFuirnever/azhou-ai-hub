@@ -110,3 +110,5 @@ On 2026-11-25, both native managers installed 0.12.7 on the maintainer Mac. Isol
 Native window acceptance of 0.12.7 is pending. Existing desktop views may still load the previous release after a package update. Earlier native ZCode checks on 2026-11-25 covered composer hover, switching sessions, a narrow panel and artwork rendering.
 
 In the 0.12.8 source, performance details show observed values. Codex can show context usage when its rollout provides a request total and window. ZCode can show cache hit from recorded turn usage. ZCode context occupancy and per-turn injected memory counts on both hosts remain unavailable. The ZCode dashboard marks retained resource readings when a refresh fails and refreshes them when the dashboard becomes visible. It shows turn rate in the details only when the headline shows a different rate.
+
+The 0.12.9 package source keeps ZCode performance details collapsed until opened and retains unchanged details across refreshes. In the standalone overlay, one-shot refresh keeps the current pause setting and the rate chart can be reopened while paused.
