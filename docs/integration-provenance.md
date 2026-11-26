@@ -83,3 +83,5 @@ On 2026-11-26, both native managers updated the existing Hub registrations from 
 The 0.12.11 ZCode Context check used its own temporary native marketplace registration and versioned cache. The installed dashboard and extension matched the candidate source. The test registration was removed after the check, and the production 0.12.10 payload matched its pre-test bytes. [Context verification](support-matrix.md#azhou-agent-workbench).
 
 On 2026-11-26, both native managers updated the existing Hub registrations from 0.12.11 to 0.12.12. The cached entry points matched Hub revision `cd7dad43`. After the ZCode restart, the desktop loaded the updated dashboard. [Native follow-up](../evidence/azhou-agent-workbench-native-0.12.12-2026-11-26.md).
+
+On 2026-11-26, both native managers updated the existing Hub registrations to 0.12.13. The installed manifests and entry points matched Hub revision `81bb1538`. The private install record retains the previous payloads. [Workbench 0.12.13 verification](../evidence/azhou-agent-workbench-native-0.12.13-2026-11-26.md).
