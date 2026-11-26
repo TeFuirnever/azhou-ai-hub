@@ -9,18 +9,21 @@ on:
         type: string
 
 permissions:
-  contents: write
-  id-token: write
+  contents: read
 
 concurrency:
   group: signing-rehearsal-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  rehearsal:
-    name: keyless-sign a skill manifest and attach it to a draft release
+  sign:
+    name: Keyless-sign and verify the skill manifest
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,9 +49,9 @@ jobs:
           Path("SKILL_SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
           print(Path("SKILL_SHA256SUMS.txt").read_text(encoding="utf-8"))
           PY
-      - name: Install the pinned sigstore CLI
+      - name: Install the hash-pinned sigstore CLI
         run: |
-          python -m pip install --quiet "sigstore==4.5.0"
+          python -m pip install --quiet --require-hashes --only-binary=:all: -r .github/requirements/sigstore.txt
           python -m sigstore --version
       - name: Keyless-sign the manifest
         run: python -m sigstore sign --bundle SKILL_SHA256SUMS.txt.sigstore SKILL_SHA256SUMS.txt
@@ -59,6 +62,32 @@ jobs:
           --cert-identity "https://github.com/TeFuirnever/azhou-ai-hub/.github/workflows/signed-release-rehearsal.yml@refs/heads/main"
           --cert-oidc-issuer "https://token.actions.githubusercontent.com"
           SKILL_SHA256SUMS.txt
+      - name: Transfer the verified signing artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: signed-skill-manifest
+          path: |
+            SKILL_SHA256SUMS.txt
+            SKILL_SHA256SUMS.txt.sigstore
+          if-no-files-found: error
+          retention-days: 1
+
+  draft:
+    name: Attach the verified manifest to a draft release
+    needs: sign
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Retrieve the verified signing artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: signed-skill-manifest
       - name: Attach the signed manifest to a draft release
         env:
           GH_TOKEN: ${{ github.token }}
