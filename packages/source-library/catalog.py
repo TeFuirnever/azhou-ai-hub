@@ -90,14 +90,15 @@ class Catalog:
         changed = self.db.execute("INSERT OR IGNORE INTO sources VALUES (?,?)", (source, article_id)).rowcount
         return article_id, changed
 
-    def record_discovery(self, source, candidates):
-        now = timestamp()
+    def record_discovery(self, source, candidates, *, update_source_status=True):
         with self.db:
             added = sum(self.note(source, c.url, c.title, c.published)[1] for c in candidates)
-            self.db.execute(
-                "INSERT OR REPLACE INTO source_runs VALUES (?,?,?,?,?,NULL)",
-                (source, "updated" if added else "no_updates", now, now, added),
-            )
+            if update_source_status:
+                now = timestamp()
+                self.db.execute(
+                    "INSERT OR REPLACE INTO source_runs VALUES (?,?,?,?,?,NULL)",
+                    (source, "updated" if added else "no_updates", now, now, added),
+                )
         return added
 
     def record_failure(self, source, reason):

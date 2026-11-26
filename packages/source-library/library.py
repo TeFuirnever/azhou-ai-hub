@@ -7,6 +7,7 @@ from pathlib import Path
 
 from catalog import Catalog
 from collect import Candidate, CollectionError, SOURCES, discover, fetch, read_article
+from ingest import discover_json, import_batch
 
 STATUS_LABELS = {"updated": "有更新", "no_updates": "无更新", "failed": "抓取失败"}
 
@@ -18,7 +19,9 @@ def private_path(path):
     return directory
 
 
-def preview(source, url=None, fetcher=None):
+def preview(source, url=None, fetcher=None, *, json_config=None):
+    if json_config is not None:
+        return discover_json(source, json_config, fetcher).candidates
     if url:
         article, _, _, _ = read_article(SOURCES[source], url, fetcher or fetch)
         return [Candidate(article["url"], article["title"], article["published"])]
@@ -27,11 +30,11 @@ def preview(source, url=None, fetcher=None):
     return discover(SOURCES[source]) if fetcher is None else discover(SOURCES[source], fetcher)
 
 
-def sync(catalog, sources, url=None, fetcher=None):
+def sync(catalog, sources, url=None, fetcher=None, *, json_config=None):
     results = {}
     for source in sources:
         try:
-            candidates = preview(source, url, fetcher)
+            candidates = preview(source, url, fetcher, json_config=json_config)
         except CollectionError as exc:
             catalog.record_failure(source, str(exc))
             results[source] = {"status": "failed", "label": STATUS_LABELS["failed"], "reason": str(exc)}
@@ -48,10 +51,17 @@ def parse_args():
     sub = parser.add_subparsers(dest="action", required=True)
     commands = sub.add_parser("preview", help="try the source parser without opening the private catalog")
     commands.add_argument("source", choices=SOURCES)
-    commands.add_argument("--url")
+    preview_input = commands.add_mutually_exclusive_group()
+    preview_input.add_argument("--url")
+    preview_input.add_argument("--json-config", type=Path, help="read one registered source's JSON listing")
     commands = sub.add_parser("sync", help="discover candidates and update the source status")
     commands.add_argument("source", choices=[*SOURCES, "all"])
-    commands.add_argument("--url")
+    sync_input = commands.add_mutually_exclusive_group()
+    sync_input.add_argument("--url")
+    sync_input.add_argument("--json-config", type=Path, help="read one registered source's JSON listing")
+    commands = sub.add_parser("import-json", help="register candidates from an AIHOT-format batch file")
+    commands.add_argument("file", type=Path)
+    commands.add_argument("--dry-run", action="store_true", help="validate the batch and display a preview")
     sub.add_parser("status", help="show the latest formal collection results")
     sub.add_parser("list", help="show candidates, publication approvals and completeness")
     commands = sub.add_parser("inspect", help="view private article metadata, retained body and revision")
@@ -79,19 +89,40 @@ def parse_args():
     commands = sub.add_parser("backup", help="verify and copy the private database and referenced objects")
     commands.add_argument("target", type=Path)
     args = parser.parse_args()
-    if args.action != "preview" and args.data is None:
+    read_only = args.action == "preview" or (args.action == "import-json" and args.dry_run)
+    if not read_only and args.data is None:
         parser.error("--data is required for maintenance commands")
     if args.action == "sync" and args.source == "all" and args.url:
         parser.error("use --url with a single source")
+    if args.action == "sync" and args.source == "all" and args.json_config is not None:
+        parser.error("use --json-config with a single source")
     if args.action == "archive" and args.include_images and not args.fetch_original:
         parser.error("--include-images requires --fetch-original")
     return args
 
 
+def run_import(args):
+    batch = import_batch(args.file)
+    outcome = {
+        "source": batch.source,
+        "received": batch.received,
+        "eligible": len(batch.candidates),
+        "skipped": batch.skipped,
+        "duplicates": batch.duplicates,
+    }
+    if args.dry_run:
+        return {**outcome, "preview": [asdict(item) for item in batch.candidates[:20]]}
+    with Catalog(private_path(args.data)) as store:
+        added = store.record_discovery(batch.source, batch.candidates, update_source_status=False)
+    return {**outcome, "added": added, "already_known": len(batch.candidates) - added}
+
+
 def run(args):
     if args.action == "preview":
-        rows = preview(args.source, args.url)
+        rows = preview(args.source, args.url, json_config=getattr(args, "json_config", None))
         return {"found": len(rows), "preview": [asdict(row) for row in rows[:20]]}
+    if args.action == "import-json":
+        return run_import(args)
     with Catalog(private_path(args.data)) as store:
         if args.action == "status":
             return [dict(row, label=STATUS_LABELS[row["status"]]) for row in store.runs()]
@@ -101,7 +132,7 @@ def run(args):
             return store.inspect(args.id, args.revision)
         if args.action == "sync":
             sources = [choice for choice in SOURCES if choice != "mimo"] if args.source == "all" else [args.source]
-            return sync(store, sources, args.url)
+            return sync(store, sources, args.url, json_config=args.json_config)
         if args.action == "archive":
             if args.saved_html is None:
                 return store.archive(args.source, args.url, args.basis, fetch, keep_images=args.include_images)
