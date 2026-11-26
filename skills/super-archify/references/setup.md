@@ -17,7 +17,7 @@ Copy the complete package to the authorized location and invoke the CLI:
 node /path/to/skills/super-archify/bin/archify.mjs doctor
 ```
 
-The package's canonical discovery/bin name is `super-archify`; the actual internal CLI filename remains `archify.mjs`. Official stable-update identity stays `archify` because it belongs to the upstream manifest protocol, not Hub discovery.
+The package's canonical discovery/bin name is `super-archify`; the actual internal CLI filename remains `archify.mjs`. Official stable-update identity stays `archify` because it belongs to the upstream manifest protocol, not Hub discovery. The supported Code Analysis workbench entry is `node bin/archify.mjs start "/path/to/project" [--ir architecture.json] [--locale zh-CN]` from the package root; the upstream monorepo `npm start` quick-start and `npm run test:code-analysis` development suite are not part of this packaged skill.
 
 ## Verification (fail closed)
 
@@ -44,3 +44,16 @@ node bin/archify.mjs finalize explainer /path/to/candidate.archify.md /path/to/a
 Tests can set `ARCHIFY_UPDATE_CHECK_DISABLED=1` in that process to keep update checks from writing the upstream cache. Normal update awareness remains bounded and advisory; it never installs an upgrade. The canonical installer and existing installation ownership stay unchanged.
 
 If a required check fails, report the exact failure and stop that delivery. Do not mix package files from different upstream versions. Reconstruct from the immutable stable source and the recorded local packaging delta.
+
+## Known upstream behavior at the pin
+
+The packaged files keep their upstream bytes, so these upstream behaviors ship as they are. The full record of eight items is in [upstream-compatibility](upstream-compatibility.md#accepted-upstream-behavior-notes-at-the-pin).
+
+- **Export to a destination that cannot alias the input.** `export-svg` never compares the output path with the input specification, so an output path that is a symlink to the input JSON overwrites it with SVG and reports success.
+- **Keep view ids distinct from the story id.** A view named `walkthrough` (or named after the story) has its static SVGs overwritten by the story bake, and the receipt then carries duplicate asset ids with stale hashes.
+- **Confirm the sticky comment's author before attaching.** `--target comment` picks the first comment carrying a pack block regardless of author, so another participant's comment can be selected and patched.
+- **Expect verification controls to drop from a rebuilt PR snapshot.** Rebuilding a captured PR analysis with its review reloads the wrong comparison file; the findings and review state themselves are unaffected.
+- **Do not push while an attach is uploading.** The head is checked only before upload, so a concurrent push can publish a stale pack that still reports success; re-run the attach after pushes settle.
+- **Rebuild after editing a diagram.** `pr attach` hashes the current SVG bytes but never compares them with the build receipt's recorded digest, so a diagram edited after `pr build` is published against the old receipt's revision metadata.
+- **Do not edit the PR description while an attach is uploading.** The final publication rebuilds the description from the preflight snapshot, discarding edits made outside the pack block during the upload.
+- **Story excerpts quote the head, not the cited revision.** The code excerpt reader runs `git show` at the repository head and ignores the citation's `source.revision`, so a base-revision citation can be presented with head content (or fail if the file was deleted); re-verify such citations before relying on the walkthrough's quotes.

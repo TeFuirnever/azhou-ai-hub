@@ -62,7 +62,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | 从上游资料起草、校准并评审架构文档。 | 确定性脚手架、收尾门检查器与黄金用例。 |
 | [Session Insights](skills/super-session-insights/SKILL.md) | 从本机会话存储产出事实绑定的使用报告；对已授权材料做反思。 | 合成存储接线套件；反思合同检查。 |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的结构规则改写面向 agent 的英文。 | 上游钉定（SHA-256）；确定性的 `ste-lint.py` gate。 |
-| [Archify](skills/super-archify/SKILL.md) | 把系统、代码库或 Mermaid 草图做成交互架构图。 | 上游 v3.2.0 同步（git tag + SHA-256）；收尾/校验 gate。 |
+| [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成交互图示地图 HTML、代码分析覆盖层与故事走查。 | 上游 v3.3.0 同步（git tag + SHA-256；Apache-2.0、历史 MIT 授权保留；explainer 默认主动）；SVG 样式校验与收尾验证。 |
 | [Lavish](skills/super-lavish/SKILL.md) | 把回答变成可审阅的 HTML；浏览器标注反馈回到 agent。 | 锁定的上游发布（SHA-256 + npm 钉定）；完整性测试。 |
 | [Imagegen](skills/super-imagegen/SKILL.md) | 经本机已安装的私有 `azhou-imagegen` skill 执行准备好的生图请求；缺该 skill 或其 doctor gate 时 fail-closed。 | 仅契约层包；基线哈希钉定；fail-closed。 |
 | [Rederive](skills/super-rederive/SKILL.md) | 通过重新推导设计来练习理解代码。 | 上游钉定（SHA-256）；仅探索性观察。 |
