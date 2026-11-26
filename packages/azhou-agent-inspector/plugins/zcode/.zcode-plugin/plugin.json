@@ -1,6 +1,6 @@
 {
   "name": "azhou-agent-inspector",
-  "version": "0.12.10",
+  "version": "0.12.11",
   "description": "Shows tokens per second for the current conversation in the ZCode Desktop composer. Requires ZCode 3.18.2 or later. Includes /tps, a conversation dashboard, and MCP tools.",
   "description_i18n": {
     "en": "Shows tokens per second for the current conversation in the ZCode Desktop composer. Requires ZCode 3.18.2 or later. Includes /tps, a conversation dashboard, and MCP tools.",
