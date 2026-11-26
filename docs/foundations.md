@@ -69,6 +69,8 @@ Use `--help` on the root command or any subcommand for current options.
 
 `setup` requires an explicit harness skill root. Its default is a dry-run; `--apply` is the mutation checkpoint.
 
+In terminal output, the preview gives you the exact `--apply --plan-id` arguments when there are skills to install. If every selected skill is current, the preview reports that no action is needed. Scripts can use the `planId` in the JSON response.
+
 ~~~bash
 SKILLS_HOME=/absolute/path/to/harness/skills
 
