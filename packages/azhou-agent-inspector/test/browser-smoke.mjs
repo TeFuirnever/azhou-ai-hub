@@ -167,7 +167,8 @@ const zcodeHost = `<script>
   const lane = (sessionId, rate, requestRate) => ({
     sessionId, label: "Smoke " + sessionId, model: "Fixture", cwd: "/fixtures/" + sessionId, requestRate,
     status: "active", latest: { tokPerSec: rate, outputTokens: 200, genMs: 1000, completedAt: Date.now() },
-    turn: { tokPerSec: rate, totalMs: rate * 10, genMs: 600, ttftMs: sessionId === "A" ? 100 : null, totalOutput: 200,
+    turn: { tokPerSec: rate, totalMs: rate * 10, genMs: sessionId === "A" ? 600 : 0,
+      ttftMs: sessionId === "A" ? 100 : null, totalOutput: 200,
       totalReasoning: 0, requests: 1, rated: true, peak: rate },
     session: { avg: rate, max: rate, totalOutput: 200, totalReasoning: 0, requests: 1 },
     history: [rate - 2, rate],
@@ -225,7 +226,8 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     }
     summary.focus();
     summary.click();
-    if (!details.open || value("dSub").includes("TTFT") || !value("dSub").includes("reasoning0 tok")) {
+    const detailLabels = [...doc().querySelectorAll("#dSub dt")].map(term => term.textContent);
+    if (!details.open || detailLabels.includes("TTFT") || detailLabels.includes("Generation") || !value("dSub").includes("reasoning0 tok")) {
       throw new Error("ZCode did not expose measured values including zero while omitting missing values");
     }
     const detailList = doc().querySelector("#dSub dl");
@@ -355,8 +357,9 @@ const overlayPage = `<!doctype html><body>${harness}<iframe title="Overlay" src=
     await until(() => state.textContent.includes("刷新失败"), "Overlay did not announce manual refresh failure");
     if (byId("num").textContent !== "152") throw new Error("Overlay replaced its last reading on failure");
     host.fail = false;
+    Object.defineProperty(frame.contentDocument, "hidden", { value: true });
     pause.click();
-    await until(() => host.reads >= 5 && state.textContent === "空闲", "Overlay did not resume automatic polling");
+    await until(() => host.reads >= 5 && state.textContent === "空闲", "Overlay did not resume polling in the background");
     frame.src = "/overlay-panel?style=line";
     await until(() => byId("info")?.textContent === "暂无会话数据", "Overlay line mode did not render the empty state");
     if (byId("btnSpark").getClientRects().length) throw new Error("Line mode exposed a control with no effect");

@@ -35,7 +35,7 @@ layout: base.njk
 <script>
   const input = document.getElementById("skill-search");
   const clear = document.getElementById("clear-skill-search");
-  const languageLink = document.getElementById("switch-language");
+  const catalogLanguageLink = document.getElementById("switch-language");
   const count = document.getElementById("skill-count");
   const items = Array.from(document.querySelectorAll("#skill-list > li"), element => ({
     element,
@@ -58,19 +58,24 @@ layout: base.njk
     if (count.textContent !== message) count.textContent = message;
     clear.hidden = input.value === "";
 
-    const translated = new URL(languageLink.href);
+    const translated = new URL(catalogLanguageLink.href);
     setQuery(translated, query);
-    languageLink.href = translated.href;
+    catalogLanguageLink.href = translated.href;
   }
   function restoreSearch() {
     input.value = new URLSearchParams(window.location.search).get("q") ?? "";
     updateSkills();
   }
   function saveSearch() {
+    updateSkills();
     const current = new URL(window.location.href);
     setQuery(current, input.value.trim());
-    if (current.href !== window.location.href) history.replaceState(history.state, "", current);
-    updateSkills();
+    if (current.href === window.location.href) return;
+    try {
+      history.replaceState(history.state, "", current);
+    } catch (error) {
+      if (error.name !== "SecurityError") throw error;
+    }
   }
   input.addEventListener("input", saveSearch);
   clear.addEventListener("click", () => {

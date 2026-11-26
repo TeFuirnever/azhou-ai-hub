@@ -478,7 +478,7 @@ function renderDetail(s) {
     const t = s.turn;
     const zh = language === "zh-CN";
     addMetric(copy.first, t.ttftMs, sec);
-    addMetric(copy.generation, t.genMs, sec);
+    if (t.genMs > 0) addMetric(copy.generation, t.genMs, sec);
     addMetric(copy.output, t.totalOutput, tokens);
     addMetric(copy.reasoning, t.totalReasoning, tokens);
     addMetric(zh ? "请求段数" : "Request segments", t.requests, fmtNum);
