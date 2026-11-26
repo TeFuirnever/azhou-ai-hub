@@ -35,12 +35,17 @@ eleventyComputed:
   </header>
   <div class="article-layout">
     {% if entry.scope == 'full' %}
-    <details class="article-toc" open data-pagefind-ignore>
+    <details class="article-toc" data-pagefind-ignore>
       <summary>{{ '章节目录' if zh else 'Contents' }}</summary>
       <ol lang="en">
         {% for section in entry.sections %}<li><a href="#{{ section.id | escape }}">{{ section.title | escape }}</a></li>{% endfor %}
       </ol>
     </details>
+    <script>
+      if (matchMedia("(min-width: 62rem)").matches) {
+        document.querySelector(".article-toc").open = true;
+      }
+    </script>
     {% endif %}
     <div class="article-copy">
       <div class="reading-note">
