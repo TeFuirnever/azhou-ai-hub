@@ -1,12 +1,14 @@
 import json
 import tempfile
 import unittest
+from email.message import Message
 from pathlib import Path
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from catalog import Catalog
 from collect import CollectionError, SOURCES, from_feed, from_list, from_zhipu_research
-from library import preview, sync
+from library import parse_args, preview, run, sync
 
 URL = "https://openai.com/index/library-fixture/"
 ALIAS = "https://openai.com/index/library-alias/"
@@ -79,6 +81,54 @@ class LibraryTest(unittest.TestCase):
         self.assertIn(PRIVATE, revision["body"])
         self.assertIn("Caption", revision["body"])
         self.assertEqual(revision["media"], [])
+
+    def test_manual_fetch_retains_selected_article_and_requires_media_opt_in(self):
+        argv = ["library.py", "--data", str(self.store.root), "archive", "openai", URL,
+                "--fetch-original", "--basis", "Fixture retention grant"]
+        with patch("sys.argv", argv):
+            args = parse_args()
+        with patch("library.fetch", wraps=self.fetch) as request:
+            result = run(args)
+            self.assertEqual([call.args[0] for call in request.call_args_list], [URL])
+        revision = self.store.inspect(result["id"])["revision"]
+        self.assertIn(PRIVATE, revision["body"])
+        self.assertEqual(revision["retention_basis"], args.basis)
+        self.assertEqual((self.store.root / "objects" / revision["raw_object"]).read_bytes(), html(PRIVATE))
+        self.assertEqual(revision["media"], [])
+        self.assertIn(f"image: {IMAGE}", result["missing"])
+        self.assertEqual(self.store.export(self.root / "no-approval"), 0)
+
+        with patch("sys.argv", [*argv, "--include-images"]):
+            args = parse_args()
+        with patch("library.fetch", wraps=self.fetch) as request:
+            result_with_image = run(args)
+            self.assertEqual([call.args[0] for call in request.call_args_list], [URL, IMAGE])
+        self.assertEqual(result_with_image["id"], result["id"])
+        self.assertEqual(result_with_image["completeness"], "complete")
+        self.assertNotEqual(result_with_image["revision"], result["revision"])
+
+    def test_manual_sync_retries_transient_listing_once(self):
+        failure = CollectionError("temporary upstream error")
+        failure.__cause__ = HTTPError(FEED, 503, "Unavailable", Message(), None)
+        replies = [failure, self.responses[FEED]]
+        with patch("collect.fetch", side_effect=replies) as request, patch("collect.sleep") as delay:
+            outcome = sync(self.store, ["openai"])
+        self.assertEqual(outcome["openai"]["status"], "updated")
+        self.assertEqual(request.call_count, 2)
+        self.assertLess(request.call_args.kwargs["timeout"], 20)
+        delay.assert_called_once_with(1)
+
+    def test_manual_sync_respects_retry_after_and_reports_failure(self):
+        headers = Message()
+        headers["Retry-After"] = "60"
+        failure = CollectionError("temporarily unavailable; retry later")
+        failure.__cause__ = HTTPError(FEED, 503, "Unavailable", headers, None)
+        with patch("collect.fetch", side_effect=failure) as request, patch("collect.sleep") as delay:
+            outcome = sync(self.store, ["openai"])
+        self.assertEqual(outcome["openai"]["status"], "failed")
+        self.assertEqual(self.store.runs()[0]["reason"], str(failure))
+        request.assert_called_once()
+        delay.assert_not_called()
 
     def test_cli_keeps_private_storage_outside_git_checkouts(self):
         from argparse import Namespace

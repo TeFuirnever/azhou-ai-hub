@@ -2,6 +2,12 @@
 
 Azhou AI Hub code is licensed under the root [MIT License](LICENSE). Some runtime packages preserve or build on separately copyrighted open-source material. Their upstream notices remain effective.
 
+## AIHOT source listing retry
+
+The Source Library includes the original [AIHOT listing retry module](https://github.com/KKKKhazix/AIHOT/blob/97e1f93260bbb98d317dbea9d817eb9b28bbd9e9/packages/backend/src/sources/listing-fetch.ts) by 数字生命卡兹克 and its [MIT license](packages/source-library/vendor/aihot/LICENSE). The TypeScript snapshot is stored at [listing-fetch.ts](packages/source-library/vendor/aihot/listing-fetch.ts). The Python [collector](packages/source-library/collect.py) adapts the single retry and shared timeout budget for transient listing failures to the existing HTTPS client. It respects an upstream `Retry-After` and uses the current official sources' host rules.
+
+To refresh the import, choose an immutable AIHOT commit. Copy its listing retry module and root `LICENSE` into `packages/source-library/vendor/aihot/`, compare behavior with the Python adapter, and rerun the Source Library and repository tests. The import consists of the retry module and its license.
+
 ## Agent Rules Books
 
 The project includes 14 book-inspired engineering skills by Maciej Ciemborowicz from [ciembor/agent-rules-books at the imported revision](https://github.com/ciembor/agent-rules-books/tree/893a88a6fce3a80c565bf39ac65021b43a8b2990). The upstream [MIT notice](LICENSES/agent-rules-books-MIT.txt) covers the rule files. The [upstream catalog](https://github.com/ciembor/agent-rules-books/blob/893a88a6fce3a80c565bf39ac65021b43a8b2990/README.md#release-matrix) lists the books. Each directory name doubles as its project skill name.

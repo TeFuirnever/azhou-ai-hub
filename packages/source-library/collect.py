@@ -1,12 +1,15 @@
 """Collect and normalize public publisher pages without writing to the catalog."""
 
+import errno
 import json
 import re
+import socket
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from urllib.error import URLError
+from time import monotonic, sleep
+from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -28,6 +31,10 @@ BODY_TAGS = frozenset(
     "h1 h2 h3 h4 h5 h6 hr i img kbd li mark ol p pre q s samp span strong sub summary sup "
     "table tbody td th thead tfoot tr ul var".split()
 )
+REQUEST_TIMEOUT = 20
+LISTING_RETRY_DELAY = 1
+TRANSIENT_LISTING_STATUSES = {500, 502, 503, 504}
+TRANSIENT_TRANSPORT_ERRORS = {errno.ECONNRESET, errno.EPIPE, errno.ETIMEDOUT, socket.EAI_AGAIN}
 
 
 class CollectionError(ValueError):
@@ -72,18 +79,44 @@ class SourceRedirects(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def fetch(url, hosts, limit=8_000_000):
+def fetch(url, hosts, limit=8_000_000, *, timeout=REQUEST_TIMEOUT):
     if not http_url(url) or urlsplit(url).hostname not in hosts:
         raise CollectionError("URL is outside the configured hosts")
     request = Request(url, headers={"User-Agent": "AzhouSourceLibrary/0.1"})
     try:
-        with build_opener(SourceRedirects(hosts)).open(request, timeout=20) as response:
+        with build_opener(SourceRedirects(hosts)).open(request, timeout=timeout) as response:
             raw = response.read(limit + 1)
             if len(raw) > limit:
                 raise CollectionError("response exceeded the byte limit")
             return raw, response.geturl(), response.headers.get_content_type()
     except (URLError, TimeoutError, OSError) as exc:
         raise CollectionError(f"request failed: {exc}") from exc
+
+
+def transient_listing_error(error):
+    cause = error.__cause__
+    if isinstance(cause, HTTPError):
+        return cause.code in TRANSIENT_LISTING_STATUSES and not (cause.headers and cause.headers.get("Retry-After"))
+    if isinstance(cause, URLError):
+        cause = cause.reason
+    return isinstance(cause, TimeoutError) or (
+        isinstance(cause, OSError) and cause.errno in TRANSIENT_TRANSPORT_ERRORS
+    )
+
+
+def fetch_listing(url, hosts):
+    """Adapt AIHOT's one-retry listing policy to the local HTTPS fetcher."""
+    deadline = monotonic() + REQUEST_TIMEOUT
+    try:
+        return fetch(url, hosts)
+    except CollectionError as error:
+        if not transient_listing_error(error) or deadline - monotonic() <= LISTING_RETRY_DELAY:
+            raise
+        sleep(LISTING_RETRY_DELAY)
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            raise
+    return fetch(url, hosts, timeout=remaining)
 
 
 def as_date(value):
@@ -200,7 +233,7 @@ def from_zhipu_research(source, raw, url):
     return rows
 
 
-def discover(source, fetcher=fetch):
+def discover(source, fetcher=fetch_listing):
     candidates = {}
     for url in ([source["feed"]] if "feed" in source else source.get("lists", [])):
         raw, landed, _ = fetcher(url, {urlsplit(url).hostname})
