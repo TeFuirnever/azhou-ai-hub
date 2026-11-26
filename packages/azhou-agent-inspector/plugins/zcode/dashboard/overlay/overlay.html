@@ -6,11 +6,29 @@
 <style>
   /* DSH 风格紧凑小框:卡片约 330×184、单行条约 620×40(?style=line);
      body 零边距零滚动;配色对齐监控大屏(index.html)。零外部资源(无 CDN/字体/图片),
-     系统字体栈;仅用 WKWebView(WebKit)长期支持的特性:flex / keyframes / rgba /
-     tabular-nums / :not(),不用 gap、:has()、grid。 */
+     系统字体栈；卡片和单行模式均在 WKWebView 中运行。 */
+  :root {
+    color-scheme: dark light;
+    --motion-press: 100ms;
+    --motion-feedback: 140ms;
+    --motion-change: 180ms;
+    --motion-ease: cubic-bezier(.23, 1, .32, 1);
+    --bg: #0b1020; --ink: #e8ecf7; --muted: #aab3cf; --secondary: #8b94ad;
+    --surface: #141b33; --hover: #1d2747; --pressed: #26325a;
+    --line: #2a3350; --active-line: #3a4774; --accent: #7ea2ff;
+    --live: #2fd67b; --error: #ff9aa6;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f7fc; --ink: #172144; --muted: #35446a; --secondary: #506080;
+      --surface: #fff; --hover: #e9efff; --pressed: #dae5ff;
+      --line: #a9b5d0; --active-line: #687ca7; --accent: #345db4;
+      --live: #146447; --error: #a02744;
+    }
+  }
   html, body { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; }
   body {
-    background: #0b1020; color: #e8ecf7;
+    background: var(--bg); color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
     -webkit-font-smoothing: antialiased;
     user-select: none; -webkit-user-select: none;
@@ -18,38 +36,46 @@
   }
   .wrap { box-sizing: border-box; width: 100%; height: 100%; padding: 10px 14px 12px; display: flex; flex-direction: column; }
   .top { display: flex; align-items: center; }
-  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #8b94ad; margin-right: 6px; }
-  .dot.on { background: #2fd67b; animation: pulse 1.2s infinite; }
-  .state { font-size: 12px; color: #8b94ad; }
-  .state.on { color: #2fd67b; }
-  .main { display: flex; align-items: baseline; margin-top: 4px; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--secondary); margin-right: 6px; }
+  .top[data-state="active"] .dot { background: var(--live); }
+  .top[data-state="error"] .dot { background: var(--error); }
+  .state { font-size: 12px; color: var(--secondary); white-space: nowrap; }
+  .top[data-state="active"] .state { color: var(--live); }
+  .top[data-state="error"] .state { color: var(--error); }
+  .main { display: flex; align-items: baseline; margin-top: 4px; white-space: nowrap; }
   .bolt { font-size: 24px; margin-right: 7px; }
   .num { font-size: 46px; font-weight: 700; line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
-  .num.off { color: #565f7a; }
-  .unit { font-size: 13px; color: #8b94ad; margin-left: 6px; }
-  .scope { margin-left: auto; font-size: 11px; color: #565f7a; }
-  .info { margin-top: auto; font-size: 11px; color: #8b94ad; white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
+  .num.off { color: var(--secondary); }
+  .unit { font-size: 13px; color: var(--secondary); margin-left: 6px; }
+  .scope { margin-left: auto; font-size: 11px; color: var(--secondary); }
+  .info { margin-top: auto; font-size: 11px; color: var(--secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 
   /* 交互按钮区:悬浮在右上角(单行模式垂直居中)。面板的透明拖动层只覆盖左侧,
      右侧 120pt 不覆盖(见 OverlayPanel.swift),按钮可点击、其余区域按住拖动。 */
   .ctrls { position: absolute; top: 8px; right: 8px; display: flex; }
   .cbtn {
     width: 30px; height: 30px; margin-left: 5px; padding: 0; box-sizing: border-box;
-    border: 1px solid #2a3350; border-radius: 6px;
-    background: #141b33; color: #aab3cf;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--surface); color: var(--muted);
     font-size: 12px; line-height: 20px; text-align: center;
     cursor: pointer; -webkit-user-select: none;
   }
-  .cbtn:hover { background: #1d2747; border-color: #3a4774; color: #e8ecf7; }
-  .cbtn:active { background: #26325a; }
-  .cbtn:focus-visible { outline: 2px solid #7ea2ff; outline-offset: 1px; }
-  .cbtn[aria-disabled="true"] { opacity: .55; }
-  .cbtn.on { color: #7ea2ff; border-color: #3a4774; }
+  @media (hover: hover) and (pointer: fine) {
+    .cbtn:not([aria-disabled="true"]):hover { background: var(--hover); border-color: var(--active-line); color: var(--ink); }
+  }
+  .cbtn:not([aria-disabled="true"]):active { background: var(--pressed); }
+  .cbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cbtn[aria-disabled="true"] { opacity: .55; cursor: default; }
+  .cbtn[aria-pressed="true"] { color: var(--accent); border-color: var(--active-line); }
+  #btnPause { display: grid; place-items: center; }
+  #btnPause span { grid-area: 1 / 1; }
+  #btnPause[aria-pressed="false"] .resume-icon,
+  #btnPause[aria-pressed="true"] .pause-icon { opacity: 0; }
 
   /* 速率曲线(卡片模式,点 📈 开关):细 sparkline,高约 26px */
-  .spark { display: none; margin-top: 6px; width: 100%; height: 26px; }
-  body:not(.line) .spark.on { display: block; }
-  .spark polyline { stroke: #5f8bff; }
+  .spark { flex: none; margin-top: 6px; width: 100%; height: 26px; opacity: 0; }
+  .spark.on { opacity: 1; }
+  .spark polyline { stroke: var(--accent); }
 
   /* 单行模式(?style=line):一条细横条,配合面板 --size 620x40 贴在输入框上方 */
   body.line { border-radius: 8px; }
@@ -61,15 +87,26 @@
   body.line .scope { margin-left: 0; font-size: 10px; margin-right: 10px; }
   body.line .info { margin: 0 0 0 4px; }
   body.line .ctrls { top: 50%; right: 8px; transform: translateY(-50%); }
-  body.line #btnSpark { display: none; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
-  @media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
+  body.line :is(#btnSpark, .spark) { display: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    .dot { transition: background-color var(--motion-feedback) ease; }
+    .cbtn {
+      transition: border-color var(--motion-feedback) ease, background-color var(--motion-feedback) ease,
+                  color var(--motion-feedback) ease, opacity var(--motion-feedback) ease,
+                  transform var(--motion-feedback) var(--motion-ease);
+    }
+    .cbtn:not([aria-disabled="true"]):active { transform: scale(.98); transition-duration: var(--motion-press); }
+    #btnPause span { transition: opacity var(--motion-feedback) var(--motion-ease); }
+    .spark { transform: translateY(3px); transition: opacity var(--motion-change) var(--motion-ease),
+                                                       transform var(--motion-change) var(--motion-ease); }
+    .spark.on { transform: none; }
+  }
 </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="top">
-      <span class="dot" id="dot"></span>
+    <div class="top" id="statusGroup">
+      <span class="dot" aria-hidden="true"></span>
       <span class="state" id="state" role="status">连接中…</span>
     </div>
     <div class="main">
@@ -82,7 +119,10 @@
     </svg>
     <div class="ctrls">
       <button class="cbtn" id="btnRefresh" type="button" aria-label="立即刷新一次" title="立即刷新一次">&#8635;</button>
-      <button class="cbtn" id="btnPause" type="button" aria-label="暂停自动刷新" aria-pressed="false" title="暂停自动刷新">&#9208;</button>
+      <button class="cbtn" id="btnPause" type="button" aria-label="暂停自动刷新" aria-pressed="false" title="暂停自动刷新">
+        <span class="pause-icon" aria-hidden="true">&#9208;</span>
+        <span class="resume-icon" aria-hidden="true">&#9654;</span>
+      </button>
       <button class="cbtn" id="btnSpark" type="button" aria-label="速率曲线" aria-pressed="false" title="显示速率曲线">&#128200;</button>
     </div>
   </div>
@@ -132,9 +172,8 @@
   function renderStatus() {
     var st = lastData && lastData.status;
     var on = !paused && !connectionFailed && st === "generating";
-    $("dot").className = on ? "dot on" : "dot";
+    $("statusGroup").dataset.state = manualRefresh ? "pending" : connectionFailed ? "error" : on ? "active" : "idle";
     var state = $("state");
-    state.className = on ? "state on" : "state";
     var label = manualRefresh ? (paused ? "暂停中 · 刷新中…" : "正在刷新…")
       : connectionFailed ? (paused ? "暂停中 · 刷新失败" : "连接中断")
       : paused ? "已暂停"
@@ -226,8 +265,6 @@
   $("btnRefresh").addEventListener("click", function () { tick(true); });
   $("btnPause").addEventListener("click", function () {
     paused = !paused;
-    $("btnPause").textContent = paused ? "\u25B6" : "\u23F8";
-    $("btnPause").className = paused ? "cbtn on" : "cbtn";
     $("btnPause").setAttribute("aria-pressed", String(paused));
     $("btnPause").title = paused ? "恢复自动刷新" : "暂停自动刷新";
     renderStatus();
@@ -235,7 +272,6 @@
   });
   $("btnSpark").addEventListener("click", function () {
     sparkOn = !sparkOn;
-    $("btnSpark").className = sparkOn ? "cbtn on" : "cbtn";
     $("btnSpark").setAttribute("aria-pressed", String(sparkOn));
     $("btnSpark").title = sparkOn ? "隐藏速率曲线" : "显示速率曲线";
     $("spark").classList.toggle("on", sparkOn);

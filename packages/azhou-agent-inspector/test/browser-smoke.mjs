@@ -242,7 +242,9 @@ const zcodePage = `<!doctype html><body>${harness}<iframe title="ZCode dashboard
     selection.selectAllChildren(detailList);
     const selectedText = selection.toString();
     const initialReads = frame.contentWindow.smoke.reads;
+    const rateNode = doc().getElementById("dRate").firstChild;
     await until(() => frame.contentWindow.smoke.reads >= initialReads + 2, "ZCode did not refresh the same session");
+    if (doc().getElementById("dRate").firstChild !== rateNode) throw new Error("Unchanged TPS was rewritten on poll");
     if (!selectedText || selection.toString() !== selectedText || doc().activeElement !== summary || !details.open) {
       throw new Error("A ZCode refresh disturbed the current disclosure, focus, or selected text");
     }
@@ -362,12 +364,16 @@ const overlayPage = `<!doctype html><body>${harness}<iframe title="Overlay" src=
     }
     await new Promise(resolve => setTimeout(resolve, 1200));
     if (host.reads !== 2) throw new Error("Paused overlay kept polling");
+    const infoTop = byId("info").getBoundingClientRect().top;
     spark.click();
     const points = byId("sparkline").getAttribute("points");
     spark.click();
     spark.click();
     if (!points || byId("sparkline").getAttribute("points") !== points || spark.getAttribute("aria-pressed") !== "true") {
       throw new Error("Overlay did not restore the cached sparkline while paused");
+    }
+    if (byId("info").getBoundingClientRect().top !== infoTop) {
+      throw new Error("Toggling the sparkline moved the stats text");
     }
     host.fail = true;
     refresh.click();

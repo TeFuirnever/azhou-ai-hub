@@ -1,6 +1,10 @@
 (() => {
   'use strict';
   const root = document.documentElement;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const scrollToContext = (target, block) => target.scrollIntoView({
+    block, behavior: reducedMotion.matches ? 'instant' : 'smooth',
+  });
   const read = id => JSON.parse(document.getElementById(id).textContent);
   const prepared = read('archify-explainer-prepared');
   const diagrams = prepared.preparedDiagrams.diagrams || prepared.preparedDiagrams;
@@ -484,7 +488,7 @@
         const {preview,nodes,edges} = targetOf(steps[index].querySelector('[data-diagram-link]'));
         spotlight(preview,nodes,edges);
         const box = preview?.getBoundingClientRect();
-        if (box && (box.bottom < 0 || box.top > innerHeight)) preview.scrollIntoView({block:'nearest',behavior:'smooth'});
+        if (box && (box.bottom < 0 || box.top > innerHeight)) scrollToContext(preview, 'nearest');
       }));
     });
     // A workflow no step list walks through can be walked node by node, in the order it was written,
@@ -501,7 +505,7 @@
         const node = nodes[index], into = edges.filter(edge=>edge.to === node.id && (index === 0 || nodes.slice(0,index).some(seen=>seen.id === edge.from)));
         spotlight(preview,[node.id,...into.map(edge=>edge.from)],into.map(edge=>edge.id));
         const target = preview.querySelector(`[data-node-id="${CSS.escape(node.id)}"]`), box = target?.getBoundingClientRect();
-        if (box && (box.top < 0 || box.bottom > innerHeight - 80)) target.scrollIntoView({block:'center',behavior:'smooth'});
+        if (box && (box.top < 0 || box.bottom > innerHeight - 80)) scrollToContext(target, 'center');
         return node.label || node.id;
       }));
     });
@@ -517,7 +521,7 @@
         const message = messages[index];
         spotlight(preview,[message.dataset.edgeFrom,message.dataset.edgeTo],[message.dataset.edgeId]);
         const box = message.getBoundingClientRect();
-        if (box.top < 0 || box.bottom > innerHeight - 80) message.scrollIntoView({block:'center',behavior:'smooth'});
+        if (box.top < 0 || box.bottom > innerHeight - 80) scrollToContext(message, 'center');
         return `${label(message.dataset.edgeFrom)} → ${label(message.dataset.edgeTo)}${say(': ','：')}${message.dataset.edgeLabel || ''}`;
       }));
     });

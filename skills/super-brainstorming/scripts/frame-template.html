@@ -2,6 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Visual Brainstorming</title>
   <style>
     /*
@@ -21,6 +22,9 @@
 
     /* ===== THEME VARIABLES ===== */
     :root {
+      --motion-press: 100ms;
+      --motion-feedback: 140ms;
+      --motion-ease: cubic-bezier(.23, 1, .32, 1);
       --bg-primary: #f5f5f7;
       --bg-secondary: #ffffff;
       --bg-tertiary: #e5e5e7;
@@ -113,12 +117,10 @@
       border-radius: 12px;
       padding: 1rem 1.25rem;
       cursor: pointer;
-      transition: all 0.15s ease;
       display: flex;
       align-items: flex-start;
       gap: 1rem;
     }
-    .option:hover { border-color: var(--accent); }
     .option.selected { background: var(--selected-bg); border-color: var(--selected-border); }
     .option .letter {
       background: var(--bg-tertiary);
@@ -134,17 +136,30 @@
     .option .content p { color: var(--text-secondary); font-size: 0.85rem; margin: 0; }
 
     /* ===== CARDS (for showing designs/mockups) ===== */
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 1rem; }
     .card {
       background: var(--bg-secondary);
       border: 1px solid var(--border);
       border-radius: 12px;
       overflow: hidden;
       cursor: pointer;
-      transition: all 0.15s ease;
     }
-    .card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .card.selected { border-color: var(--selected-border); border-width: 2px; }
+    .card.selected { border-color: var(--selected-border); box-shadow: inset 0 0 0 1px var(--selected-border); }
+    :is(.option, .card)[data-choice]:active { background: var(--selected-bg); }
+    :is(.option, .card)[data-choice]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    @media (hover: hover) and (pointer: fine) {
+      :is(.option, .card):hover { border-color: var(--accent); }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      :is(.option, .card) {
+        transition: border-color var(--motion-feedback) ease, background-color var(--motion-feedback) ease,
+                    transform var(--motion-feedback) var(--motion-ease);
+      }
+      :is(.option, .card)[data-choice]:active {
+        transform: scale(.99); transition-duration: var(--motion-press);
+      }
+      .option .letter { transition: background-color var(--motion-feedback) ease, color var(--motion-feedback) ease; }
+    }
     .card-image { background: var(--bg-tertiary); aspect-ratio: 16/10; display: flex; align-items: center; justify-content: center; }
     .card-body { padding: 1rem; }
     .card-body h3 { margin-bottom: 0.25rem; }

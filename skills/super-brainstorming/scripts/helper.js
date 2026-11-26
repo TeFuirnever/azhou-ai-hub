@@ -140,20 +140,43 @@
 
   });
 
+  // The generated frame also uses divs for choices with structured content.
+  const choiceSelector = '.option[data-choice], .card[data-choice]';
+  for (const choice of document.querySelectorAll(choiceSelector)) {
+    if (!choice.matches('button, a[href], input, [role]')) {
+      choice.setAttribute('role', 'button');
+    }
+    if (choice.getAttribute('role') === 'button' && !choice.hasAttribute('tabindex') &&
+        !choice.matches('button, a[href], input')) choice.tabIndex = 0;
+    if (choice.matches('button, [role="button"]')) {
+      choice.setAttribute('aria-pressed', String(choice.classList.contains('selected')));
+    }
+  }
+  document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+    const choice = event.target;
+    if (!choice.matches('.option[role="button"][data-choice], .card[role="button"][data-choice]') ||
+        choice.matches('button, a[href], input')) return;
+    event.preventDefault();
+    choice.click();
+  });
+
   // Frame UI: selection tracking
   window.selectedChoice = null;
+  function setSelected(choice, selected) {
+    choice.classList.toggle('selected', selected);
+    if (choice.matches('button, [role="button"]')) choice.setAttribute('aria-pressed', String(selected));
+  }
 
   window.toggleSelect = function(el) {
     const container = el.closest('.options') || el.closest('.cards');
     const multi = container && container.dataset.multiselect !== undefined;
     if (container && !multi) {
-      container.querySelectorAll('.option, .card').forEach(o => o.classList.remove('selected'));
+      container.querySelectorAll('.option, .card').forEach(choice => {
+        if (choice !== el) setSelected(choice, false);
+      });
     }
-    if (multi) {
-      el.classList.toggle('selected');
-    } else {
-      el.classList.add('selected');
-    }
+    setSelected(el, !multi || !el.classList.contains('selected'));
     window.selectedChoice = el.dataset.choice;
   };
 
