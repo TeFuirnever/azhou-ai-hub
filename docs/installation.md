@@ -73,7 +73,7 @@ git clone --depth 1 --branch "$TAG" https://github.com/TeFuirnever/azhou-ai-hub 
   diff -r "$SNAPSHOT/skills/$SKILL" "$SKILLS_HOME/$SKILL" && echo identical
 ~~~
 
-`<installed-skills-root>` is wherever your harness placed the skill (the package manager prints the destination). Any drift — including extra files — prints as a diff. Release notes list which skills a release touches; per-skill content digests are not published yet, so the tag snapshot is the reference.
+Set `SKILLS_HOME` to the parent directory of the installed skill. Use the destination shown by the package manager. The comparison reports changed and extra files. Release notes list the affected skills, and the tag snapshot supplies the reference files.
 
 **Receipt-backed verification (checkout-assisted path only).** The checkout-assisted `setup --apply` writes a managed receipt whose digests `doctor` re-checks on demand:
 
