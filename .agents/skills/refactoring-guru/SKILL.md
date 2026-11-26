@@ -2,8 +2,6 @@
 name: refactoring-guru
 description: Apply Refactoring.Guru-inspired rules when diagnosing code smells, choosing refactoring techniques, and stopping cleanup before uncontrolled redesign.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Refactoring.Guru Skill

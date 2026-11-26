@@ -28,15 +28,39 @@ npx skills list --agent codex
 
 Add `--global` for a user-wide install. If `super-ask-azhou` is absent, check the terminal folder and the installation output. If it is listed, compare the displayed scope and path with the project open in Codex, then try the question in a fresh chat.
 
+## Install Hub components in Codex
+
+Keep a checkout of Azhou AI Hub as the installation source. Use Python 3.11 or later and, when selecting pstack, a Codex CLI that supports native plugin management. Run the command in the project where you want to use the components. Replace the script path with the path in your Hub checkout.
+
+~~~bash
+python /path/to/azhou-ai-hub/scripts/azhou_hub.py install --all
+~~~
+
+Use `--component hub-skills agent-rules-books` in place of `--all` to select those two components. The available choices are `hub-skills`, `pstack` and `agent-rules-books`. Use `--workspace /path/to/project` to select another existing project directory. Review the paths and component plan, then enter `y` in the same command to install. Add `--dry-run` to exit after the preview.
+
+The installer copies Hub Skills and Agent Rules Books into the project's `.agents/skills/` directory. pstack uses the native Codex plugin manager and a dedicated home at `.azhou/hub/targets/pstack` in that project. The command prints how to launch Codex with that home. In that session, pstack is available on demand and SessionStart auto-routing is off. Use `--codex-bin` or `--codex-home` to select a different executable or a dedicated target explicitly.
+
+If either component plan is blocked, resolve the reported conflict before retrying. If pstack fails after the skill copies have completed, the copies remain available. Resolve the pstack error and repeat the same selection. Matching skill copies are reused. For other pstack hosts and ongoing plugin management, see the [native integration guide](integrations.md#pstack-local-source-to-native-plugin).
+
 ## Optional external integrations
 
 The existing Skill installation paths below remain independent. For the optional pstack integration, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
 
 ## Install or update when a task needs it
 
-If a book skill is missing from the Azhou AI Hub checkout, check the current branch and the files under `.agents/skills/`. Update the checkout or restore the tracked files from the intended revision. These book skills ship with the project. Installing Ask Azhou by itself adds the router. To use a specific book in a different project, install it there from [agent-rules-books](https://github.com/ciembor/agent-rules-books).
-
 If Ask Azhou is missing from a project, follow [First install in Codex](#first-install-in-codex). A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
+
+## Install Agent Rules Books
+
+Hub contributors use the book skills tracked under `.agents/skills/` in their checkout. If a book skill is missing, check the current branch and restore the tracked files from the intended revision.
+
+In another project, choose a name from the [Agent Rules Books catalog](../README.md#agent-rules-books). Run the command in that project's directory, using Node.js and npm.
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
+~~~
+
+Open a new Codex session in the same project and look for `$refactoring`. Use `npx skills list --agent codex` to confirm the installed name and scope if the skill is missing. For a specific Hub revision, write `TeFuirnever/azhou-ai-hub@<commit>` as the source. For an existing Skills CLI install, use its [current scope when you update or remove it](#upgrade-or-uninstall).
 
 ## Package-manager install
 

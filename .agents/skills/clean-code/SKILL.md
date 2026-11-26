@@ -2,8 +2,6 @@
 name: clean-code
 description: Apply Robert C. Martin-inspired clean code rules when improving readability, naming, function design, responsibilities, or testable everyday code.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Clean Code Skill

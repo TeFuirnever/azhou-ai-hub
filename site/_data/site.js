@@ -11,8 +11,8 @@ module.exports = {
   treeBase: `${githubUrl}/tree/main`,
   pathPrefix: `/${REPO_NAME}/`,
   routes: {
-    en: { home: "/", skills: "/skills/", docs: "/docs/", support: "/support/" },
-    zh: { home: "/zh/", skills: "/zh/skills/", docs: "/zh/docs/", support: "/zh/support/" },
+    en: { home: "/", skills: "/skills/", books: "/agent-rules-books/", docs: "/docs/", support: "/support/" },
+    zh: { home: "/zh/", skills: "/zh/skills/", books: "/zh/agent-rules-books/", docs: "/zh/docs/", support: "/zh/support/" },
   },
   labels: {
     en: {

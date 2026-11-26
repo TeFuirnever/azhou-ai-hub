@@ -88,18 +88,28 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-session-insights/SKILL.md",
 }
 REPOSITORY_EXTENSION_SKILL_PATHS = set()
-PROJECT_LOCAL_SKILL_PATHS = {
+BOOK_SKILL_PATHS = {
     ".agents/skills/a-philosophy-of-software-design/SKILL.md",
-    ".agents/skills/agent-experience/SKILL.md",
-    ".agents/skills/architecture-governance/SKILL.md",
     ".agents/skills/clean-architecture/SKILL.md",
     ".agents/skills/clean-code/SKILL.md",
     ".agents/skills/code-complete/SKILL.md",
-    ".agents/skills/cordis-styling-nitpicking/SKILL.md",
-    ".agents/skills/dep-refs/SKILL.md",
     ".agents/skills/designing-data-intensive-applications/SKILL.md",
     ".agents/skills/domain-driven-design-distilled/SKILL.md",
     ".agents/skills/domain-driven-design/SKILL.md",
+    ".agents/skills/implementing-domain-driven-design/SKILL.md",
+    ".agents/skills/patterns-of-enterprise-application-architecture/SKILL.md",
+    ".agents/skills/refactoring-guru/SKILL.md",
+    ".agents/skills/refactoring/SKILL.md",
+    ".agents/skills/release-it/SKILL.md",
+    ".agents/skills/the-pragmatic-programmer/SKILL.md",
+    ".agents/skills/working-effectively-with-legacy-code/SKILL.md",
+}
+BOOK_SKILL_LICENSE = "LICENSES/agent-rules-books-MIT.txt"
+PROJECT_LOCAL_SKILL_PATHS = {
+    ".agents/skills/agent-experience/SKILL.md",
+    ".agents/skills/architecture-governance/SKILL.md",
+    ".agents/skills/cordis-styling-nitpicking/SKILL.md",
+    ".agents/skills/dep-refs/SKILL.md",
     ".agents/skills/dsh-archive-agent-notes/SKILL.md",
     ".agents/skills/dsh-ci-test-reliability/SKILL.md",
     ".agents/skills/dsh-client-ui-ux/SKILL.md",
@@ -116,14 +126,7 @@ PROJECT_LOCAL_SKILL_PATHS = {
     ".agents/skills/dsh-trim-cot-leakage/SKILL.md",
     ".agents/skills/e2e-case-lifecycle/SKILL.md",
     ".agents/skills/feature-boundary-planner/SKILL.md",
-    ".agents/skills/implementing-domain-driven-design/SKILL.md",
-    ".agents/skills/patterns-of-enterprise-application-architecture/SKILL.md",
     ".agents/skills/record-browser-gif/SKILL.md",
-    ".agents/skills/refactoring-guru/SKILL.md",
-    ".agents/skills/refactoring/SKILL.md",
-    ".agents/skills/release-it/SKILL.md",
-    ".agents/skills/the-pragmatic-programmer/SKILL.md",
-    ".agents/skills/working-effectively-with-legacy-code/SKILL.md",
 }
 ZCODE_NOTICE_SHA256 = "c946abfb46cf3920fefeb756c526620201a3ce29bf84953b540763605b33d9ea"
 ZCODE_NOTICES = {f".agents/skills/{name}/NOTICE-ZCode.md" for name in (
@@ -444,6 +447,30 @@ def check_internal_skill_metadata(root: Path) -> list[str]:
     return errors
 
 
+def check_book_skill_packages(root: Path) -> list[str]:
+    """Keep the book skills discoverable and retain their notice in each install."""
+    source_notice = root / BOOK_SKILL_LICENSE
+    if not source_notice.is_file():
+        return [f"book skill source notice missing: {BOOK_SKILL_LICENSE}"]
+    notice_bytes = source_notice.read_bytes()
+    errors: list[str] = []
+    for relative in sorted(BOOK_SKILL_PATHS):
+        skill_path = root / relative
+        if not skill_path.is_file():
+            continue
+        try:
+            parsed = parse_skill_frontmatter(skill_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, SkillFrontmatterError):
+            # The public frontmatter check reports the invalid file.
+            continue
+        if _is_internal_skill_metadata(parsed.get("metadata")):
+            errors.append(f"book skill must be publicly discoverable: {relative}")
+        package_notice = skill_path.with_name("LICENSE")
+        if not package_notice.is_file() or package_notice.read_bytes() != notice_bytes:
+            errors.append(f"book skill must include its upstream notice: {package_notice.relative_to(root).as_posix()}")
+    return errors
+
+
 
 SKILL_BRAND_CONTRACTS = {
     "skills/super-ask-azhou/SKILL.md": {
@@ -587,7 +614,8 @@ def public_files(root: Path = ROOT) -> list[Path]:
 
 
 def check_required(root: Path) -> list[str]:
-    return [f"required public file missing: {name}" for name in (*REQUIRED_PATHS, *sorted(PROJECT_LOCAL_SKILL_PATHS)) if not (root / name).is_file()]
+    required = (*REQUIRED_PATHS, *sorted(PROJECT_LOCAL_SKILL_PATHS | BOOK_SKILL_PATHS))
+    return [f"required public file missing: {name}" for name in required if not (root / name).is_file()]
 
 
 def check_treehouse_config(root: Path) -> list[str]:
@@ -679,7 +707,7 @@ def check_skill_discovery(files: list[Path], root: Path) -> list[str]:
         path for path in REPOSITORY_EXTENSION_SKILL_PATHS if (root / path).is_file()
     }
     expected = INSTALLABLE_SKILL_PATHS | repository_extensions | {
-        path for path in PROJECT_LOCAL_SKILL_PATHS if (root / path).is_file()
+        path for path in PROJECT_LOCAL_SKILL_PATHS | BOOK_SKILL_PATHS if (root / path).is_file()
     }
     errors = [f"installable skill missing: {path}" for path in sorted(expected - actual)]
     errors.extend(f"unexpected installable skill: {path}" for path in sorted(actual - expected))
@@ -1733,6 +1761,7 @@ def run_checks(root: Path = ROOT) -> list[str]:
     errors.extend(check_fidelity_axis(root))
     errors.extend(check_skill_frontmatter_yaml(files, root))
     errors.extend(check_internal_skill_metadata(root))
+    errors.extend(check_book_skill_packages(root))
     errors.extend(check_azhou_description_brand(root))
     errors.extend(check_rename_residue(files, root))
     errors.extend(check_json(files, root))

@@ -2,8 +2,6 @@
 name: the-pragmatic-programmer
 description: Apply Hunt and Thomas-inspired pragmatic programming rules when improving engineering judgment, feedback loops, DRY knowledge, orthogonality, automation, or adaptability.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # The Pragmatic Programmer Skill

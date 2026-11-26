@@ -101,6 +101,16 @@ Model quality is not a support claim. Benchmark comparisons must freeze the prom
 
 Open a [bug report](https://github.com/TeFuirnever/azhou-ai-hub/issues/new?template=bug.yml) when an entry is stale. Include the harness version, skill commit and a redacted reproduction.
 
+## Unified installer
+
+The [unified installer](installation.md#install-hub-components-in-codex) supports a Codex project. On 2026-11-26, an `install --all` run in a disposable macOS project copied the 21 Hub Skills and 14 book packages with matching package digests and registered pstack using Codex CLI 0.171.0-alpha.13.2. The native adapter verified registration and the dedicated home's installed files. This evidence covers installation.
+
+## Agent Rules Books
+
+The 14 book skills ship from the Hub repository under `.agents/skills/`. Hub contributors use the checkout's copy. External projects install selected skills from the same source through the [Agent Rules Books install path](installation.md#install-agent-rules-books).
+
+On 2026-11-26, Skills CLI 1.9.0 listed all 14 book skills and installed them in a disposable Codex project. The installed entries, rules and license notices matched the Hub source files byte-for-byte. Codex App Server reported all 14 as enabled from that project's own skill directory. This check covered package installation and Codex discovery. Per-book invocation and other hosts have separate evidence requirements.
+
 ## Azhou Agent Workbench
 
 The Codex and ZCode plugins share the same release version starting with 0.12.5. Each host updates the plugin through its native manager. Version 0.12.7 updates the visible name to Azhou Agent Workbench. The ZCode dashboard shows the host-selected session when opened for a session. To inspect a different session, switch to it in ZCode and open the dashboard from its composer.
