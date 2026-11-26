@@ -1,0 +1,78 @@
+{
+  "claude": {
+    "feed": "https://claude.com/resources/articles/rss.xml",
+    "articles": [
+      "https://claude.com/resources/articles/"
+    ],
+    "body": ".text-rich-text--article",
+    "media": [
+      "assets.claude.com",
+      "cdn.prod.website-files.com"
+    ]
+  },
+  "openai": {
+    "feed": "https://openai.com/news/rss.xml",
+    "articles": [
+      "https://openai.com/index/"
+    ],
+    "body": "main article",
+    "media": [
+      "images.ctfassets.net",
+      "cdn.openai.com",
+      "videos.ctfassets.net"
+    ]
+  },
+  "anthropic": {
+    "lists": [
+      "https://www.anthropic.com/news",
+      "https://www.anthropic.com/engineering"
+    ],
+    "articles": [
+      "https://www.anthropic.com/news/",
+      "https://www.anthropic.com/engineering/",
+      "https://www.anthropic.com/research/"
+    ],
+    "body": "article [class*='_body'], main article",
+    "media": [
+      "assets.claude.com",
+      "cdn.sanity.io"
+    ]
+  },
+  "kimi": {
+    "lists": [
+      "https://www.kimi.ai/blog/"
+    ],
+    "articles": [
+      "https://www.kimi.ai/blog/"
+    ],
+    "body": ".blog-v2-main .markdown, main article",
+    "media": [
+      "kimi-file.kimi.ai",
+      "statics.kimi.ai"
+    ]
+  },
+  "mimo": {
+    "articles": [
+      "https://mimo.xiaomi.com/blog/",
+      "https://mimo.xiaomi.com/zh/blog/"
+    ],
+    "body": "div.article, main article",
+    "media": [
+      "cdn.cnbj1.fds.api.mi-img.com"
+    ]
+  },
+  "zhipu": {
+    "lists": [
+      "https://www.zhipuai.cn/zh/research"
+    ],
+    "list_format": "zhipu-research",
+    "articles": [
+      "https://www.zhipuai.cn/zh/research/",
+      "https://www.zhipuai.cn/zh/news/"
+    ],
+    "body": "main article .prose, main article",
+    "media": [
+      "www.zhipuai.cn"
+    ]
+  }
+}

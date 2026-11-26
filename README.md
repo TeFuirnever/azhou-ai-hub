@@ -24,6 +24,8 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 | [Agent Rules Books](#agent-rules-books) | Apply 14 sets of book-inspired engineering rules to a design, code change or review. |
 | [Azhou Source Library](https://tefuirnever.github.io/azhou-ai-hub/library/) | Browse official AI sources and subscribe to selections through RSS. |
 
+Maintainers can use the [Source Library tools](packages/source-library/README.md) to check sources, archive saved pages and back up a private catalog.
+
 ## First install in Codex
 
 To install Hub Skills, pstack and Agent Rules Books together or choose components individually, use the [unified Codex installer](docs/installation.md#install-hub-components-in-codex).

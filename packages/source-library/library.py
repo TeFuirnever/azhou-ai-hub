@@ -1,0 +1,132 @@
+"""Maintenance commands for Azhou Source Library."""
+
+import argparse
+import json
+from dataclasses import asdict
+from pathlib import Path
+
+from catalog import Catalog
+from collect import Candidate, CollectionError, SOURCES, discover, fetch, read_article
+
+STATUS_LABELS = {"updated": "有更新", "no_updates": "无更新", "failed": "抓取失败"}
+
+
+def private_path(path):
+    directory = path.expanduser().resolve()
+    if any((parent / ".git").exists() for parent in (directory, *directory.parents)):
+        raise CollectionError("private archive and backup directories must be outside Git checkouts")
+    return directory
+
+
+def preview(source, url=None, fetcher=fetch):
+    if url:
+        article, _, _, _ = read_article(SOURCES[source], url, fetcher)
+        return [Candidate(article["url"], article["title"], article["published"])]
+    if not any(key in SOURCES[source] for key in ("feed", "lists")):
+        raise CollectionError("this source is checked by article link; supply --url")
+    return discover(SOURCES[source], fetcher)
+
+
+def sync(catalog, sources, url=None, fetcher=fetch):
+    results = {}
+    for source in sources:
+        try:
+            candidates = preview(source, url, fetcher)
+        except CollectionError as exc:
+            catalog.record_failure(source, str(exc))
+            results[source] = {"status": "failed", "label": STATUS_LABELS["failed"], "reason": str(exc)}
+        else:
+            added = catalog.record_discovery(source, candidates)
+            status = "updated" if added else "no_updates"
+            results[source] = {"status": status, "label": STATUS_LABELS[status], "found": len(candidates), "added": added}
+    return results
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data", type=Path, help="private archive data directory")
+    sub = parser.add_subparsers(dest="action", required=True)
+    commands = sub.add_parser("preview", help="try the source parser without opening the private catalog")
+    commands.add_argument("source", choices=SOURCES)
+    commands.add_argument("--url")
+    commands = sub.add_parser("sync", help="discover candidates and update the source status")
+    commands.add_argument("source", choices=[*SOURCES, "all"])
+    commands.add_argument("--url")
+    sub.add_parser("status", help="show the latest formal collection results")
+    sub.add_parser("list", help="show candidates, publication approvals and completeness")
+    commands = sub.add_parser("inspect", help="view private article metadata, retained body and revision")
+    commands.add_argument("id")
+    commands.add_argument("--revision")
+    commands = sub.add_parser("archive", help="retain the text of an article saved from the publisher")
+    commands.add_argument("source", choices=SOURCES)
+    commands.add_argument("url")
+    commands.add_argument("--saved-html", type=Path, required=True)
+    commands.add_argument("--basis", required=True)
+    commands = sub.add_parser("review", help="approve exactly the fields and revision eligible for release")
+    commands.add_argument("id")
+    commands.add_argument("scope", choices=["link", "full"])
+    commands.add_argument("--basis", required=True)
+    commands.add_argument("--note", required=True)
+    commands.add_argument("--revision")
+    commands.add_argument("--kind", choices=["article", "announcement", "research"], default="article")
+    commands = sub.add_parser("withdraw")
+    commands.add_argument("id")
+    commands = sub.add_parser("export", help="write an approved-only bundle for editorial review")
+    commands.add_argument("target", type=Path)
+    commands = sub.add_parser("backup", help="verify and copy the private database and referenced objects")
+    commands.add_argument("target", type=Path)
+    args = parser.parse_args()
+    if args.action != "preview" and args.data is None:
+        parser.error("--data is required for maintenance commands")
+    if args.action == "sync" and args.source == "all" and args.url:
+        parser.error("use --url with a single source")
+    return args
+
+
+def run(args):
+    if args.action == "preview":
+        rows = preview(args.source, args.url)
+        return {"found": len(rows), "preview": [asdict(row) for row in rows[:20]]}
+    with Catalog(private_path(args.data)) as store:
+        if args.action == "status":
+            return [dict(row, label=STATUS_LABELS[row["status"]]) for row in store.runs()]
+        if args.action == "list":
+            return store.entries()
+        if args.action == "inspect":
+            return store.inspect(args.id, args.revision)
+        if args.action == "sync":
+            sources = [choice for choice in SOURCES if choice != "mimo"] if args.source == "all" else [args.source]
+            return sync(store, sources, args.url)
+        if args.action == "archive":
+            def saved_page(url, _hosts, limit=8_000_000):
+                if url != args.url:
+                    raise CollectionError("external media is excluded from saved-page imports")
+                with args.saved_html.expanduser().open("rb") as source:
+                    raw = source.read(limit + 1)
+                if len(raw) > limit:
+                    raise CollectionError("saved page exceeded the byte limit")
+                return raw, url, "text/html"
+
+            return store.archive(args.source, args.url, args.basis, saved_page)
+        if args.action == "review":
+            store.approve(args.id, args.scope, args.basis, args.note, args.revision, args.kind)
+            return {"approved": args.id, "scope": args.scope}
+        if args.action == "withdraw":
+            store.withdraw(args.id)
+            return {"withdrawn": args.id}
+        if args.action == "backup":
+            store.backup(private_path(args.target))
+            return {"backup": str(args.target)}
+        return {"exported": store.export(args.target), "path": str(args.target)}
+
+
+if __name__ == "__main__":
+    try:
+        args = parse_args()
+        result = run(args)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        if args.action == "sync" and any(row["status"] == "failed" for row in result.values()):
+            raise SystemExit(1)
+    except (CollectionError, OSError) as exc:
+        print(json.dumps({"error": str(exc)}, ensure_ascii=False))
+        raise SystemExit(1)

@@ -1,0 +1,8 @@
+[project]
+name = "azhou-source-library"
+version = "0.1.0"
+requires-python = ">=3.11.5"
+dependencies = ["beautifulsoup4==4.14.3", "defusedxml==0.7.1"]
+
+[tool.uv]
+package = false
