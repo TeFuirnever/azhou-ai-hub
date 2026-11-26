@@ -238,9 +238,8 @@
       transform: rotate(-45deg);
     }
     details[open] > summary::before { transform: rotate(45deg); }
-    /* The arrival mark breathes around its heading; the negative margins keep the text in place. */
+    /* The arrival mark is paint only: a tint and a frame that never touch margins or padding. */
     .hub-arrived { border-radius: 4px; }
-    :is(h1, h2, h3, h4).hub-arrived { margin: -.25rem -.45rem; padding: .25rem .45rem; }
     #skill-filter { margin-top: 24px; }
     #skill-filter label { display: block; margin-block-end: .25rem; }
     .skill-search-controls { display: flex; align-items: center; gap: .5rem; }
@@ -281,7 +280,8 @@
     .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); overflow-wrap: anywhere; }
     .btn-primary:active { background: var(--az-accent-active); }
     @media (prefers-reduced-motion: reduce) {
-      .hub-arrived { background: var(--az-accent-surface); }
+      .hub-arrived, .gcard.hub-arrived { background: var(--az-accent-surface); }
+      :is(h1, h2, h3, h4, h5, h6).hub-arrived { box-shadow: 0 0 0 .35rem var(--az-accent-surface); }
     }
     @media (prefers-reduced-motion: no-preference) {
       @keyframes state-arrive {
@@ -482,17 +482,18 @@
       function highlightTarget() {
         dismissMark();
         const target = fragmentTarget(location.hash);
-        if (!target) return;
+        if (!target || !target.matches(":is(h1, h2, h3, h4, h5, h6, .cardgrid > li)")) return;
         const box = landingBox(target);
         marked = [box];
         box.classList.add("hub-arrived");
         if (motion.matches || typeof box.animate !== "function") return;
         const surface = tokens.getPropertyValue("--az-accent-surface").trim();
-        const fadeIn = box.animate(
-          [{ backgroundColor: "transparent" }, { backgroundColor: surface }],
+        const frame = box.matches(":is(h1, h2, h3, h4, h5, h6)") ? "0 0 0 .35rem " : "0 0 0 0 ";
+        const rest = { backgroundColor: "transparent", boxShadow: frame + "transparent" };
+        const held = { backgroundColor: surface, boxShadow: frame + surface };
+        const fadeIn = box.animate([rest, held],
           { duration: duration("--motion-feedback"), easing, fill: "forwards" });
-        const fadeOut = box.animate(
-          [{ backgroundColor: surface }, { backgroundColor: "transparent" }],
+        const fadeOut = box.animate([held, rest],
           { duration: duration("--motion-expand"), easing, delay: 1000, fill: "forwards" });
         arrival = [fadeIn, fadeOut];
         fadeOut.finished.then(() => {
