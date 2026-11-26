@@ -12,19 +12,21 @@ Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Code
 
    This command installs into the current project. Add `--global` on the first install if you want a user-wide copy instead. For later updates and removal, use the scope you installed into.
 
-2. **Try Ask Azhou.** Open a new Codex chat in the same project and enter the following question.
+2. **Try Ask Azhou.** Open a new Codex chat in the same project. Type `$super-ask-azhou` and check that Codex offers the skill, then enter the following question.
 
    > `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
 
-   The expected recommendation is `super-archify` for an interactive HTML diagram. This confirms that you can use the router. Install the recommended Skill separately when you want to run it.
+   The expected recommendation is `super-archify` for an interactive HTML diagram. Install the recommended Skill separately when you want to run it.
 
-3. **If Codex cannot find Ask Azhou, check the install.** Run this from the same project.
+### If Codex cannot find Ask Azhou
 
-   ~~~bash
-   npx skills list --agent codex
-   ~~~
+Run this from the same project.
 
-   Add `--global` for a user-wide install. If `super-ask-azhou` is absent, check the terminal folder and the installation output. If it is listed, compare the displayed scope and path with the project open in Codex, then try the question in a fresh chat.
+~~~bash
+npx skills list --agent codex
+~~~
+
+Add `--global` for a user-wide install. If `super-ask-azhou` is absent, check the terminal folder and the installation output. If it is listed, compare the displayed scope and path with the project open in Codex, then try the question in a fresh chat.
 
 ## Optional external integrations
 
@@ -48,7 +50,7 @@ This example installs Super Archify for Codex in the current project. For anothe
 
 ## Alternate installer
 
-If Skills CLI times out cloning the repository, use Codex's bundled skill installer to fetch just Ask Azhou. Run this from your Codex project directory.
+If Skills CLI times out cloning the repository, use Codex's bundled skill installer to fetch just Ask Azhou. Run this from your Codex project directory with your system's Python command.
 
 ~~~bash
 python "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-ask-azhou --method git --dest "$PWD/.agents/skills"
@@ -60,11 +62,15 @@ Open a new chat in the project and [try Ask Azhou](#first-install-in-codex). The
 
 Package-manager installs resolve the mutable default branch and carry no repository receipt, so verify the installed content instead of trusting the install step.
 
-**Tag-snapshot comparison (works on every host).** Compare the installed skill directory against the version you intended, at a published tag:
+**Tag-snapshot comparison (works on every host).** Set `TAG` to the published version you installed. Run the comparison in a POSIX shell, such as Git Bash on Windows.
 
 ~~~bash
-git clone --depth 1 --branch v2.0.1 https://github.com/TeFuirnever/azhou-ai-hub /tmp/azhou-tag
-diff -r /tmp/azhou-tag/skills/<skill-name> <installed-skills-root>/<skill-name> && echo identical
+TAG=v2.0.1
+SKILL=super-ask-azhou
+SKILLS_HOME=/absolute/path/to/installed/skills
+SNAPSHOT=$(mktemp -d)
+git clone --depth 1 --branch "$TAG" https://github.com/TeFuirnever/azhou-ai-hub "$SNAPSHOT" &&
+  diff -r "$SNAPSHOT/skills/$SKILL" "$SKILLS_HOME/$SKILL" && echo identical
 ~~~
 
 `<installed-skills-root>` is wherever your harness placed the skill (the package manager prints the destination). Any drift — including extra files — prints as a diff. Release notes list which skills a release touches; per-skill content digests are not published yet, so the tag snapshot is the reference.

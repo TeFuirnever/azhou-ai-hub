@@ -34,7 +34,7 @@
      右侧 120pt 不覆盖(见 OverlayPanel.swift),按钮可点击、其余区域按住拖动。 */
   .ctrls { position: absolute; top: 8px; right: 8px; display: flex; }
   .cbtn {
-    width: 22px; height: 22px; margin-left: 5px; box-sizing: border-box;
+    width: 30px; height: 30px; margin-left: 5px; padding: 0; box-sizing: border-box;
     border: 1px solid #2a3350; border-radius: 6px;
     background: #141b33; color: #aab3cf;
     font-size: 12px; line-height: 20px; text-align: center;
@@ -42,6 +42,8 @@
   }
   .cbtn:hover { background: #1d2747; border-color: #3a4774; color: #e8ecf7; }
   .cbtn:active { background: #26325a; }
+  .cbtn:focus-visible { outline: 2px solid #7ea2ff; outline-offset: 1px; }
+  .cbtn[aria-disabled="true"] { opacity: .55; }
   .cbtn.on { color: #7ea2ff; border-color: #3a4774; }
 
   /* 速率曲线(卡片模式,点 📈 开关):细 sparkline,高约 26px */
@@ -51,7 +53,7 @@
 
   /* 单行模式(?style=line):一条细横条,配合面板 --size 620x40 贴在输入框上方 */
   body.line { border-radius: 8px; }
-  body.line .wrap { flex-direction: row; align-items: center; padding: 0 12px; }
+  body.line .wrap { flex-direction: row; align-items: center; padding: 0 82px 0 12px; }
   body.line .top { flex: none; margin-right: 10px; }
   body.line .bolt { font-size: 15px; margin-right: 4px; }
   body.line .num { font-size: 20px; letter-spacing: 0; }
@@ -59,15 +61,16 @@
   body.line .scope { margin-left: 0; font-size: 10px; margin-right: 10px; }
   body.line .info { margin: 0 0 0 4px; }
   body.line .ctrls { top: 50%; right: 8px; transform: translateY(-50%); }
-  body.line .cbtn { width: 20px; height: 20px; line-height: 18px; font-size: 11px; }
+  body.line #btnSpark { display: none; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+  @media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
 </style>
 </head>
 <body>
   <div class="wrap">
     <div class="top">
       <span class="dot" id="dot"></span>
-      <span class="state" id="state">连接中…</span>
+      <span class="state" id="state" role="status">连接中…</span>
     </div>
     <div class="main">
       <span class="bolt">&#9889;</span><span class="num off" id="num">--</span><span class="unit">tok/s</span>
@@ -78,9 +81,9 @@
       <polyline id="sparkline" fill="none" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
     </svg>
     <div class="ctrls">
-      <span class="cbtn" id="btnRefresh" title="立即刷新">&#8635;</span>
-      <span class="cbtn" id="btnPause" title="暂停 / 恢复自动刷新">&#9208;</span>
-      <span class="cbtn" id="btnSpark" title="显示 / 隐藏速率曲线">&#128200;</span>
+      <button class="cbtn" id="btnRefresh" type="button" aria-label="立即刷新一次" title="立即刷新一次">&#8635;</button>
+      <button class="cbtn" id="btnPause" type="button" aria-label="暂停自动刷新" aria-pressed="false" title="暂停自动刷新">&#9208;</button>
+      <button class="cbtn" id="btnSpark" type="button" aria-label="速率曲线" aria-pressed="false" title="显示速率曲线">&#128200;</button>
     </div>
   </div>
 <script>
@@ -96,6 +99,9 @@
   var busy = false;
   var paused = false;   // 暂停自动刷新(手动 ↻ 仍可拉取)
   var sparkOn = false;  // 速率曲线开关(卡片模式)
+  var lastData;
+  var connectionFailed = false;
+  var manualRefresh = false;
 
   // 紧凑单位:千以下原始、千~万一位小数 k、万~百万取整 k、百万以上一位小数 M(与 token-rate.mjs 的 fmtCompact 一致)
   function fmtCompact(n) {
@@ -123,19 +129,23 @@
     poly.setAttribute("points", pts.join(" "));
   }
 
-  // 网络异常:灰点 + 文案,数字保持上次的值,下个周期自动重试
-  function setConn() {
-    $("dot").className = "dot";
-    $("state").className = "state";
-    $("state").textContent = "连接中断";
+  function renderStatus() {
+    var st = lastData && lastData.status;
+    var on = !paused && !connectionFailed && st === "generating";
+    $("dot").className = on ? "dot on" : "dot";
+    var state = $("state");
+    state.className = on ? "state on" : "state";
+    var label = manualRefresh ? (paused ? "暂停中 · 刷新中…" : "正在刷新…")
+      : connectionFailed ? (paused ? "暂停中 · 刷新失败" : "连接中断")
+      : paused ? "已暂停"
+      : on ? "生成中"
+      : st === "idle" ? "空闲"
+      : lastData ? "无数据" : "连接中…";
+    if (state.textContent !== label) state.textContent = label;
   }
 
   function render(d) {
     var st = d && d.status ? d.status : "no-data";
-    var on = st === "generating";
-    $("dot").className = on ? "dot on" : "dot";
-    $("state").className = on ? "state on" : "state";
-    $("state").textContent = paused ? "已暂停" : on ? "生成中" : st === "idle" ? "空闲" : "无数据";
 
     // 主数字:优先本轮(turn),无本轮数据时退回上轮(latest)并把标注从「本轮」换成「上轮」
     var t = d ? d.turn : null;
@@ -157,10 +167,12 @@
     // 统计小字:单行模式空间有限,只留输出与累计;卡片模式给全量
     var cum = s ? fmtCompact((s.totalOutput || 0) + (s.totalReasoning || 0)) : "-";
     if (lineMode) {
-      var out = src === t
-        ? (t.totalOutput || 0) + (t.totalReasoning || 0)
-        : l ? (l.outputTokens || 0) + (l.reasoningTokens || 0) : null;
-      $("info").textContent = src ? "输出 " + fmtNum(out) + " · 累计 " + cum : "暂无会话数据";
+      if (src) {
+        var out = src === t ? (t.totalOutput || 0) + (t.totalReasoning || 0) : (l.outputTokens || 0) + (l.reasoningTokens || 0);
+        $("info").textContent = "输出 " + fmtNum(out) + " · 累计 " + cum;
+      } else {
+        $("info").textContent = "暂无会话数据";
+      }
     } else if (t) {
       $("info").textContent =
         "首字 " + fmtSec(t.ttftMs) +
@@ -182,35 +194,56 @@
 
   // 每秒增量刷新;上一拍未返回时跳过本拍,避免请求堆积(页面可能被系统挂起后恢复);
   // 暂停时不再轮询(点 ↻ 可立即手动拉一次)
-  function tick() {
+  function tick(manual) {
     if (busy) return;
     busy = true;
+    if (manual) {
+      manualRefresh = true;
+      renderStatus();
+    }
+    $("btnRefresh").setAttribute("aria-disabled", "true");
     fetch("/api/live", { cache: "no-store" })
-      .then(function (r) { return r.json(); })
-      .then(render)
-      .catch(setConn)
-      .then(function () { busy = false; });
+      .then(function (r) {
+        if (!r.ok) throw new Error("Overlay data unavailable");
+        return r.json();
+      })
+      .then(function (data) {
+        if (paused && !manual) return;
+        render(data);
+        lastData = data;
+        connectionFailed = false;
+      })
+      .catch(function () { if (!paused || manual) connectionFailed = true; })
+      .then(function () {
+        busy = false;
+        manualRefresh = false;
+        $("btnRefresh").removeAttribute("aria-disabled");
+        renderStatus();
+      });
   }
 
   // 交互按钮:立即刷新 / 暂停自动刷新 / 曲线开关(曲线仅卡片模式显示)
-  $("btnRefresh").addEventListener("click", function () { paused = false; $("btnPause").textContent = "\u23F8"; tick(); });
+  $("btnRefresh").addEventListener("click", function () { tick(true); });
   $("btnPause").addEventListener("click", function () {
     paused = !paused;
     $("btnPause").textContent = paused ? "\u25B6" : "\u23F8";
     $("btnPause").className = paused ? "cbtn on" : "cbtn";
-    var stEl = $("state");
-    if (paused) { stEl.className = "state"; stEl.textContent = "已暂停"; $("dot").className = "dot"; }
-    else tick();
+    $("btnPause").setAttribute("aria-pressed", String(paused));
+    $("btnPause").title = paused ? "恢复自动刷新" : "暂停自动刷新";
+    renderStatus();
+    if (!paused) tick();
   });
   $("btnSpark").addEventListener("click", function () {
     sparkOn = !sparkOn;
     $("btnSpark").className = sparkOn ? "cbtn on" : "cbtn";
-    $("spark").className = sparkOn ? "spark on" : "spark";
-    if (!sparkOn) $("sparkline").setAttribute("points", "");
+    $("btnSpark").setAttribute("aria-pressed", String(sparkOn));
+    $("btnSpark").title = sparkOn ? "隐藏速率曲线" : "显示速率曲线";
+    $("spark").classList.toggle("on", sparkOn);
+    drawSpark(lastData && lastData.history);
   });
 
   tick();
-  if (!paused) setInterval(function () { if (!paused) tick(); }, 1000);
+  setInterval(function () { if (!paused && !document.hidden) tick(); }, 1000);
 })();
 </script>
 </body>

@@ -17,30 +17,31 @@ layout: base.njk
 <section class="sec">
   <div class="wrap">
     <h2 id="install" tabindex="-1">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</h2>
-    <p>{{ '登录 Codex。用装有 Node.js 和 npx 的终端进入你的项目目录，再运行下面的命令。这个命令只为当前项目安装。' if zh else 'Sign in to Codex. Open your project folder in a terminal with Node.js and npx, then run this command. It installs in the current project.' }}</p>
+    <p>{{ '登录 Codex。在终端进入项目目录，使用 Node.js 22.20 或更新版本运行下面的命令。出现安装提示时，确认安装到当前项目。' if zh else 'Sign in to Codex. In a terminal, open your project folder and run this command with Node.js 22.20 or later. When prompted, confirm the install for this project.' }}</p>
     {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
     <div class="copy-block">
-      <button class="btn btn-outline" type="button" hidden data-copy="install-command">{{ '复制命令' if zh else 'Copy command' }}</button>
+      <button class="btn btn-outline" type="button" hidden data-copy="install-command">{{ '复制安装命令' if zh else 'Copy install command' }}</button>
       <pre class="wrap-text"><code id="install-command">npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
     </div>
-    <p>{{ '在同一项目打开新的 Codex 会话，粘贴这句话。看到它推荐 super-archify，就说明 Ask Azhou 装好了。' if zh else 'Open a new Codex chat in the same project and paste this question. A recommendation for super-archify confirms Ask Azhou is installed.' }}</p>
+    <p>{{ '在同一项目打开新的 Codex 会话。先输入 $super-ask-azhou，确认 Codex 找得到这个技能，再试试下面的问题。正常情况下，它会推荐 super-archify。' if zh else 'Open a new Codex chat in the same project. Type $super-ask-azhou to check that Codex can find the skill, then try the question below. Expect a recommendation for super-archify.' }}</p>
     <div class="copy-block">
-      <button class="btn btn-outline" type="button" hidden data-copy="try-prompt">{{ '复制示例' if zh else 'Copy example' }}</button>
+      <button class="btn btn-outline" type="button" hidden data-copy="try-prompt">{{ '复制试用问题' if zh else 'Copy example question' }}</button>
       <pre class="wrap-text"><code id="try-prompt">{{ '$super-ask-azhou 我有一段 Mermaid，想做成交互架构图。该用哪个技能？' if zh else '$super-ask-azhou I have a Mermaid diagram. Which skill turns it into an interactive architecture diagram?' }}</code></pre>
     </div>
     <details>
       <summary>{{ '安装上面推荐的技能' if zh else 'Install the recommended skill' }}</summary>
       <div class="copy-block">
-        <button class="btn btn-outline" type="button" hidden data-copy="install-recommended">{{ '复制命令' if zh else 'Copy command' }}</button>
+        <button class="btn btn-outline" type="button" hidden data-copy="install-recommended">{{ '复制 Archify 安装命令' if zh else 'Copy Archify install command' }}</button>
         <pre class="wrap-text"><code id="install-recommended">npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex</code></pre>
       </div>
     </details>
     <details>
       <summary>{{ '排查安装、更新或卸载' if zh else 'Troubleshoot, update, or uninstall' }}</summary>
+      {%- if zh %}<p>以下指南为英文。</p>{% endif %}
       <ul>
-        <li><a href="{{ installGuide }}#alternate-installer">{{ '下载超时' if zh else 'Repository download timed out' }}</a></li>
-        <li><a href="{{ installGuide }}#first-install-in-codex">{{ 'Codex 找不到技能' if zh else 'Codex cannot find the skill' }}</a></li>
-        <li><a href="{{ installGuide }}#upgrade-or-uninstall">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
+        <li><a href="{{ installGuide }}#alternate-installer" hreflang="en">{{ '下载超时' if zh else 'Repository download timed out' }}</a></li>
+        <li><a href="{{ installGuide }}#if-codex-cannot-find-ask-azhou" hreflang="en">{{ 'Codex 找不到技能' if zh else 'Codex cannot find the skill' }}</a></li>
+        <li><a href="{{ installGuide }}#upgrade-or-uninstall" hreflang="en">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
       </ul>
     </details>
   </div>
@@ -64,12 +65,12 @@ layout: base.njk
       try {
         await navigator.clipboard.writeText(source.textContent);
         status.textContent = {{ ('已复制' if zh else 'Copied') | dump | safe }};
+        reset = setTimeout(() => { status.textContent = ""; }, 3500);
       } catch {
         status.textContent = {{ ('复制失败。请选中下方文字手动复制。' if zh else 'Copy failed. Select the text below to copy it manually.') | dump | safe }};
       } finally {
         pending = false;
       }
-      reset = setTimeout(() => { status.textContent = ""; }, 3500);
     });
   }
 </script>

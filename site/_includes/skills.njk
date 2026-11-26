@@ -8,17 +8,21 @@ layout: base.njk
   <p>{{ '按任务找技能，或让 Ask Azhou 为你推荐。' if zh else 'Find a skill by task, or ask Ask Azhou to recommend one.' }}
     <a href="{{ site.routes[lang].home | url }}#install">{{ '在 Codex 开始' if zh else 'Start in Codex' }}</a>
   </p>
-  <div id="skill-filter" hidden>
+  <div id="skill-filter" role="search" hidden>
     <label for="skill-search">{{ '搜索任务或包名' if zh else 'Search tasks or package names' }}</label>
-    <input id="skill-search" type="search" autocomplete="off">
+    <div class="skill-search-controls">
+      <input id="skill-search" type="search" autocomplete="off" autocapitalize="none" spellcheck="false">
+      <button id="clear-skill-search" class="btn btn-outline" type="button" hidden>{{ '清空搜索' if zh else 'Clear search' }}</button>
+    </div>
     <p id="skill-count" role="status"
        data-all="{{ skills.length }} {{ '个技能' if zh else 'skills' }}"
        data-results="{{ '找到 {count} 个技能' if zh else '{count} of ' ~ skills.length ~ ' skills' }}"
        data-empty="{{ '没找到技能。试试更短的关键词，或者清空搜索框。' if zh else 'No skills found. Try a shorter search or clear the field.' }}"></p>
   </div>
   <ul class="cardgrid" id="skill-list">
+    {%- set other = 'en' if zh else 'zh' %}
     {%- for skill in skills %}
-    <li id="{{ skill.name }}">
+    <li id="{{ skill.name }}" data-other-language="{{ (skill.summary[other].title ~ ' ' ~ skill.summary[other].task) | escape }}">
       <a class="gcard" href="{{ skill.url }}">
         <span class="gcard-t">{{ skill.summary[lang].title | escape }}</span>
         <span class="gcard-d">{{ skill.summary[lang].task | escape }}</span>
@@ -30,23 +34,52 @@ layout: base.njk
 </article>
 <script>
   const input = document.getElementById("skill-search");
+  const clear = document.getElementById("clear-skill-search");
+  const languageLink = document.getElementById("switch-language");
   const count = document.getElementById("skill-count");
   const items = Array.from(document.querySelectorAll("#skill-list > li"), element => ({
     element,
-    keywords: element.textContent.toLowerCase(),
+    keywords: (element.textContent + " " + element.dataset.otherLanguage).toLowerCase(),
   }));
+  function setQuery(url, query) {
+    if (query) url.searchParams.set("q", query);
+    else url.searchParams.delete("q");
+  }
   function updateSkills() {
-    const terms = input.value.toLowerCase().trim().split(/\s+/);
+    const query = input.value.trim();
+    const terms = query.toLowerCase().split(/\s+/);
     let found = 0;
     for (const { element, keywords } of items) {
       element.hidden = !terms.every(term => keywords.includes(term));
       if (!element.hidden) found += 1;
     }
-    count.textContent = found === items.length ? count.dataset.all :
+    const message = !query ? count.dataset.all :
       found ? count.dataset.results.replace("{count}", found) : count.dataset.empty;
+    if (count.textContent !== message) count.textContent = message;
+    clear.hidden = input.value === "";
+
+    const translated = new URL(languageLink.href);
+    setQuery(translated, query);
+    languageLink.href = translated.href;
   }
-  input.addEventListener("input", updateSkills);
-  window.addEventListener("pageshow", updateSkills);
-  updateSkills();
+  function restoreSearch() {
+    input.value = new URLSearchParams(window.location.search).get("q") ?? "";
+    updateSkills();
+  }
+  function saveSearch() {
+    const current = new URL(window.location.href);
+    setQuery(current, input.value.trim());
+    if (current.href !== window.location.href) history.replaceState(history.state, "", current);
+    updateSkills();
+  }
+  input.addEventListener("input", saveSearch);
+  clear.addEventListener("click", () => {
+    input.value = "";
+    input.focus();
+    saveSearch();
+  });
+  window.addEventListener("pageshow", restoreSearch);
+  window.addEventListener("popstate", restoreSearch);
+  restoreSearch();
   document.getElementById("skill-filter").hidden = false;
 </script>

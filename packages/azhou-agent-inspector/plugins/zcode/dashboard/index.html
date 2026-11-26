@@ -135,7 +135,8 @@
   .bump { animation: bump .5s var(--ease); }
 
   .dsub { color: var(--dim); font-size: 13px; margin: 6px 6px 0; }
-  .dsub b { color: var(--ink); font-weight: 600; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  summary.dsub { cursor: pointer; width: fit-content; padding-block: .75rem; }
+  summary.dsub:focus-visible { outline: 2px solid var(--em); outline-offset: 2px; }
 
   .dchips { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr)); gap: 8px; margin-bottom: 0.75rem; }
   .dchips .c { border: 1px solid var(--hair); border-radius: 14px; padding: 10px 13px; background: rgba(255, 255, 255, .015); }
@@ -186,11 +187,11 @@
       <div class="inner">
         <div class="dhead">
           <span class="nm" id="dName" data-i18n="waiting">等待数据…</span>
-          <span class="state idl" id="dState" data-i18n="idle">空闲</span>
+          <span class="state idl" id="dState" hidden></span>
           <span class="mdl" id="dModel"></span>
           <span class="dir" id="dDir"></span>
         </div>
-        <dl class="hero">
+        <dl class="hero" hidden>
           <div>
             <dt data-i18n="turnDuration">整轮用时</dt>
             <dd id="dDuration">—</dd>
@@ -200,10 +201,14 @@
             <dd class="rate"><span class="big" id="dRate">—</span><span id="dRateUnit" hidden> tok/s</span></dd>
           </div>
         </dl>
-        <div class="dsub" id="dSub" data-i18n="waitingUsage">等待 usage 数据库返回…</div>
+        <details id="performanceDetails" hidden>
+          <summary class="dsub" data-i18n="performanceDetails">性能详情</summary>
+          <div class="dsub" id="dSub"></div>
+        </details>
+        <p class="dsub" id="dEmpty" data-i18n="noRequests" hidden>该会话还没有已完成的模型请求</p>
       </div>
     </section>
-    <section class="panel session-history reveal" style="--d:.26s">
+    <section class="panel session-history reveal" style="--d:.26s" hidden>
       <div class="inner">
         <div class="dchips">
           <div class="c"><div class="k" data-i18n="recentAvg">近段均值</div><div class="v" id="cAvg">--</div></div>
@@ -219,7 +224,7 @@
     </section>
   </div>
 
-  <div class="stats reveal" style="--d:.1s">
+  <div class="stats reveal" style="--d:.1s" hidden>
     <div class="chip"><div class="in"><div class="k" data-i18n="sessions24h">24h 内会话</div><div class="v" id="sTotal">--<i data-i18n="sessionUnit">个</i></div></div></div>
     <div class="chip em"><div class="in"><div class="k" data-i18n="generating">生成中</div><div class="v" id="sGen">--<i data-i18n="sessionUnit">个</i></div></div></div>
     <div class="chip bl"><div class="in"><div class="k" data-i18n="active10m">活跃(10 分钟内)</div><div class="v" id="sAct">--<i data-i18n="sessionUnit">个</i></div></div></div>
@@ -265,7 +270,7 @@ const translations = {
     idle: "空闲",
     turnRate: "本轮即时速率",
     segmentRate: "最近一段速率",
-    waitingUsage: "等待 usage 数据库返回…",
+    performanceDetails: "性能详情",
     recentAvg: "近段均值",
     recentPeak: "近段峰值",
     sessionOutput: "会话累计输出",
@@ -286,6 +291,7 @@ const translations = {
     output: "输出",
     reasoning: "思考",
     generation: "生成",
+    completedAt: "完成时间",
     peak: "峰",
     recentSegments: (n) => `近 ${n} 段`,
     hours: (n) => `${n} 小时`,
@@ -312,7 +318,7 @@ const translations = {
     idle: "Idle",
     turnRate: "Current turn rate",
     segmentRate: "Latest segment rate",
-    waitingUsage: "Waiting for ZCode usage data…",
+    performanceDetails: "Performance details",
     recentAvg: "Recent average",
     recentPeak: "Recent peak",
     sessionOutput: "Session output",
@@ -333,6 +339,7 @@ const translations = {
     output: "Output",
     reasoning: "reasoning",
     generation: "Generation",
+    completedAt: "Completed at",
     peak: "Peak",
     recentSegments: (n) => `Last ${n} ${n === 1 ? "segment" : "segments"}`,
     hours: (n) => `${n} h`,
@@ -381,7 +388,7 @@ function sessionRate(s) {
 }
 
 /* ---------- 聚焦详情 ---------- */
-let chartHist = [], chartSig = "";
+let chartHist = [], chartSig = "", detailSig = "";
 
 // 画布取色:每次绘制现读 CSS 变量,主题切换即生效(不缓存,避免主题状态滞留)
 function chartPalette() {
@@ -447,6 +454,7 @@ function renderDetail(s) {
   $("dModel").textContent = s.model ? "· " + s.model : "";
   $("dDir").textContent = s.cwd || s.sessionId;
   const st = $("dState");
+  st.hidden = !hasSession;
   st.className = "state " + (s.status === "generating" ? "gen" : s.status === "active" ? "act" : "idl");
   st.textContent = hasSession ? (copy[s.status] || s.status) : "";
   const r = sessionRate(s);
@@ -454,38 +462,49 @@ function renderDetail(s) {
   big.textContent = r == null ? "—" : rate1(r);
   $("dRateUnit").hidden = r == null;
   const sec = ms => Number.isFinite(ms) ? (ms / 1000).toFixed(1) + " s" : "—";
+  document.querySelector(".hero").hidden = !Number.isFinite(r) && !Number.isFinite(s.turn?.totalMs);
   $("dDuration").textContent = sec(s.turn?.totalMs);
   big.className = "big" + (s.status === "idle" ? " idl" : "");
   if (r != null && s.status === "generating") bump(big);
   $("dCap").textContent = s.requestRateEstimated ? (language === "zh-CN" ? "流式估算" : "Live estimate") : (s.requestRate != null || !s.turn ? copy.segmentRate : copy.turnRate);
+
+  const rows = [];
+  const addMetric = (label, value, format) => {
+    if (Number.isFinite(value)) rows.push([label, format(value)]);
+  };
+  const tokens = v => fmtNum(v) + " tok";
+  const rate = v => rate1(v) + " tok/s";
   if (s.turn) {
     const t = s.turn;
     const zh = language === "zh-CN";
-    const rows = [
-      [copy.first, sec(t.ttftMs)], [copy.generation, sec(t.genMs || null)],
-      [copy.output, fmtNum(t.totalOutput) + " tok"],
-      [copy.reasoning, fmtNum(t.totalReasoning) + " tok"],
-      [zh ? "请求段数" : "Request segments", String(t.requests)],
-      [copy.peak, t.rated ? rate1(t.peak) + " tok/s" : "—"],
-    ];
-    if (s.requestRate != null || !Number.isFinite(t.tokPerSec)) {
-      rows.push([
-        s.composerTurn ? (zh ? "有效段均速" : "Mean rated segment speed") : (zh ? "整轮生成均速" : "Turn generation rate"),
-        Number.isFinite(t.tokPerSec) ? rate1(t.tokPerSec) + " tok/s" : "—",
-      ]);
+    addMetric(copy.first, t.ttftMs, sec);
+    addMetric(copy.generation, t.genMs, sec);
+    addMetric(copy.output, t.totalOutput, tokens);
+    addMetric(copy.reasoning, t.totalReasoning, tokens);
+    addMetric(zh ? "请求段数" : "Request segments", t.requests, fmtNum);
+    if (t.rated) addMetric(copy.peak, t.peak, rate);
+    if (s.requestRate != null) {
+      const label = s.composerTurn ? (zh ? "有效段均速" : "Mean rated segment speed") : (zh ? "整轮生成均速" : "Turn generation rate");
+      addMetric(label, t.tokPerSec, rate);
     }
+  } else if (s.latest) {
+    addMetric(copy.output, s.latest.outputTokens, tokens);
+    addMetric(copy.generation, s.latest.genMs, sec);
+    addMetric(copy.completedAt, s.latest.completedAt, hhmmss);
+  }
+
+  const details = $("performanceDetails");
+  details.hidden = rows.length === 0;
+  $("dEmpty").hidden = !hasSession || Boolean(s.turn || s.latest);
+  const nextDetailSig = JSON.stringify([s.sessionId, rows]);
+  if (detailSig !== nextDetailSig) {
+    detailSig = nextDetailSig;
     const list = document.createElement("dl");
     for (const [label, value] of rows) {
       const term = document.createElement("dt"), detail = document.createElement("dd");
       term.textContent = label; detail.textContent = value; list.append(term, detail);
     }
     $("dSub").replaceChildren(list);
-  } else if (s.latest) {
-    const l = s.latest;
-    $("dSub").innerHTML = copy.output + " <b>" + fmtNum(l.outputTokens) + "</b> tok · " + copy.generation + " <b>" +
-      (l.genMs != null ? (l.genMs / 1000).toFixed(1) : "-") + "s</b> · ⏱ " + hhmmss(l.completedAt);
-  } else {
-    $("dSub").textContent = hasSession ? copy.noRequests : copy.waitingUsage;
   }
   const ses = s.session;
   $("cAvg").textContent = ses && ses.avg != null ? rate1(ses.avg) : "--";
@@ -493,7 +512,9 @@ function renderDetail(s) {
   $("cCum").innerHTML = ses ? fmtCompact(ses.totalOutput + ses.totalReasoning) + "<i>tok</i>" : "--";
   $("cReq").innerHTML = ses ? withUnit(fmtNum(ses.requests), copy.requestUnit) : "--";
   chartHist = s.history || [];
-  const sig = s.sessionId + ":" + chartHist.length + ":" + (chartHist[chartHist.length - 1] ?? "");
+  const showHistory = Boolean(ses) || chartHist.some(Number.isFinite);
+  document.querySelector(".session-history").hidden = !showHistory;
+  const sig = JSON.stringify([s.sessionId, showHistory, chartHist]);
   if (sig !== chartSig) { chartSig = sig; drawChart(); $("chartCap").textContent = copy.recentSegments(chartHist.filter((v) => v != null).length); }
 }
 
@@ -558,6 +579,7 @@ async function loadArtwork() {
 function renderSessions(r) {
   const list = r.sessions || [];
   renderDetail(r.focusedSessionId ? r.focusedSession : list[0]);
+  document.querySelector(".stats").hidden = false;
   const gen = list.filter((x) => x.status === "generating").length;
   const act = list.filter((x) => x.status !== "idle").length;
   $("sTotal").innerHTML = withUnit(r.total ?? list.length, copy.sessionUnit);

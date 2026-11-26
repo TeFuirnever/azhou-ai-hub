@@ -16,17 +16,17 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 
 ### First install in Codex
 
-Have Codex signed in and Node.js with `npx` available, and run commands from the project folder where you want Ask Azhou installed. The shell examples are POSIX: on Windows, run them in Git Bash ([Windows notes](docs/installation.md#windows-notes)).
+Sign in to Codex and use Node.js 22.20 or later. Run the command from your project folder and confirm the project install when prompted. On Windows, use Git Bash for the [shell examples](docs/installation.md#windows-notes).
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 ~~~
 
-Open a new Codex chat in that project and try the following question.
+Open a new Codex chat in that project. Type `$super-ask-azhou` to check that Codex can find it, then try the following question.
 
 > `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
 
-Look for a recommendation of `super-archify`. If Ask Azhou is missing, check the [first-install guide](docs/installation.md#first-install-in-codex). For an existing installation, see [check, update, or uninstall](docs/installation.md#upgrade-or-uninstall).
+Expect a recommendation for `super-archify`. If Codex cannot find Ask Azhou, [check the installation](docs/installation.md#if-codex-cannot-find-ask-azhou). For an existing installation, see [check, update, or uninstall](docs/installation.md#upgrade-or-uninstall).
 
 When you want to use a recommended skill, follow the [single-skill install guide](docs/installation.md#package-manager-install). Use [one installation method per skill](docs/installation.md#one-path-rule). The four `super-azhou-*` skills also require a local checkout.
 
@@ -113,7 +113,7 @@ Optional integrations live under `packages/`. These projects are not Skills, and
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
-| `azhou-agent-inspector` | [Azhou Agent Workbench](packages/azhou-agent-inspector/README.md) | Codex conversation panel and ZCode composer status with a conversation dashboard. Both views share the Azhou portrait, wallpaper, and four-field performance preview. Native installation is per harness. |
+| `azhou-agent-inspector` | [Azhou Agent Workbench](packages/azhou-agent-inspector/README.md) | Codex conversation panel and ZCode composer status with a conversation dashboard. Both panels show turn duration and speed and let you expand the available performance details. Install through each host's plugin manager. |
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **candidate**: native Codex/Claude plugins, a zcode plugin with bundled skills, and shared Skills discovery for MiMo and DeepSeek Harness (the maintainer host's shared-root pstack links were retired on 2026-11-14; serving pstack that way moves to a separately scoped task, and other skills sharing the root are unaffected). Dated evidence and limits: [support matrix](docs/support-matrix.md#optional-integrations). |
 
 

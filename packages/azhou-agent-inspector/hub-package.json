@@ -2,7 +2,7 @@
   "schema": "azhou-hub.package.v1",
   "component": "azhou-agent-inspector",
   "display_name": "Azhou Agent Workbench",
-  "version": "0.12.8",
+  "version": "0.12.9",
   "commit": "e23245990d525f333d59318abbd20bb2aa8dfda1",
   "repository": "https://github.com/TeFuirnever/zcode-tps-monitor.git",
   "license": "MIT (code); CC BY-NC-ND 4.0 (Azhou artwork)",
