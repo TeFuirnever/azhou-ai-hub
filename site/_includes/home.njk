@@ -3,6 +3,12 @@ layout: base.njk
 ---
 
 {% set zh = lang == 'zh' %}
+{% macro copyControl(source, label) %}
+<div class="copy-actions" hidden>
+  <button class="btn btn-outline" type="button" data-copy="{{ source }}">{{ label }}</button>
+  <span class="copy-status" role="status"></span>
+</div>
+{% endmacro %}
 <section class="band">
   <div class="wrap">
     <h1>{{ '给 Agent 装上你需要的技能' if zh else 'Give your agent a skill for the job' }}</h1>
@@ -44,18 +50,18 @@ layout: base.njk
     {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
     <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ '一次安装或按需选择三个组件（英文）' if zh else 'Install Hub Skills, pstack and Agent Rules Books together or separately' }}</a></p>
     <div class="copy-block">
-      <button class="btn btn-outline" type="button" hidden data-copy="install-command">{{ '复制安装命令' if zh else 'Copy install command' }}</button>
+      {{ copyControl("install-command", '复制安装命令' if zh else 'Copy install command') }}
       <pre class="wrap-text"><code id="install-command">npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
     </div>
     <p>{{ '在同一项目打开新的 Codex 会话。先输入 $super-ask-azhou，确认 Codex 找得到这个技能，再试试下面的问题。正常情况下，它会推荐 super-archify。' if zh else 'Open a new Codex chat in the same project. Type $super-ask-azhou to check that Codex can find the skill, then try the question below. Expect a recommendation for super-archify.' }}</p>
     <div class="copy-block">
-      <button class="btn btn-outline" type="button" hidden data-copy="try-prompt">{{ '复制试用问题' if zh else 'Copy example question' }}</button>
+      {{ copyControl("try-prompt", '复制试用问题' if zh else 'Copy example question') }}
       <pre class="wrap-text"><code id="try-prompt">{{ '$super-ask-azhou 我有一段 Mermaid，想做成交互架构图。该用哪个技能？' if zh else '$super-ask-azhou I have a Mermaid diagram. Which skill turns it into an interactive architecture diagram?' }}</code></pre>
     </div>
     <details>
       <summary>{{ '安装上面推荐的技能' if zh else 'Install the recommended skill' }}</summary>
       <div class="copy-block">
-        <button class="btn btn-outline" type="button" hidden data-copy="install-recommended">{{ '复制 Archify 安装命令' if zh else 'Copy Archify install command' }}</button>
+        {{ copyControl("install-recommended", '复制 Archify 安装命令' if zh else 'Copy Archify install command') }}
         <pre class="wrap-text"><code id="install-recommended">npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex</code></pre>
       </div>
     </details>
@@ -84,27 +90,31 @@ layout: base.njk
 <script>
   for (const button of document.querySelectorAll("[data-copy]")) {
     if (!navigator.clipboard?.writeText) continue;
-    button.hidden = false;
-    const status = document.createElement("span");
-    status.className = "copy-status";
-    status.setAttribute("role", "status");
-    button.after(status);
-    let pending = false;
+    const actions = button.parentElement;
+    const status = actions.querySelector('[role="status"]');
+    actions.hidden = false;
     let reset;
+    function showStatus(message, state) {
+      status.dataset.state = state;
+      status.textContent = message;
+    }
     button.addEventListener("click", async () => {
-      if (pending) return;
-      pending = true;
+      if (button.hasAttribute("aria-disabled")) return;
+      button.setAttribute("aria-disabled", "true");
       clearTimeout(reset);
-      status.textContent = {{ ('正在复制…' if zh else 'Copying…') | dump | safe }};
+      const showPending = setTimeout(() => {
+        showStatus({{ ('正在复制…' if zh else 'Copying…') | dump | safe }}, "pending");
+      }, 120);
       const source = document.getElementById(button.dataset.copy);
       try {
         await navigator.clipboard.writeText(source.textContent);
-        status.textContent = {{ ('已复制' if zh else 'Copied') | dump | safe }};
+        showStatus({{ ('已复制' if zh else 'Copied') | dump | safe }}, "success");
         reset = setTimeout(() => { status.textContent = ""; }, 3500);
       } catch {
-        status.textContent = {{ ('复制失败。请选中下方文字手动复制。' if zh else 'Copy failed. Select the text below to copy it manually.') | dump | safe }};
+        showStatus({{ ('复制失败，请选中下方文字复制。' if zh else 'Copy failed. Select the text below.') | dump | safe }}, "error");
       } finally {
-        pending = false;
+        clearTimeout(showPending);
+        button.removeAttribute("aria-disabled");
       }
     });
   }

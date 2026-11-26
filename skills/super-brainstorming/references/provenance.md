@@ -31,7 +31,7 @@ The upstream release carries no per-skill license file; the repository-root `LIC
 
 ## Azhou-maintained adaptation
 
-The upstream instruction body is retained verbatim except for the six recorded deltas and the Azhou brand layer; each delta is reproducible against the upstream anchors:
+The upstream instruction body is retained verbatim except for the recorded deltas and the Azhou brand layer; each delta is reproducible against the upstream anchors:
 
 | # | Delta | Upstream anchor | Change |
 |---|---|---|---|
@@ -41,6 +41,8 @@ The upstream instruction body is retained verbatim except for the six recorded d
 | D4 | Branding and telemetry default off | `SUPERPOWERS_BRAND_IMAGE_URL` block and `brandMarkup()` in `scripts/server.cjs`; `<title>` in `scripts/frame-template.html` | the upstream opt-out switches (`SUPERPOWERS_DISABLE_TELEMETRY`, `DISABLE_TELEMETRY`, `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`) become opt-in (`SUPERPOWERS_ENABLE_TELEMETRY`, `ENABLE_TELEMETRY`); with telemetry off the companion renders no brand markup, fetches no remote logo, and links no upstream repository; the frame title is neutral (`Visual Brainstorming`) |
 | D5 | Harness note | `visual-companion.md`, before `**Launching the server by platform:**` | one inserted paragraph declaring the platform recipes examples and the generic start/share/stop loop normative |
 | D6 | Builder-check provenance note | the subagent fallback sentence ("Without a subagent tool, read the document as that builder yourself.") | one appended clause requiring the mechanism that performed the check to be named |
+
+| D7 | Companion choice feedback | Choice styles and frame body in `scripts/frame-template.html` | Add a mobile viewport, keep selected cards the same size, follow reduced motion, and expose framed choices to keyboard and assistive technology. Selection still calls the original helper. |
 
 ### Accepted upstream-behavior notes
 

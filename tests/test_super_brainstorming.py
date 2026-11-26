@@ -51,7 +51,7 @@ DELTA_FILE_SHA256 = {
     "SKILL.md": "503b5fc3240e90145ad76b3db374d3c446e8ce636bcd84f1be0ca23e3ef36543",
     "visual-companion.md": "0d00eeb35af93d8d822f2cde5088992ca442f1df87fcb6080f31142c66ff461c",
     "scripts/server.cjs": "3a3452c0e6cf6671e8ad5472832668a35786fb3e932bd3f087bd1ca7fe04d832",
-    "scripts/frame-template.html": "ede490ecf25083c5af502601063ce07832831cc61f994b4767c36c0f382d0d8b",
+    "scripts/frame-template.html": "6b827d92843c0c2d2642c155add584d3bfbf9599d8810500e7fa59ba72e49c2a",
 }
 
 EXPECTED_FILES = frozenset(
@@ -85,7 +85,7 @@ SEGMENTS = {
         ("function brandMarkup() {", None, "f76e4de24366cf94a9a0ca23dd024e54801ae130bb303ca4b1b1d07a1b4ff78d"),
     ),
     "scripts/frame-template.html": (
-        ("<!DOCTYPE", "<style>", "2d0a9e44ab9c0a2e4823759c1fe64fa0136ea850397b9b22011d5a651ac6c0f5"),
+        ("<!DOCTYPE", "<style>", "ac79f21fff31d746f97bc28d783ace6a86c59ea08b6b42c8d550204c7aeffa68"),
     ),
 }
 

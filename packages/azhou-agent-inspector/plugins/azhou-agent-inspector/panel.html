@@ -7,6 +7,10 @@
   <style>
     :root {
       color-scheme: light dark;
+      --motion-press: 100ms;
+      --motion-feedback: 140ms;
+      --motion-change: 180ms;
+      --motion-ease: cubic-bezier(.23, 1, .32, 1);
       font: 100%/1.5 system-ui, sans-serif;
       --background: light-dark(#f9f4ee, #211a1c);
       --surface: light-dark(#fff8ef, #302628);
@@ -52,7 +56,7 @@
       background: var(--surface);
       cursor: pointer;
     }
-    @media (hover: hover) {
+    @media (hover: hover) and (pointer: fine) {
       button:not([aria-disabled="true"]):hover { border-color: var(--muted); }
     }
     button:not([aria-disabled="true"]):active { border-color: var(--accent); }
@@ -62,8 +66,7 @@
     .status, .feedback, .round, dt, footer { font-size: 0.8125rem; color: var(--muted); }
     .status { margin: 1rem 0 0.625rem; }
     .status[data-state="running"] { color: var(--accent); }
-    .feedback { margin: 0 0 0.625rem; }
-    .feedback:empty { margin: 0; }
+    .feedback { min-block-size: 1.5em; margin: 0 0 0.625rem; }
     .round { margin: 0 0 0.5rem; font-weight: 600; }
     dl, dd { margin: 0; }
     dd { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -106,6 +109,20 @@
     .performance { margin-block-start: 0.625rem; font-size: 0.875rem; }
     .performance summary { cursor: pointer; width: fit-content; padding: 0.25rem; }
     .performance summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    @media (prefers-reduced-motion: no-preference) {
+      button {
+        transition: border-color var(--motion-feedback) ease, color var(--motion-feedback) ease,
+                    transform var(--motion-feedback) var(--motion-ease);
+      }
+      button:not([aria-disabled="true"]):active {
+        transform: scale(.98); transition-duration: var(--motion-press);
+      }
+      :is(.feedback, #snapshot) { transition: opacity var(--motion-change) var(--motion-ease); }
+      .feedback:empty { opacity: 0; }
+      @starting-style { #snapshot:not([hidden]) { opacity: 0; } }
+      .performance::details-content { opacity: 0; transition: opacity var(--motion-change) var(--motion-ease); }
+      .performance[open]::details-content { opacity: 1; }
+    }
     footer { margin-block-start: 1rem; overflow-wrap: anywhere; }
   </style>
 </head>
@@ -180,20 +197,22 @@
 
     let revision = 0;
     let feedbackReset;
-    function acceptSnapshot(data) {
+    function acceptSnapshot(data, clearFeedback = true) {
       if (data !== null && !Object.hasOwn(notices, data?.state)) return false;
 
       revision += 1;
       const status = data?.state ?? "";
       const sample = status === "complete" ? data : data?.lastCompleted;
       state.dataset.state = status;
-      state.textContent = notices[status] ?? "尚未收到宿主数据。";
+      const notice = notices[status] ?? "尚未收到宿主数据。";
+      if (state.textContent !== notice) state.textContent = notice;
       snapshot.hidden = !sample;
       round.hidden = status === "complete";
       for (const metric of metrics) {
         const key = metric.dataset.metric;
         const value = sample?.[key];
-        metric.textContent = Number.isFinite(value) ? formats[key](value) : "—";
+        const text = Number.isFinite(value) ? formats[key](value) : "—";
+        if (metric.textContent !== text) metric.textContent = text;
       }
       for (const row of performanceRows) {
         row.hidden = !Number.isFinite(sample?.[row.querySelector("dd").dataset.metric]);
@@ -204,8 +223,10 @@
         const [term, value] = row.children;
         return term.textContent + " " + value.textContent;
       }).join("\n");
-      clearTimeout(feedbackReset);
-      feedback.textContent = "";
+      if (clearFeedback) {
+        clearTimeout(feedbackReset);
+        feedback.textContent = "";
+      }
       return true;
     }
 
@@ -256,13 +277,13 @@
 
         // A host push may already have replaced the visible session while the call was pending.
         if (revision === requestedAt) {
-          if (!acceptSnapshot(result?.structuredContent)) throw Error("missing snapshot");
+          if (!acceptSnapshot(result?.structuredContent, false)) throw Error("missing snapshot");
           feedback.textContent = "已刷新。";
           feedbackReset = setTimeout(() => { feedback.textContent = ""; }, 3500);
         }
       } catch {
         if (revision === requestedAt) {
-          feedback.textContent = snapshot.hidden ? "刷新失败，请重试。" : "刷新失败，仍显示上次读取的数据。";
+          feedback.textContent = snapshot.hidden ? "刷新失败，请重试。" : "刷新失败，仍显示上次数据。";
         }
       } finally {
         refresh.removeAttribute("aria-disabled");

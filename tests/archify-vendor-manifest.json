@@ -7,7 +7,7 @@
     "SKILL.md": "7481a4618fc660458ff3da8411af70cd5b6f5478a0e3ff5c353f0179d3eeb5fb",
     "THIRD_PARTY_NOTICES.md": "6595f9485861d8e1f46bdae09bde7288be4f82f3f286e2a41d3f8356d6fdc3b9",
     "assets/JetBrainsMono-OFL.txt": "c1ab7c666206842a02b35b30770dac0d7a10156ed401c9defc3f02a754d89e90",
-    "assets/template.html": "7f21fd87d83d4bc6ebdb833d78e8a40103abe117d33002b8713e6004d264f021",
+    "assets/template.html": "c3de88ed4d8d78c95a6cc9283c609a27e1f408683d050cf6c45e4401cd7efad7",
     "bin/archify.mjs": "17fb2e4795413570696d5d9d3586cb7e610ee0008acf0c3051f07faf861e54fe",
     "bin/delivery-update.mjs": "24d92f908d91ece10ddcefe979f7950f9250023813c41777022ae5d948aa8e2c",
     "bin/export-svg.mjs": "002c8f6cf361646cc2e1d781ee00e6d5e50e2f27f668a0d0227ade717975da71",
@@ -71,8 +71,8 @@
     "explainer/parse.mjs": "a1ed1447e8f76603f544952a3483614039357755620945d5cfed51b1a1c42261",
     "explainer/patch.mjs": "a571191e2b65403d49343237c2e915b81c6d0f80c13b9cfedc17de3f60dd0804",
     "explainer/prepare.mjs": "476808c5a1cd0412d7fb2a91b8de0720bfa8aec01e3bd2f54712ce1c4881fa69",
-    "explainer/reader.css": "938509ac8694c411065c5a902c7b80b57f09a44e7c75f4ca979de99f4b07b518",
-    "explainer/reader.js": "57732c9cd15329b263eff164a94065778efa8ae2ea3c426cb76cf51905171af6",
+    "explainer/reader.css": "2febf6aa78e3a93e5dd723e920f2ed6c4dd01a9f311ff8b23fe353b53ef6d1b4",
+    "explainer/reader.js": "08fa489e975fb83f9fcff7e4f91fef5d5bbaf3ac06f4b9247534c49bb9ef56bf",
     "explainer/render.mjs": "adefa5776bd0b3824d07c4d7808a3b040b7e8223c785882346f1be42cac58fdf",
     "explainer/revision.mjs": "29032cab30c03b2e4c48730f40175e0e59aa4794893c02e5ae38668776c18288",
     "explainer/sources.mjs": "cbe349e5f7bf6203b1ae51ee2eb73ee5fb1bf399e23f0b301af1be41f8adae09",
@@ -322,7 +322,7 @@
     "references/delivery-contract.md": "418250feeb9a4d3e172e954822c16f7d02c9b1733fd06cfdaf41ac8f6ad1369c",
     "references/explainer-authoring.md": "cdc159e11582a516fa023bb2e57aabc4c280f3d9ea76183761e52dcd58e0e79e",
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
-    "references/provenance.md": "41271ef1f12751e40dd103c6b9b7c75f01d3b23d1e412597cbae54b00ffaf47e",
+    "references/provenance.md": "501bd0dd80336a38bcfa90671f815e31411f0bcf6a23e0e23177f65fb493c2d0",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
     "references/setup.md": "58958433d8f054a3c91cde05b3ba5cbbc2bad61aeb3811f50a47561ea913df5c",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
@@ -503,11 +503,11 @@
     {
       "base_sha256": "4fe243de7448f83d2123e987db5ec2539b662480a6e3ce3c90deb9e0c9ad11ef",
       "disposition": "adopt_upstream_with_documented_local_fix",
-      "local_sha256": "5296ebce756e65f87d81b9f3d5fa13ce768ecec226fe215708b89cc5300faa80",
-      "packaged_sha256": "7f21fd87d83d4bc6ebdb833d78e8a40103abe117d33002b8713e6004d264f021",
+      "local_sha256": "da24944bb1d7b46fb686779a2849fc458ceeca5c88d16da0004700a161b94896",
+      "packaged_sha256": "c3de88ed4d8d78c95a6cc9283c609a27e1f408683d050cf6c45e4401cd7efad7",
       "path": "assets/template.html",
       "target_sha256": "ce14fe404b80577bf5aceae189d78a50dded861a026f99c21997f57fdd3254fb",
-      "resolution": "Upstream 3.3.0 generator meta line carries the local super-archify label; whitespace-only line normalization replayed; the generic export-menu subtitle span and its header styles are removed (references/provenance.md); drilldown, parent-return and Semantic Passport navigation hrefs pass one shared scheme allowlist guard before location or href writes"
+      "resolution": "Upstream 3.3.0 generator meta line carries the local super-archify label; whitespace-only line normalization replayed; the generic export-menu subtitle span and its header styles are removed (references/provenance.md); drilldown, parent-return and Semantic Passport navigation hrefs pass one shared scheme allowlist guard before location or href writes Reapplied the Viewer theme switch, reduced-motion camera and overview scrolling behavior from Hub PR #603."
     },
     {
       "base_sha256": "3cebcee3fa339e3b98deacae8cb9a5570525e003d8823368d304d904ba9ceecd",
@@ -1168,20 +1168,21 @@
     },
     {
       "base_sha256": "20ae425a84157c2d478241250975e74fca8938b47b85c5414149710ff4a3538f",
-      "disposition": "adopt_upstream",
-      "local_sha256": "20ae425a84157c2d478241250975e74fca8938b47b85c5414149710ff4a3538f",
-      "packaged_sha256": "938509ac8694c411065c5a902c7b80b57f09a44e7c75f4ca979de99f4b07b518",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "9c9014ce5a310b8fa2f1c1510fcb3e59f580467f26fc53372ba6a20bf4afa735",
+      "packaged_sha256": "2febf6aa78e3a93e5dd723e920f2ed6c4dd01a9f311ff8b23fe353b53ef6d1b4",
       "path": "explainer/reader.css",
-      "target_sha256": "938509ac8694c411065c5a902c7b80b57f09a44e7c75f4ca979de99f4b07b518"
+      "target_sha256": "938509ac8694c411065c5a902c7b80b57f09a44e7c75f4ca979de99f4b07b518",
+      "resolution": "Reapplied the explainer control and reduced-motion styles from Hub PR #603."
     },
     {
       "base_sha256": "202d3ad200accd89a1484fe64610d9bc8bb4544c14c3f51522ba74f965b332c6",
       "disposition": "adopt_upstream_with_documented_local_fix",
-      "local_sha256": "61c50334c072d7393f8ee0c60198e6a5e7c635d91a3175c09ac3616e7152b7f2",
-      "packaged_sha256": "57732c9cd15329b263eff164a94065778efa8ae2ea3c426cb76cf51905171af6",
+      "local_sha256": "5948826dea7b721cc7cc2b7e8e94e526db5b744c6ace9f31f7d89e771ac1049b",
+      "packaged_sha256": "08fa489e975fb83f9fcff7e4f91fef5d5bbaf3ac06f4b9247534c49bb9ef56bf",
       "path": "explainer/reader.js",
       "target_sha256": "ad13e6c83602eb00f4fd7af6b7dc0374cce839e73fe1b1f337f8b132ad0ad6f4",
-      "resolution": "Hoisted attribute-complete escapeText over the Walk bar, Ask dialog and source cards; the former Clipboard guard retired because upstream v3.3.0 owns copyText and its retry/manual fallbacks"
+      "resolution": "Hoisted attribute-complete escapeText over the Walk bar, Ask dialog and source cards; the former Clipboard guard retired because upstream v3.3.0 owns copyText and its retry/manual fallbacks Reapplied reduced-motion navigation and scroll behavior from Hub PR #603."
     },
     {
       "base_sha256": "415c8c0638f42abc3b96f1b105453780678f1e33a9994f844cfbe4833670f25d",
@@ -4408,8 +4409,8 @@
     {
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
-      "local_sha256": "a913a7e229478bfbb4896621babc825e42999c72763a5d34d4d6caa1e185e83e",
-      "packaged_sha256": "41271ef1f12751e40dd103c6b9b7c75f01d3b23d1e412597cbae54b00ffaf47e",
+      "local_sha256": "98f33d07143a6a7e8ed3ac4c5cd8d6f7081fdd23b8e914775adcc4425187cb2c",
+      "packaged_sha256": "501bd0dd80336a38bcfa90671f815e31411f0bcf6a23e0e23177f65fb493c2d0",
       "path": "references/provenance.md",
       "target_sha256": null
     },

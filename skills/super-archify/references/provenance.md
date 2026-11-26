@@ -40,6 +40,7 @@ The local capability-independent adaptations remain:
 - the retained local `examples/archify-repository.tree.json` packaging delta, `renderers/shared/diagnostics.mjs`, `scripts/generate-brand-marks.mjs` and the unchanged mode README deltas;
 - the v3.2.0-era restore of the real sibling `bin/archify.mjs` identity in `bin/preview.mjs` and the upstream `archify` skillId in `skill-release.json`/`scripts/update-contract.mjs`; v3.3.0 keeps both, so `bin/preview.mjs` and `skill-release.json` now carry upstream bytes verbatim;
 - removal of the generic export-menu subtitle and its translations from the local Viewer;
+- Viewer and explainer motion improvements. The theme switch moves with a transform, camera and explainer navigation follow reduced motion, and selecting a node on the overview map scrolls the page when the current camera movement finishes. Reapply these changes in `assets/template.html`, `explainer/reader.js` and `explainer/reader.css` when updating the source pin.
 - the bounded CodeQL-driven security hardening added on this pin (see below), which keeps every flagged flow behavior-preserving and pins its regressions in repository-level `tests/test_archify.py`.
 
 ## Local compatibility fixes carried across this pin
