@@ -44,7 +44,11 @@ eleventyComputed:
     <script>
       const toc = document.querySelector(".article-toc");
       const wide = matchMedia("(min-width: 62rem)");
-      const syncToc = () => { toc.open = wide.matches; };
+      const syncToc = () => {
+        // A keyboard user inside the contents keeps their place when it folds away.
+        if (toc.open && !wide.matches && toc.contains(document.activeElement)) toc.querySelector("summary").focus({ preventScroll: true });
+        toc.open = wide.matches;
+      };
       syncToc();
       wide.addEventListener("change", syncToc);
     </script>

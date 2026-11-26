@@ -108,9 +108,16 @@
       }
     }
     * { box-sizing: border-box; }
-    /* The fallback is the wide header's own height, so a deep link lands right
-       before the observer has measured it. */
-    html { scroll-padding-top: calc(var(--site-header-height, 4.6rem) + 25px); }
+    /* The fallback is the header's own height at each layout, so a deep link lands
+       right before the observer has measured it. The two-row header has its own. */
+    :root { --site-header-fallback: 4.6rem; }
+    html { scroll-padding-top: calc(var(--site-header-height, var(--site-header-fallback)) + 25px); }
+    @media (min-width: 680px) and (max-width: 46rem) {
+      :root { --site-header-fallback: 5.9rem; }
+    }
+    @media (min-width: 680px) and (max-width: 46rem) and (pointer: coarse) {
+      :root { --site-header-fallback: 6.3rem; }
+    }
     body {
       margin: 0;
       background: var(--az-bg);
@@ -144,7 +151,6 @@
       text-decoration-color: color-mix(in srgb, currentColor 68%, transparent);
       text-underline-offset: .15em;
     }
-    :where(a:active:not(.btn, .gcard, .capability-link, .channel-list a)) { color: var(--az-accent-active); }
     @media (hover: hover) and (pointer: fine) {
       a:hover, a:active { text-decoration-color: currentColor; }
     }
@@ -283,6 +289,10 @@
       .hub-arrived, .gcard.hub-arrived { background: var(--az-accent-surface); }
       :is(h1, h2, h3, h4, h5, h6).hub-arrived { box-shadow: 0 0 0 .35rem var(--az-accent-surface); }
     }
+    /* Forced colours drop tints and shadows; the mark stays as an outline there. */
+    @media (forced-colors: active) {
+      .hub-arrived { outline: 2px solid CanvasText; outline-offset: 2px; }
+    }
     @media (prefers-reduced-motion: no-preference) {
       @keyframes state-arrive {
         from { opacity: .65; }
@@ -299,17 +309,16 @@
       @supports not selector(details::details-content) {
         details[open] > :not(summary) { animation: state-arrive var(--motion-change) var(--motion-ease); }
       }
-      /* Where both the content pseudo-element and keyword interpolation exist,
-         the disclosure opens and closes on its own box. Closing is the shorter
-         change. flow-root keeps child margins inside the box so the last frame
-         cannot jump; visibility is discrete so the content stays while it leaves. */
+      /* Where the content pseudo-element and keyword interpolation exist, a disclosure
+         a person toggles opens and closes on its own box; closing is the shorter change.
+         flow-root keeps child margins inside the box so the last frame cannot jump.
+         Closed content stays hidden the browser's own way, which keeps it findable;
+         the script below turns motion on only for a click on the summary. */
       @supports (interpolate-size: allow-keywords) and (transition-behavior: allow-discrete) and selector(details::details-content) {
         :root { interpolate-size: allow-keywords; }
         details[open] > summary::before { transition-duration: var(--motion-expand); }
         details::details-content {
           display: flow-root;
-          content-visibility: visible;
-          visibility: hidden;
           block-size: 0;
           /* The negative margins cancel the padding, so resting layout stays put
              while focus rings keep their room inside the clip. */
@@ -317,19 +326,15 @@
           margin: -6px -8px;
           overflow: clip;
           opacity: 0;
+        }
+        details[open]::details-content { animation: none; block-size: auto; opacity: 1; }
+        details.hub-motion::details-content {
           transition:
             block-size var(--motion-change) var(--motion-move),
-            visibility var(--motion-change),
             opacity var(--motion-change) var(--motion-ease);
-          transition-behavior: allow-discrete;
         }
-        details[open]::details-content {
-          animation: none;
-          visibility: visible;
-          block-size: auto;
-          opacity: 1;
-          transition-duration: var(--motion-expand), var(--motion-expand), var(--motion-change);
-        }
+        details.hub-motion[open]::details-content { transition-duration: var(--motion-expand), var(--motion-change); }
+        details.hub-closing::details-content { content-visibility: visible; }
       }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -459,6 +464,45 @@
         }).observe(top);
       }
 
+      // Motion is on only while a person toggles a disclosure with its summary. Find-in-page,
+      // scripts and layout breakpoints change it without motion, so a found line is exactly
+      // where the browser scrolled to. While a disclosure closes, its content stays rendered
+      // until the box has shrunk and cannot take focus.
+      const settleDisclosures = [];
+      for (const summary of document.querySelectorAll("main summary")) {
+        const details = summary.parentElement;
+        const content = Array.from(details.children).filter((child) => child !== summary);
+        let timer, expected;
+        const settle = () => {
+          clearTimeout(timer);
+          timer = 0;
+          details.classList.remove("hub-motion", "hub-closing");
+          for (const child of content) child.inert = false;
+        };
+        settleDisclosures.push(settle);
+        // The box's own transition reports no event, so it is timed by the step it takes.
+        // Anything else that changes the box before then ends the step at once.
+        details.addEventListener("toggle", () => {
+          if (timer && details.open !== expected) settle();
+        });
+        summary.addEventListener("click", () => {
+          settle();
+          if (motion.matches) return;
+          const closing = details.open;
+          expected = !closing;
+          details.classList.add("hub-motion");
+          if (closing) {
+            details.classList.add("hub-closing");
+            for (const child of content) child.inert = true;
+          }
+          timer = setTimeout(settle, duration(closing ? "--motion-change" : "--motion-expand") + 60);
+        });
+      }
+      // A hidden page shows no motion, and its timers run late.
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) for (const settle of settleDisclosures) settle();
+      });
+
       // Arrival answers "where did I land" once instead of leaving a frame on the target.
       // The next input dismisses it, which also covers a glide the user interrupts.
       let arrival = [];
@@ -555,7 +599,7 @@
           const started = performance.now();
           const time = Math.min(320, 180 + Math.abs(span) * .08);
           const tick = (now) => {
-            const progress = Math.min(1, (now - started) / time);
+            const progress = Math.min(1, Math.max(0, (now - started) / time));
             current.expected = from + span * (bezier ? bezier(progress) : progress);
             scrollTo(0, current.expected);
             if (progress < 1 && Math.abs(to - current.expected) >= 1) current.frame = requestAnimationFrame(tick);

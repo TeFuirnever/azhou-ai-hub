@@ -146,6 +146,8 @@
 @media (hover: hover) and (pointer: fine) {
   .btn-primary { --az-hover-fill: var(--az-accent-hover); }
   :is(.gcard, .capability-link, .channel-list a) { --az-hover-fill: var(--az-card); }
+  /* A marked catalog row keeps its arrival tint under the pointer. */
+  .gcard.hub-arrived { --az-hover-fill: var(--az-accent-surface); }
   /* summary draws its chevron on ::before, so its layer lives on ::after.
      The layer fades its colour in paint: an opacity layer makes WebKit read its
      start value on the last frame of the transition. */
@@ -164,7 +166,8 @@
     pointer-events: none;
     transition: none;
   }
-  :is(.site-head nav a, .btn, .gcard, .capability-link, summary, .channel-list a):hover {
+  /* Source rows are text links and keep their underline; only the layer joins them. */
+  :is(.site-head nav a, .btn, .gcard, .capability-link, summary):hover {
     text-decoration: none;
   }
   :is(.site-head nav a, .btn, .gcard, .capability-link, .channel-list a):hover:not(:active, :disabled)::before,
@@ -324,26 +327,32 @@
     align-items: center;
     column-gap: .2rem;
     row-gap: .2rem;
-    padding-block: .3rem .4rem;
+  /* The top padding leaves room for a focus ring at the viewport edge. */
+    padding-block: .5rem .4rem;
   }
-  /* Identity and language share the first row; five single-line links share the second.
+  /* Identity and language share the first row and five links share the second. Each link
+     stays on one line at the default text size and wraps only when larger text needs the room.
      The language link widens its hit area through its margins so the row stays as short as the brand. */
-  .site-head nav .brand { grid-column: 1 / 4; grid-row: 1; justify-self: start; white-space: nowrap; }
+  .site-head nav .brand { grid-column: 1 / 4; grid-row: 1; justify-self: start; }
   .site-head #switch-language {
-    grid-column: 4 / 6; grid-row: 1; justify-self: end; white-space: nowrap;
+    grid-column: 4 / 6; grid-row: 1; justify-self: end;
     min-block-size: 0; padding-block: 9px; margin-block: -9px;
   }
   /* Touch keeps the full 44px target; the wider gap and top padding keep it clear of the row below and the viewport edge. */
   @media (pointer: coarse) {
-    .site-head nav { padding-block-start: .4rem; row-gap: .4rem; }
+    /* 11px clears the 12px the target lifts and the 5px of its focus ring. */
+    .site-head nav { padding-block-start: 11px; row-gap: .4rem; }
     .site-head #switch-language { min-block-size: 44px; padding-block: 12px; margin-block: -12px; }
   }
+  /* Columns may shrink below their longest word, so very large text never widens the page. */
+  .site-head nav > * { min-inline-size: 0; }
   .site-head nav a:not(.brand, #switch-language) {
     grid-row: 2;
     justify-content: center;
-    white-space: nowrap;
     padding-inline: .1rem;
     font-size: clamp(.75rem, 3vw, .9rem);
+    /* A word that no longer fits its column breaks instead of painting into its neighbour. */
+    overflow-wrap: anywhere;
   }
   .site-head nav .spacer { display: none; }
 }
