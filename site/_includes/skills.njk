@@ -62,20 +62,38 @@ layout: base.njk
     setQuery(translated, query);
     catalogLanguageLink.href = translated.href;
   }
-  function restoreSearch() {
-    input.value = new URLSearchParams(window.location.search).get("q") ?? "";
-    updateSkills();
+  function searchDraftKey() {
+    return "hub-skill-search:" + window.location.pathname + window.location.search;
+  }
+  function restoreSearch(restoreDraft) {
+    let draft = null;
+    if (restoreDraft) {
+      try {
+        draft = sessionStorage.getItem(searchDraftKey());
+      } catch {}
+    }
+    input.value = draft ?? new URLSearchParams(window.location.search).get("q") ?? "";
+    if (draft === null) updateSkills();
+    else saveSearch();
   }
   function saveSearch() {
     updateSkills();
     const current = new URL(window.location.href);
-    setQuery(current, input.value.trim());
-    if (current.href === window.location.href) return;
+    const key = searchDraftKey();
+    const query = input.value.trim();
+    setQuery(current, query);
     try {
-      history.replaceState(history.state, "", current);
+      if (current.href !== window.location.href) history.replaceState(history.state, "", current);
     } catch (error) {
       if (error.name !== "SecurityError") throw error;
+      try {
+        sessionStorage.setItem(key, query);
+      } catch {}
+      return;
     }
+    try {
+      sessionStorage.removeItem(key);
+    } catch {}
   }
   input.addEventListener("input", saveSearch);
   clear.addEventListener("click", () => {
@@ -83,8 +101,11 @@ layout: base.njk
     input.focus();
     saveSearch();
   });
-  window.addEventListener("pageshow", restoreSearch);
-  window.addEventListener("popstate", restoreSearch);
-  restoreSearch();
+  window.addEventListener("pageshow", event => {
+    if (event.persisted) restoreSearch(true);
+  });
+  window.addEventListener("popstate", () => restoreSearch(true));
+  const navigationType = performance.getEntriesByType("navigation")[0]?.type;
+  restoreSearch(navigationType === "reload" || navigationType === "back_forward");
   document.getElementById("skill-filter").hidden = false;
 </script>
