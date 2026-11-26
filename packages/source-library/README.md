@@ -28,11 +28,13 @@ uv run --locked python library.py --data "$azhou_catalog" list
 uv run --locked python library.py --data "$azhou_catalog" backup /path/to/new-backup
 ```
 
-`inspect <id>` 可读归档版本和正文。备份会校验私有数据库引用的文件。恢复时把整个备份复制到新的私有目录，再用 `list` 和 `inspect` 核对。
+`inspect <id>` 可读最近一次归档的版本和正文，传入 `--revision` 可查看指定版本。备份会校验私有数据库引用的文件。恢复时把整个备份复制到新的私有目录，再用 `list` 和 `inspect` 核对。
 
 ## 审核与发布
 
 用 `review <id> link --basis "<发布依据>" --note "<自写导读>"` 登记链接审核。全文审核用 `review <id> full --revision <版本摘要> --basis "<发布依据>" --note "<自写导读>"`。用 `withdraw <id>` 从后续导出移除审核结果。
+
+旧版归档可继续查看。若旧版归档缺少对应版本的标题和作者等记录，重新导入当时保存的网页，再按新版本摘要审核全文。
 
 `export <新目录>` 生成一份仅含已审核条目的交接包。维护者再核对权利范围，把获准条目纳入[官网发布清单](../../site/library-content/first-edition.json)，由常规 PR 和 Pages 流程发布。线上下架同样通过修改官网发布清单并部署验证。
 

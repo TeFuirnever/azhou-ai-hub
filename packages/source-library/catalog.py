@@ -15,7 +15,8 @@ SCHEMA = """
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS articles (
     id TEXT PRIMARY KEY, url TEXT UNIQUE NOT NULL, original_url TEXT NOT NULL,
-    title TEXT NOT NULL, published TEXT, author TEXT, lang TEXT, first_exported TEXT
+    title TEXT NOT NULL, published TEXT, author TEXT, lang TEXT, first_exported TEXT,
+    latest_revision TEXT
 );
 CREATE TABLE IF NOT EXISTS aliases (
     url TEXT PRIMARY KEY, article_id TEXT NOT NULL REFERENCES articles(id)
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS source_runs (
 CREATE TABLE IF NOT EXISTS revisions (
     article_id TEXT NOT NULL REFERENCES articles(id), digest TEXT NOT NULL,
     captured TEXT NOT NULL, raw_object TEXT NOT NULL, retention_basis TEXT NOT NULL,
-    body TEXT NOT NULL, media TEXT NOT NULL, missing TEXT NOT NULL,
+    body TEXT NOT NULL, media TEXT NOT NULL, missing TEXT NOT NULL, metadata TEXT,
     PRIMARY KEY (article_id, digest)
 );
 CREATE TABLE IF NOT EXISTS approvals (
@@ -56,6 +57,17 @@ class Catalog:
         self.db = sqlite3.connect(self.root / "catalog.sqlite3")
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            articles = {column["name"] for column in self.db.execute("PRAGMA table_info(articles)")}
+            if "latest_revision" not in articles:
+                self.db.execute("ALTER TABLE articles ADD COLUMN latest_revision TEXT")
+                self.db.execute("""UPDATE articles SET latest_revision=(
+                    SELECT digest FROM revisions WHERE article_id=articles.id ORDER BY rowid DESC LIMIT 1
+                )""")
+            revisions = {column["name"] for column in self.db.execute("PRAGMA table_info(revisions)")}
+            if "metadata" not in revisions:
+                self.db.execute("ALTER TABLE revisions ADD COLUMN metadata TEXT")
 
     def __enter__(self):
         return self
@@ -102,10 +114,11 @@ class Catalog:
 
     def entries(self):
         return [dict(row) for row in self.db.execute(
-            """SELECT a.*, group_concat(s.source) AS sources, p.scope, p.basis,
-                      (SELECT missing FROM revisions WHERE article_id=a.id ORDER BY rowid DESC LIMIT 1) AS missing
+            """SELECT a.*, group_concat(s.source) AS sources, p.scope, p.basis, r.missing
                FROM articles a JOIN sources s ON a.id=s.article_id
-               LEFT JOIN approvals p ON a.id=p.article_id GROUP BY a.id ORDER BY a.published DESC,a.title"""
+               LEFT JOIN approvals p ON a.id=p.article_id
+               LEFT JOIN revisions r ON r.article_id=a.id AND r.digest=a.latest_revision
+               GROUP BY a.id ORDER BY a.published DESC,a.title"""
         )]
 
     def put_object(self, raw, suffix):
@@ -140,7 +153,6 @@ class Catalog:
         html, missing = clean_body(body, landed, archive_image)
         raw_object = self.put_object(raw, "html")
         images = sorted(set(media.values()))
-        content_digest = digest(json_text([article["title"], html, images, missing]).encode())
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
             canonical_id = self.lookup(article["url"])
@@ -156,14 +168,21 @@ class Catalog:
                 self.db.execute("INSERT OR IGNORE INTO aliases VALUES (?,?)", (article["url"], known_id))
             article_id, _ = self.note(source_key, article["url"], article["title"], article["published"])
             self.db.execute("INSERT OR IGNORE INTO aliases VALUES (?,?)", (normalized_url(url), article_id))
+            previous = self.db.execute("SELECT published FROM articles WHERE id=?", (article_id,)).fetchone()
+            metadata = {name: article[name] for name in ("url", "title", "published", "author", "lang")}
+            metadata["published"] = metadata["published"] or previous["published"]
+            content_digest = digest(json_text([metadata, html, images, missing]).encode())
             self.db.execute(
-                """UPDATE articles SET url=?,title=?,published=coalesce(?,published),author=?,lang=? WHERE id=?""",
-                (article["url"], article["title"], article["published"], article["author"], article["lang"], article_id),
+                """INSERT OR IGNORE INTO revisions
+                   (article_id,digest,captured,raw_object,retention_basis,body,media,missing,metadata)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (article_id, content_digest, timestamp(), raw_object, basis, html,
+                 json_text(images), json_text(missing), json_text(metadata)),
             )
             self.db.execute(
-                "INSERT OR IGNORE INTO revisions VALUES (?,?,?,?,?,?,?,?)",
-                (article_id, content_digest, timestamp(), raw_object, basis, html,
-                 json_text(images), json_text(missing)),
+                """UPDATE articles SET url=?,title=?,published=?,author=?,lang=?,latest_revision=? WHERE id=?""",
+                (metadata["url"], metadata["title"], metadata["published"], metadata["author"],
+                 metadata["lang"], content_digest, article_id),
             )
         return {"id": article_id, "revision": content_digest, "missing": missing,
                 "completeness": "partial" if missing else "complete"}
@@ -182,9 +201,10 @@ class Catalog:
         entry = self.db.execute("SELECT * FROM articles WHERE id=?", (article_id,)).fetchone()
         if entry is None:
             raise CollectionError("article was not found")
-        if revision:
+        selected = revision or entry["latest_revision"]
+        if selected:
             saved = self.db.execute(
-                "SELECT * FROM revisions WHERE article_id=? AND digest=?", (article_id, revision)
+                "SELECT * FROM revisions WHERE article_id=? AND digest=?", (article_id, selected)
             ).fetchone()
         else:
             saved = self.db.execute(
@@ -195,8 +215,11 @@ class Catalog:
         if saved is None:
             return dict(entry, completeness="metadata", revision=None)
         item = dict(saved)
-        item.update(media=json.loads(item["media"]), missing=json.loads(item["missing"]))
-        return dict(entry, completeness="partial" if item["missing"] else "complete", revision=item)
+        item.update(media=json.loads(item["media"]), missing=json.loads(item["missing"]),
+                    metadata=json.loads(item["metadata"]) if item["metadata"] else None)
+        fields = dict(entry)
+        fields.update(item["metadata"] or {})
+        return dict(fields, completeness="partial" if item["missing"] else "complete", revision=item)
 
     def backup(self, target):
         destination = Path(target).expanduser().resolve()
@@ -233,6 +256,9 @@ class Catalog:
             ).fetchone()
             if not saved:
                 raise CollectionError("full approval requires the digest of a reviewed revision")
+            if saved["metadata"] is None:
+                raise CollectionError("archive the saved page again to record version metadata before full approval")
+            fields.update(json.loads(saved["metadata"]))
             fields.update(body=saved["body"], media=json.loads(saved["media"]), missing=json.loads(saved["missing"]))
         with self.db:
             self.db.execute("INSERT OR REPLACE INTO approvals VALUES (?,?,?,?,?)",

@@ -176,6 +176,33 @@ class LibraryTest(unittest.TestCase):
         self.assertEqual(len(self.store.entries()), 1)
         self.assertEqual(sync(self.store, ["openai"], fetcher=self.fetch)["openai"]["added"], 0)
 
+    def test_full_approval_uses_the_requested_revisions_metadata(self):
+        original = self.store.archive("openai", URL, "local fixture", self.fetch)
+        updated = html(PRIVATE).replace(b"Archive fixture", b"Updated title").replace(b"Test author", b"New author")
+        self.responses[URL] = (updated, URL, "text/html")
+        latest = self.store.archive("openai", URL, "local fixture", self.fetch)
+        self.assertNotEqual(original["revision"], latest["revision"])
+        previous = self.store.inspect(original["id"], original["revision"])
+        self.assertEqual((previous["title"], previous["author"]), ("Archive fixture", "Test author"))
+        self.store.approve(original["id"], "full", "local fixture", "Public overview", original["revision"])
+        exported = self.root / "metadata-export"
+        self.store.export(exported)
+        [item] = json.loads((exported / "manifest.json").read_text())["articles"]
+        self.assertEqual((item["title"], item["author"]), ("Archive fixture", "Test author"))
+
+    def test_reimport_of_an_old_revision_becomes_latest(self):
+        original = self.store.archive("openai", URL, "local fixture", self.fetch)
+        prior_media = self.responses[IMAGE]
+        self.responses[IMAGE] = CollectionError("fixture image unavailable")
+        interim = self.store.archive("openai", URL, "local fixture", self.fetch)
+        self.assertNotEqual(original["revision"], interim["revision"])
+        self.responses[IMAGE] = prior_media
+        reverted = self.store.archive("openai", URL, "local fixture", self.fetch)
+        self.assertEqual(original["revision"], reverted["revision"])
+        entry = self.store.inspect(original["id"])
+        self.assertEqual(entry["revision"]["digest"], original["revision"])
+        self.assertEqual(self.store.entries()[0]["missing"], "[]")
+
     def test_restore_preserves_links_approvals_and_media(self):
         saved = self.store.archive("openai", URL, "local fixture", self.fetch)
         self.store.approve(saved["id"], "full", "local fixture", "Public overview", saved["revision"])
