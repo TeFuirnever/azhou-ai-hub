@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import tempfile
@@ -99,6 +100,35 @@ class PstackIntegrationTest(unittest.TestCase):
 
     def calls(self):
         return [json.loads(line) for line in (self.home / "native-operations.jsonl").read_text(encoding="utf-8").splitlines()]
+
+    def test_text_plan_prints_an_apply_command_bound_to_the_same_plan(self):
+        self.workspace = self.base / "project with spaces and an apostrophe's"
+        self.home = self.workspace / ".azhou/hub/targets/pstack"
+        args = ["--workspace", str(self.workspace), "--codex-home", str(self.home), "--codex-bin", str(self.binary)]
+
+        for operation in ("install", "remove"):
+            with self.subTest(operation=operation):
+                command = ["plan", "--operation", operation, *args]
+                if operation == "install":
+                    command.append("--coexistence")
+                json_output = io.StringIO()
+                with redirect_stdout(json_output):
+                    self.assertEqual(0, pstack.main(command, hub_root=self.hub))
+                plan = json.loads(json_output.getvalue())
+
+                text_output = io.StringIO()
+                with redirect_stdout(text_output):
+                    self.assertEqual(0, pstack.main([*command, "--text"], hub_root=self.hub))
+                self.assertIn("No files changed.", text_output.getvalue())
+                if operation == "install":
+                    self.assertFalse(self.home.exists())
+                apply = shlex.split(text_output.getvalue().splitlines()[-1])
+                self.assertEqual(["integrations", "pstack", "apply"], apply[2:5])
+                self.assertIn(plan["plan_id"], apply)
+                result = io.StringIO()
+                with redirect_stdout(result):
+                    self.assertEqual(0, pstack.main(apply[4:], hub_root=self.hub))
+                self.assertTrue(json.loads(result.getvalue())["changed"])
 
     def _install_owned_legacy_fixture(self):
         """Build an actual old-layout frozen snapshot and native install.

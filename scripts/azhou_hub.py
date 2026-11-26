@@ -1159,9 +1159,16 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
         rows.append({"name": item.get("name", ""), "status": "already_absent" if state == "missing" else state, "details": details, "destination": str(target / item.get("name", ""))})
     if any(row["status"] == "conflict" for row in rows):
         return _lifecycle_report("fail", rows)
+    record_needed = receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled"
     if not apply:
+        if all(row["status"] == "already_absent" for row in rows):
+            details = (
+                "The skill files are already absent. Run with --apply to record the uninstall."
+                if record_needed else "The skill files are already absent. No action needed."
+            )
+            return _lifecycle_report("dry_run", rows, details=details)
         return _lifecycle_report("dry_run", rows)
-    if receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled" and not LINK_SUPPORTS_DIR_FD and os.name != "nt":
+    if record_needed and not LINK_SUPPORTS_DIR_FD and os.name != "nt":
         return _lifecycle_report("fail", rows, error="safe uninstall recording is unavailable on this platform")
     for row in rows:
         if row["status"] == "current":
@@ -1174,7 +1181,7 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             except (OSError, PackageError) as exc:
                 row["status"], row["details"] = "fail", str(exc)
                 return _lifecycle_report("partial", rows, error="uninstall failed")
-    if receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled":
+    if record_needed:
         try:
             state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
             if state != "missing":

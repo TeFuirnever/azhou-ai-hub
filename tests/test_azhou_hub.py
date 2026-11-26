@@ -1361,6 +1361,25 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertIn("managed copy digest differs", refused.getvalue())
             self.assertEqual("user-owned", (target / "sample/SKILL.md").read_text(encoding="utf-8"))
 
+    def test_uninstall_text_only_prompt_to_record_an_active_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            shutil.rmtree(target / "sample")
+            command = ["uninstall", "--target", str(target), "--receipt", str(receipt)]
+
+            pending = io.StringIO()
+            with redirect_stdout(pending):
+                self.assertEqual(0, azhou_hub.main(command, root=root))
+            self.assertIn("Run with --apply to record the uninstall.", pending.getvalue())
+
+            result, applied = self._json_main([*command, "--apply", "--json"], root=root)
+            self.assertEqual(0, result, applied)
+            finished = io.StringIO()
+            with redirect_stdout(finished):
+                self.assertEqual(0, azhou_hub.main(command, root=root))
+            self.assertIn("No action needed.", finished.getvalue())
+            self.assertNotIn("--apply", finished.getvalue())
+
     def test_legacy_receipts_require_explicit_reviewed_namespace_migration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, current_receipt = self._managed_fixture(directory, mode="copy")

@@ -73,6 +73,14 @@ For engineering questions, compare the [book skill names](references/book-skills
 
 Match the task to the local entry's description. Recommend the closest fit, give one reason tied to the user's situation, and show `$<name>` for direct use in the default mini mode. If the user specifically asks for something they can use here, verify any fallback skill is available to this project too. If nothing available fits, lead with that result. Mention a missing prerequisite only to explain the outcome. Reserve book recommendations and invocation commands for verified, usable entries.
 
+## Give the next action
+
+Lead the routing answer with the recommended Skill and why it fits. Give one next action in the user's language. Put the required receipt fields on one compact line. Give the invocation or installation instruction once.
+
+- If the host reports that the Skill is available in this project, give its invocation using that host's syntax. Do not add installation instructions.
+- If the Skill is confirmed missing, give the documented install route for the current host and the recommended Skill. For a project-scope package-manager install in Codex, use `npx skills add TeFuirnever/azhou-ai-hub --skill <canonical-name> --agent codex` from the project directory. Other hosts and existing installations use their documented route. Mention any prerequisite that changes the next action, such as the local checkout required by the Foundation Skills.
+- If availability is unknown, say so briefly. Give the most useful check, such as looking for the Skill in the current host's Skill picker. Do not infer that it is missing from the install state of another project.
+
 ## Boundaries
 
 - Recommendation only: name the skill and its mode; the user stays in control of what runs.
@@ -91,4 +99,10 @@ For a standalone router installation, use its own `scripts/record_unrouted.py` a
 
 ## Verification
 
-The routing catalog is generated from the canonical skills manifest, so it cannot go stale silently: adding, renaming, or re-describing a skill requires regenerating this file, and the router-coverage plus generated-index parity checks in `scripts/check_repository.py` fail closed otherwise (removal is caught by discovery parity). End with a stable receipt carrying `schema`, `status`, `current truth`, `artifacts/changes`, `verification`, `holds`, `next action`, and `learning signal`; `artifacts` is empty for a routing answer. The router-pattern source pin and update path live in [provenance.md](references/provenance.md).
+The routing catalog is generated from the canonical skills manifest, so it cannot go stale silently: adding, renaming, or re-describing a skill requires regenerating this file, and the router-coverage plus generated-index parity checks in `scripts/check_repository.py` fail closed otherwise (removal is caught by discovery parity). The router-pattern source pin and update path live in [provenance.md](references/provenance.md).
+
+End with this single-line receipt. Replace every placeholder with a short value. For a match, use `artifacts/changes=none`. If you recorded a miss, name the local telemetry update without quoting the request.
+
+```text
+schema=<schema> · status=<status> · current truth=<state> · artifacts/changes=<changes> · verification=<check> · holds=<holds> · next action=<action> · learning signal=<signal>
+```

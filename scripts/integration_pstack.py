@@ -22,6 +22,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import stat
 import subprocess
 import sys
@@ -1298,6 +1299,35 @@ def apply_plan(plan: dict, *, plan_id: str, hub_root: Path = ROOT) -> dict:
             raise
 
 
+def _print_plan(plan: dict, hub_root: Path) -> None:
+    operation = plan["operation"]
+    print(f"Plan to {operation} {plan['native_identity']['plugin_id']}")
+    print(f"Codex home: {json.dumps(plan['codex_home'], ensure_ascii=False)}")
+    print(f"Workspace: {json.dumps(plan['workspace'], ensure_ascii=False)}")
+    print(f"Codex executable: {json.dumps(plan['codex_bin'], ensure_ascii=False)}")
+    coexistence = plan["coexistence"]
+    if coexistence.get("sheet_change"):
+        change = coexistence["sheet_change"]
+        print(f"Model sheet: {change['purpose']}")
+    elif coexistence.get("sheet_restore"):
+        print("Model sheet: restore the previous contents if the owned change is still intact.")
+    if operation == "remove":
+        print("The private source snapshot is kept. Avoid other plugin changes in this Codex home during removal.")
+    print("No files changed. Review the target before applying this plan.")
+
+    command = [
+        sys.executable, str(hub_root.resolve() / "scripts" / "azhou_hub.py"),
+        "integrations", "pstack", "apply",
+        "--workspace", plan["workspace"], "--codex-home", plan["codex_home"],
+        "--codex-bin", plan["codex_bin"], "--operation", operation,
+        "--plan-id", plan["plan_id"],
+    ]
+    if coexistence["requested"]:
+        command.append("--coexistence")
+    print("Copy the following command into a POSIX shell to apply.")
+    print(shlex.join(command))
+
+
 def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("plan", "apply", "doctor", "transition-plan"))
@@ -1313,7 +1343,11 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
     parser.add_argument("--skills-dir", type=Path, default=None,
                         help="transition-plan only: a shared Skills root compared read-only against the pinned package")
     parser.add_argument("--plan-id")
+    parser.add_argument("--text", action="store_true",
+                        help="plan only: review the target and get a POSIX shell apply command")
     args = parser.parse_args(argv)
+    if args.text and args.command != "plan":
+        parser.error("--text is only valid with plan")
     try:
         if args.skills_dir is not None and args.command != "transition-plan":
             raise common.IntegrationError("--skills-dir is only valid with transition-plan")
@@ -1330,10 +1364,16 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
                 if not args.plan_id:
                     raise common.IntegrationError("apply requires the --plan-id from a reviewed plan")
                 result = apply_plan(result, plan_id=args.plan_id, hub_root=hub_root)
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        if args.text:
+            _print_plan(result, hub_root)
+        else:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
     except (common.IntegrationError, OSError) as exc:
-        print(json.dumps({"status": "blocked", "error": str(exc)}, ensure_ascii=False))
+        if args.text:
+            print(f"Plan blocked: {exc}", file=sys.stderr)
+        else:
+            print(json.dumps({"status": "blocked", "error": str(exc)}, ensure_ascii=False))
         return 1
 
 

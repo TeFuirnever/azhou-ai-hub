@@ -46,6 +46,17 @@ layout: base.njk
     </details>
   </div>
 </section>
+<section class="sec">
+  <div class="wrap">
+    {% set cursor = '/assets/cursors/azhou-double-hug/' %}
+    {% set cursorGuide = site.blobBase ~ cursor ~ 'README.md' %}
+    <h2 id="cursor-theme">{{ '阿舟 macOS 鼠标指针' if zh else 'Azhou cursor theme for macOS' }}</h2>
+    <p>{{ '在 Mousecape 导入「百变阿舟 · 抱一下」后，选中主题并点击 Apply 生效。' if zh else 'Import Azhou Double Hug in Mousecape, then select the theme and click Apply.' }}</p>
+    <p><a href="{{ '/assets/Azhou-Double-Hug-3.6.1.cape' | url }}" download>{{ '下载鼠标指针主题' if zh else 'Download the cursor theme' }}</a>
+    · <a href="{{ cursorGuide }}">{{ '查看预览和安装步骤' if zh else 'Preview and install' }}</a>
+    · <a href="{{ cursorGuide }}#restore">{{ '恢复系统指针' if zh else 'Restore system cursors' }}</a></p>
+  </div>
+</section>
 <script>
   for (const button of document.querySelectorAll("[data-copy]")) {
     if (!navigator.clipboard?.writeText) continue;
