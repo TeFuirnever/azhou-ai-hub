@@ -112,17 +112,22 @@
       font: 400 16px/24px var(--az-font);
     }
     body.doc { background: var(--az-bg-2); }
+    ::view-transition { pointer-events: none; }
+    ::view-transition-group(*), ::view-transition-new(*) { animation: none; }
+    ::view-transition-old(*) { display: none; }
+    ::view-transition-group(hub-content) { z-index: 1; }
+    ::view-transition-group(hub-header) { z-index: 2; }
     @media (prefers-reduced-motion: no-preference) {
       @view-transition { navigation: auto; }
       .site-head { view-transition-name: hub-header; }
-      ::view-transition { pointer-events: none; }
-      ::view-transition-group(root),
-      ::view-transition-group(hub-header) {
-        animation-duration: var(--motion-change);
-        animation-timing-function: var(--motion-ease);
+      main { view-transition-name: hub-content; }
+      @keyframes route-enter {
+        from { opacity: .88; transform: translateY(4px); }
       }
-      ::view-transition-old(hub-header) { animation: none; opacity: 0; }
-      ::view-transition-new(hub-header) { animation: none; }
+      ::view-transition-new(hub-content) {
+        mix-blend-mode: normal;
+        animation: route-enter var(--motion-change) var(--motion-ease) both;
+      }
     }
     a { color: var(--az-accent); }
     a:hover { text-decoration: underline; text-underline-offset: .15em; }
@@ -244,7 +249,7 @@
       padding: 16px; text-decoration: none;
     }
     .gcard-t { font: 500 16px/1.3 var(--az-font); color: var(--az-accent); }
-    .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); }
+    .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); overflow-wrap: anywhere; }
     @media (hover: hover) and (pointer: fine) {
       .site-head nav a:not(.brand):not(:active):hover { background: var(--az-bg-3); color: var(--az-text); text-decoration: none; }
       .btn-primary:hover { background: var(--az-accent-hover); color: var(--az-btn-text); text-decoration: none; }
@@ -349,8 +354,25 @@
       <p>Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0</p>
     </div>
   </footer>
-  {%- if route %}
   <script>
+    window.addEventListener("pagereveal", ({ viewTransition }) => {
+      if (!viewTransition) return;
+      const motion = matchMedia("(prefers-reduced-motion: reduce)");
+      if (motion.matches) {
+        viewTransition.skipTransition();
+        return;
+      }
+      const listener = new AbortController();
+      const stop = () => viewTransition.skipTransition();
+      const options = { capture: true, passive: true, signal: listener.signal };
+      window.addEventListener("pointerdown", stop, options);
+      window.addEventListener("keydown", stop, options);
+      window.addEventListener("wheel", stop, options);
+      motion.addEventListener("change", stop, options);
+      const cleanup = () => listener.abort();
+      viewTransition.finished.then(cleanup, cleanup);
+    });
+    {%- if route %}
     if ("ResizeObserver" in window) {
       new ResizeObserver(([entry]) => {
         document.documentElement.style.setProperty("--site-header-height", entry.target.offsetHeight + "px");
@@ -362,7 +384,7 @@
     }
     window.addEventListener("hashchange", syncLanguageLink);
     syncLanguageLink();
+    {%- endif %}
   </script>
-  {%- endif %}
 </body>
 </html>

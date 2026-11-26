@@ -224,5 +224,33 @@
     </div>
   </div>
 
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const frame = document.getElementById("frame-content");
+      const choices = [...frame.querySelectorAll(".option[data-choice], .card[data-choice]")];
+      const nativeSelector = "button, a[href], input";
+      for (const choice of choices) {
+        if (choice.matches(nativeSelector) || choice.hasAttribute("role")) continue;
+        choice.setAttribute("role", "button");
+        if (!choice.hasAttribute("tabindex")) choice.tabIndex = 0;
+      }
+      const buttons = choices.filter(choice => choice.matches('button, [role="button"]'));
+      function syncSelection() {
+        for (const choice of buttons) {
+          const pressed = String(choice.classList.contains("selected"));
+          if (choice.getAttribute("aria-pressed") !== pressed) choice.setAttribute("aria-pressed", pressed);
+        }
+      }
+      frame.addEventListener("keydown", event => {
+        if (event.defaultPrevented || event.repeat || (event.key !== "Enter" && event.key !== " ")) return;
+        const choice = event.target;
+        if (!buttons.includes(choice) || choice.matches(nativeSelector)) return;
+        event.preventDefault();
+        choice.click();
+      });
+      frame.addEventListener("click", syncSelection);
+      syncSelection();
+    });
+  </script>
 </body>
 </html>

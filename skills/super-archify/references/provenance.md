@@ -30,6 +30,7 @@ The local capability-independent adaptations remain:
 - the Azhou brand protocol, explicit holds and stable receipt (`super-archify.receipt.v1`), including honest `not-run` reporting for an optional explainer browser gate;
 - the setup, provenance and compatibility references;
 - removal of the generic export-menu subtitle and its translations from the local Viewer;
+- Viewer and explainer motion improvements. The theme switch moves with a transform, camera and explainer navigation follow reduced motion, and selecting a node on the overview map scrolls the page when the current camera movement finishes. Reapply these changes in `assets/template.html`, `explainer/reader.js` and `explainer/reader.css` when updating the source pin;
 - removal of monorepo-only npm scripts and development lockfile, omission of generated example HTML, and the existing whitespace-only normalization.
 
 The old canonical rename had also reached two runtime contracts. These are repaired against the actual upstream implementation:
