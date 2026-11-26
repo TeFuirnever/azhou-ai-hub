@@ -22,6 +22,7 @@
 | [阿舟 Agent 工作台](packages/azhou-agent-inspector/README.md) | 在 Codex 和 ZCode 查看整轮耗时、速率及可用的性能详情。 |
 | [pstack](packages/pstack-agent-harness/README.md) | 用工程工作流完成实现、评审和 PR 跟进。 |
 | [Agent Rules Books](#agent-rules-books) | 用 14 套书籍工程规则指导设计、代码改动和评审。 |
+| [阿舟来源库](https://tefuirnever.github.io/azhou-ai-hub/zh/library/) | 浏览 AI 官方信源，通过 RSS 订阅选文。 |
 
 ## 在 Codex 里首次安装
 
