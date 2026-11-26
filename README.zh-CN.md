@@ -106,17 +106,17 @@ https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
 ### 在 Azhou AI Hub 开发时使用
 
-仓库在 `.agents/skills/` 自带固定版本。在当前 checkout 打开的 Codex 会话里，可以输入 `$refactoring 检查这次改动，建议一项能保持行为的最小重构。` Ask Azhou 核实当前工作区已启用对应规则后，也可以推荐它。
+Hub 维护的版本在 `.agents/skills/`。开发 Hub 时，直接使用当前 checkout 自带的规则。在这个 checkout 打开的 Codex 会话里，可以输入 `$refactoring 检查这次改动，建议一项能保持行为的最小重构。` Ask Azhou 核实当前工作区已启用对应规则后，也可以推荐它。
 
 ### 在其他项目安装
 
-准备好 Node.js 和 npm 后，在自己的项目目录运行下面的命令，从上游安装一套规则。如果安装器提示选择 Agent 和安装范围，请选你的 Agent 以及当前项目。
+准备好 Node.js 和 npm 后，在自己的项目目录运行下面的命令，为 Codex 安装 Hub 维护的版本。把 `refactoring` 换成上面任意一个规则名即可。如果安装器询问安装范围，请选当前项目。
 
 ~~~bash
-npx skills add ciembor/agent-rules-books --skill refactoring
+npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
 ~~~
 
-在同一项目里打开新会话，确认能找到该技能后再调用。其他宿主、手动安装和整套安装见[上游安装指南](https://github.com/ciembor/agent-rules-books#installation-as-skills)。
+在同一项目里打开新会话，确认能找到该技能后再调用。安装器默认从 Hub 的默认分支取规则。要与某个 Hub checkout 的版本完全一致，在仓库名后加 `@<commit>`。[安装和更新说明](https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-agent-rules-books)
 
 ## 为什么可信
 

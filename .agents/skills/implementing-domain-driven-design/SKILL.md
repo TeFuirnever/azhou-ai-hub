@@ -2,8 +2,6 @@
 name: implementing-domain-driven-design
 description: Apply Vaughn Vernon-inspired implementation DDD rules when building aggregates, domain events, repositories, application services, or context integrations.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Implementing Domain-Driven Design Skill

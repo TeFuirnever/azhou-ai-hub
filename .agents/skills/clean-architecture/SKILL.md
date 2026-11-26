@@ -2,8 +2,6 @@
 name: clean-architecture
 description: Apply Robert C. Martin-inspired architecture rules when separating business policy from frameworks, databases, UI, or infrastructure details.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Clean Architecture Skill

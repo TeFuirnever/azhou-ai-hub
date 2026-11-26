@@ -34,9 +34,19 @@ The existing Skill installation paths below remain independent. For the optional
 
 ## Install or update when a task needs it
 
-If a book skill is missing from the Azhou AI Hub checkout, check the current branch and the files under `.agents/skills/`. Update the checkout or restore the tracked files from the intended revision. These book skills ship with the project. Installing Ask Azhou by itself adds the router. To use a specific book in a different project, install it there from [agent-rules-books](https://github.com/ciembor/agent-rules-books).
-
 If Ask Azhou is missing from a project, follow [First install in Codex](#first-install-in-codex). A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
+
+## Install Agent Rules Books
+
+Hub contributors use the book skills tracked under `.agents/skills/` in their checkout. If a book skill is missing, check the current branch and restore the tracked files from the intended revision.
+
+In another project, choose a name from the [Agent Rules Books catalog](../README.md#agent-rules-books). Run the command in that project's directory, using Node.js and npm.
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
+~~~
+
+Open a new Codex session in the same project and look for `$refactoring`. Use `npx skills list --agent codex` to confirm the installed name and scope if the skill is missing. For a specific Hub revision, write `TeFuirnever/azhou-ai-hub@<commit>` as the source. For an existing Skills CLI install, use its [current scope when you update or remove it](#upgrade-or-uninstall).
 
 ## Package-manager install
 

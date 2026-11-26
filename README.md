@@ -106,17 +106,17 @@ Choose a skill for the engineering decision you want help with.
 
 ### Use the rules in Azhou AI Hub
 
-The repository ships a pinned copy under `.agents/skills/`. In a Codex session opened in this checkout, try `$refactoring Review this change and suggest the smallest refactor that preserves behavior.` Ask Azhou can also recommend a book skill when it can verify the skill is enabled in this workspace.
+Hub keeps its maintained edition under `.agents/skills/`. Contributors use it directly from the checkout. In a Codex session opened there, try `$refactoring Review this change and suggest the smallest refactor that preserves behavior.` Ask Azhou can also recommend a book skill when it can verify the skill is enabled in this workspace.
 
 ### Install the rules in another project
 
-With Node.js and npm, run this from your project directory to install one skill from the upstream repository. Select your agent host and project scope if the installer prompts you.
+With Node.js and npm, run this from your project directory to install the Hub edition for Codex. Replace `refactoring` with any skill name above. Select the current project if the installer asks for a scope.
 
 ~~~bash
-npx skills add ciembor/agent-rules-books --skill refactoring
+npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
 ~~~
 
-Open a new session in that project and confirm the skill appears before invoking it. For other hosts, manual setup or the full collection, see the [upstream installation guide](https://github.com/ciembor/agent-rules-books#installation-as-skills).
+Open a new session in that project and confirm the skill appears before invoking it. The installer uses Hub's default branch. To match a particular Hub checkout exactly, append `@<commit>` to the repository name. See [installation and updates](https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-agent-rules-books).
 
 ## Why trust it
 

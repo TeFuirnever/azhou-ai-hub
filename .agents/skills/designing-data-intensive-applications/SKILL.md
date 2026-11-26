@@ -2,8 +2,6 @@
 name: designing-data-intensive-applications
 description: Apply Martin Kleppmann-inspired data-system rules when designing reliability, scalability, consistency, replication, transactions, streams, or schema evolution.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Designing Data-Intensive Applications Skill
