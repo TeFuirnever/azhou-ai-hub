@@ -16,11 +16,12 @@ Use Python 3.11+ and a verified Codex executable for operations that need the na
 
 | Entry | Package runtime and adapter scope | Native owner and boundary |
 |---|---|---|
+| `azhou-agent-inspector` | `packages/azhou-agent-inspector/` provides a read-only plan with the marketplace root, runtime fingerprint and installation instructions for Codex or ZCode. | Each host's plugin manager installs and updates the Workbench. |
 | `pstack` | `packages/pstack-agent-harness/`; current `runtime_paths` fingerprint, private snapshot, native install/doctor/remove adapter and read-only transition review | Codex plugin manager owns registration and cache; the Hub adapter owns only the coexistence model-sheet line it writes. Bun/Node support bundled scripts; forge workflows may need their declared tools. |
 
-Adapters copy only manifest-selected runtime inputs below `<workspace>/.azhou/hub/sources/` and record a per-plan digest in an ignored private receipt. Receipts can contain local paths, frozen source bytes and exact rollback bytes; do not publish them. They keep recovery and owned cleanup tied to the reviewed package snapshot even after package files change. Build outputs and explicitly supplied private inputs have separate checks. A digest detects input changes; it is not a signature or an upstream license grant.
+When you apply a reviewed pstack install plan, the adapter copies only manifest-selected runtime inputs below `<workspace>/.azhou/hub/sources/` and records the digest in an ignored private receipt. Receipts can contain local paths, frozen source bytes and exact rollback bytes; do not publish them. They keep recovery and owned cleanup tied to the reviewed package snapshot even after package files change. Build outputs and explicitly supplied private inputs have separate checks. A digest detects input changes; it is not a signature or an upstream license grant.
 
-The adapters do not modify package source files. Any runtime input change changes the next plan fingerprint; review the plan before applying it. An existing installation may require recovery or removal using its recorded snapshot before a changed package can be installed. See [package provenance and updates](integration-provenance.md).
+The adapters do not modify package source files. A runtime input change produces a new plan fingerprint. Review the pstack plan before applying it. An existing pstack installation may require recovery or removal using its recorded snapshot before a changed package can be installed. See [package provenance and updates](integration-provenance.md).
 
 ## pstack: local source to native plugin
 
