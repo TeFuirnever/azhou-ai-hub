@@ -11,7 +11,7 @@ layout: base.njk
     {% if sourceLibrary.entries.length %}
     <p class="lede">{{ '搜索 AI 官方文章，阅读已获准的原文归档，或订阅选文更新。' if zh else 'Search official AI articles, read licensed archives, or subscribe to new selections.' }}</p>
     {% else %}
-    <p class="lede">{{ '浏览 AI 官方信源，订阅来源库的选文更新。' if zh else 'Browse official AI sources and subscribe to new selections.' }}</p>
+    <p class="lede">{{ '浏览 AI 官方来源，订阅来源库的选文更新。' if zh else 'Browse official AI sources and subscribe to new selections.' }}</p>
     {% endif %}
   </div>
 </section>
@@ -51,7 +51,7 @@ layout: base.njk
     <ul id="library-results" class="edition-list">
       {% for item in sourceLibrary.entries %}{% include "library-item.njk" %}{% endfor %}
     </ul>
-    {% if not sourceLibrary.entries.length %}<p>{{ '首批条目待发布。' if zh else 'The first selections are awaiting publication.' }}</p>{% endif %}
+    {% if not sourceLibrary.entries.length %}<p>{{ '首批选文即将发布。现在可以先浏览官方来源，或订阅更新。' if zh else 'The first selections are coming soon. Browse the official sources or subscribe for updates.' }}</p>{% endif %}
   </section>
   <aside class="library-sidebar" aria-labelledby="sources-title">
     <h2 id="sources-title">{{ '按来源浏览' if zh else 'Browse sources' }}</h2>

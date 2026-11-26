@@ -16,8 +16,8 @@ layout: base.njk
     </div>
     <p id="skill-count" role="status"
        data-all="{{ skills.length }} {{ '个技能' if zh else 'skills' }}"
-       data-results="{{ '找到 {count} 个技能' if zh else '{count} of ' ~ skills.length ~ ' skills' }}"
-       data-empty="{{ '没有匹配的技能。试试更短的关键词。' if zh else 'No matches. Try a shorter search.' }}"></p>
+       data-results="{{ '{total} 个技能中的 {count} 个' if zh else '{count} of {total} skills' }}"
+       data-empty="{{ '没有匹配的技能。试试更短的关键词，或清空搜索。' if zh else 'No matching skills. Try fewer words or clear the search.' }}"></p>
   </div>
   <ul class="cardgrid" id="skill-list">
     {%- set other = 'en' if zh else 'zh' %}
@@ -55,7 +55,7 @@ layout: base.njk
       if (visible) found += 1;
     }
     const message = !query ? count.dataset.all :
-      found ? count.dataset.results.replace("{count}", found) : count.dataset.empty;
+      found ? count.dataset.results.replace("{total}", items.length).replace("{count}", found) : count.dataset.empty;
     if (count.textContent !== message) count.textContent = message;
     clear.disabled = input.value === "";
 

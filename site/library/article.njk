@@ -42,9 +42,11 @@ eleventyComputed:
       </ol>
     </details>
     <script>
-      if (matchMedia("(min-width: 62rem)").matches) {
-        document.querySelector(".article-toc").open = true;
-      }
+      const toc = document.querySelector(".article-toc");
+      const wide = matchMedia("(min-width: 62rem)");
+      const syncToc = () => { toc.open = wide.matches; };
+      syncToc();
+      wide.addEventListener("change", syncToc);
     </script>
     {% endif %}
     <div class="article-copy">

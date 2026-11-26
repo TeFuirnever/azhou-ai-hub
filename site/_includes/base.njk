@@ -58,7 +58,11 @@
       color-scheme: light dark;
       --motion-feedback: 120ms;
       --motion-change: 160ms;
+      --motion-expand: 240ms;
       --motion-ease: cubic-bezier(.23, 1, .32, 1);
+      /* State and opacity lean forward; anything that travels a distance
+         (a disclosure's box, an anchor glide) starts and settles gently. */
+      --motion-move: cubic-bezier(.4, 0, .2, 1);
       --az-bg: #f6f1e7;
       --az-bg-2: #f0ecde;
       --az-bg-3: #e5e8d9;
@@ -77,6 +81,7 @@
       --az-brand-text: #a04023;
       --az-band: var(--az-bg-2);
       --az-band-border: var(--az-border-2);
+      --az-shadow-head: 0 6px 16px rgba(33, 45, 38, .09);
       --az-font: "Avenir Next", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
       --az-display: "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", "SimSun", Georgia, serif;
       --az-mono: "Roboto Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
@@ -94,15 +99,18 @@
         --az-accent: #b4d1b3;
         --az-accent-hover: #c9e1c9;
         --az-accent-active: #9dbc9d;
-        --az-accent-surface: #2b4132;
+        --az-accent-surface: rgba(143, 212, 171, .16);
         --az-btn-text: #192920;
         --az-code-bg: #25332a;
         --az-code-text: #e2ede0;
         --az-brand-text: #f3a181;
+        --az-shadow-head: 0 6px 16px rgba(0, 0, 0, .42);
       }
     }
     * { box-sizing: border-box; }
-    html { scroll-padding-top: calc(var(--site-header-height, 64px) + 24px); }
+    /* The fallback is the wide header's own height, so a deep link lands right
+       before the observer has measured it. */
+    html { scroll-padding-top: calc(var(--site-header-height, 4.6rem) + 25px); }
     body {
       margin: 0;
       background: var(--az-bg);
@@ -127,8 +135,19 @@
         animation: route-enter var(--motion-change) var(--motion-ease) both;
       }
     }
-    a { color: var(--az-accent); }
-    a:hover { text-decoration: underline; text-underline-offset: .15em; }
+    /* Resting underlines stay legible on every surface, then answer the pointer
+       with the shared feedback curve. Writing the offset on :hover moved it. */
+    a {
+      color: var(--az-accent);
+      text-decoration: underline;
+      text-decoration-color: currentColor;
+      text-decoration-color: color-mix(in srgb, currentColor 68%, transparent);
+      text-underline-offset: .15em;
+    }
+    :where(a:active:not(.btn, .gcard, .capability-link, .channel-list a)) { color: var(--az-accent-active); }
+    @media (hover: hover) and (pointer: fine) {
+      a:hover, a:active { text-decoration-color: currentColor; }
+    }
     :focus-visible { outline: 2px solid var(--az-accent); outline-offset: 2px; border-radius: 2px; }
     ::selection { background: var(--az-accent); color: var(--az-btn-text); }
     .skip-link {
@@ -146,6 +165,12 @@
       position: sticky; top: 0; z-index: 10;
       background: var(--az-bg);
       border-bottom: 1px solid var(--az-border-2);
+      box-shadow: 0 6px 16px transparent;
+    }
+    /* The shadow fades in paint rather than through an opacity layer, whose
+       teardown makes WebKit read its start value on the last frame. */
+    @media (min-width: 680px) {
+      .site-head[data-elevated] { box-shadow: var(--az-shadow-head); }
     }
     .site-head nav {
       display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center;
@@ -175,21 +200,21 @@
     :lang(zh) .band h1, :lang(zh) .lede { max-width: none; }
     .cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 32px; }
     .btn {
-      display: inline-flex; align-items: center; height: 36px; padding: 0 24px;
-      border-radius: 4px; border: 0;
-      font: 500 14px/36px var(--az-font); text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center; min-block-size: 36px; padding: 0 24px;
+      appearance: none; border-radius: 4px; border: 0; background: transparent; cursor: pointer;
+      font: 500 14px/20px var(--az-font); text-decoration: none;
     }
     .btn-primary { background: var(--az-accent); color: var(--az-btn-text); }
     .btn-outline { border: 1px solid var(--az-border); color: var(--az-text); }
-    .btn-outline:not(:disabled):active, .site-head nav a:not(.brand):active { background: var(--az-accent-surface); }
+    .btn-outline:not(:disabled):active, .site-head nav a:active, summary:active, .channel-list a:active { background: var(--az-accent-surface); }
     .btn:disabled { color: var(--az-text-2); cursor: default; }
+    .btn-outline:disabled { border-color: var(--az-border-2); }
     [hidden] { display: none !important; }
     .sec { padding: 60px 0; }
     .copy-actions {
       display: grid; grid-template-columns: max-content minmax(0, 1fr);
       align-items: center; justify-items: start; gap: .25rem .75rem;
     }
-    .copy-block button { cursor: pointer; }
     .copy-status {
       display: flex; align-items: baseline; gap: .35em;
       min-block-size: 1.5rem; color: var(--az-text-2);
@@ -202,8 +227,8 @@
       .copy-status { min-block-size: 3rem; }
     }
     details summary {
-      cursor: pointer; width: fit-content; padding-block: .5rem;
-      color: var(--az-accent); list-style: none;
+      cursor: pointer; width: fit-content; padding: .5rem .45rem; margin-inline: -.45rem;
+      border-radius: 4px; color: var(--az-accent); list-style: none;
     }
     details summary::-webkit-details-marker { display: none; }
     details summary::before {
@@ -213,7 +238,9 @@
       transform: rotate(-45deg);
     }
     details[open] > summary::before { transform: rotate(45deg); }
-    :is(h2, .cardgrid li):target { scroll-margin-block-start: .5rem; outline: 2px solid var(--az-accent); outline-offset: 4px; }
+    /* The arrival mark breathes around its heading; the negative margins keep the text in place. */
+    .hub-arrived { border-radius: 4px; }
+    :is(h1, h2, h3, h4).hub-arrived { margin: -.25rem -.45rem; padding: .25rem .45rem; }
     #skill-filter { margin-top: 24px; }
     #skill-filter label { display: block; margin-block-end: .25rem; }
     .skill-search-controls { display: flex; align-items: center; gap: .5rem; }
@@ -222,7 +249,7 @@
       border: 1px solid var(--az-text-2); background: var(--az-bg); color: var(--az-text); font: inherit;
     }
     #skill-search::-webkit-search-cancel-button { appearance: none; }
-    #clear-skill-search { flex: none; cursor: pointer; min-height: 44px; padding-inline: .75rem; }
+    #clear-skill-search { flex: none; min-height: 44px; padding-inline: .75rem; }
     #skill-count { color: var(--az-text-2); margin: .5rem 0 0; font-variant-numeric: tabular-nums; }
     .skill-name { align-self: flex-start; margin-block-start: auto; overflow-wrap: anywhere; font-size: 12px; }
     .gcard:active { background: var(--az-accent-surface); }
@@ -253,16 +280,52 @@
     .gcard-t { font: 500 16px/1.3 var(--az-font); color: var(--az-accent); }
     .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); overflow-wrap: anywhere; }
     .btn-primary:active { background: var(--az-accent-active); }
+    @media (prefers-reduced-motion: reduce) {
+      .hub-arrived { background: var(--az-accent-surface); }
+    }
     @media (prefers-reduced-motion: no-preference) {
       @keyframes state-arrive {
         from { opacity: .65; }
       }
-      summary::before { transition: transform var(--motion-change) var(--motion-ease); }
+      .btn { transition: color var(--motion-feedback) var(--motion-ease), border-color var(--motion-feedback) var(--motion-ease); }
+      a { transition: text-decoration-color var(--motion-feedback) var(--motion-ease); }
+      a:active { transition: none; }
+      .site-head { transition: box-shadow var(--motion-feedback) var(--motion-ease); }
+      summary::before { transition: transform var(--motion-change) var(--motion-move); }
       @supports selector(details::details-content) {
         details[open]::details-content { animation: state-arrive var(--motion-change) var(--motion-ease); }
       }
-      .copy-status:is([data-state="success"], [data-state="error"]) {
-        animation: state-arrive var(--motion-feedback) var(--motion-ease);
+      /* Where both the content pseudo-element and keyword interpolation exist,
+         the disclosure opens and closes on its own box. Closing is the shorter
+         change. flow-root keeps child margins inside the box so the last frame
+         cannot jump; visibility is discrete so the content stays while it leaves. */
+      @supports (interpolate-size: allow-keywords) and (transition-behavior: allow-discrete) and selector(details::details-content) {
+        :root { interpolate-size: allow-keywords; }
+        details[open] > summary::before { transition-duration: var(--motion-expand); }
+        details::details-content {
+          display: flow-root;
+          content-visibility: visible;
+          visibility: hidden;
+          block-size: 0;
+          /* The negative margins cancel the padding, so resting layout stays put
+             while focus rings keep their room inside the clip. */
+          padding: 6px 8px;
+          margin: -6px -8px;
+          overflow: clip;
+          opacity: 0;
+          transition:
+            block-size var(--motion-change) var(--motion-move),
+            visibility var(--motion-change),
+            opacity var(--motion-change) var(--motion-ease);
+          transition-behavior: allow-discrete;
+        }
+        details[open]::details-content {
+          animation: none;
+          visibility: visible;
+          block-size: auto;
+          opacity: 1;
+          transition-duration: var(--motion-expand), var(--motion-expand), var(--motion-change);
+        }
       }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -361,6 +424,163 @@
     window.addEventListener("hashchange", syncLanguageLink);
     syncLanguageLink();
     {%- endif %}
+    (() => {
+      const motion = matchMedia("(prefers-reduced-motion: reduce)");
+      const tokens = getComputedStyle(document.documentElement);
+      const easing = tokens.getPropertyValue("--motion-ease").trim();
+      const curve = /^cubic-bezier\(([^)]+)\)$/.exec(tokens.getPropertyValue("--motion-move").trim());
+      // The glide reads the same curve as the stylesheet instead of keeping a second one.
+      const bezier = curve && (([x1, y1, x2, y2]) => {
+        const point = (a, b) => (t) => 3 * a * (1 - t) ** 2 * t + 3 * b * (1 - t) * t * t + t ** 3;
+        const slope = (a, b) => (t) => 3 * (1 - t) ** 2 * a + 6 * (1 - t) * t * (b - a) + 3 * t * t * (1 - b);
+        const x = point(x1, x2), y = point(y1, y2), dx = slope(x1, x2);
+        return (progress) => {
+          if (progress <= 0 || progress >= 1) return progress;
+          let t = progress;
+          for (let i = 0; i < 6; i += 1) {
+            const steep = dx(t);
+            if (Math.abs(steep) < 1e-6) break;
+            t -= (x(t) - progress) / steep;
+          }
+          return y(t);
+        };
+      })(curve[1].split(",").map(Number));
+      const duration = (token) => parseFloat(tokens.getPropertyValue(token));
+
+      const head = document.querySelector(".site-head");
+      const top = document.querySelector(".brand-rule");
+      if ("IntersectionObserver" in window) {
+        new IntersectionObserver(([entry]) => {
+          head.toggleAttribute("data-elevated", !entry.isIntersecting);
+        }).observe(top);
+      }
+
+      // Arrival answers "where did I land" once instead of leaving a frame on the target.
+      // The next input dismisses it, which also covers a glide the user interrupts.
+      let arrival = [];
+      let marked = [];
+      function dismissMark() {
+        for (const animation of arrival) animation.cancel();
+        arrival = [];
+        for (const element of marked) element.classList.remove("hub-arrived");
+        marked = [];
+      }
+      function landingBox(target) {
+        return target.matches(".cardgrid > li") ? target.firstElementChild : target;
+      }
+      function fragmentTarget(hash) {
+        try {
+          return hash && document.getElementById(decodeURIComponent(hash.slice(1)));
+        } catch {
+          return null;
+        }
+      }
+      function highlightTarget() {
+        dismissMark();
+        const target = fragmentTarget(location.hash);
+        if (!target) return;
+        const box = landingBox(target);
+        marked = [box];
+        box.classList.add("hub-arrived");
+        if (motion.matches || typeof box.animate !== "function") return;
+        const surface = tokens.getPropertyValue("--az-accent-surface").trim();
+        const fadeIn = box.animate(
+          [{ backgroundColor: "transparent" }, { backgroundColor: surface }],
+          { duration: duration("--motion-feedback"), easing, fill: "forwards" });
+        const fadeOut = box.animate(
+          [{ backgroundColor: surface }, { backgroundColor: "transparent" }],
+          { duration: duration("--motion-expand"), easing, delay: 1000, fill: "forwards" });
+        arrival = [fadeIn, fadeOut];
+        fadeOut.finished.then(() => {
+          if (arrival.includes(fadeOut)) dismissMark();
+        }, () => {});
+      }
+      window.addEventListener("hashchange", highlightTarget);
+      for (const type of ["pointerdown", "keydown", "wheel", "touchstart"]) {
+        window.addEventListener(type, dismissMark, { capture: true, passive: true });
+      }
+      motion.addEventListener("change", highlightTarget);
+      highlightTarget();
+
+      // In-page anchors glide only on an explicit click or Enter. Any scroll intent
+      // hands the page back at once and skips the focus hand-off. Entry by address,
+      // history traversal and reduced motion keep the native jump.
+      let glide = null;
+      function stopGlide() {
+        if (!glide) return;
+        const current = glide;
+        glide = null;
+        current.listener.abort();
+        cancelAnimationFrame(current.frame);
+      }
+      function landing(target) {
+        const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+        const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+        const limit = document.documentElement.scrollHeight - innerHeight;
+        const rest = Math.max(0, Math.min(limit, scrollY + target.getBoundingClientRect().top - pad - margin));
+        // Engines round fractional scroll offsets differently; land on a device pixel.
+        return Math.round(rest * devicePixelRatio) / devicePixelRatio;
+      }
+      function glideTo(to) {
+        stopGlide();
+        return new Promise((resolve) => {
+          const from = scrollY;
+          const span = to - from;
+          const current = { listener: new AbortController(), expected: from, frame: 0, resolve };
+          const settle = (arrived) => {
+            stopGlide();
+            if (arrived) scrollTo(0, to);
+            resolve(arrived);
+          };
+          if (Math.abs(span) < 1) {
+            settle(true);
+            return;
+          }
+          glide = current;
+          const options = { capture: true, passive: true, signal: current.listener.signal };
+          for (const type of ["wheel", "touchstart", "pointerdown", "resize", "pagehide"]) {
+            window.addEventListener(type, () => settle(false), options);
+          }
+          window.addEventListener("keydown", () => settle(false), options);
+          window.addEventListener("visibilitychange", () => { if (document.hidden) settle(false); }, options);
+          motion.addEventListener("change", () => settle(false), options);
+          window.addEventListener("scroll", () => {
+            if (glide && Math.abs(scrollY - glide.expected) > 1) settle(false);
+          }, options);
+          const started = performance.now();
+          const time = Math.min(320, 180 + Math.abs(span) * .08);
+          const tick = (now) => {
+            const progress = Math.min(1, (now - started) / time);
+            current.expected = from + span * (bezier ? bezier(progress) : progress);
+            scrollTo(0, current.expected);
+            if (progress < 1 && Math.abs(to - current.expected) >= 1) current.frame = requestAnimationFrame(tick);
+            else settle(true);
+          };
+          current.frame = requestAnimationFrame(tick);
+        });
+      }
+      document.addEventListener("click", async (event) => {
+        if (motion.matches || event.defaultPrevented || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        const link = event.target.closest?.('a[href^="#"]:not(.skip-link)');
+        if (!link) return;
+        const hash = link.getAttribute("href");
+        const target = fragmentTarget(hash);
+        if (!target) return;
+        if (location.hash !== hash) {
+          try {
+            history.pushState(history.state, "", hash);
+          } catch (error) {
+            if (error.name !== "SecurityError") throw error;
+            return;
+          }
+        }
+        event.preventDefault();
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+        if (!await glideTo(landing(target))) return;
+        if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
+        target.focus({ preventScroll: true });
+      });
+    })();
   </script>
 </body>
 </html>
