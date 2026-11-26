@@ -38,6 +38,10 @@
        not a reference value. */
     :root {
       color-scheme: light dark;
+      --motion-press: 100ms;
+      --motion-feedback: 140ms;
+      --motion-change: 180ms;
+      --motion-ease: cubic-bezier(.23, 1, .32, 1);
       --az-bg: #ffffff;
       --az-bg-2: #f8f9fa;
       --az-bg-3: #f1f3f4;
@@ -100,7 +104,7 @@
       }
     }
     * { box-sizing: border-box; }
-    html { scroll-padding-top: 88px; }
+    html { scroll-padding-top: calc(var(--site-header-height, 64px) + 24px); }
     body {
       margin: 0;
       background: var(--az-bg);
@@ -108,8 +112,22 @@
       font: 400 16px/24px var(--az-font);
     }
     body.doc { background: var(--az-bg-2); }
+    ::view-transition { pointer-events: none; }
+    ::view-transition-group(*), ::view-transition-new(*) { animation: none; }
+    ::view-transition-old(*) { display: none; }
+    ::view-transition-group(hub-content) { z-index: 1; }
+    ::view-transition-group(hub-header) { z-index: 2; }
     @media (prefers-reduced-motion: no-preference) {
       @view-transition { navigation: auto; }
+      .site-head { view-transition-name: hub-header; }
+      main { view-transition-name: hub-content; }
+      @keyframes route-enter {
+        from { opacity: .88; transform: translateY(4px); }
+      }
+      ::view-transition-new(hub-content) {
+        mix-blend-mode: normal;
+        animation: route-enter var(--motion-change) var(--motion-ease) both;
+      }
     }
     a { color: var(--az-accent); }
     a:hover { text-decoration: underline; text-underline-offset: .15em; }
@@ -144,7 +162,6 @@
       color: var(--az-text-2); text-decoration: none;
       padding: 8px 10px; border-radius: 4px;
     }
-    .site-head nav a:not(.brand):hover { background: var(--az-bg-3); color: var(--az-text); text-decoration: none; }
     .site-head nav a[aria-current="page"] { background: var(--az-accent-surface); color: var(--az-accent); }
     .spacer { flex: 1; }
     .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
@@ -167,15 +184,34 @@
       font: 500 14px/36px var(--az-font); text-decoration: none;
     }
     .btn-primary { background: var(--az-accent); color: var(--az-btn-text); }
-    .btn-primary:hover { background: var(--az-accent-hover); color: var(--az-btn-text); text-decoration: none; }
-    .btn-primary:active { background: var(--az-accent-active); }
     .btn-outline { border: 1px solid var(--az-border); color: var(--az-text); }
-    .btn-outline:hover { background: var(--az-bg-2); text-decoration: none; color: var(--az-text); }
+    .btn-outline:active, .site-head nav a:not(.brand):active { background: var(--az-accent-surface); }
+    .btn:disabled, .btn[aria-disabled="true"] { color: var(--az-text-2); cursor: default; }
     [hidden] { display: none !important; }
     .sec { padding: 60px 0; }
+    .copy-actions {
+      display: grid; grid-template-columns: max-content minmax(0, 1fr);
+      align-items: center; justify-items: start; gap: .25rem .75rem;
+    }
     .copy-block button { cursor: pointer; }
-    .copy-status { margin-inline-start: .75rem; color: var(--az-text-2); }
-    details summary { cursor: pointer; width: fit-content; padding-block: .5rem; color: var(--az-accent); }
+    .copy-status { min-block-size: 1.5rem; color: var(--az-text-2); }
+    .copy-status[data-state="success"] { color: var(--az-accent); }
+    @media (max-width: 599px) {
+      .copy-actions { grid-template-columns: minmax(0, 1fr); }
+    }
+    details summary {
+      cursor: pointer; width: fit-content; padding-block: .5rem;
+      color: var(--az-accent); list-style: none;
+    }
+    details summary::-webkit-details-marker { display: none; }
+    details summary::before {
+      content: ""; display: inline-block; inline-size: .42em; block-size: .42em;
+      margin-inline: .15em .6em; vertical-align: .12em;
+      border-inline-end: 2px solid; border-block-end: 2px solid;
+      transform: rotate(-45deg);
+    }
+    details[open] > summary::before { transform: rotate(45deg); }
+    :is(h2, .cardgrid li):target { scroll-margin-block-start: .5rem; outline: 2px solid var(--az-accent); outline-offset: 4px; }
     #skill-filter { margin-top: 24px; }
     #skill-filter label { display: block; margin-block-end: .25rem; }
     .skill-search-controls { display: flex; align-items: center; gap: .5rem; }
@@ -185,7 +221,7 @@
     }
     #skill-search::-webkit-search-cancel-button { appearance: none; }
     #clear-skill-search { flex: none; cursor: pointer; min-height: 44px; padding-inline: .75rem; }
-    #skill-count { color: var(--az-text-2); margin: .5rem 0 0; }
+    #skill-count { color: var(--az-text-2); margin: .5rem 0 0; font-variant-numeric: tabular-nums; }
     .skill-name { align-self: flex-start; margin-block-start: auto; overflow-wrap: anywhere; font-size: 12px; }
     .gcard:active { background: var(--az-accent-surface); }
     .sec h2 { font: 500 24px/32px var(--az-font); letter-spacing: 0; margin: 0 0 16px; }
@@ -213,10 +249,31 @@
       padding: 16px; text-decoration: none;
     }
     .gcard-t { font: 500 16px/1.3 var(--az-font); color: var(--az-accent); }
-    .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); }
+    .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); overflow-wrap: anywhere; }
     @media (hover: hover) and (pointer: fine) {
-      .gcard { transition: border-color 160ms ease, box-shadow 160ms ease; }
-      .gcard:hover { border-color: var(--az-accent); box-shadow: var(--az-shadow-hover); text-decoration: none; }
+      .site-head nav a:not(.brand):not(:active):hover { background: var(--az-bg-3); color: var(--az-text); text-decoration: none; }
+      .btn-primary:hover { background: var(--az-accent-hover); color: var(--az-btn-text); text-decoration: none; }
+      .btn-outline:not(:disabled):not([aria-disabled="true"]):not(:active):hover { background: var(--az-bg-3); text-decoration: none; color: var(--az-text); }
+      .gcard:hover { border-color: var(--az-accent); text-decoration: none; }
+    }
+    .btn-primary:active { background: var(--az-accent-active); }
+    @media (prefers-reduced-motion: no-preference) {
+      :is(.btn, .gcard, .site-head nav a:not(.brand)) {
+        transition: border-color var(--motion-feedback) ease,
+                    background-color var(--motion-feedback) ease,
+                    color var(--motion-feedback) ease,
+                    transform var(--motion-feedback) var(--motion-ease);
+      }
+      .btn:not(:disabled):active, .gcard:active {
+        transform: scale(.98); transition-duration: var(--motion-press);
+      }
+      summary::before { transition: transform var(--motion-change) var(--motion-ease); }
+      @supports selector(details::details-content) {
+        details::details-content { opacity: 0; transition: opacity var(--motion-change) var(--motion-ease); }
+        details[open]::details-content { opacity: 1; }
+      }
+      .copy-status { transition: opacity var(--motion-feedback) var(--motion-ease); }
+      .copy-status:empty { opacity: 0; }
     }
     .gcard:focus-visible { border-color: var(--az-accent); box-shadow: var(--az-shadow-hover); }
     .doc-shell { max-width: 1440px; margin: 0 auto; padding: 32px 24px 72px; }
@@ -250,12 +307,13 @@
     @media (max-width: 959px) {
       .doc-card { padding: 24px; }
     }
+    @media (pointer: coarse) {
+      .btn { min-block-size: 44px; }
+      .site-head nav a:not(.brand) { min-block-size: 44px; display: flex; align-items: center; }
+    }
     @media (prefers-reduced-transparency: reduce) {
       .site-head { background: var(--az-bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
       body.doc .site-head { background: var(--az-bg-2); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      * { transition-duration: 0.01ms !important; }
     }
     @media print {
       .site-head, .site-foot, .brand-rule { display: none; }
@@ -296,15 +354,37 @@
       <p>Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0</p>
     </div>
   </footer>
-  {%- if route %}
   <script>
+    window.addEventListener("pagereveal", ({ viewTransition }) => {
+      if (!viewTransition) return;
+      const motion = matchMedia("(prefers-reduced-motion: reduce)");
+      if (motion.matches) {
+        viewTransition.skipTransition();
+        return;
+      }
+      const listener = new AbortController();
+      const stop = () => viewTransition.skipTransition();
+      const options = { capture: true, passive: true, signal: listener.signal };
+      window.addEventListener("pointerdown", stop, options);
+      window.addEventListener("keydown", stop, options);
+      window.addEventListener("wheel", stop, options);
+      motion.addEventListener("change", stop, options);
+      const cleanup = () => listener.abort();
+      viewTransition.finished.then(cleanup, cleanup);
+    });
+    {%- if route %}
+    if ("ResizeObserver" in window) {
+      new ResizeObserver(([entry]) => {
+        document.documentElement.style.setProperty("--site-header-height", entry.target.offsetHeight + "px");
+      }).observe(document.querySelector(".site-head"));
+    }
     const languageLink = document.getElementById("switch-language");
     function syncLanguageLink() {
       languageLink.hash = window.location.hash;
     }
     window.addEventListener("hashchange", syncLanguageLink);
     syncLanguageLink();
+    {%- endif %}
   </script>
-  {%- endif %}
 </body>
 </html>

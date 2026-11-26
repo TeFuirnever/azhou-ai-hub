@@ -12,12 +12,12 @@ layout: base.njk
     <label for="skill-search">{{ '搜索任务或包名' if zh else 'Search tasks or package names' }}</label>
     <div class="skill-search-controls">
       <input id="skill-search" type="search" autocomplete="off" autocapitalize="none" spellcheck="false">
-      <button id="clear-skill-search" class="btn btn-outline" type="button" hidden>{{ '清空搜索' if zh else 'Clear search' }}</button>
+      <button id="clear-skill-search" class="btn btn-outline" type="button" disabled>{{ '清空搜索' if zh else 'Clear search' }}</button>
     </div>
     <p id="skill-count" role="status"
        data-all="{{ skills.length }} {{ '个技能' if zh else 'skills' }}"
        data-results="{{ '找到 {count} 个技能' if zh else '{count} of ' ~ skills.length ~ ' skills' }}"
-       data-empty="{{ '没找到技能。试试更短的关键词，或者清空搜索框。' if zh else 'No skills found. Try a shorter search or clear the field.' }}"></p>
+       data-empty="{{ '没有匹配的技能。试试更短的关键词。' if zh else 'No matches. Try a shorter search.' }}"></p>
   </div>
   <ul class="cardgrid" id="skill-list">
     {%- set other = 'en' if zh else 'zh' %}
@@ -45,18 +45,55 @@ layout: base.njk
     if (query) url.searchParams.set("q", query);
     else url.searchParams.delete("q");
   }
-  function updateSkills() {
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  const resultAnimations = new Map();
+
+  function updateResults(visible, animate) {
+    const changed = items.some(({ element }, index) => element.hidden === visible[index]);
+    if (!changed) return;
+    const canAnimate = animate && !reduceMotion.matches && typeof Element.prototype.animate === "function";
+    const previous = canAnimate ? items.map(({ element }, index) =>
+      visible[index] && !element.hidden ? element.getBoundingClientRect() : null) : [];
+    cancelResultAnimations();
+    items.forEach(({ element }, index) => {
+      const hidden = !visible[index];
+      if (element.hidden !== hidden) element.hidden = hidden;
+    });
+    if (!canAnimate) return;
+
+    const next = items.map(({ element }, index) => visible[index] ? element.getBoundingClientRect() : null);
+    const tokens = getComputedStyle(document.documentElement);
+    const easing = tokens.getPropertyValue("--motion-ease").trim();
+    const duration = parseFloat(tokens.getPropertyValue("--motion-change"));
+    next.forEach((rect, index) => {
+      if (!rect || rect.bottom <= 0 || rect.top >= innerHeight) return;
+      const old = previous[index];
+      const x = old ? old.x - rect.x : 0;
+      const y = old ? old.y - rect.y : 0;
+      if (old && Math.abs(x) < .5 && Math.abs(y) < .5) return;
+      const nearby = old && Math.hypot(x, y) <= 160;
+      const animation = items[index].element.animate(
+        nearby ? [{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }]
+          : [{ opacity: .72 }, { opacity: 1 }],
+        { duration, easing },
+      );
+      resultAnimations.set(items[index].element, animation);
+      animation.onfinish = () => {
+        if (resultAnimations.get(items[index].element) === animation) resultAnimations.delete(items[index].element);
+      };
+    });
+  }
+
+  function updateSkills(animate = false) {
     const query = input.value.trim();
     const terms = query.toLowerCase().split(/\s+/);
-    let found = 0;
-    for (const { element, keywords } of items) {
-      element.hidden = !terms.every(term => keywords.includes(term));
-      if (!element.hidden) found += 1;
-    }
+    const visible = items.map(({ keywords }) => terms.every(term => keywords.includes(term)));
+    const found = visible.filter(Boolean).length;
+    updateResults(visible, animate);
     const message = !query ? count.dataset.all :
       found ? count.dataset.results.replace("{count}", found) : count.dataset.empty;
     if (count.textContent !== message) count.textContent = message;
-    clear.hidden = input.value === "";
+    clear.disabled = input.value === "";
 
     const translated = new URL(catalogLanguageLink.href);
     setQuery(translated, query);
@@ -86,8 +123,8 @@ layout: base.njk
     if (draft === null) updateSkills();
     else saveSearch();
   }
-  function saveSearch() {
-    updateSkills();
+  function saveSearch(animate = false) {
+    updateSkills(animate);
     const current = new URL(window.location.href);
     const key = searchDraftKey();
     const query = input.value.trim();
@@ -109,16 +146,22 @@ layout: base.njk
       } catch {}
     }
   }
-  input.addEventListener("input", saveSearch);
+  input.addEventListener("input", () => saveSearch(true));
   clear.addEventListener("click", () => {
     input.value = "";
     input.focus();
-    saveSearch();
+    saveSearch(true);
   });
   window.addEventListener("pageshow", event => {
     if (event.persisted) restoreSearch();
   });
   window.addEventListener("popstate", restoreSearch);
+  function cancelResultAnimations() {
+    for (const animation of resultAnimations.values()) animation.cancel();
+    resultAnimations.clear();
+  }
+  reduceMotion.addEventListener("change", cancelResultAnimations);
+  window.addEventListener("resize", cancelResultAnimations);
   restoreSearch();
   document.getElementById("skill-filter").hidden = false;
 </script>

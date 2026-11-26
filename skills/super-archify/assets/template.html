@@ -3265,6 +3265,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       white-space: nowrap;
     }
     .toolbar #btn-theme {
+      --theme-thumb-offset: 0rem;
       width: 3.5rem;
       padding: 0;
       justify-content: center;
@@ -3287,8 +3288,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       background: var(--panel);
       box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.12);
       content: "";
-      transform: translateY(-50%);
-      transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+      transform: translate(var(--theme-thumb-offset), -50%);
+      transition: transform 180ms cubic-bezier(.23, 1, .32, 1);
     }
     .toolbar #theme-icon {
       position: absolute;
@@ -3298,12 +3299,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       width: 0.75rem;
       height: 0.75rem;
       color: var(--cloud-stroke);
-      transform: translateY(-50%);
-      transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+      transform: translate(var(--theme-thumb-offset), -50%);
+      transition: transform 180ms cubic-bezier(.23, 1, .32, 1);
     }
+    [data-theme="dark"] .toolbar #btn-theme { --theme-thumb-offset: 1.25rem; }
     [data-theme="dark"] .toolbar #btn-theme::before { background: rgba(148, 163, 184, 0.16); }
-    [data-theme="dark"] .toolbar #btn-theme::after { left: calc(100% - 0.5625rem - 1.125rem); background: #3b4a63; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
-    [data-theme="dark"] .toolbar #theme-icon { left: calc(100% - 0.5625rem - 1.125rem + 0.1875rem); color: #c7d2fe; }
+    [data-theme="dark"] .toolbar #btn-theme::after { background: #3b4a63; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+    [data-theme="dark"] .toolbar #theme-icon { color: #c7d2fe; }
     .toolbar #btn-present { width: 2.5rem; padding: 0; justify-content: center; }
     .toolbar #btn-present .toolbar-icon { width: 1rem; height: 1rem; }
     html[data-motion="still"] .toolbar #btn-theme::after,
@@ -3898,7 +3900,6 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         overflow-y: hidden;
         overscroll-behavior-x: contain;
         scrollbar-width: thin;
-        scroll-behavior: smooth;
       }
       html:not([data-embed="true"]) .diagram-container[data-wide-diagram="true"] > svg {
         min-width: 720px;
@@ -4113,7 +4114,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     @media (prefers-reduced-motion: reduce) {
       .toolbar .preset-menu.open,
       .toolbar .export-menu.open { animation: none; }
-      .toolbar-chevron { transition: none; }
+      .toolbar-chevron,
+      .toolbar #btn-theme::after,
+      .toolbar #theme-icon { transition: none; }
     }
 
     @media (max-width: 360px) {
@@ -11408,7 +11411,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         var pixelScale = rect.height / metrics.height / painted.scale;
         var documentTop = window.scrollY + rect.top - painted.y * pixelScale;
         var target = documentTop + (state.y + contentY * state.scale) * pixelScale - window.innerHeight / 2;
-        window.scrollTo({ left: window.scrollX, top: Math.max(0, target), behavior: options.instant ? 'instant' : 'smooth' });
+        window.scrollTo({ left: window.scrollX, top: Math.max(0, target), behavior: options.instant || reducedMotion() ? 'instant' : 'smooth' });
       }
       function centerAt(logicalX, logicalY, options) {
         options = options || {};
@@ -11426,7 +11429,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           var mobileTarget = (logicalX - viewBox.x) * metrics.scale - container.clientWidth / 2;
           mobileTarget = Math.max(0, Math.min(svg.clientWidth - container.clientWidth, mobileTarget));
           autoScrollUntil = Date.now() + 80;
-          try { container.scrollTo({ left: mobileTarget, behavior: options.instant ? 'auto' : 'smooth' }); }
+          try { container.scrollTo({ left: mobileTarget, behavior: options.instant || reducedMotion() ? 'instant' : 'smooth' }); }
           catch (_) { container.scrollLeft = mobileTarget; }
           scrollLongDiagramTo(metrics.offsetY + (logicalY - viewBox.y) * metrics.scale, metrics, options);
           return true;
@@ -11591,7 +11594,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         cameraTransaction = transaction;
         var instant = options.instant === true || reducedMotion() || document.hidden;
         autoScrollUntil = Date.now() + (instant ? 50 : 470);
-        try { container.scrollTo({ left: target, behavior: instant ? 'auto' : 'smooth' }); }
+        try { container.scrollTo({ left: target, behavior: instant ? 'instant' : 'smooth' }); }
         catch (_) { container.scrollLeft = target; }
         if (instant) finishCameraTransaction(transaction, reducedMotion() ? 'reduced-motion' : (document.hidden ? 'hidden' : 'complete'));
         else {
@@ -12123,16 +12126,14 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       function toggle() { return setOpen(!requestedOpen, { focus: false }); }
       function close(options) { return setOpen(false, options); }
       function bringNodeIntoWindow(node) {
-        var delay = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 540;
-        window.setTimeout(function () {
-          var rect = node.getBoundingClientRect();
-          var safeTop = 64;
-          var safeBottom = window.innerHeight - 64;
-          if (rect.top >= safeTop && rect.bottom <= safeBottom) return;
-          var top = Math.max(0, window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2);
-          try { window.scrollTo({ top: top, behavior: delay ? 'smooth' : 'auto' }); }
-          catch (_) { window.scrollTo(0, top); }
-        }, delay);
+        var rect = node.getBoundingClientRect();
+        var safeTop = 64;
+        var safeBottom = window.innerHeight - 64;
+        if (rect.top >= safeTop && rect.bottom <= safeBottom) return;
+        var top = Math.max(0, window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2);
+        var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        try { window.scrollTo({ top: top, behavior: reduce ? 'instant' : 'smooth' }); }
+        catch (_) { window.scrollTo(0, top); }
       }
       function focusNode(id) {
         var main = diagram.querySelector('[data-node-id="' + id + '"]');
@@ -12140,10 +12141,12 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         if (Archify.focus && typeof Archify.focus.set === 'function') {
           Archify.focus.set(id, { toggle: false });
         }
-        if (Archify.view && typeof Archify.view.reveal === 'function') {
-          Archify.view.reveal([id], { includeNeighbors: true, reason: 'radar' });
-        }
-        bringNodeIntoWindow(main);
+        var camera = Archify.view && typeof Archify.view.reveal === 'function' && Archify.view.reveal([id], { includeNeighbors: true, reason: 'radar' });
+        if (camera && camera.finished) {
+          camera.finished.then(function (receipt) {
+            if (receipt.state === 'complete' || receipt.state === 'reduced-motion') bringNodeIntoWindow(main);
+          });
+        } else bringNodeIntoWindow(main);
         try { main.focus({ preventScroll: true }); } catch (_) { try { main.focus(); } catch (_) {} }
         sync();
         return true;
