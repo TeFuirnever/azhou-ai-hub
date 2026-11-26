@@ -62,6 +62,6 @@ module.exports = {
   channels,
   sourcePages: channels.flatMap((source) => localized(source, `/library/sources/${source.id}/`)),
   articlePages: entries.flatMap((entry) => localized(entry, `/library/articles/${entry.id}/`)),
-  searchRows: entries.map(({ id, title, published, scope, kind, sources, sourceName, note, noteEn, lang }) =>
-    ({ id, title, published, scope, kind, sources, sourceName, note, noteEn, lang })),
+  searchRows: entries.map(({ id, title, published, kind, sources, note, noteEn }) =>
+    ({ id, title, published, kind, sources, note, noteEn })),
 };

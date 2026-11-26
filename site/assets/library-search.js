@@ -12,36 +12,6 @@ let sequence = 0;
 let indexReady;
 let pending;
 
-function resultRow(entry) {
-  const row = document.createElement("li");
-  row.className = "edition-item";
-  row.dataset.entryId = entry.id;
-  const meta = document.createElement("div");
-  meta.className = "entry-meta";
-  const source = document.createElement("span");
-  source.textContent = entry.sourceName;
-  meta.append(source);
-  if (entry.published) {
-    const date = document.createElement("time");
-    date.dateTime = entry.published;
-    date.textContent = entry.published.slice(0, 10);
-    meta.append(date);
-  }
-  const head = document.createElement("h3");
-  const anchor = document.createElement("a");
-  anchor.href = `${form.dataset.library}articles/${entry.id}/`;
-  anchor.lang = entry.lang;
-  anchor.textContent = entry.title;
-  head.append(anchor);
-  const type = document.createElement("span");
-  type.className = "entry-type";
-  type.textContent = entry.scope === "full" ?
-    (zh ? "可读归档" : "Archived text") :
-    (zh ? "导读与原文链接" : "Reading note and source link");
-  row.append(meta, head, type);
-  return row;
-}
-
 const normalize = (text) => text.normalize("NFKC").trim().toLocaleLowerCase();
 
 function renderResults(matches) {
@@ -52,11 +22,7 @@ function renderResults(matches) {
   }
   let position = results.firstElementChild;
   for (const [id, text] of matches) {
-    let row = rows.get(id);
-    if (!row) {
-      row = resultRow(byId.get(id));
-      rows.set(id, row);
-    }
+    const row = rows.get(id);
     const existing = row.querySelector("[data-excerpt]");
     if (text && !existing) {
       const excerpt = document.createElement("p");
@@ -108,7 +74,7 @@ async function search(updateUrl = true) {
   const from = data.get("from");
   const to = data.get("to");
   const filtered = term || source || kind || from || to;
-  const eligible = (entry) => entry && (!source || entry.sources.includes(source)) &&
+  const eligible = (entry) => entry && rows.has(entry.id) && (!source || entry.sources.includes(source)) &&
     (!kind || entry.kind === kind) && (!from || entry.published?.slice(0, 10) >= from) &&
     (!to || entry.published?.slice(0, 10) <= to);
   const params = new URLSearchParams([...data].filter(([, value]) => value));

@@ -19,7 +19,7 @@ layout: base.njk
   <section class="library-main" aria-labelledby="results-title">
     {% if sourceLibrary.entries.length %}
     <form id="library-search" class="library-search" role="search" action="{{ site.routes[lang].library | url }}"
-      method="get" data-index="{{ '/pagefind/pagefind.js' | url }}" data-library="{{ site.routes[lang].library | url }}"
+      method="get" data-index="{{ '/pagefind/pagefind.js' | url }}"
       data-locale="{{ lang }}">
       <label for="library-query">{{ '搜索标题、正文或导读' if zh else 'Search titles, archived text, or notes' }}</label>
       <div class="library-query">
