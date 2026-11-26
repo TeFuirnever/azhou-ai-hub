@@ -1,0 +1,8 @@
+{
+  "url": "https://claude.com/api/resources/search?types=article&language=en&page=1",
+  "itemsPath": "items",
+  "titlePaths": ["title"],
+  "urlTemplate": "{raw:externalUrl}",
+  "urlTemplateFallback": "/resources/articles/{slug}",
+  "publishedAtPath": "date"
+}
