@@ -1,0 +1,168 @@
+#!/usr/bin/env node
+// azhou-agent-inspector 的 stdio MCP server。协议实现沿用官方 example-plugin 的
+// 使用 MCP 的换行 JSON；旧客户端发送 Content-Length 帧时沿用其格式。
+//
+// 手工冒烟测试:
+//   printf '%s\n' \
+//     '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"manual","version":"0"}}}' \
+//     '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+//     | node mcp/tps-server.mjs
+
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { snapshot, watch, formatSnapshot, formatWatch } from "../scripts/lib/collect-core.mjs";
+
+// 版本号自动跟随插件清单,避免与插件版本脱节
+const PLUGIN_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+let VERSION = "0.0.0";
+try {
+  VERSION = JSON.parse(readFileSync(join(PLUGIN_ROOT, ".zcode-plugin", "plugin.json"), "utf8")).version;
+} catch {}
+const SERVER_INFO = { name: "azhou-agent-inspector", version: VERSION };
+
+const TOOLS = [
+  {
+    name: "tps_snapshot",
+    description:
+      "获取一次 TPS 吞吐快照:当前 TPS、延迟 p50/p95/p99、错误率,以及本机 CPU/内存使用。无需参数。",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "tps_watch",
+    description:
+      "按秒采样观察 TPS 一段时间,返回平均/最小/最大与延迟、错误率统计。seconds: 2-30,默认 5。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        seconds: { type: "integer", minimum: 2, maximum: 30, description: "采样秒数" },
+      },
+    },
+  },
+];
+
+let transport;
+function writeMessage(message) {
+  const body = JSON.stringify(message);
+  const payload = transport === "framed"
+    ? `Content-Length: ${Buffer.byteLength(body, "utf8")}\r\n\r\n${body}`
+    : body + "\n";
+  process.stdout.write(payload);
+}
+
+const ok = (id, result) => writeMessage({ jsonrpc: "2.0", id, result });
+const fail = (id, code, message) =>
+  writeMessage({ jsonrpc: "2.0", id: id ?? null, error: { code, message } });
+
+async function handleRequest(msg) {
+  if (!msg || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
+    fail(msg?.id, -32600, "Invalid request");
+    return;
+  }
+  const { id, method, params } = msg;
+
+  if (id === undefined || id === null) {
+    return; // 通知(如 initialized)直接忽略
+  }
+
+  switch (method) {
+    case "initialize":
+      ok(id, {
+        protocolVersion: params?.protocolVersion || "2024-11-05",
+        capabilities: { tools: {} },
+        serverInfo: SERVER_INFO,
+      });
+      return;
+    case "ping":
+      ok(id, {});
+      return;
+    case "tools/list":
+      ok(id, { tools: TOOLS });
+      return;
+    case "tools/call": {
+      const name = params?.name;
+      const args = params?.arguments || {};
+      try {
+        if (name === "tps_snapshot") {
+          const s = await snapshot();
+          ok(id, { content: [{ type: "text", text: formatSnapshot(s) }], isError: false });
+        } else if (name === "tps_watch") {
+          const sec = Math.min(30, Math.max(2, Number(args.seconds) || 5));
+          const w = await watch(sec);
+          ok(id, { content: [{ type: "text", text: formatWatch(w) }], isError: false });
+        } else {
+          fail(id, -32601, `Unknown tool: ${name}`);
+        }
+      } catch (err) {
+        ok(id, {
+          content: [{ type: "text", text: `[azhou-agent-inspector] 采集失败: ${err.message}` }],
+          isError: true,
+        });
+      }
+      return;
+    }
+    default:
+      fail(id, -32601, `Method not found: ${method}`);
+  }
+}
+
+function handleRaw(raw) {
+  const text = raw.toString("utf8").trim();
+  if (!text) return;
+  let msg;
+  try {
+    msg = JSON.parse(text);
+  } catch {
+    fail(null, -32700, "Parse error");
+    return;
+  }
+  if (Array.isArray(msg)) {
+    for (const item of msg) handleRequest(item);
+    return;
+  }
+  handleRequest(msg);
+}
+
+let buffer = Buffer.alloc(0);
+
+process.stdin.on("data", (chunk) => {
+  buffer = Buffer.concat([buffer, chunk]);
+  while (buffer.length) {
+    if (!transport || transport === "lines") {
+      const newline = buffer.indexOf(10);
+      if (newline < 0) break;
+      const line = buffer.subarray(0, newline);
+      const text = line.toString("utf8").trim();
+      if (!transport && /^Content-Length:/i.test(text)) {
+        transport = "framed";
+      } else {
+        buffer = buffer.subarray(newline + 1);
+        if (text) {
+          transport = "lines";
+          handleRaw(line);
+        }
+        continue;
+      }
+    }
+    const headerEnd = buffer.indexOf("\r\n\r\n");
+    if (headerEnd < 0) break;
+    const header = buffer.subarray(0, headerEnd).toString("ascii");
+    const match = /^Content-Length:\s*(\d+)$/im.exec(header);
+    const bodyStart = headerEnd + 4;
+    if (!match) {
+      buffer = buffer.subarray(bodyStart);
+      fail(null, -32700, "Invalid frame");
+      continue;
+    }
+    const bodyEnd = bodyStart + Number(match[1]);
+    if (buffer.length < bodyEnd) break;
+    handleRaw(buffer.subarray(bodyStart, bodyEnd));
+    buffer = buffer.subarray(bodyEnd);
+  }
+});
+
+process.stdin.on("end", () => {
+  if (transport !== "framed" && buffer.length) handleRaw(buffer);
+});
+
+process.stderr.write("[azhou-agent-inspector] stdio MCP server ready\n");

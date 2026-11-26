@@ -1,0 +1,16 @@
+---
+layout: base.njk
+---
+
+{% set zh = lang == 'zh' %}
+{% set matrix = site.blobBase ~ '/docs/support-matrix.md' %}
+<article class="doc-card">
+  <h1>{{ title }}</h1>
+  <p>{{ '安装之前，先查你的 Agent 工具是否支持所需的技能或功能。以下链接指向英文文档。' if zh else 'Check whether your agent host supports the skill or feature you need before installing.' }}</p>
+  <ul class="doclist">
+    <li><a href="{{ site.blobBase }}/docs/skill-platform-view.md" hreflang="en">{{ '查某个技能支持哪些工具' if zh else 'Check a skill by agent host' }}</a></li>
+    <li><a href="{{ matrix }}" hreflang="en">{{ '查工具支持哪些功能' if zh else 'Compare host capabilities' }}</a></li>
+    <li><a href="{{ matrix }}#operating-system-support-deterministic-gate" hreflang="en">{{ '查操作系统支持' if zh else 'Check operating system support' }}</a></li>
+    <li><a href="{{ matrix }}#optional-integrations" hreflang="en">{{ '查可选集成' if zh else 'Check optional integrations' }}</a></li>
+  </ul>
+</article>

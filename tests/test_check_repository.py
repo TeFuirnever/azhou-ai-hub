@@ -483,6 +483,22 @@ class RenameResidueTest(unittest.TestCase):
             preview.write_text(literal + "// repo-pedant\n", encoding="utf-8")
             self.assertTrue(any("repo-pedant ->" in e for e in check_rename_residue([preview], root)))
 
+    def test_wayfinder_label_exception_is_exact_and_path_scoped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tracker = root / "docs/agents/issue-tracker.md"
+            tracker.parent.mkdir(parents=True)
+            label_line = "Labels: `wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`).\n"
+            tracker.write_text(label_line, encoding="utf-8")
+            self.assertEqual([], check_rename_residue([tracker], root))
+            tracker.write_text(label_line + "Ask grilling to review it.\n", encoding="utf-8")
+            self.assertTrue(any("grilling ->" in e for e in check_rename_residue([tracker], root)))
+            tracker.write_text(label_line + "Run repo-pedant reconcile.\n", encoding="utf-8")
+            self.assertTrue(any("repo-pedant ->" in e for e in check_rename_residue([tracker], root)))
+            other = root / "docs/other.md"
+            other.write_text(label_line, encoding="utf-8")
+            self.assertTrue(check_rename_residue([other], root))
+
     def test_old_name_outside_allowed_surfaces_fails(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -654,11 +670,11 @@ class RepositoryPolicyTest(unittest.TestCase):
                 shutil.copy2(ROOT / relative, target)
 
             private_assets = (
-                "packages/agent-skin/assets/fixture.png",
-                "packages/agent-skin/assets/private/fixture.png",
+                "assets/azhou/fixture.png",
+                "assets/azhou/private/fixture.png",
             )
-            public_fixture = "packages/agent-skin/docs/fixtures/icon.png"
-            published_asset = "packages/agent-skin/assets/azhou/working.png"
+            public_fixture = "docs/fixtures/icon.png"
+            published_asset = "assets/azhou/working.png"
             for relative in (*private_assets, public_fixture, published_asset):
                 asset = root / relative
                 asset.parent.mkdir(parents=True, exist_ok=True)
@@ -851,6 +867,7 @@ class RepositoryPolicyTest(unittest.TestCase):
                 root / "skills" / "super-gh-axi" / "SKILL.md",
                 root / "skills" / "super-session-insights" / "SKILL.md",
                 root / "skills" / "super-brainstorming" / "SKILL.md",
+                root / "skills" / "super-grill-me" / "SKILL.md",
             ]
             self.assertEqual([], check_skill_discovery(expected, root))
             bundled = [

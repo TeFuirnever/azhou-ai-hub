@@ -12,81 +12,68 @@ Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Code
 
    This command installs into the current project. Add `--global` on the first install if you want a user-wide copy instead. For later updates and removal, use the scope you installed into.
 
-2. **Try Ask Azhou.** Open a new Codex chat in the same project and enter the following question.
+2. **Try Ask Azhou.** Open a new Codex chat in the same project. Type `$super-ask-azhou` and check that Codex offers the skill, then enter the following question.
 
    > `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
 
-   The expected recommendation is `super-archify` for an interactive HTML diagram. This confirms that you can use the router. Install the recommended Skill separately when you want to run it.
+   The expected recommendation is `super-archify` for an interactive HTML diagram. Install the recommended Skill separately when you want to run it.
 
-3. **If Codex cannot find Ask Azhou, check the install.** Run this from the same project.
+### If Codex cannot find Ask Azhou
 
-   ~~~bash
-   npx skills list --agent codex
-   ~~~
+Run this from the same project.
 
-   Add `--global` for a user-wide install. If `super-ask-azhou` is absent, check the terminal folder and the installation output. If it is listed, compare the displayed scope and path with the project open in Codex, then try the question in a fresh chat.
+~~~bash
+npx skills list --agent codex
+~~~
+
+Add `--global` for a user-wide install. If `super-ask-azhou` is absent, check the terminal folder and the installation output. If it is listed, compare the displayed scope and path with the project open in Codex, then try the question in a fresh chat.
 
 ## Optional external integrations
 
-The existing Skill installation paths below remain independent. For the two optional pstack and Agent Skin integrations, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
+The existing Skill installation paths below remain independent. For the optional pstack integration, start with `python scripts/azhou_hub.py integrations list --json` and follow the [integration runbook](integrations.md). These operations have distinct native ownership and source locks; the Skill package manager and Foundation Skill installer must not manage their targets.
 
 ## Install or update when a task needs it
 
 If a book skill is missing from the Azhou AI Hub checkout, check the current branch and the files under `.agents/skills/`. Update the checkout or restore the tracked files from the intended revision. These book skills ship with the project. Installing Ask Azhou by itself adds the router. To use a specific book in a different project, install it there from [agent-rules-books](https://github.com/ciembor/agent-rules-books).
 
-If you need Ask Azhou in a project where it is unavailable, use the single-skill install below. A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
+If Ask Azhou is missing from a project, follow [First install in Codex](#first-install-in-codex). A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
 
 ## Package-manager install
 
-Install only the skill you need:
+Choose the package name in the [skill catalog](../README.md#skills). The four `super-azhou-*` skills require a local copy of this repository to run. In a terminal opened in your agent's project folder, run this example with the chosen package name.
 
 ~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou
-npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
-npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
-npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
-npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
-npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
-npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
-npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
+npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex
 ~~~
 
-See [First install in Codex](#first-install-in-codex) for the target, first invocation, and troubleshooting steps. Skills CLI installations use the selected scope and carry no Hub receipt.
+This example installs Super Archify for Codex in the current project. For another host, check its installation route in the [support matrix](support-matrix.md). Use the original scope when updating. Skills CLI resolves the default branch. Check the installed files if you need to verify a revision.
 
 ## Alternate installer
 
-If the repository download fails, Codex users can install Rederive into the current project with the bundled skill installer and a sparse Git checkout:
+If Skills CLI times out cloning the repository, use Codex's bundled skill installer to fetch just Ask Azhou. Run this from your Codex project directory with your system's Python command.
 
 ~~~bash
-python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-rederive --method git --dest "$PWD/.agents/skills"
+python "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-ask-azhou --method git --dest "$PWD/.agents/skills"
 ~~~
 
-The destination must not already contain `super-rederive`; this command does not update an existing install.
+Open a new chat in the project and [try Ask Azhou](#first-install-in-codex). The installer stops if the destination already exists. To install a different skill, use its path from the [skill catalog](../README.md#skills).
 
 ## Verify what you installed
 
 Package-manager installs resolve the mutable default branch and carry no repository receipt, so verify the installed content instead of trusting the install step.
 
-**Tag-snapshot comparison (works on every host).** Compare the installed skill directory against the version you intended, at a published tag:
+**Tag-snapshot comparison (works on every host).** Set `TAG` to the published version you installed. Run the comparison in a POSIX shell, such as Git Bash on Windows.
 
 ~~~bash
-git clone --depth 1 --branch v2.0.1 https://github.com/TeFuirnever/azhou-ai-hub /tmp/azhou-tag
-diff -r /tmp/azhou-tag/skills/<skill-name> <installed-skills-root>/<skill-name> && echo identical
+TAG=v2.0.1
+SKILL=super-ask-azhou
+SKILLS_HOME=/absolute/path/to/installed/skills
+SNAPSHOT=$(mktemp -d)
+git clone --depth 1 --branch "$TAG" https://github.com/TeFuirnever/azhou-ai-hub "$SNAPSHOT" &&
+  diff -r "$SNAPSHOT/skills/$SKILL" "$SKILLS_HOME/$SKILL" && echo identical
 ~~~
 
-`<installed-skills-root>` is wherever your harness placed the skill (the package manager prints the destination). Any drift — including extra files — prints as a diff. Release notes list which skills a release touches; per-skill content digests are not published yet, so the tag snapshot is the reference.
+Set `SKILLS_HOME` to the parent directory of the installed skill. Use the destination shown by the package manager. The comparison reports changed and extra files. Release notes list the affected skills, and the tag snapshot supplies the reference files.
 
 **Receipt-backed verification (checkout-assisted path only).** The checkout-assisted `setup --apply` writes a managed receipt whose digests `doctor` re-checks on demand:
 

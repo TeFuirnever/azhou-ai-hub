@@ -1,4 +1,4 @@
-"""Discover and dispatch exactly two optional, independently selected integrations."""
+"""Discover and dispatch optional project integrations."""
 from __future__ import annotations
 
 import argparse
@@ -15,7 +15,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTERS = {
     "pstack": "integration_pstack",
-    "agent-skin": "integration_startup_animation",
+    "azhou-agent-inspector": "integration_agent_inspector",
 }
 
 
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None, *, hub_root: Path = ROOT) -> int:
             return 1
     parser = argparse.ArgumentParser(
         prog="azhou-ai-hub integrations",
-        description="Two in-repository packages with optional installation; installing Skills never enables them.",
+        description="Optional project integrations are installed independently of Skills.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     listing = sub.add_parser("list", help="List in-repository packages and separate operational entries")

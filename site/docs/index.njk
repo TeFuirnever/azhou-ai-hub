@@ -1,29 +1,9 @@
 ---
-layout: base.njk
+layout: docs.njk
+route: docs
 lang: en
 bodyClass: doc
 title: "Docs"
-description: "The documentation map of the Azhou AI Hub; documents stay versioned in the repository."
+description: "Install, troubleshoot, and build with Azhou AI Hub."
 permalink: "docs/index.html"
 ---
-
-<article class="doc-card">
-  <nav class="crumbs" aria-label="Breadcrumb">
-    <a href="{{ '/' | url }}">azhou-ai-hub</a>
-    <span aria-hidden="true">/</span>
-    <span aria-current="page">Docs</span>
-  </nav>
-  <h1>Docs</h1>
-  <p class="doc-lede">This page mirrors the docs index only. The documents stay versioned in the repository and every link points there, so the site never drifts from the authoritative text.</p>
-  <ul class="doclist">
-    {%- for row in docsIndex %}
-    <li>
-      {{ row.need }} —
-      {%- for source in row.sources %}
-      <a href="{{ source.url }}">{{ source.label }}</a>{% if not loop.last %} and {% endif %}
-      {%- endfor %}
-    </li>
-    {%- endfor %}
-  </ul>
-  <p class="doc-source">Mirrored from <code>docs/README.md</code> at build time · <a href="{{ site.blobBase }}/docs/README.md">view the source</a></p>
-</article>

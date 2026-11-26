@@ -111,6 +111,33 @@ jobs:
         working-directory: site
         run: npm run build
 
+  agent-inspector:
+    name: Azhou Agent Inspector
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/azhou-agent-inspector
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.15.0"
+      - name: Test ZCode adapter
+        run: node --test test/*.test.mjs
+      - name: Test Codex adapter
+        run: python3 -B -m unittest discover -s test -p '*_test.py'
+      - name: Exercise both UI bridges in Chrome
+        run: node test/browser-smoke.mjs
+      - name: Exercise ZCode dashboard and overlay HTTP routes
+        run: node plugins/zcode/dashboard/overlay/smoke-test.mjs
+
   pstack-native:
     name: pstack maintained package
     runs-on: ubuntu-latest
@@ -148,134 +175,6 @@ jobs:
       - name: Run the built tree's script tests
         working-directory: packages/pstack-agent-harness/harness/pstack/claude-code/skills/poteto-mode/scripts
         run: bun test
-
-  agent-skin-macos:
-    name: Agent Skin startup validation
-    needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
-    runs-on: macos-latest
-    # The expanded synthetic viewport matrix runs in this job.
-    timeout-minutes: 40
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.11"
-      - name: Install Dream image validation dependency
-        run: |
-          python -m pip install --only-binary=:all: Pillow==12.3.0
-      - name: Run Agent Skin startup and two-host lifecycle checks
-        working-directory: packages/agent-skin
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
-          AZHOU_RUN_NATIVE_EVENT_ASSESSMENT: "1"
-        run: |
-          node --test tools/startup.test.mjs
-          node --test tools/image-settings.test.mjs
-          node --test tools/localization.test.mjs
-          node --test tools/dream-theme-validator.test.mjs
-          python -B tools/test-production-dream-style.py
-          python -B tools/test-production-theme-package-preflight.py
-          python -B tools/test-production-theme-library.py
-          python -B tools/test-startup-build.py
-          python -B tools/test-startup-browser-selection-cli.py
-          node tools/test-image-settings-browser.mjs
-          python -B tools/test-startup-payload-browser.py --native-window-ordering --out "$RUNNER_TEMP/agent-skin-browser-evidence"
-          mkdir -p .build
-          xcrun --sdk macosx swiftc -target "$(uname -m)-apple-macos13.0" \
-            Native/App.swift Native/Wallpaper.swift Native/SkinHostContract.swift \
-            Native/CodexSkinDriver.swift Native/OptionalStartupMedia.swift Native/OptionalStartupAVPlayback.swift \
-            Native/OptionalStartupPresentation.swift \
-            Native/OptionalStartupVideoResolver.swift Native/OptionalStartupVideoFiles.swift \
-            -o .build/startup-app-compile \
-            -framework AppKit -framework WebKit
-      - name: Retain isolated startup functional evidence
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: agent-skin-browser-evidence
-          path: ${{ runner.temp }}/agent-skin-browser-evidence
-          retention-days: 5
-
-  agent-skin-unit-coverage:
-    name: Agent Skin full production UT coverage
-    needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
-    runs-on: macos-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.11"
-      - name: Set up Node
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24.15.0"
-      - name: Install unit coverage dependency
-        run: |
-          python -m pip install --only-binary=:all: coverage==7.16.2 Pillow==12.3.0
-      - name: Prepare isolated Bash unit tooling
-        working-directory: packages/agent-skin
-        run: python -B tools/test-setup-unit-tools.py --github-env "$GITHUB_ENV" --github-path "$GITHUB_PATH"
-      - name: Run fast Agent Skin Node unit checks
-        working-directory: packages/agent-skin
-        run: node --test tools/startup-browser-selection.unit.test.mjs
-      - name: Require 95 percent for every production language
-        working-directory: packages/agent-skin
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
-        run: |
-          python -B tools/test-coverage-policy.py
-          python -B tools/test-functional-verdict.py
-          python -B tools/test-bootstrap-unit-tools.py
-          python -B tools/test-unit-coverage.py
-
-  agent-skin-fresh-clone:
-    name: Agent Skin fresh-clone build
-    # Proves a clean checkout builds the published Azhou skin with no local
-    # assets/private overlay. Skipped only for docs-only changes.
-    needs: changes
-    if: needs.changes.outputs.docs_only != 'true'
-    runs-on: macos-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: "3.11"
-      - name: Build and verify from the published library only
-        working-directory: packages/agent-skin
-        env:
-          PYTHONDONTWRITEBYTECODE: "1"
-        run: |
-          test ! -e assets/private
-          python tools/check-assets.py --require-no-overlay
-          bash tools/build-macos.sh
-          python tools/verify-artifacts.py
-          python tools/build-dsh-plugin.py
-          python tools/verify-artifacts.py --verify-dsh-plugin .build/azhou-dsh-plugin/azhou-agent-skin
-          test ! -e assets/private
 
   benchmarks:
     name: Benchmark integrity
@@ -365,9 +264,7 @@ jobs:
       - policy
       - verify-windows
       - pstack-native
-      - agent-skin-macos
-      - agent-skin-unit-coverage
-      - agent-skin-fresh-clone
+      - agent-inspector
     runs-on: ubuntu-latest
     timeout-minutes: 2
     env:
@@ -377,10 +274,8 @@ jobs:
       BENCHMARKS_RESULT: ${{ needs.benchmarks.result }}
       POLICY_RESULT: ${{ needs.policy.result }}
       WINDOWS_RESULT: ${{ needs.verify-windows.result }}
+      AGENT_INSPECTOR_RESULT: ${{ needs.agent-inspector.result }}
       PSTACK_RESULT: ${{ needs.pstack-native.result }}
-      ANIMATION_RESULT: ${{ needs.agent-skin-macos.result }}
-      AGENT_SKIN_COVERAGE_RESULT: ${{ needs.agent-skin-unit-coverage.result }}
-      AGENT_SKIN_FRESH_CLONE_RESULT: ${{ needs.agent-skin-fresh-clone.result }}
     steps:
       - name: Require every CI gate
         run: |
@@ -391,8 +286,9 @@ jobs:
           test "$BENCHMARKS_RESULT" = "success"
           test "$POLICY_RESULT" = "success"
           test "$PSTACK_RESULT" = "success"
+          test "$AGENT_INSPECTOR_RESULT" = "success"
           # Only a confirmed docs-only change can skip a platform gate.
-          for result in "$WINDOWS_RESULT" "$ANIMATION_RESULT" "$AGENT_SKIN_COVERAGE_RESULT" "$AGENT_SKIN_FRESH_CLONE_RESULT"; do
+          for result in "$WINDOWS_RESULT"; do
             case "$result" in
               success) ;;
               skipped) test "$DOCS_ONLY" = "true" || exit 1 ;;

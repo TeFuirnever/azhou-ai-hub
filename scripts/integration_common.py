@@ -20,10 +20,10 @@ except ImportError:
     import azhou_runtime_state
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPONENTS = ("pstack", "agent-skin")
+COMPONENTS = ("pstack", "azhou-agent-inspector")
 PACKAGES = {
     "pstack": "pstack-agent-harness",
-    "agent-skin": "agent-skin",
+    "azhou-agent-inspector": "azhou-agent-inspector",
 }
 PACKAGE_SCHEMA = "azhou-hub.package.v1"
 LOCK_SCHEMA = "azhou-hub.package-inputs.v1"

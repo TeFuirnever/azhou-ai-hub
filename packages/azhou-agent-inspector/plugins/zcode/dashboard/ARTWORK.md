@@ -1,0 +1,1 @@
+Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0. The ZCode dashboard uses byte-identical copies of the Codex portrait and wallpaper. The source assets and conversion commands are in the [shared artwork record](../../azhou-agent-inspector/ARTWORK.md). See the [license](https://creativecommons.org/licenses/by-nc-nd/4.0/).

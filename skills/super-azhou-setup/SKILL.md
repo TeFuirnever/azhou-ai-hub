@@ -26,7 +26,7 @@ In a Markdown chat host, wrap each brand broadcast as `> <emoji> **<label>**<pro
 
 ## Choose the installation path
 
-Ask what the user wants to install, update, or remove, and which project or user scope they intend. Use the current project only when its identity is explicit in the conversation or host. Explain the proposed destination and verify the actual installation path before an update or removal.
+Resolve the requested operation, skill, and scope from the user's request and the active workspace. Use the current project when the conversation or host identifies it. Ask only for a missing choice that affects the action or destination. Explain the proposed destination and verify the actual installation path before an update or removal.
 
 For a Skills CLI installation, use the package manager for that exact skill and scope. The [installation guide](../../docs/installation.md#upgrade-or-uninstall) gives commands and verification steps when this checkout is available. For a standalone Setup installation, use [setup and compatibility](references/setup.md). Check for updates before changing an installed package. After installing or updating, verify discovery and, when requested, invoke the skill in a fresh session. After removal, verify the installed entry is gone. Report a failed or ambiguous result without claiming success. Do not treat a package-manager installation as receipt-managed.
 
@@ -40,6 +40,7 @@ For checkout-managed installations, follow the workflow below. To update a manag
    - `python scripts/azhou_hub.py setup --skill <name> --target </absolute/root> --mode <link|copy> --json` emits a deterministic `planId`.
    - Managed setup additionally requires `--managed --receipt <path>` and exactly one skill.
    - `repair`, `migrate`, and `uninstall` require the exact managed receipt plus the same target.
+   - If setup or repair shows every selected skill is current, report that no action is needed and skip apply.
    - A dry-run whose rows show `conflict-same-source` means the destination already links identical canonical package content from another checkout: the CLI reports `dry_run_same_source` and exits `3` while still emitting the `planId`. Present it as blocked pending a user decision, not as a failed plan; `--apply` still refuses until the duplicate checkout is resolved.
 4. Apply only after the user has authorized that exact plan and target, using the per-command form:
    - `setup` (including `--managed`): add `--apply --plan-id <reviewed-planId>` — its dry run emits a deterministic `planId`, and apply recomputes the plan under the mutation lock and **rejects drift** from the reviewed plan.

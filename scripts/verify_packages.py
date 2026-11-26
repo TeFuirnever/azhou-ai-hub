@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Validate in-repository package inputs and safe POSIX lifecycle suites."""
+"""Validate in-repository package inputs."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path, PurePosixPath
-import subprocess
 import sys
 
 try:
@@ -64,77 +62,15 @@ def validate_packages() -> tuple[dict[str, Path], list[str]]:
     return packages, errors
 
 
-def run_suite(label: str, package: Path, arguments: list[str]) -> int:
-    command = [sys.executable, *arguments]
-    print(f"==> {label}: {' '.join(arguments)}", flush=True)
-    environment = os.environ.copy()
-    environment["PYTHONDONTWRITEBYTECODE"] = "1"
-    try:
-        result = subprocess.run(command, cwd=package, env=environment, check=False)
-        code = result.returncode
-    except OSError as exc:
-        print(f"FAILED: {label} could not launch: {exc}", file=sys.stderr, flush=True)
-        return 127
-    if code:
-        print(f"FAILED: {label} (exit {code})", file=sys.stderr, flush=True)
-    return code
-
-
 def main() -> int:
-    packages, errors = validate_packages()
+    _, errors = validate_packages()
     if errors:
         for error in errors:
             print(f"FAILED: {error}", file=sys.stderr, flush=True)
         print("package source validation failed", flush=True)
         return 1
 
-    # Standard-library only, so it runs on every platform: a fresh checkout must
-    # carry the complete published Azhou asset library.
-    if run_suite("agent-skin asset library", packages["agent-skin"], ["tools/check-assets.py"]):
-        return 1
-
-    if os.name != "posix":
-        if sys.platform == "win32":
-            print(
-                "SKIPPED: native package lifecycle suites are unvalidated on Windows; "
-                "package manifests were checked",
-                flush=True,
-            )
-        else:
-            print(
-                f"SKIPPED: native package lifecycle suites are unvalidated on {sys.platform}; "
-                "package manifests were checked",
-                flush=True,
-            )
-        return 0
-
-    results = [
-        run_suite(
-            "agent-skin installer lifecycle tests",
-            packages["agent-skin"],
-            ["tools/test-install-macos.py"],
-        ),
-        run_suite(
-            "agent-skin asset library and resolver tests",
-            packages["agent-skin"],
-            ["tools/test-production-assets.py"],
-        ),
-    ]
-    for suite in ("test-approved-startup-video.py", "test-startup-video-packaging.py"):
-        results.append(run_suite("agent-skin approved startup video contracts", packages["agent-skin"], ["tools/" + suite]))
-    results.append(run_suite("agent-skin Dream AST/capsule/total mapping contracts", packages["agent-skin"],
-                             ["tools/test-production-dream-style.py"]))
-    if sys.platform == "darwin":
-        results.extend([
-            run_suite("agent-skin Dream ZIP resource and reference contracts", packages["agent-skin"],
-                      ["tools/test-production-theme-package-preflight.py"]),
-            run_suite("agent-skin isolated Dream source library", packages["agent-skin"],
-                      ["tools/test-production-theme-library.py"]),
-        ])
-    else:
-        print("SKIPPED: Dream source-library functional suites require the macOS test dependency environment; "
-              "the macOS CI leg installs pinned Pillow and runs them", flush=True)
-    return next((code for code in results if code), 0)
+    return 0
 
 
 if __name__ == "__main__":

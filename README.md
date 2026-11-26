@@ -12,61 +12,23 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub hero: the Azhou fox feeds a card into a gate with a green lamp, beside the claims: 17 installable skill packages; one deterministic repository gate; human-approved evolution only." width="100%" />
-
-https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
-
 </div>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-install-dark.jpg">
-  <img src="assets/github/readme-banner-install.jpg" alt="Install: one command per skill" width="100%">
-</picture>
 
 ### First install in Codex
 
-Have Codex signed in and Node.js with `npx` available, and run commands from the project folder where you want Ask Azhou installed. The shell examples are POSIX: on Windows, run them in Git Bash ([Windows notes](docs/installation.md#windows-notes)); the [OS-support table](docs/support-matrix.md#operating-system-support-deterministic-gate) records the platforms the repository gate and shipped scripts cover.
+Sign in to Codex and use Node.js 22.20 or later. Run the command from your project folder and confirm the project install when prompted. On Windows, use Git Bash for the [shell examples](docs/installation.md#windows-notes).
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 ~~~
 
-Open a new Codex chat in that project and try the following question.
+Open a new Codex chat in that project. Type `$super-ask-azhou` to check that Codex can find it, then try the following question.
 
 > `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
 
-Look for a recommendation of `super-archify`. If Ask Azhou is missing, check the [first-install guide](docs/installation.md#first-install-in-codex). For an existing installation, see [check, update, or uninstall](docs/installation.md#upgrade-or-uninstall).
+Expect a recommendation for `super-archify`. If Codex cannot find Ask Azhou, [check the installation](docs/installation.md#if-codex-cannot-find-ask-azhou). For an existing installation, see [check, update, or uninstall](docs/installation.md#upgrade-or-uninstall).
 
-The four Foundation Skills install the same way:
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
-~~~
-
-The remaining packages install the same way:
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
-npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
-npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
-npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
-npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
-npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
-npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
-~~~
-
-Choose one installation method per skill ([one-path rule](docs/installation.md#one-path-rule)). A package-manager install resolves the mutable default branch and carries no Hub receipt. The four `super-azhou-*` packages are thin wrappers: the npx command installs the Skill, but invoking it runs the Foundation CLI (`scripts/azhou_hub.py`) from a checkout of this repository, so that checkout must still be on disk (clone it once).
+When you want to use a recommended skill, follow the [single-skill install guide](docs/installation.md#package-manager-install). Use [one installation method per skill](docs/installation.md#one-path-rule). The four `super-azhou-*` skills also require a local checkout.
 
 The walkthrough above targets Codex. For the other maintained harnesses — Claude Code, MiMo Code (`mimo`), DeepSeek Harness (`dsh`) and zcode — the verified install route and evidence per harness live in the [support matrix](docs/support-matrix.md), and a repository checkout can install via [checkout-assisted setup](docs/installation.md#checkout-assisted-setup) or [manual copy](docs/installation.md#manual-copy).
 
@@ -89,7 +51,7 @@ Every adapted package records its upstream provenance in `skills/<name>/referenc
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | Draft, calibrate and review an architecture document from upstream sources. | Deterministic scaffold, closing-gate checker and golden case. |
 | [Session Insights](skills/super-session-insights/SKILL.md) | Fact-bound usage reports from local session stores; reflection on authorized material. | Synthetic-store wiring suite; reflection contract checks. |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | Rewrite agent-facing English under ASD-STE100-derived structural rules. | Pinned upstream (SHA-256); deterministic `ste-lint.py` gate. |
-| [Archify](skills/super-archify/SKILL.md) | Turn systems, plans or codebases into interactive diagram-map HTML. | Upstream v3.2.0 sync (git tag + SHA-256); finalize/validate gates. |
+| [Archify](skills/super-archify/SKILL.md) | Turn a system, codebase, or Mermaid sketch into an interactive architecture diagram. | Upstream v3.2.0 sync (git tag + SHA-256); finalize/validate gates. |
 | [Lavish](skills/super-lavish/SKILL.md) | Turn responses into reviewable HTML; browser annotations return to the agent. | Locked upstream release (SHA-256 + npm pins); integrity tests. |
 | [Imagegen](skills/super-imagegen/SKILL.md) | Run prepared image-generation requests through the machine's already-installed private `azhou-imagegen` skill; without that skill or its doctor gate, the package fails closed. | Contract-only package; baseline hashes pinned; fails closed. |
 | [Rederive](skills/super-rederive/SKILL.md) | Practice understanding code by re-deriving its design. | Pinned upstream (SHA-256); exploratory observation only. |
@@ -98,10 +60,13 @@ Every adapted package records its upstream provenance in `skills/<name>/referenc
 | [Diagram Design](skills/super-diagram-design/SKILL.md) | Create branded editor-grade HTML/SVG diagrams across 51 visual types, with .drawio/Mermaid/.excalidraw/PlantUML import. | Vendored upstream (commit pin + per-file SHA-256); packaged `self_check.py` gate. |
 | [Frontend Design](skills/super-frontend-design/SKILL.md) | Produce a distinctive, non-templated visual design direction for a new UI or a restyle: palette, typography, layout, and the avoid-the-AI-defaults review pass. | Faithfully adopted from anthropics/skills at the pinned commit with the upstream guidance body preserved verbatim, the Apache-2.0 license vendored byte-identical, and SHA-256 integrity tests. No behavior benchmark yet. |
 | [Brainstorming](skills/super-brainstorming/SKILL.md) | Hold the pre-build conversation: find out what the reader wants and why, lay out approaches, write the design doc, and enforce the approval gate. | Adapted from obra/superpowers at the pinned tag with six recorded deltas, per-file upstream SHA-256 anchors, and integrity tests. No behavior benchmark yet. |
+| [Grill Me](skills/super-grill-me/SKILL.md) | Grill the user about a plan, decision, or idea in rounds: every settled question asked with a recommended answer, facts looked up, decisions left to the user. | Adapted from mattpocock/skills at the pinned tag; upstream trigger sentences kept verbatim; instruction body verbatim outside one sentence; SHA-256 integrity tests. No behavior benchmark yet. [Claude Code host check](evidence/super-grill-me-host-check-claude-2026-11-24.md). |
 
 [Per-skill platform view](docs/skill-platform-view.md) · [Evaluation contract](docs/eval-case-contract.md)
 
 ### Try it
+
+https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
 In the results below, a *hold* is an explicitly flagged unresolved item, and a *stable receipt* is the checkable record of what a run produced.
 
@@ -144,26 +109,23 @@ python scripts/azhou_hub.py verify
 
 ## Integrations
 
-Two complete projects live under `packages/`. These projects are not Skills, and installing a Hub Skill does not enable any integration. A **candidate** below is a maintained source version not yet accepted as a full release; its evidence is the dated receipts in the [support matrix](docs/support-matrix.md#optional-integrations), never a release claim.
+Optional integrations live under `packages/`. These projects are not Skills, and installing a Hub Skill does not enable any integration. A **candidate** below is a maintained source version not yet accepted as a full release; its evidence is the dated receipts in the [support matrix](docs/support-matrix.md#optional-integrations), never a release claim.
 
 | Entry | Complete project package | Current boundary |
 |---|---|---|
+| `azhou-agent-inspector` | [Azhou Agent Workbench](packages/azhou-agent-inspector/README.md) | Codex conversation panel and ZCode composer status with a conversation dashboard. Both panels show turn duration and speed and let you expand available details, including context usage when the host supplies a measured request and its window. Install through each host's plugin manager. [Desktop verification by version](docs/support-matrix.md#azhou-agent-workbench). |
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **candidate**: native Codex/Claude plugins, a zcode plugin with bundled skills, and shared Skills discovery for MiMo and DeepSeek Harness (the maintainer host's shared-root pstack links were retired on 2026-11-14; serving pstack that way moves to a separately scoped task, and other skills sharing the root are unaffected). Dated evidence and limits: [support matrix](docs/support-matrix.md#optional-integrations). |
-| `agent-skin` | [Azhou AI Lab for Codex](packages/agent-skin/README.md) | On Codex desktop cold starts it plays a 12-second Azhou startup animation and applies an Azhou wallpaper (visual acceptance still pending; tracked in the [support matrix](docs/support-matrix.md#optional-integrations)); an assembled DeepSeek Harness plugin package brings the same appearance to DSH. Current source candidate `0.9.0/build 43`. Updates follow the [local install SOP](packages/agent-skin/docs/local-install-sop.md). |
 
-[Azhou Appearance](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary) accepts user-selected images and Azhou JSON presets. It does not import themes or migrate data from other projects.
 
-[Azhou mouse cursors 3.6.1](assets/cursors/azhou-double-hug/README.md) are available as a standalone Mousecape theme for macOS.
+[Azhou mouse cursors 3.6.1](assets/cursors/azhou-double-hug/README.md) are available as a standalone Mousecape theme for macOS. The guide covers downloading, applying and restoring the system cursors.
 
 Run these from a clone of this repository, as above:
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
 python scripts/azhou_hub.py integrations pstack --help
-python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-pstack keeps its upstream MIT notices. Agent Skin code is covered by the Hub root MIT license since its independent rewrite in #441. Its Azhou art in `packages/agent-skin/assets/azhou/` is CC BY-NC-ND 4.0, and the Azhou name, logo and character follow [TRADEMARKS.md](TRADEMARKS.md).
 
 [Integration runbook](docs/integrations.md) · [Provenance](docs/integration-provenance.md) · [Support matrix](docs/support-matrix.md#optional-integrations)
 
@@ -171,10 +133,10 @@ pstack keeps its upstream MIT notices. Agent Skin code is covered by the Hub roo
 
 Retired surfaces, their last supported versions, and what installed users do now:
 
-- **agent-skin's ZCode host layer** — last supported `0.9.0/build 41`. An installed ZCode skin keeps working frozen; restore its original launcher or remove the Azhou entry and receipts.
+- **Agent Skin** is retired for Codex, DSH and previously retired ZCode. See the [installed-user exit guide](docs/decisions/agent-skin-retirement.md).
 - **Agent Orchestration Kit (model router)** — never released publicly. This entry is only for machines that still carry a private testing install: recover the Kit's own uninstaller from Git history or the old releases, and uninstall with it before installing pstack.
-- **Legacy `codex-startup-animation` package** — last version `0.7.1/build 8`, removed 2026-11-12. Agent Skin owns the current launcher source; Git history retains the legacy bytes.
-- **Azhou Codex Pet** — retired 2026-11-18. See the [retirement record](packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md).
+- **Legacy `codex-startup-animation` package** — last version `0.7.1/build 8`, removed 2026-11-12. Git history retains the legacy source.
+- **Azhou Codex Pet** — retired 2026-11-18. See the [retirement record](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md).
 
 [HUB-RET-001](docs/decisions/hub-retirement-physical-deletion.md) records the cut; [provenance rows](docs/integration-provenance.md) locate each pre-deletion revision, and all old releases and tags remain in full.
 
@@ -195,7 +157,7 @@ The [Azhou Skill Standard](docs/skill-standard.md) is the single project authori
 
 ## Develop
 
-In Codex, `$refactoring` applies refactoring guidance to a change and `$release-it` reviews failure recovery; the 14 [book-inspired skills](THIRD_PARTY_NOTICES.md#agent-rules-books) ship with the repository under `.agents/skills/` — project-local, not among the 20 installable packages under `skills/` — and load their rules on demand.
+In Codex, `$refactoring` applies refactoring guidance to a change and `$release-it` reviews failure recovery; the 14 [book-inspired skills](THIRD_PARTY_NOTICES.md#agent-rules-books) ship with the repository under `.agents/skills/` — project-local, not among the 21 installable packages under `skills/` — and load their rules on demand.
 
 Python 3.11+ is enough for the repository gate:
 
@@ -209,4 +171,4 @@ python scripts/verify.py
 
 ## License
 
-Azhou-maintained code: [MIT](LICENSE). Azhou artwork: [CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/NOTICE.md). Name, logo and character: [TRADEMARKS.md](TRADEMARKS.md). Third-party components retain their own notices and licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Azhou-maintained code: [MIT](LICENSE). Azhou artwork: [CC BY-NC-ND 4.0](assets/azhou/NOTICE.md). Name, logo and character: [TRADEMARKS.md](TRADEMARKS.md). Third-party components retain their own notices and licenses: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

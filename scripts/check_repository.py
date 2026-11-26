@@ -79,6 +79,7 @@ INSTALLABLE_SKILL_PATHS = {
     "skills/super-excalidraw-diagram/SKILL.md",
     "skills/super-frontend-design/SKILL.md",
     "skills/super-gh-axi/SKILL.md",
+    "skills/super-grill-me/SKILL.md",
     "skills/super-i-have-adhd/SKILL.md",
     "skills/super-imagegen/SKILL.md",
     "skills/super-lavish/SKILL.md",
@@ -122,7 +123,6 @@ PROJECT_LOCAL_SKILL_PATHS = {
     ".agents/skills/refactoring/SKILL.md",
     ".agents/skills/release-it/SKILL.md",
     ".agents/skills/the-pragmatic-programmer/SKILL.md",
-    ".agents/skills/verify-dsh-startup-gate/SKILL.md",
     ".agents/skills/working-effectively-with-legacy-code/SKILL.md",
 }
 ZCODE_NOTICE_SHA256 = "c946abfb46cf3920fefeb756c526620201a3ce29bf84953b540763605b33d9ea"
@@ -556,6 +556,12 @@ SKILL_BRAND_CONTRACTS = {
         "startup": "🦊 阿舟 · Brainstorming 启动（mode=<start|resume>, scope=<topic>）",
         "brand_path": "skills/super-brainstorming/references/brand-layer.md",
     },
+    "skills/super-grill-me/SKILL.md": {
+        "display_name": "Grill Me",
+        "motto": "回合拷问，问到计划扛得住。",
+        "startup": "🦊 阿舟 · Grill Me 启动（mode=<start|resume>, scope=<plan-or-decision>）",
+        "brand_path": "skills/super-grill-me/references/brand-layer.md",
+    },
 }
 
 BASELINE_HASHES = {
@@ -656,6 +662,7 @@ VENDORED_SKILL_PACKAGES = (
 # included. They are that package's distribution, not entries of the Hub's
 # installable skill catalogue.
 SKILL_BUNDLE_ROOTS = VENDORED_ROOTS + (
+    "packages/azhou-agent-inspector/plugins/zcode/skills/",
     "packages/pstack-agent-harness/hub-skills/",
 )
 
@@ -993,6 +1000,8 @@ RENAMED_AWAY_SKILLS = {
     "gh-axi": "super-gh-axi",
     "session-insights": "super-session-insights",
     "brainstorming": "super-brainstorming",
+    "grill-me": "super-grill-me",
+    "grilling": "super-grill-me",
 }
 
 # Surfaces where a renamed-away canonical name is legal, by category:
@@ -1123,14 +1132,14 @@ def check_azhou_description_brand(root: Path) -> list[str]:
     return errors
 
 
-# Exact upstream protocol/path literals are not canonical package identities.
-# Keep this allowlist narrow: all other old-name occurrences in these same
-# files still fail. The vendor manifest independently binds the source bytes.
-UPSTREAM_IDENTITY_LITERALS = {
+# Exact literals that would read as renamed skills but are not: vendored upstream
+# identifiers and a host workflow's label enumeration.
+RESIDUE_EXEMPT_LITERALS = {
     "skills/super-archify/bin/preview.mjs": ("const cliPath = path.join(here, 'archify.mjs');",),
     "skills/super-archify/scripts/update-contract.mjs": ("export const SKILL_ID = 'archify';",),
     "skills/super-archify/skill-release.json": ('"skillId": "archify"',),
     "skills/super-archify/bin/archify.mjs": ("Use: archify patch explainer ",),
+    "docs/agents/issue-tracker.md": ("`wayfinder:<type>` (`research`/`prototype`/`grilling`/`task`)",),
 }
 
 
@@ -1151,12 +1160,11 @@ def check_rename_residue(files: list[Path], root: Path) -> list[str]:
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             continue
+        candidate_text = text
+        for literal in RESIDUE_EXEMPT_LITERALS.get(relative, ()):
+            candidate_text = candidate_text.replace(literal, "")
         for old_name, new_name in sorted(RENAMED_AWAY_SKILLS.items()):
             token = re.compile(rf"(?<![\w./-]){re.escape(old_name)}(?![\w-])")
-            candidate_text = text
-            if old_name == "archify":
-                for literal in UPSTREAM_IDENTITY_LITERALS.get(relative, ()):
-                    candidate_text = candidate_text.replace(literal, "")
             if token.search(candidate_text):
                 errors.append(f"rename residue outside allowed surfaces: {relative}: {old_name} -> {new_name}")
     return errors
@@ -1614,10 +1622,10 @@ def check_public_boundaries(files: list[Path], root: Path) -> list[str]:
     return errors
 
 
-# The published Azhou library (CC BY-NC-ND 4.0) is the only tracked Agent Skin
-# artwork; everything else under packages/agent-skin/assets/ stays private.
-PUBLISHED_AGENT_SKIN_ASSETS = frozenset(
-    "packages/agent-skin/assets/azhou/" + name
+# The published Azhou library (CC BY-NC-ND 4.0) is the only tracked Azhou
+# artwork; everything else under assets/azhou/ stays private.
+PUBLISHED_AZHOU_ASSETS = frozenset(
+    "assets/azhou/" + name
     for name in ("LICENSE", "NOTICE.md", "working.png", "wallpaper-scene-q-v3.png",
                  "entry-avatar.png", "app-icon/source.png")
 )
@@ -1628,7 +1636,7 @@ def check_private_startup_artwork(root: Path) -> list[str]:
     result = subprocess.run(
         [
             "git", "ls-files", "-z", "--cached", "--",
-            ":(icase)packages/agent-skin/assets/",
+            ":(icase)assets/azhou/",
         ],
         cwd=root,
         check=True,
@@ -1636,7 +1644,7 @@ def check_private_startup_artwork(root: Path) -> list[str]:
     )
     paths = sorted(set(result.stdout.decode("utf-8", errors="backslashreplace").split("\0")) - {""})
     return [f"private startup artwork is public: {path}" for path in paths
-            if path not in PUBLISHED_AGENT_SKIN_ASSETS]
+            if path not in PUBLISHED_AZHOU_ASSETS]
 
 
 def check_runtime_state_contract(files: list[Path], root: Path) -> list[str]:

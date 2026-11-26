@@ -36,6 +36,7 @@ SKILL_DIRS = (
     ROOT / "skills" / "super-diagram-design",
     ROOT / "skills" / "super-frontend-design",
     ROOT / "skills" / "super-brainstorming",
+    ROOT / "skills" / "super-grill-me",
 )
 PACKAGE_COUNT_WORDS = {
     "sixteen": 16,
@@ -48,6 +49,7 @@ PACKAGE_COUNT_WORDS = {
     "十八": 18,
     "十九": 19,
     "二十": 20,
+    "二十一": 21,
 }
 
 
@@ -130,9 +132,9 @@ class SkillPackageTest(unittest.TestCase):
 
         for language, text in readmes.items():
             lines = text.splitlines()
+            self.assertIn("docs/installation.md#package-manager-install", text, language)
+            self.assertIn("docs/installation.md#checkout-assisted-setup", text, language)
             for skill, commands in command_map.items():
-                install = f"npx skills add TeFuirnever/azhou-ai-hub --skill {skill}"
-                self.assertIn(install, text, f"{language}: {skill} install command")
                 mapping = next((line for line in lines if line.startswith(f"| `{skill}` |")), "")
                 self.assertTrue(mapping, f"{language}: {skill} CLI mapping")
                 for command in commands:
@@ -202,16 +204,21 @@ class SkillPackageTest(unittest.TestCase):
         self.assertIn("host integration", support)
         self.assertIn("discovery/invocation", support)
 
-    def test_public_install_and_catalog_enumerations_match_the_shipped_tree(self) -> None:
+    def test_public_install_examples_and_catalog_match_the_shipped_tree(self) -> None:
         shipped = sorted(path.parent.name for path in ROOT.glob("skills/*/SKILL.md"))
-        for relative in ("docs/installation.md", "README.md", "README.zh-CN.md"):
+        examples = {
+            "docs/installation.md": ["super-ask-azhou", "super-archify"],
+            "README.md": ["super-ask-azhou"],
+            "README.zh-CN.md": ["super-ask-azhou"],
+        }
+        for relative, expected in examples.items():
             text = (ROOT / relative).read_text(encoding="utf-8")
-            enumerated = re.findall(
-                r"^npx skills add TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+)", text, re.MULTILINE
+            commands = re.findall(
+                r"^[ \t]*npx skills add TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+) --agent codex$",
+                text, re.MULTILINE,
             )
-            self.assertEqual(shipped, sorted(enumerated), relative)
-            every = re.findall(r"npx skills add TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+)", text)
-            self.assertEqual(shipped, sorted(set(every)), relative)
+            self.assertEqual(expected, commands, relative)
+            self.assertTrue(set(commands).issubset(shipped), relative)
         for relative in ("README.md", "README.zh-CN.md"):
             text = (ROOT / relative).read_text(encoding="utf-8")
             rows = re.findall(

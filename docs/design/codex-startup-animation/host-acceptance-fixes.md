@@ -1,6 +1,6 @@
 # 冷启动验收修订
 
-> 2026-10-27 历史修订；下文的入口布局和保存后重播是当时的方案。当前入口、保存与预览行为见 [主题与外观配置](../../../packages/agent-skin/docs/theme-appearance.md)，当前验收入口见 [测试与功能验收](../../../packages/agent-skin/docs/testing.md)。
+> 2026-10-27 历史修订；下文的入口布局和保存后重播是当时的方案。当前入口、保存与预览行为见 [主题与外观配置](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/docs/theme-appearance.md)，当前验收入口见 [测试与功能验收](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/docs/testing.md)。
 
 2026-10-27，用户确认看到动画自然结束、Codex 可以点击和输入；同时报告应用内背景仍是官方背景，Command-Option-B 打开官方浏览器。用户批准质量优先继续修复。这些观察不表示 G3 或 G4 已通过。
 

@@ -4,13 +4,21 @@ A standalone Mousecape theme for macOS with 41 cursor states and 32 px and 64 px
 
 ![Azhou Double Hug in dark and light contexts at 3× and 1×](preview.png)
 
-## Install
+## Install / 安装
 
-1. Import [Azhou-Double-Hug-3.6.1.cape](Azhou-Double-Hug-3.6.1.cape) in Mousecape.
-2. Select **百变阿舟 · 抱一下 3.6.1** and choose **Apply**.
-3. Check the arrow and text selection in Finder or a document. To revert, select your previous cape and choose **Apply**, or use Mousecape to restore the system cursors.
+[Download the theme](https://tefuirnever.github.io/azhou-ai-hub/#cursor-theme) · [下载主题](https://tefuirnever.github.io/azhou-ai-hub/zh/#cursor-theme) · [Browse the .cape file / 查看主题文件](Azhou-Double-Hug-3.6.1.cape) · [Get Mousecape / 获取 Mousecape](https://github.com/alexzielenski/Mousecape/releases) · [Restore / 恢复](#restore)
 
-[Import 3.6.1](Azhou-Double-Hug-3.6.1.cape) 后，选中「百变阿舟 · 抱一下 3.6.1」并点击 Apply。可以重新应用原来的皮肤，或用 Mousecape 恢复系统指针。
+1. Open Mousecape and import the downloaded `.cape` file.
+2. Select **百变阿舟 · 抱一下 3.6.1** and choose **Apply**. Check the arrow and text selection in Finder or a document.
+
+1. 打开 Mousecape，导入下载的 `.cape` 文件。
+2. 选中「百变阿舟 · 抱一下 3.6.1」并点击 **Apply**。在访达或文档里检查箭头和文字选择指针。
+
+## Restore
+
+To switch back to another theme, select it and choose **Apply**. To restore the macOS system cursors, use Mousecape’s reset command. In versions that show **Cape → Reset to Default**, choose that menu item.
+
+要换回原来的主题，选中它并点击 **Apply**。要恢复 macOS 系统指针，用 Mousecape 的恢复默认功能。如果菜单里有 **Cape → Reset to Default**，就点这一项。
 
 ## Rebuild
 
@@ -27,6 +35,6 @@ The repository's unit suite checks the delivered file's identifier, role set, an
 
 ## Rights
 
-Code follows the repository MIT license. Source atlases, preview and artwork embedded in the cape are © 2026 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0. See the [artwork license](../../../packages/agent-skin/assets/azhou/LICENSE) and [brand terms](../../../TRADEMARKS.md).
+Code follows the repository MIT license. Source atlases, preview and artwork embedded in the cape are © 2026 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0. See the [artwork license](../../../assets/azhou/LICENSE) and [brand terms](../../../TRADEMARKS.md).
 
 未经许可，请勿修改并再分发阿舟素材或用于商业用途。阿舟名称与形象属于作者品牌。

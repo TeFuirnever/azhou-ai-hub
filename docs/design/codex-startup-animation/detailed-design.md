@@ -1,6 +1,6 @@
 # 功能详细设计：Agent Skin 首期 Codex 适配
 
-> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。旧源根 `packages/codex-startup-animation/` 已于 2026-11-12 删除；文中该路径为历史定位，指向 Git 历史。
+> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/README.md)和[测试与功能验收](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/docs/testing.md)为准。旧源根 `packages/codex-startup-animation/` 已于 2026-11-12 删除；文中该路径为历史定位，指向 Git 历史。
 
 ## 0. 文档控制与阅读入口
 

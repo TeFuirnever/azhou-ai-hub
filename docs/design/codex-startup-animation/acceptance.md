@@ -1,6 +1,6 @@
 # 验收设计与本次文档交付记录
 
-> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](../../../packages/agent-skin/README.md)和[测试与功能验收](../../../packages/agent-skin/docs/testing.md)为准。下文原本机渲染截图路径已不可用，不作为当前证据。
+> 历史设计快照；现役行为与验收以 [Agent Skin 使用说明](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/README.md)和[测试与功能验收](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/docs/testing.md)为准。下文原本机渲染截图路径已不可用，不作为当前证据。
 
 本文分开记录未来实现的验收计划和本次实际执行结果。需求入口见[详细设计](detailed-design.md)，具体字段见[运行契约](runtime-contracts.md)。未经实际执行的项目均为 Planned。
 

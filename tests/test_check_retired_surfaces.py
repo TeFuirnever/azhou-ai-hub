@@ -48,12 +48,12 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             tool = write(root, "packages/agent-skin/tools/manage-codex-pet.py", "")
-            guide = write(root, "packages/agent-skin/README.md", "Run tools/manage-codex-pet.py.\n")
-            record = write(root, "packages/agent-skin/evidence/old-pet.md", "Run tools/manage-codex-pet.py.\n")
+            guide = write(root, "docs/pet-live.md", "Run tools/manage-codex-pet.py.\n")
+            record = write(root, "evidence/old-pet.md", "Run tools/manage-codex-pet.py.\n")
             self.assertEqual(
                 [
                     "retired surface resurrected: packages/agent-skin/tools/manage-codex-pet.py",
-                    "retired-surface reference: packages/agent-skin/README.md:1: Codex Pet tooling",
+                    "retired-surface reference: docs/pet-live.md:1: Codex Pet tooling",
                 ],
                 check_retired_surface_references([tool, guide, record], root),
             )
@@ -92,7 +92,7 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
             root = Path(directory)
             frozen = write(
                 root,
-                "packages/agent-skin/tools/new-check.mjs",
+                "scripts/new-check.mjs",
                 "const owner = 'azhou.codex-startup-animation';\n"
                 "const pet = 'codex-startup-animation/native-pet-v1';\n"
                 "const upstream = 'panding999/codex-startup-animation';\n"
@@ -175,7 +175,7 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
             root = Path(directory)
             script = write(
                 root,
-                "packages/agent-skin/tools/build-macos.sh",
+                "scripts/build-macos.sh",
                 "swiftc Native/ZCodeSkinDriver.swift\n"
                 "node tools/test-zcode-runtime.py\n"
                 "open extension/hosts/zcode.mjs\n"
@@ -185,11 +185,11 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
             errors = check_retired_surface_references([script], root)
             self.assertEqual(
                 [
-                    "retired-surface reference: packages/agent-skin/tools/build-macos.sh:1: ZCodeSkin",
-                    "retired-surface reference: packages/agent-skin/tools/build-macos.sh:2: test-zcode-",
-                    "retired-surface reference: packages/agent-skin/tools/build-macos.sh:3: hosts/zcode.mjs",
-                    "retired-surface reference: packages/agent-skin/tools/build-macos.sh:4: azhou-zcode-startup",
-                    "retired-surface reference: packages/agent-skin/tools/build-macos.sh:5: offline-acceptance-runbook",
+                    "retired-surface reference: scripts/build-macos.sh:1: ZCodeSkin",
+                    "retired-surface reference: scripts/build-macos.sh:2: test-zcode-",
+                    "retired-surface reference: scripts/build-macos.sh:3: hosts/zcode.mjs",
+                    "retired-surface reference: scripts/build-macos.sh:4: azhou-zcode-startup",
+                    "retired-surface reference: scripts/build-macos.sh:5: offline-acceptance-runbook",
                 ],
                 errors,
             )
@@ -219,7 +219,7 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
                 write(root, "evidence/old.md", "ZCodeSkinDriver and agent-orchestration-kit\n"),
                 write(
                     root,
-                    "packages/agent-skin/evidence/old.md",
+                    "evidence/old.md",
                     "hosts/zcode.mjs and codex-startup-animation\n",
                 ),
                 write(root, "docs/decisions/old.md", "agent-orchestration-kit removed\n"),
@@ -230,27 +230,15 @@ class RetiredSurfaceReverseScanTest(unittest.TestCase):
             ]
             self.assertEqual([], check_retired_surface_references(receipts, root))
 
-    def test_frozen_site_comment_is_path_scoped_and_hides_nothing_else(self) -> None:
+    def test_retired_skin_runtime_and_adapter_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            site = "packages/agent-skin/Native/InstallRegistryCore.swift"
-            comment = '// Frozen installed-state owner identity inherited from codex-startup-animation;\n'
-            core = write(root, site, comment + 'let owner = "azhou.codex-startup-animation"\n')
-            self.assertEqual([], check_retired_surface_references([core], root))
-            core.write_text(
-                comment + "// See codex-startup-animation for the old installer.\n",
-                encoding="utf-8",
-            )
-            self.assertEqual(
-                [
-                    "retired-surface reference: "
-                    "packages/agent-skin/Native/InstallRegistryCore.swift:2: codex-startup-animation"
-                ],
-                check_retired_surface_references([core], root),
-            )
-            # The same comment is not a frozen site anywhere else.
-            other = write(root, "docs/new-guide.md", comment)
-            self.assertTrue(check_retired_surface_references([other], root))
+            for name in ("packages/agent-skin/extension.mjs", "scripts/integration_startup_animation.py"):
+                with self.subTest(name=name):
+                    self.assertEqual(
+                        [f"retired surface resurrected: {name}"],
+                        check_retired_surface_references([write(root, name, "")], root),
+                    )
 
     def test_frozen_narrative_fragment_is_path_scoped(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

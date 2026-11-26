@@ -1,0 +1,10 @@
+{
+  "name": "azhou-agent-tools",
+  "interface": {"displayName": "Azhou Agent Tools"},
+  "plugins": [{
+    "name": "azhou-agent-inspector",
+    "source": {"source": "local", "path": "./plugins/azhou-agent-inspector"},
+    "category": "Developer Tools",
+    "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"}
+  }]
+}

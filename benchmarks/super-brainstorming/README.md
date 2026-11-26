@@ -16,6 +16,10 @@ Run in a scratch directory (never a real checkout):
 
 Record the Node version alongside any run notes. The conversation behavior itself (exploration → approaches → design doc → approval gate) is a human-in-the-loop protocol and is walked through, not automated, by this contract.
 
+## Next check
+
+Use a disposable project for a two-turn design review in a supported chat host. Check that each material stage is announced, that the written design is saved, and that implementation waits for the reader’s explicit approval. Record the host version, tool availability and the approval boundary.
+
 ## Recorded run
 
 Two runs are recorded, both on macOS arm64 against the pushed bytes of this branch on the official Node.js v18.20.8 build.

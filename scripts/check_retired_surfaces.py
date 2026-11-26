@@ -42,7 +42,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RETIRED_PACKAGE_ROOTS = (
     "packages/agent-orchestration-kit/",
     "packages/codex-startup-animation/",
-    "packages/agent-skin/pet/",
+    "packages/agent-skin/",
     "skills/super-pdf/",
 )
 
@@ -50,6 +50,7 @@ RETIRED_PACKAGE_ROOTS = (
 # The shared core and the Codex/DSH hosts survive; only these host-layer
 # files must never come back. The last five paths are retired Pet tooling.
 RETIRED_AGENT_SKIN_FILES = (
+    "scripts/integration_startup_animation.py",
     "packages/agent-skin/Native/ZCodeSkinDriver.swift",
     "packages/agent-skin/Native/ZCodeSkinRuntime.swift",
     "packages/agent-skin/Native/ZCodeSkinDriverTests.swift",

@@ -12,61 +12,23 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——17 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
-
-https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
-
 </div>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-install.zh-CN-dark.jpg">
-  <img src="assets/github/readme-banner-install.zh-CN.jpg" alt="安装：一条命令，装一个 skill" width="100%">
-</picture>
 
 ### 在 Codex 里首次安装
 
-先登录 Codex，并确认电脑已安装带 `npx` 的 Node.js；所有命令都在你想要安装 Ask Azhou 的项目目录下执行。示例命令均为 POSIX shell：Windows 请在 Git Bash 中运行（[Windows 说明](docs/installation.md#windows-notes)）；仓库 gate 与随附脚本覆盖哪些平台，见[操作系统支持表](docs/support-matrix.md#operating-system-support-deterministic-gate)。
+先登录 Codex，并确认电脑已安装 Node.js 22.20 或更新版本。在项目目录运行下面的命令，看到提示后确认安装到当前项目。Windows 用户请在 Git Bash 中运行[示例命令](docs/installation.md#windows-notes)。
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 ~~~
 
-在同一项目打开一个新的 Codex 会话，试着问下面的问题。
+在同一项目打开一个新的 Codex 会话。先输入 `$super-ask-azhou`，确认 Codex 找得到它，再试试下面的问题。
 
 > `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub Skill？
 
-应看到它推荐 `super-archify`。如果找不到 Ask Azhou，先看[首次安装排查](docs/installation.md#first-install-in-codex)；已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
+正常情况下，它会推荐 `super-archify`。如果 Codex 找不到 Ask Azhou，可以[检查安装](docs/installation.md#if-codex-cannot-find-ask-azhou)。已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
 
-四个 Foundation Skill 用同样的方式安装：
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
-~~~
-
-其余的包用同样的方式安装：
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
-npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
-npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
-npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
-npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
-npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
-npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
-~~~
-
-每个 skill 只选一种安装方式（[单一路径规则](docs/installation.md#one-path-rule)）。包管理器安装解析的是可变默认分支，不留 Hub 回执。四个 `super-azhou-*` 包只是薄封装：npx 命令装的是 Skill，但调用时执行的是本仓库 checkout 里的 Foundation CLI（`scripts/azhou_hub.py`），所以磁盘上仍需要这份 checkout（clone 一次即可）。
+想安装 Ask Azhou 推荐的技能时，按[单个技能安装指南](docs/installation.md#package-manager-install)操作。每个技能只选[一种安装方式](docs/installation.md#one-path-rule)。四个 `super-azhou-*` 技能还需要一份本地仓库 checkout。
 
 上面的走查以 Codex 为目标。其余受维护的 harness——Claude Code、MiMo Code（`mimo`）、DeepSeek Harness（`dsh`）、zcode——各自的已验证安装路线与证据见[支持矩阵](docs/support-matrix.md)；也可以用仓库 checkout 走 [checkout 辅助安装](docs/installation.md#checkout-assisted-setup)或[手动复制](docs/installation.md#manual-copy)。
 
@@ -89,7 +51,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
 | [Arch Doc](skills/super-arch-doc/SKILL.md) | 从上游资料起草、校准并评审架构文档。 | 确定性脚手架、收尾门检查器与黄金用例。 |
 | [Session Insights](skills/super-session-insights/SKILL.md) | 从本机会话存储产出事实绑定的使用报告；对已授权材料做反思。 | 合成存储接线套件；反思合同检查。 |
 | [ASD-STE100](skills/super-asd-ste100/SKILL.md) | 按源自 ASD-STE100 的结构规则改写面向 agent 的英文。 | 上游钉定（SHA-256）；确定性的 `ste-lint.py` gate。 |
-| [Archify](skills/super-archify/SKILL.md) | 把系统、计划或代码库变成交互图示地图 HTML。 | 上游 v3.2.0 同步（git tag + SHA-256）；收尾/校验 gate。 |
+| [Archify](skills/super-archify/SKILL.md) | 把系统、代码库或 Mermaid 草图做成交互架构图。 | 上游 v3.2.0 同步（git tag + SHA-256）；收尾/校验 gate。 |
 | [Lavish](skills/super-lavish/SKILL.md) | 把回答变成可审阅的 HTML；浏览器标注反馈回到 agent。 | 锁定的上游发布（SHA-256 + npm 钉定）；完整性测试。 |
 | [Imagegen](skills/super-imagegen/SKILL.md) | 经本机已安装的私有 `azhou-imagegen` skill 执行准备好的生图请求；缺该 skill 或其 doctor gate 时 fail-closed。 | 仅契约层包；基线哈希钉定；fail-closed。 |
 | [Rederive](skills/super-rederive/SKILL.md) | 通过重新推导设计来练习理解代码。 | 上游钉定（SHA-256）；仅探索性观察。 |
@@ -98,10 +60,13 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
 | [Diagram Design](skills/super-diagram-design/SKILL.md) | 51 种视觉类型下创建品牌化、编辑级的 HTML/SVG 图表，支持 .drawio/Mermaid/.excalidraw/PlantUML 导入。 | 上游 vendored（commit 钉定 + 逐文件 SHA-256）；包内 `self_check.py` 门禁。 |
 | [Frontend Design](skills/super-frontend-design/SKILL.md) | 为新 UI 或界面改版产出独特、非模板化的视觉设计方向：色板、字体排印、布局，以及避开 AI 默认观感的评审流程。 | 在 anthropics/skills 的钉定 commit 上 faithful 引入：上游指导正文逐字保留，Apache-2.0 许可逐字节 vendored，配 SHA-256 完整性测试。尚无行为 benchmark。 |
 | [Brainstorming](skills/super-brainstorming/SKILL.md) | 在动手前探清读者真正想要什么与为什么：枚举方案、写设计文档、守审批门。 | 上游 adapted（tag 钉定 + 逐文件 SHA-256 锚）；六处记录在案 delta；完整性测试。尚无行为 benchmark。 |
+| [Grill Me](skills/super-grill-me/SKILL.md) | 按轮拷问用户的方案、决定或想法：前提已定的问题逐个附上推荐答案，事实去查，决策留给用户。 | 上游 adapted（tag 钉定；上游触发句逐字保留；正文除一句外逐字保留）；SHA-256 完整性测试。尚无行为 benchmark。 [Claude Code 宿主实测](evidence/super-grill-me-host-check-claude-2026-11-24.md). |
 
 [逐 skill 平台汇总](docs/skill-platform-view.md) · [评测合同](docs/eval-case-contract.md)
 
 ### 上手试试
+
+https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
 下表“必须返回什么”中的两个固定说法：hold＝明确挂起、留待后续处理的事项；稳定收据＝一次运行留下的可核对结果记录。
 
@@ -144,26 +109,23 @@ python scripts/azhou_hub.py verify
 
 ## 集成
 
-两个完整项目位于 `packages/`。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。下文中的**候选版**（candidate）指已维护、但尚未接受为正式发布的源码版本；其证据以[支持矩阵](docs/support-matrix.md#optional-integrations)中带日期的收据为准，不构成发布声明。
+可选集成位于 `packages/`。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。下文中的**候选版**（candidate）指已维护、但尚未接受为正式发布的源码版本；其证据以[支持矩阵](docs/support-matrix.md#optional-integrations)中带日期的收据为准，不构成发布声明。
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
+| `azhou-agent-inspector` | [阿舟 Agent 工作台](packages/azhou-agent-inspector/README.md) | Codex 会话侧面板、ZCode 输入框状态项与会话仪表盘。两个面板都显示整轮耗时和速率，可按需展开性能详情。宿主提供实际请求的用量和窗口上限时，详情会显示 Context 占用。通过各宿主自己的插件管理器安装。[各版本桌面验收](docs/support-matrix.md#azhou-agent-workbench)。 |
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
-| `agent-skin` | [阿舟 AI 实验室 for Codex](packages/agent-skin/README.md) | Codex 桌面冷启动时播放 12 秒阿舟启动动画并应用阿舟壁纸（视觉验收仍待人工确认；以[支持矩阵](docs/support-matrix.md#optional-integrations)为准）；组装好的 DeepSeek Harness 插件包把同样的外观带到 DSH。当前源码候选为 `0.9.0/build 43`。更新按[本地安装 SOP](packages/agent-skin/docs/local-install-sop.md) 执行。 |
 
-[阿舟外观](packages/agent-skin/docs/theme-appearance.md#appearance-file-boundary)可选用本机图片和阿舟 JSON 预设，不导入其他项目的主题，也不迁移其他项目的数据。
 
-[阿舟鼠标指针 3.6.1](assets/cursors/azhou-double-hug/README.md) 是一套适用于 macOS 的独立 Mousecape 皮肤。
+[阿舟鼠标指针 3.6.1](assets/cursors/azhou-double-hug/README.md) 是一套适用于 macOS 的独立 Mousecape 皮肤。主题指南提供下载、安装和恢复系统指针的入口。
 
 同样在本仓库的 clone 中执行：
 
 ~~~bash
 python scripts/azhou_hub.py integrations list --json
 python scripts/azhou_hub.py integrations pstack --help
-python scripts/azhou_hub.py integrations agent-skin --help
 ~~~
 
-pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由 Hub 根 MIT 许可证覆盖。`packages/agent-skin/assets/azhou/` 的阿舟素材采用 CC BY-NC-ND 4.0，阿舟名称、标识与角色见 [TRADEMARKS.md](TRADEMARKS.md)。
 
 [接入手册](docs/integrations.md) · [来源记录](docs/integration-provenance.md) · [支持矩阵](docs/support-matrix.md#optional-integrations)
 
@@ -171,10 +133,10 @@ pstack 保留其上游 MIT 声明。Agent Skin 代码自 #441 独立重写后由
 
 退役面、各自最后支持的版本，以及已装用户的处置方式：
 
-- **agent-skin 的 ZCode 宿主层**——最后支持 `0.9.0/build 41`。已安装的 ZCode 皮肤作为冻结安装继续可用；恢复其原始启动器，或连同回执移除阿舟入口。
+- **Agent Skin** 已退役，覆盖 Codex、DSH 与此前退役的 ZCode。见[已安装用户退出说明](docs/decisions/agent-skin-retirement.md)。
 - **Agent Orchestration Kit（model router）**——从未公开发布。这一条只写给仍残留内部测试安装的机器：从 Git 历史或旧 release 取回其自带的卸载器执行卸载，然后再安装 pstack。
-- **旧 `codex-startup-animation` 包**——末版 `0.7.1/build 8`，2026-11-12 移除。当前启动器源码由 Agent Skin 维护；Git 历史保留旧字节。
-- **阿舟 Codex Pet**——2026-11-18 退役。见[退役记录](packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md)。
+- **旧 `codex-startup-animation` 包**——末版 `0.7.1/build 8`，2026-11-12 移除。Git 历史保留旧字节。
+- **阿舟 Codex Pet**——2026-11-18 退役。见[退役记录](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md)。
 
 [HUB-RET-001](docs/decisions/hub-retirement-physical-deletion.md) 记录了这次切割；[来源记录](docs/integration-provenance.md)各历史行定位每个删除前的修订，所有旧 release 与 tag 全量保留。
 
@@ -195,7 +157,7 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 
 ## 开发
 
-在 Codex 中，`$refactoring` 把重构指南落到一次改动上，`$release-it` 评审故障恢复；14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库放在 `.agents/skills/` 下——属于项目本地内容，不在 `skills/` 的 20 个可安装包之列——按需读取。
+在 Codex 中，`$refactoring` 把重构指南落到一次改动上，`$release-it` 评审故障恢复；14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库放在 `.agents/skills/` 下——属于项目本地内容，不在 `skills/` 的 21 个可安装包之列——按需读取。
 
 仓库级 gate 只需要 Python 3.11+：
 
@@ -209,4 +171,4 @@ python scripts/verify.py
 
 ## 许可证
 
-阿舟维护的代码：[MIT](LICENSE)。阿舟素材：[CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/NOTICE.md)。名称、标识与角色：[TRADEMARKS.md](TRADEMARKS.md)。第三方组件保留自己的声明与许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+阿舟维护的代码：[MIT](LICENSE)。阿舟素材：[CC BY-NC-ND 4.0](assets/azhou/NOTICE.md)。名称、标识与角色：[TRADEMARKS.md](TRADEMARKS.md)。第三方组件保留自己的声明与许可证：[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

@@ -1,15 +1,13 @@
 # Optional integrations / 可选能力接入
 
-The twenty canonical Skills under `skills/` keep their existing independent install, discovery and invocation contracts. The two optional entries are complete projects under `packages/`, not new Skills or a general package manager. `setup` does not enable them. The `integrations` command remains their stable operational entry.
+The 21 canonical Skills under `skills/` keep their existing independent install, discovery and invocation contracts. Optional entries are complete projects under `packages/`, not new Skills or a general package manager. `setup` does not enable them. The `integrations` command remains their stable operational entry.
 
-The in-repository packages are [pstack-agent-harness](../packages/pstack-agent-harness/README.md) and [Agent Skin](../packages/agent-skin/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
+The packages include [Azhou Agent Workbench](../packages/azhou-agent-inspector/README.md) and [pstack-agent-harness](../packages/pstack-agent-harness/README.md). Each keeps its own native layout and toolchain. `hub-package.json` declares the runtime paths; every plan computes a fingerprint from those current files and their executable modes. No tracked external source lock pins a checkout. The `commit` metadata records original import provenance, not the current Hub revision or package contents.
 
-The 2026-10-26 local App handoff predates the Agent Skin rename. Launcher ownership follows the native installer and the current App receipt.
 
 ```sh
 python scripts/azhou_hub.py integrations list --json
 python scripts/azhou_hub.py integrations pstack --help
-python scripts/azhou_hub.py integrations agent-skin --help
 ```
 
 Use Python 3.11+ and a verified Codex executable for operations that need the native runtime. Commands default to the canonical package under `packages/`; optional `--source` accepts only that exact absolute package path as an assertion and cannot select an external checkout. The native acceptance evidence is dated and applies only to the recorded macOS Codex runtime in the [historical report](../evidence/optional-integrations-2026-10-25.md); other operating systems and arbitrary Codex versions are not covered. Resolve and inspect the executable, not only the command found first on `PATH`.
@@ -18,14 +16,24 @@ Use Python 3.11+ and a verified Codex executable for operations that need the na
 
 | Entry | Package runtime and adapter scope | Native owner and boundary |
 |---|---|---|
+| `azhou-agent-inspector` | `packages/azhou-agent-inspector/` provides a read-only plan with the marketplace root, runtime fingerprint and installation instructions for Codex or ZCode. | Each host's plugin manager installs and updates the Workbench. |
 | `pstack` | `packages/pstack-agent-harness/`; current `runtime_paths` fingerprint, private snapshot, native install/doctor/remove adapter and read-only transition review | Codex plugin manager owns registration and cache; the Hub adapter owns only the coexistence model-sheet line it writes. Bun/Node support bundled scripts; forge workflows may need their declared tools. |
-| `agent-skin` | `packages/agent-skin/`; current runtime and build inputs, isolated build/test install/run/inspect; production lifecycle plans remain blocked | Azhou AI Lab, a Codex adapter with the native player and wallpaper helper, plus the assembled `azhou-agent-skin` DeepSeek Harness plugin package (`tools/build-dsh-plugin.py`, local assembly only). Owned UI supports Chinese/English and follows official host language/theme without separate preferences. The bot entry portrait and startup artwork are separate assets. Version-aware events, independent playback smoke, read-only status and scoped restore retain their existing boundaries. Local tests do not establish official-host acceptance or installation handoff. Code is MIT since the #441 rewrite; the bundled Azhou art is CC BY-NC-ND 4.0. |
 
-Adapters copy only manifest-selected runtime inputs below `<workspace>/.azhou/hub/sources/` and record a per-plan digest in an ignored private receipt. Receipts can contain local paths, frozen source bytes and exact rollback bytes; do not publish them. They keep recovery and owned cleanup tied to the reviewed package snapshot even after package files change. Build outputs and explicitly supplied private inputs have separate checks. A digest detects input changes; it is not a signature or an upstream license grant.
+When you apply a reviewed pstack install plan, the adapter copies only manifest-selected runtime inputs below `<workspace>/.azhou/hub/sources/` and records the digest in an ignored private receipt. Receipts can contain local paths, frozen source bytes and exact rollback bytes; do not publish them. They keep recovery and owned cleanup tied to the reviewed package snapshot even after package files change. Build outputs and explicitly supplied private inputs have separate checks. A digest detects input changes; it is not a signature or an upstream license grant.
 
-The adapters do not modify package source files. Any runtime input change changes the next plan fingerprint; review the plan before applying it. An existing installation may require recovery or removal using its recorded snapshot before a changed package can be installed. See [package provenance and updates](integration-provenance.md).
+The adapters do not modify package source files. A runtime input change produces a new plan fingerprint. Review the pstack plan before applying it. An existing pstack installation may require recovery or removal using its recorded snapshot before a changed package can be installed. See [package provenance and updates](integration-provenance.md).
 
 ## pstack: local source to native plugin
+
+| Host | Start here |
+|---|---|
+| Codex | Preview a [dedicated installation](#preview-the-codex-installation) below. |
+| Claude Code | Use the [native plugin commands](../packages/pstack-agent-harness/README.md#install). |
+| ZCode | Use the [bundled plugin](../packages/pstack-agent-harness/README.md#install). |
+
+Already installed? Check the [transition guide](#reviewing-an-existing-installation-before-any-transition) before switching sources or homes.
+
+### Preview the Codex installation
 
 Use the maintained Hub package as the source for new pstack installations. Upstream repositories remain provenance and update inputs. The [package install guide](../packages/pstack-agent-harness/README.md#install) covers the maintained installation targets. Only the Codex adapter below has a Hub-managed lifecycle; the other targets use native registration or an explicit Skills root. Imported formats for other harnesses remain source history, outside current support. Existing external installations require their native owner's removal or an explicitly reviewed source transition; copying the package into this repository does not adopt them.
 
@@ -38,18 +46,18 @@ PSTACK_WORKSPACE=/absolute/test-project
 PSTACK_HOME="$PSTACK_WORKSPACE/.azhou/hub/targets/pstack"
 CODEX_BIN=/absolute/path/to/verified/codex
 
-python scripts/azhou_hub.py integrations pstack plan \
+python scripts/azhou_hub.py integrations pstack plan --text \
   --workspace "$PSTACK_WORKSPACE" \
   --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN"
-python scripts/azhou_hub.py integrations pstack apply \
-  --workspace "$PSTACK_WORKSPACE" \
-  --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN" --plan-id PLAN_ID
-python scripts/azhou_hub.py integrations pstack doctor \
-  --workspace "$PSTACK_WORKSPACE" --codex-home "$PSTACK_HOME" --codex-bin "$CODEX_BIN"
+```
+
+Review the Codex home, workspace and operation. Copy the printed apply command into the same POSIX shell when you are ready. Omit `--text` for the full JSON plan and its `plan_id`. After applying, launch Codex with the dedicated home.
+
+```sh
 env CODEX_HOME="$PSTACK_HOME" "$CODEX_BIN" -C "$PSTACK_WORKSPACE"
 ```
 
-Replace `PLAN_ID` with the current plan output. The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack-azhouzhou@azhou-hub`. The marketplace was renamed from the fork-era `pstack-claude` to `azhou-hub` on 2026-11-12; installs registered under the old name keep their recorded identity and are removed or verified through it, while the reviewed local source path always determines the installed bytes. The adapter verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
+The adapter calls native `plugin marketplace add` with its private **in-repository snapshot**, then `plugin add pstack-azhouzhou@azhou-hub`. The marketplace was renamed from the fork-era `pstack-claude` to `azhou-hub` on 2026-11-12; installs registered under the old name keep their recorded identity and are removed or verified through it, while the reviewed local source path always determines the installed bytes. The adapter verifies the native marketplace root, marketplace source, plugin source path, installed version, current snapshot files and the complete plugin file set. Existing foreign installations are not adopted.
 
 After opening the dedicated session, inspect native Skills and invoke `pstack-azhouzhou:how` or another selected workflow. `doctor` proves installed files and registration; it does not prove invocation. `/setup-pstack` owns model-sheet setup. On Codex the native sheet is `<codex-home>/pstack-models.md` (the active `${CODEX_HOME:-$HOME/.codex}/pstack-models.md`); the upstream Cursor `.mdc` instructions do not apply, and model rows must not be copied to `AGENTS.md`. Review the rows and actual host-supported model aliases before dispatch; only a sheet-declared, host-supported fallback is permitted. The Hub does not invent a universal model table.
 
@@ -103,55 +111,6 @@ Model sheets in automatically loaded rule locations still inject instructions af
 
 `~/.agents/skills` is a shared Skills discovery directory, including for Codex processes with an isolated home. A skills-only pstack installation there has no native routing hook. Its presence alone does not establish automatic routing or require a native-plugin conversion; choose one workflow owner per task. A later shared installation must link to this Hub's maintained package, and its removal affects every runtime that reads the shared directory. This manual source-retirement procedure does not adopt unknown installations or replace the planned controlled-conversion lifecycle.
 
-## Agent Skin: build, test entry and production boundary
+## Azhou Agent Workbench
 
-For updates to existing daily installations, follow the [local install SOP](../packages/agent-skin/docs/local-install-sop.md). The test-entry adapter below keeps its existing ownership boundary.
-
-The ZCode host layer is retired from this package: its last supported version was `0.9.0/build 41`, installed ZCode skins are frozen installs, the [README exit statement](../README.md#retired-surfaces) carries the uninstall guidance, and the persisted/protocol identifiers that installed-state migrations depend on keep their historical names ([decision record](decisions/hub-retirement-physical-deletion.md)).
-
-The canonical package is `packages/agent-skin/`. The CLI uses it by default; optional `--source` only asserts that canonical path. Its code was originally derived from the unlicensed upstream `panding999/codex-startup-animation`, independently rewritten in #441 (2026-11-11), and is now covered by the Hub root MIT license. Its Azhou artwork ships in `assets/azhou/` under CC BY-NC-ND 4.0 (not MIT), with the brand under the root [TRADEMARKS.md](../TRADEMARKS.md); an optional Git-ignored `assets/private/` overlay can replace it locally and is never included.
-
-```sh
-ANIMATION_WORKSPACE=/absolute/animation-test-project
-python scripts/azhou_hub.py integrations agent-skin check-source
-python scripts/azhou_hub.py integrations agent-skin build \
-  --workspace "$ANIMATION_WORKSPACE"
-```
-
-The last command is a plan. Repeat it with `--apply --plan-id PLAN_ID` after reviewing the targets. Without `--private-assets` the snapshot builds the published `assets/azhou/` skin. To build a custom skin, add `--private-assets /absolute/overlay` holding any of `working.png`, `wallpaper-scene-q-v3.png`, `entry-avatar.png` and `app-icon/source.png`; the plan hashes them, the adapter copies them only into the snapshot's ignored `assets/private/` overlay, runs the fixed native build and compares the final marker against **all** approved overlay inputs. Assets the overlay omits fall back to `assets/azhou/`; a reused workspace whose snapshot overlay holds any file outside the approved plan (for example, left by an earlier custom build) is refused before the build, so use a new workspace when switching skins. Builds before 0.9.0 still require the legacy private set including `scene.js`. The temporary empty Git database in that snapshot serves only the native ignore checks, not source-history attribution.
-
-The same package assembles the DeepSeek Harness plugin without a plan, because the plugin never installs anything: `python tools/build-dsh-plugin.py` (from `packages/agent-skin/`) emits `.build/azhou-dsh-plugin/azhou-agent-skin/` and `python tools/verify-artifacts.py --verify-dsh-plugin <package>` checks it. The plugin's source inputs joined `hub-package.json` `build_inputs` and `runtime_paths`, so the next native plan fingerprint changes; review it before applying. Installing the package into a DSH profile is a separate manual step, not performed by this repository's adapters. The official throwaway-profile installation loop was verified in the [2026-11-05 live install receipt](../evidence/live-dsh-plugin-install-2026-11-05.md). See the [plugin contract](../packages/agent-skin/docs/dsh-plugin.md) and the [assembly receipt](../evidence/dsh-agent-skin-assembly-2026-11-05.md).
-
-Use the returned `.build/azhou-payload` path as `PAYLOAD`. Test installation accepts only that frozen-snapshot payload: a bundle built directly in the live package directory is rejected at planning, because test-uninstall restores from the frozen snapshot. Test installation likewise requires its own current plan:
-
-```sh
-python scripts/azhou_hub.py integrations agent-skin test-install \
-  --workspace "$ANIMATION_WORKSPACE" --payload "$PAYLOAD"
-# Repeat with --apply --plan-id PLAN_ID; set TEST_APP to the returned path.
-python scripts/azhou_hub.py integrations agent-skin inspect --bundle "$TEST_APP"
-python scripts/azhou_hub.py integrations agent-skin run --bundle "$TEST_APP" --mode smoke
-python scripts/azhou_hub.py integrations agent-skin run --bundle "$TEST_APP" --mode probe
-```
-
-`run` is a plan until repeated with `--apply --plan-id PLAN_ID`. `smoke` runs a one-shot player without launching or enhancing Codex. `probe` resolves the actual `com.openai.codex` target without launching it. The returned log must name the installed application; a source preview or successful exit alone is insufficient. The optional `--evidence` path must be inside this Hub checkout's `.azhou/hub/` and is bound into the plan.
-
-The Hub assesses output according to the inspected bundle version: verified 0.7.1 payloads retain legacy event rules; 0.8.0 and later payloads use `azhou-startup.event.v1` for consumed events. Known diagnostics may omit the schema and are not counted as startup evidence. For the current contract, the native Codex cold-start connector activates at readiness and keeps its bounded attachment alive while playback is in progress, permitting only proven page replacement. Completion, skip or entry into settings ends that attachment. `launch` still reports hot activation, startup readiness, skip, interruption and unproven behavior separately from wallpaper status; its outcome alone does not prove wallpaper or visual acceptance. `smoke` is a one-shot player check that requires its own playback-completion evidence and never launches or enhances Codex. `probe` only resolves the actual `com.openai.codex` target. These event assessments are validated with synthetic fixtures; no live producer or official host run is claimed.
-
-Plans disclose temporary locks, helper logs and the possible lifetime of a cold-start loopback debugging port. `wallpaper-status` is a separate read-only check that can report an optional startup state without launching, injecting, registering or writing logs. `disable-wallpaper` requires a specific target PID and bundle; its restore scope removes the Agent Skin controller and wallpaper while preserving saved settings, the host process and its debugging port. Playback completion, launcher result, wallpaper report, live page state and visual review remain separate evidence. Never restart an active host merely to make an acceptance test pass.
-
-For the test entry, use `test-uninstall --workspace ...`, then repeat with `--apply --plan-id PLAN_ID`. macOS may automatically register even a directly executed test `.app`; cleanup is limited to this receipt-owned exact path and must preserve other registrations. Cleanup uses the verified private package snapshot and receipt, so later package changes do not remove the recovery source. New build, install, run and inspect plans fingerprint the current in-repository inputs. This is separate from the native production entry. Apple describes `lsregister` as a [debugging tool, not a stable API](https://developer.apple.com/forums/thread/725805); the tested exact-path operation and NSWorkspace before/after check do not establish support for every macOS release.
-
-`install-plan` and `uninstall-plan` describe the production target and return `blocked_source_contract`. The Hub package's native installer has a narrow one-time `--migrate-from OLD_ROOT` operation for an existing launcher at the fixed user Applications entry. Run it only from the final Hub package path after building its own payload. It requires matching old schema-2 installation receipt, old build payload and installed app fingerprints, the old build marker, unique registration, a user-entry lock and both project install locks. It replaces the exact verified entry, writes a Hub-owned receipt with `sourceHandoff`, and leaves the old checkout intact for separate archival or removal. A normal install still rejects another `projectRoot`. This native handoff does not implement the Hub adapter's general production install/uninstall plans; explicit build/state/destination and native uninstall contracts remain needed there. `native-check` remains read-only. The original official Codex entry remains available.
-
-## Why these checks are necessary
-
-The initial read-only review answered the four implementation questions with concrete consequences:
-
-| Question | Implementation consequence |
-|---|---|
-| Necessary work beyond copying capabilities? | Keep two native projects as independent packages, select only declared runtime inputs, bind current bytes to each plan, preserve recovery after source edits, and separate private artwork, playback, host launch and appearance evidence. |
-| Which primary materials prove what? | Package manifests and runtime source show current intended inputs; package licenses define stated grants; host protocol/config and task metadata prove native discovery/dispatch. README and dated receipts locate evidence but do not prove current behavior. |
-| How is the path traced? | `hub-package.json` runtime paths → per-plan digest → private package snapshot → native plan/installer → receipt → native list/config/schema → task or installed-player events. Dated acceptance records remain tied to their original inputs. |
-| What can disprove correctness? | Changed package bytes, native configuration/Skill validation, independent review, altered target/dependency/material/transaction negative controls, installed resource hashes and actual run metadata. Formal visual approval, redistribution permission and unexecuted host behavior remain explicit holds. |
-
-Run the repository gate with `python scripts/verify.py`; it includes each package's targeted native tests. The [2026-10-25 acceptance report](../evidence/optional-integrations-2026-10-25.md) and [support matrix](support-matrix.md#optional-integrations) are historical evidence, not fresh acceptance of the monorepo package contents. No quality, latency, price or cross-harness equivalence claim follows from these integrations.
+The session monitor supports read-only installation planning via `python scripts/azhou_hub.py integrations azhou-agent-inspector plan --harness codex` (or `zcode`). Each native plugin manager owns installation.

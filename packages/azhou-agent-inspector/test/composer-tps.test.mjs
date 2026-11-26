@@ -1,0 +1,219 @@
+import assert from "node:assert/strict";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import { activate } from "../plugins/zcode/extension.mjs";
+
+test("composer shows and restores per-session TPS on ZCode 3.18.2 and later", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "tps-composer-test-"));
+  const app = join(root, "app.asar");
+  mkdirSync(app);
+  process.env.ZCODE_USAGE_DB = join(root, "usage.sqlite");
+  process.env.TPS_MONITOR_STATE_FILE = join(root, "state.json");
+  process.env.TPS_MONITOR_SESSIONS_DIR = join(root, "sessions");
+  process.env.TOKEN_RATE_MIN_MS = "1";
+  mkdirSync(process.env.TPS_MONITOR_SESSIONS_DIR);
+  const db = new DatabaseSync(process.env.ZCODE_USAGE_DB);
+  db.exec(`CREATE TABLE message (session_id TEXT, data TEXT);
+           CREATE TABLE model_usage (
+             session_id TEXT, status TEXT, query_source TEXT, model_id TEXT,
+             output_tokens INTEGER, reasoning_tokens INTEGER, input_tokens INTEGER,
+             cache_read_input_tokens INTEGER, first_token_at INTEGER, completed_at INTEGER,
+             time_to_first_token_ms INTEGER, turn_id TEXT
+           );`);
+  const addMessage = db.prepare("INSERT INTO message VALUES (?, ?)");
+  for (const data of [{ role: "user" }, { role: "user", synthetic: true }, { role: "assistant" }]) {
+    addMessage.run("sess-a", JSON.stringify(data));
+  }
+  const addRequest = db.prepare(
+    "INSERT INTO model_usage VALUES (?, 'completed', 'main_turn', 'fixture', ?, 0, 100, 0, ?, ?, ?, ?)"
+  );
+  const now = Date.now();
+  addRequest.run("sess-a", 83, now - 6000, now - 5968, 750, "turn-1");
+  db.prepare("UPDATE model_usage SET cache_read_input_tokens = 50 WHERE session_id = ?").run("sess-a");
+  addRequest.run("sess-a", 15, now - 5000, now - 4974, 350, "turn-1");
+
+  Object.defineProperty(process, "resourcesPath", { value: root, configurable: true });
+  t.after(() => {
+    db.close();
+    delete process.resourcesPath;
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  async function load(version, sessionId, locale = "zh-CN", context) {
+    writeFileSync(join(app, "package.json"), JSON.stringify({ version }));
+    const display = new Map();
+    const tooltips = new Map();
+    const commands = new Map();
+    const views = new Map();
+    const opened = [];
+    let select, receive, changeLocale;
+    await activate({
+      extension: { dataPath: join(root, "data") },
+      log: { warn() {} },
+      env: locale == null ? undefined : {
+        onDidChange(listener) {
+          changeLocale = listener;
+          listener({ locale });
+        },
+      },
+      commands: { register(id, run) { commands.set(id, run); } },
+      views: {
+        register(id, view) { views.set(id, view); },
+        async open(id, scope) { opened.push({ id, scope }); },
+      },
+      slots: {
+        update(id, { text, tooltip }, scope) {
+          display.set(scope.sessionId ?? scope, text);
+          tooltips.set(scope.sessionId ?? scope, tooltip);
+        },
+      },
+      context,
+      workbench: {
+        async visibleSessions() { return [{ sessionId }]; },
+        onDidChange(listener) { select = listener; },
+      },
+      models: { onDidGenerate(listener) { receive = listener; } },
+    });
+    return {
+      display,
+      tooltips,
+      commands,
+      views,
+      opened,
+      setLocale: (locale) => changeLocale({ locale }),
+      switchTo: (id) => select({ sessions: [{ sessionId: id }] }),
+      generate: (id, phase, rate) => receive({ sessionId: id, requestId: "request-1", phase, outputTokensPerSecond: rate }),
+    };
+  }
+
+  for (const version of ["3.17.2", "3.18.0", "3.18.1"]) {
+    assert.equal((await load(version, "sess-a")).display.size, 0, version);
+  }
+
+  const current = await load("3.18.2", "sess-a");
+  assert.equal(current.display.get("app"), "— tok/s");
+  assert.equal(current.display.get("sess-a"), "— tok/s");
+  assert.match(current.tooltips.get("sess-a"), /会话 1 轮 · 最近一轮 2 段/);
+  assert.match(current.tooltips.get("sess-a"), /首字 0.8 秒 · 总用时/);
+  assert.match(current.tooltips.get("sess-a"), /缓存命中 25%/);
+  current.setLocale("en-US");
+  assert.match(current.tooltips.get("sess-a"), /TTFT 0.8 s · Total/);
+  assert.doesNotMatch(current.tooltips.get("app"), /Cache hit|Context|Memory/);
+  assert.match(current.tooltips.get("app"), /Open Agent Workbench$/);
+  current.setLocale("zh-TW");
+  const dashboard = current.views.get("dashboard");
+  const firstContext = {
+    sessionId: "sess-a", phase: "request", providerContextTokens: 13_160,
+    model: { contextWindow: 80_000 }, categories: [{ id: "meta_user_context" }],
+  };
+  let composition = firstContext;
+  let changeContext;
+  const reads = [];
+  const context = {
+    async get({ sessionId }) {
+      reads.push(sessionId);
+      return composition;
+    },
+    onDidChange(listener) { changeContext = listener; },
+  };
+  const withContext = await load("4.0.0", "sess-a", "en-US", context);
+  const dashboardRead = withContext.views.get("dashboard").tools.sessions.run;
+  const focused = async (sessionId = "sess-a") => (await dashboardRead({ sessionId: "wrong" }, {
+    view: { sessionId },
+  })).focusedSession;
+  const readAgain = async () => {
+    await focused();
+    await new Promise(resolve => setImmediate(resolve));
+    return focused();
+  };
+  assert.equal((await readAgain()).contextUsagePercent, 16.5);
+  assert.deepEqual(reads, ["sess-a"]);
+  for (const invalid of [
+    { ...firstContext, sessionId: "another-session" },
+    { ...firstContext, phase: "draft-preview" },
+    { ...firstContext, providerContextTokens: undefined, providerInputTokens: 400 },
+    { ...firstContext, model: { contextWindow: 0 } },
+  ]) {
+    composition = invalid;
+    changeContext({ sessionId: "sess-a" });
+    assert.equal((await readAgain()).contextUsagePercent, undefined);
+  }
+  composition = { ...firstContext, providerContextTokens: 0 };
+  changeContext({ sessionId: "sess-a" });
+  assert.equal((await readAgain()).contextUsagePercent, 0);
+
+  let finishOldRead;
+  composition = new Promise(resolve => { finishOldRead = resolve; });
+  changeContext({ sessionId: "sess-a" });
+  assert.equal((await focused()).contextUsagePercent, undefined);
+  composition = { ...firstContext, providerContextTokens: 20_000 };
+  changeContext({ sessionId: "sess-a" });
+  assert.equal((await readAgain()).contextUsagePercent, 25);
+  finishOldRead(firstContext);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal((await focused()).contextUsagePercent, 25);
+  assert.equal((await focused()).categories, undefined);
+  assert.equal((await dashboard.tools.sessions.run({}, { view: { sessionId: "sess-a" } }))
+    .focusedSession.contextUsagePercent, undefined);
+  assert.equal(dashboard.entry, "./dashboard/index.html");
+  const { portrait, wallpaper } = await dashboard.tools.artwork.run();
+  for (const [data, filename] of [[portrait, "azhou.webp"], [wallpaper, "wallpaper.webp"]]) {
+    const image = readFileSync(new URL("../plugins/zcode/dashboard/" + filename, import.meta.url), "base64");
+    assert.equal(data, "data:image/webp;base64," + image);
+  }
+  await current.commands.get("open-dashboard")({ scope: { kind: "session", sessionId: "sess-a" } });
+  assert.deepEqual(current.opened, [{ id: "dashboard", scope: { sessionId: "sess-a" } }]);
+  writeFileSync(join(root, "sessions", "sess-a.json"), JSON.stringify({ ts: now, promptTs: now - 1800 }));
+  addMessage.run("sess-a", JSON.stringify({ role: "user" }));
+  await current.generate("sess-a", "streaming", 42.1);
+  assert.equal(current.display.get("sess-a"), "42.1 tok/s");
+  assert.match(current.tooltips.get("sess-a"), /^42\.1 tok\/s · 流式估算/);
+  assert.match(current.tooltips.get("sess-a"), /会话 2 轮 · 本轮等待请求完成/);
+  assert.doesNotMatch(current.tooltips.get("sess-a"), /输出 98 tok/);
+  addRequest.run("sess-a", 1500, now - 1600, now - 1401, 200, "turn-2"); // 199 ms：仅计总量和耗时
+  addRequest.run("sess-a", 80, now - 1300, now - 1100, 60, "turn-2"); // 200 ms：有效，400 tok/s
+  addRequest.run("sess-a", 120, now - 1000, now - 600, 100, "turn-2"); // 400 ms：有效，300 tok/s
+  await current.generate("sess-a", "final", 39.8);
+  addRequest.run("sess-a", 20, now - 550, now - 349, 100, "turn-2");
+  await current.generate("sess-a", "final", 39.8);
+  await current.switchTo("sess-b");
+  assert.equal(current.display.get("sess-b"), "— tok/s");
+  await current.generate("sess-b", "final", 112.6);
+  assert.equal(current.display.get("sess-a"), "39.8 tok/s");
+
+  const restarted = await load("3.19.0", "sess-b");
+  assert.equal(restarted.display.get("sess-b"), "112.6 tok/s");
+  await restarted.switchTo("sess-a");
+  assert.equal(restarted.display.get("sess-a"), "39.8 tok/s");
+
+  for (const [rate, text] of [[999.9, "999.9"], [1000, "1k"], [999950, "1M"], [1e9, "1B"]]) {
+    await current.generate("sess-large", "streaming", rate);
+    assert.equal(current.display.get("sess-large"), `${text} tok/s`);
+  }
+  current.setLocale("en-GB");
+  assert.match(current.tooltips.get("sess-large"), /^1B tok\/s · Live estimate\n/);
+  assert.match(current.tooltips.get("sess-large"), /Waiting for request to finish/);
+  await current.switchTo("sess-b");
+  assert.match(current.tooltips.get("sess-b"), /No request stats/);
+  assert.equal(current.display.get("sess-a"), "39.8 tok/s");
+  current.setLocale("zh-CN");
+  addMessage.run("sess-large", JSON.stringify({ role: "user" }));
+  addRequest.run("sess-large", 2_500_000_000, now - 1500, now - 500, 200, "turn-large");
+  db.prepare("UPDATE model_usage SET reasoning_tokens = ? WHERE session_id = ?").run(1_200_000, "sess-large");
+  await current.generate("sess-large", "final", 2_500_000_000);
+  const tooltip = current.tooltips.get("sess-large");
+  assert.match(tooltip, /^2\.5B tok\/s · 最近一段\n/);
+  assert.match(tooltip, /\n\n打开 Agent 工作台$/);
+  assert.ok(tooltip.length <= 200);
+
+  const localized = await load("3.19.0", "sess-large", "en-US");
+  const english = localized.tooltips.get("sess-large");
+  assert.match(english, /^2\.5B tok\/s · Last segment\n1 turn · 1 segment last turn/);
+  assert.ok(english.length <= 200);
+
+  const system = await load("3.18.2", "sess-b", null);
+  assert.equal(system.display.get("sess-b"), "112.6 tok/s");
+});

@@ -12,7 +12,7 @@ For an update, review the upstream diff and license at the proposed commit first
 
 ## Optional external integrations
 
-The two optional integration projects are complete projects under `packages/` (`agent-skin`, `pstack-agent-harness`); there is no `integrations/` directory, and no tracked external source lock exists — `hub-package.json` plus `runtime_paths` fingerprints record the imported provenance instead. The table below holds one active package row (pstack-agent-harness) and two retired historical rows. See [integration provenance](docs/integration-provenance.md) for the full chain, selected file boundaries and fixed-version update procedure.
+The optional integration project is `packages/pstack-agent-harness`; there is no `integrations/` directory, and no tracked external source lock exists — `hub-package.json` plus `runtime_paths` fingerprints record the imported provenance instead. The table below holds one active package row (pstack-agent-harness) and two retired historical rows. See [integration provenance](docs/integration-provenance.md) for the full chain, selected file boundaries and fixed-version update procedure.
 
 | External source | Selected version | License and distribution boundary |
 |---|---|---|
@@ -20,7 +20,7 @@ The two optional integration projects are complete projects under `packages/` (`
 | Agent Orchestration Kit (retired; historical row), recorded origin [donvito/codex-astra-luna-orchestrator](https://github.com/donvito/codex-astra-luna-orchestrator) | Local continuation `4d1a2081f96cdab8a9ea0fe3d357312471546dcc` | Apache-2.0. The package was physically removed from this repository on 2026-11-12; Git history retains the exact imported bytes and is the traceability record. The Apache-2.0 notice obligation survives for any distribution made from those historical bytes. Publication of the continuation commit at the recorded origin has not been established. |
 | Legacy startup-animation source (retired; historical row), public upstream [panding999/codex-startup-animation](https://github.com/panding999/codex-startup-animation) and local origin [TeFuirnever/codex-startup-animation](https://github.com/TeFuirnever/codex-startup-animation) | Original base `c743c2b5eceaa7be9dc511d23a1a77f7c4ce6248` plus 22 selected worktree hashes; final maintained runtime `0.7.1` build `8` | No program license grant was found. The package directory was physically removed from this repository on 2026-11-12 after the reviewed receipt-ownership handoff; Git history retains the exact imported bytes and is the traceability record. The root MIT license does not apply to these historical bytes, and no redistribution authorization for them has been established. The surviving `packages/agent-skin/` code was originally derived from this source and independently rewritten in #441 (2026-11-11); it is not a redistribution of these bytes and is covered by the root MIT license. |
 
-Agent Skin's character, wallpaper, entry portrait and icon source are the maintainer's own Azhou artwork, published in `packages/agent-skin/assets/azhou/` under [CC BY-NC-ND 4.0](packages/agent-skin/assets/azhou/LICENSE) with its [notice](packages/agent-skin/assets/azhou/NOTICE.md); they are not third-party material and are not covered by the root MIT license. The Azhou name, logo and character follow [TRADEMARKS.md](TRADEMARKS.md). An optional Git-ignored `assets/private/` overlay may replace them locally; overlay files are the user's own and stay out of Git. A successful hash check is not a rights grant or formal visual approval.
+Agent Skin's character, wallpaper, entry portrait and icon source are the maintainer's own Azhou artwork, published in `assets/azhou/` under [CC BY-NC-ND 4.0](assets/azhou/LICENSE) with its [notice](assets/azhou/NOTICE.md); they are not third-party material and are not covered by the root MIT license. The Azhou name, logo and character follow [TRADEMARKS.md](TRADEMARKS.md). An optional Git-ignored `assets/private/` overlay may replace them locally; overlay files are the user's own and stay out of Git. A successful hash check is not a rights grant or formal visual approval.
 
 ## Change scope
 
@@ -40,7 +40,7 @@ The tracked workflows under `.agents/skills/` adapt [DeepSeek Harness](https://g
 
 `assets/github/readme-banner-*.jpg` (24 files: six text-only README section banners — install, skills, try, trust, checkout, integrations — each in English and Chinese, light and dark) are Azhou-maintained brand assets made in-house on 2026-11-12. They contain no illustration and no generated imagery: each banner is a flat background, a rounded border and a hand-drawn-style underline, all drawn with Pillow, plus text set deterministically with Pillow in Noto Sans SC (SIL Open Font License 1.1; only rasterized glyphs are distributed, not the font). The banners contain no character, no third-party logos and no copied assets.
 
-`assets/github/foundation-cli-effect.png`, `assets/github/integration-pstack-effect.png` and `assets/github/integration-agent-skin-effect.png` are Azhou-maintained illustrations generated in-house on 2026-11-12 with the Grok Bot assistant's image-generation tool from text prompts, using the existing `assets/skills/super-eli5-effect.png` as the style and character reference for the Azhou fox. They did not come from the local Azhou imagegen pipeline or the governed azhou-scenes pipeline, have no machine colour gate, and are not skill showcase scenes under the showcase rule in `docs/skill-standard.md` §4. They contain no text, no third-party logos and no copied assets.
+`assets/github/foundation-cli-effect.png` and `assets/github/integration-pstack-effect.png` are Azhou-maintained illustrations generated in-house on 2026-11-12 with the Grok Bot assistant's image-generation tool from text prompts, using the existing `assets/skills/super-eli5-effect.png` as the style and character reference for the Azhou fox. They did not come from the local Azhou imagegen pipeline or the governed azhou-scenes pipeline, have no machine colour gate, and are not skill showcase scenes under the showcase rule in `docs/skill-standard.md` §4. They contain no text, no third-party logos and no copied assets.
 
 The maintainer (IP owner) visually approved all 27 files on 2026-11-12; the README captions record this. No separate rights review is recorded beyond that approval. When replacing any of them, repeat the visual and rights review.
 
@@ -62,6 +62,8 @@ The README promo video is not stored in this repository. Both READMEs link to th
 The previous Rederive showcase, SHA-256 `63ca128fbed8b5f31dd969572dbb30eb9f3ac4fb655cba5588830a7729de9621`, had a bounded colour check on 2026-11-21 but did not meet the GitHub canvas profile. That historical check does not establish approval or production readiness for its replacement; detailed records stay private.
 
 `assets/skills/super-brainstorming-effect.png` is the Brainstorming skill showcase scene required by the showcase rule in `docs/skill-standard.md` §4, added 2026-11-23. It landed through the maintainer's governed azhou-scenes local candidate pipeline (2026-11-23, `backend: azhou-gen`, `execution_scope: local_candidate_only`, `article_16_9` mode, final profile tier): the shipped PNG is the metadata-sanitized copy of the approved seed-20261124 candidate (a chunk whitelist keeps only IHDR/IDAT/IEND, so the pixel stream is byte-identical to the approved candidate and the shipped file carries no prompt text, no local paths and no runtime identity), SHA-256 `7a6885b4bdb3f12b4a7b56ab885f6e366a9a4428fb630121927dee14c36da412`, pinned together with the chunk walk by `tests/test_super_brainstorming.py`. Approved for publication 2026-11-23 by the delegated named human visual P0 under the maintainer's standing go-ahead (seed 20261124 selected; the seed-20261123 alternative was not). It has no machine colour gate: the formal governed-workspace colour audit remains open. The full pipeline record is the [package provenance](skills/super-brainstorming/references/provenance.md). No separate rights review is recorded. When replacing it, repeat the visual and rights review.
+
+`assets/skills/super-grill-me-effect.png` is the Grill Me skill showcase scene required by the showcase rule in `docs/skill-standard.md` §4, added 2026-11-24. It landed through the maintainer's governed azhou-scenes local candidate pipeline (2026-11-24, `backend: azhou-gen`, `execution_scope: local_candidate_only`, `article_16_9` mode, final profile tier): the shipped PNG is the metadata-sanitized copy of the selected seed-2026112413 candidate (a chunk whitelist keeps only IHDR/IDAT/IEND, so the pixel stream is byte-identical to the candidate and the shipped file carries no prompt text and no runtime identity), SHA-256 `1675128a0270a7c197beea639f0a218b50c8257ad4892850444b4ab399aa6461`, pinned together with the chunk walk by `tests/test_super_grill_me.py`. Selected for publication 2026-11-24 by the session under the delegated visual P0 and the maintainer's standing go-ahead (the seed-2026112411 alternative was not; it carried mirrored digits inside the tree boxes). It has no machine colour gate: the formal governed-workspace colour audit remains open. The full pipeline record is the [package provenance](skills/super-grill-me/references/provenance.md). No separate rights review is recorded. When replacing it, repeat the visual and rights review.
 
 On 2026-11-21 the README hero and four Skills section banners had their package count corrected from 16 to 17. The hero retains its 2026-11-12 illustration and is pixel-identical outside the digit rectangle. The four banners were re-encoded as JPEG after the heading was redrawn with Noto Sans SC; recompression affects pixels beyond that rectangle. The maintainer approved these five exact images for the public README after a contact sheet was presented. The private decision binds their SHA-256 values; no separate rights review is recorded.
 
@@ -146,21 +148,6 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the output-shaping instruction body only; the upstream ships no runtime, scripts, or assets to vendor.
 - Local changes: neutral frontmatter (the upstream host-specific `disable-model-invocation` key is not copied), Azhou brand protocol and stable receipt, setup/provenance records, and five appended presentation constraints (conclusion source/limit proximity, decision continuity, evidence integrity, optional Review Contract, relative-path-only output).
 
-## Codex Dream Skin SafeCSS AST derivative
-
-- Source: Codex-Dream-Skin commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`, `runtime/safe-css-validator.mjs`.
-- Copyright: 2026 Codex Dream Skin Studio contributors.
-- License: [MIT notice](packages/agent-skin/vendor/dream-safe-css.LICENSE).
-- Derivative: the pristine source plus one fixed AST-export suffix, reproduced by `tools/derive-dream-safe-css-ast.py`. Source/patch/output hashes and the narrow local mapping boundary are recorded in [Agent Skin provenance](packages/agent-skin/UPSTREAM.md#safe-css-ast-derivative). No upstream compiled selectors or theme media are imported by this adapter.
-
-## Codex Dream Skin official-theme contract
-
-- Source: [Codex-Dream-Skin](https://github.com/TeFuirnever/Codex-Dream-Skin), commit `6fc42df48a6a5365011f55cc349e20c038e56d1d`.
-- Copyright: 2026 Codex Dream Skin Studio contributors.
-- License: [MIT notice](packages/agent-skin/vendor/dream-theme-validator.LICENSE).
-- Boundary: only the pure `validateOfficialTheme` contract and its constants/helpers from `runtime/theme-package-validator.mjs`. The derivative does not contain source staging, filesystem access, client-version assumptions, CSS compilation or host selector mappings.
-- Rebuild and exact source/derivative hashes: [Agent Skin provenance](packages/agent-skin/UPSTREAM.md#official-theme-json-contract). This code license does not authorize redistribution of third-party theme media.
-
 ## Gh Axi
 
 `skills/super-gh-axi/` imports the generated `gh-axi` Agent Skill from [kunchenguid/gh-axi](https://github.com/kunchenguid/gh-axi) at immutable commit [`5a526599c9fa5a76b650079f5e9dbb1c1874a6ce`](https://github.com/kunchenguid/gh-axi/commit/5a526599c9fa5a76b650079f5e9dbb1c1874a6ce) (official release `gh-axi-v0.1.52`). The unmodified upstream baseline is hash-locked for reproducibility.
@@ -196,6 +183,15 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 - Imported boundary: the eight upstream `skills/brainstorming/` files (instruction body, builder-check prompt, visual-companion guide, companion server scripts); the rest of the upstream plugin ecosystem (installer, sibling skills such as the planning skill, plugin manifests) is not vendored
 - Local changes: neutral three-key frontmatter with all upstream trigger sentences kept verbatim, the planning handoff unbound from the upstream sibling skill, a neutral design-doc location, branding/telemetry flipped from opt-out to opt-in, a harness note and a builder-check provenance clause, and the Azhou brand protocol and provenance/setup/compatibility records
 
+## Mattpocock Skills (Grill Me)
+
+`skills/super-grill-me/` adapts the `grill-me` and `grilling` skills from [mattpocock/skills](https://github.com/mattpocock/skills) at immutable tag [`v1.3.2`](https://github.com/mattpocock/skills/releases/tag/v1.3.2) (commit [`d1478fcb140db0b93c0c8df17bcfd311844749d0`](https://github.com/mattpocock/skills/commit/d1478fcb140db0b93c0c8df17bcfd311844749d0)). The two land as one package: the upstream `grill-me` entry is a single line that calls `grilling`, and a canonical package may not depend on a sibling skill directory. The upstream `grilling` instruction body is retained verbatim outside one added sentence. The recorded deltas are in the package provenance.
+
+- Copyright: Matt Pocock, 2026
+- License: [MIT](LICENSES/Mattpocock-Skills-MIT.txt), vendored byte-identical as the package `LICENSE`
+- Imported boundary: the two upstream `SKILL.md` entries and the upstream root `LICENSE`; the upstream `agents/openai.yaml` files are not vendored
+- Local changes: neutral three-key frontmatter with both upstream trigger sentences kept verbatim and a renamed-from line for both names, one sub-agent degradation sentence, the Azhou brand protocol and stable receipt, and the provenance/setup/compatibility records
+
 ## Public prior art excluded from distribution
 
 [coleam00/excalidraw-diagram-skill](https://github.com/coleam00/excalidraw-diagram-skill) was reviewed as public prior art. At audited commit [`8646fcc9f74f38539c6cdb4c969723336a96ddcd`](https://github.com/coleam00/excalidraw-diagram-skill/commit/8646fcc9f74f38539c6cdb4c969723336a96ddcd), the repository declared no license. Azhou AI Hub therefore does not redistribute its files. The Excalidraw entry instructions, palette, fragments, schema guide, renderer and HTML host were independently re-expressed before public release.
@@ -203,7 +199,3 @@ Refresh these sources only in an isolated checkout or package workspace at an ap
 ## Contributor rule
 
 New vendored or adapted material requires a source URL, immutable version or commit, license identifier, retained notice and a reproducible update path. Public visibility without a license is not permission to copy, modify or redistribute.
-
-## DSH adapter test fixtures
-
-`packages/agent-skin/tools/fixtures/dsh/` retains unmodified DeepSeek Harness source files from official `dsh-v0.2.2-rc.1` (`66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db`) and `dsh-v0.2.2-rc.3` (`38a6a5c965aa99ab525161efb7cc5cf1fe62fced`) tags, solely for synthetic adapter regression tests. Copyright (c) 2026 DeepSeek; MIT licenses accompany both snapshots. See the fixture README and manifests for boundaries, immutable source paths, digests and update procedure. These snapshots do not establish installed package provenance or live release support.

@@ -3663,18 +3663,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       gap: 1rem;
       padding: 0.55rem 0.6rem 0.6rem;
     }
-    .export-menu-header strong,
-    .export-menu-header span { display: block; }
     .export-menu-header strong {
       color: var(--text);
       font-size: 0.875rem;
       font-weight: 600;
       letter-spacing: -0.005em;
-    }
-    .export-menu-header span {
-      margin-top: 0.15rem;
-      color: var(--text-faint);
-      font-size: 0.75rem;
     }
     .export-menu-header kbd {
       min-width: 1.125rem;
@@ -5159,7 +5152,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       </button>
       <div class="export-menu" id="export-menu" role="menu" aria-label="{{i18n:viewer.export.menu}}">
         <div class="export-menu-header" role="presentation">
-          <div><strong>{{i18n:viewer.export.diagram}}</strong><span>{{i18n:viewer.export.subtitle}}</span></div>
+          <strong>{{i18n:viewer.export.diagram}}</strong>
           <kbd>E</kbd>
         </div>
         <div class="export-menu-section" role="group" aria-label="{{i18n:viewer.export.share}}">
