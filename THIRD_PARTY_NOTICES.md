@@ -8,6 +8,12 @@ The Source Library includes the original [AIHOT listing retry module](https://gi
 
 To refresh the import, choose an immutable AIHOT commit. Copy its listing retry module and root `LICENSE` into `packages/source-library/vendor/aihot/`, compare behavior with the Python adapter, and rerun the Source Library and repository tests. The import consists of the retry module and its license.
 
+## AIHOT JSON source and batch input
+
+The Source Library runs the upstream JSON path and URL template helpers from [AIHOT `sources/json-list.ts`](https://github.com/KKKKhazix/AIHOT/blob/97e1f93260bbb98d317dbea9d817eb9b28bbd9e9/packages/backend/src/sources/json-list.ts#L10-L43) and the batch and item guards from [AIHOT `ingest/items.ts`](https://github.com/KKKKhazix/AIHOT/blob/97e1f93260bbb98d317dbea9d817eb9b28bbd9e9/packages/backend/src/ingest/items.ts#L10-L48) by 数字生命卡兹克, under the [same MIT license](packages/source-library/vendor/aihot/LICENSE). The local adapter uses these fragments for manual commands and validates candidates against the registered source before SQLite registration.
+
+To reproduce the import, copy lines 10–43 of the pinned JSON source file to [json-fields.mts](packages/source-library/vendor/aihot/json-fields.mts) and export `firstString`. Copy lines 10–26, 29–32 and 45–48 of the pinned ingest file into the corresponding declarations and functions in [ingest-fields.mts](packages/source-library/vendor/aihot/ingest-fields.mts). Retain the local function shells and the metadata projection. Recheck field behavior and rerun the Source Library and repository tests when updating either fragment.
+
 ## AIHOT Agent Markdown renderer
 
 The site uses the two preamble constants and the `answer` renderer from [AIHOT `publication/agent.ts`](https://github.com/KKKKhazix/AIHOT/blob/97e1f93260bbb98d317dbea9d817eb9b28bbd9e9/packages/backend/src/publication/agent.ts#L36-L58) by 数字生命卡兹克, with its [MIT license](site/vendor/aihot/LICENSE). [The vendored fragment](site/vendor/aihot/agent-answer.mts) uses local bindings for the locale type and site name. [The site adapter](site/lib/library-agent.mjs) supplies Azhou's published metadata, links and reading guidance.

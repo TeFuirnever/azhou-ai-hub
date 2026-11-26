@@ -17,6 +17,54 @@ uv run --locked python library.py --data "$HOME/.local/share/azhou-source-librar
 
 RSS 和网页列表遇到短暂网络故障或部分上游服务器错误时，在同一次命令内最多重试一次。若服务器给了 `Retry-After` 或解析未匹配，按本次抓取失败处理。[上游源码及引入记录](../../THIRD_PARTY_NOTICES.md#aihot-source-listing-retry)
 
+## 手动读取 JSON 信源
+
+JSON 信源和外部批量导入需要 Node.js 22.20 或更新版本。把字段映射存为本机配置文件。下面的 URL 是占位示例，使用时填写已登记信源的官方 HTTPS JSON 地址。正文链接也须符合该信源现有的文章网址规则。
+
+```json
+{
+  "url": "https://openai.com/path-to-official-json",
+  "itemsPath": "data.articles",
+  "titlePaths": ["title", "headline"],
+  "urlTemplate": "{raw:url}",
+  "urlTemplateFallback": "/index/{slug}/",
+  "publishedAtPath": "publishedAt"
+}
+```
+
+`itemsPath` 用点号访问嵌套字段或数组下标，省略时读取根数组。标题按 `titlePaths` 顺序取第一个可用值。链接可以来自完整网址或模板，相对地址按接口地址解析。发布日期字段可选。
+
+```sh
+azhou_catalog="$HOME/.local/share/azhou-source-library/catalog"
+uv run --locked python library.py preview openai --json-config /path/to/feed-config.json
+uv run --locked python library.py --data "$azhou_catalog" sync openai --json-config /path/to/feed-config.json
+```
+
+试抓和正式登记使用同一份解析规则。正式登记会更新信源状态，同时沿用现有的候选去重。
+
+## 手动导入外部采集结果
+
+让自己的采集脚本写出 AIHOT 批次格式。每批 1 至 50 条，`sourceId` 使用现有信源 ID，例如 `openai`。每条提供标题和原文 URL，可带 `publishedAt`。导入只取这三个字段。
+
+```json
+{
+  "sourceId": "openai",
+  "items": [
+    {
+      "title": "How OpenAI’s Performance Factory keeps ChatGPT fast",
+      "url": "https://openai.com/index/how-openai-performance-factory-keeps-chatgpt-fast/"
+    }
+  ]
+}
+```
+
+```sh
+uv run --locked python library.py import-json /path/to/candidates.json --dry-run
+uv run --locked python library.py --data "$azhou_catalog" import-json /path/to/candidates.json
+```
+
+预览列出有效、跳过和批内重复的条数。确认后运行第二条命令，新增和已登记的条数会单独显示。文件导入离线运行，候选进入现有人工审核流程。信源状态记录的是正式采集结果。
+
 ## 私有留存和备份
 
 逐篇核对留存依据，再用 `--fetch-original` 从已登记的官方页面抓取原始 HTML 和可读正文。也可以用 `--saved-html <文件>` 导入浏览器另存的网页。默认只留存页面和正文，外部媒体缺项会记在对应版本。若留存依据覆盖图片，可以在联网抓取时加 `--include-images`，命令会从信源允许的主机下载支持的图片。

@@ -60,7 +60,7 @@ class LibraryTest(unittest.TestCase):
         from argparse import Namespace
         from library import run
         nonexistent = self.root / "preview-private"
-        with patch("library.preview", wraps=lambda key, url: preview(key, url, self.fetch)):
+        with patch("library.preview", wraps=lambda key, url, **kwargs: preview(key, url, self.fetch, **kwargs)):
             outcome = run(Namespace(action="preview", data=nonexistent, source="openai", url=None))
         self.assertFalse(nonexistent.exists())
         self.assertEqual(self.store.entries(), [])
@@ -129,6 +129,102 @@ class LibraryTest(unittest.TestCase):
         self.assertEqual(self.store.runs()[0]["reason"], str(failure))
         request.assert_called_once()
         delay.assert_not_called()
+
+    def test_json_source_preview_and_sync_reuse_existing_identity(self):
+        endpoint = "https://openai.com/news/index.json"
+        config = self.root / "config.json"
+        config.write_text(json.dumps({
+            "url": endpoint, "itemsPath": "data.0.articles",
+            "titlePaths": ["display.title", "title"],
+            "urlTemplate": "{raw:href}", "urlTemplateFallback": "/index/{slug}/",
+            "publishedAtPath": "date",
+        }))
+        payload = {"data": [{"articles": [
+            {"display": {"title": "Existing"}, "href": URL + "?utm_source=json"},
+            {"title": "New candidate", "slug": "new-fixture", "date": "2026-11-26"},
+        ]}]}
+        self.assertEqual(sync(self.store, ["openai"], fetcher=self.fetch)["openai"]["added"], 1)
+        scratch = self.root / "no-preview-catalog"
+        with patch("ingest.fetch_listing", return_value=(json.dumps(payload).encode(), endpoint, "application/json")) as fetch:
+            with patch("sys.argv", ["library.py", "--data", str(scratch), "preview", "openai", "--json-config", str(config)]):
+                result = run(parse_args())
+            self.assertFalse(scratch.exists())
+            self.assertEqual(result["found"], 2)
+            self.assertEqual(result["preview"][1]["published"], "2026-11-26")
+            self.assertEqual(sync(self.store, ["openai"], json_config=config)["openai"]["added"], 1)
+            self.assertEqual(sync(self.store, ["openai"], json_config=config)["openai"]["status"], "no_updates")
+        fetch.assert_called_with(endpoint, {"openai.com"})
+        self.assertEqual(len(self.store.entries()), 2)
+        self.assertEqual(self.store.export(self.root / "no-json-approval"), 0)
+
+    def test_external_batch_is_offline_and_candidate_only(self):
+        payload = self.root / "batch.json"
+        payload.write_text(json.dumps({"sourceId": "openai", "sourceName": "Fixture crawler", "items": [
+            {"title": "Existing", "url": URL},
+            {"title": "New candidate", "url": OTHER, "publishedAt": "2026-11-26T08:00:00+08:00",
+             "body": PRIVATE, "scope": "full", "raw": {"_aihot": {"backfill": True}}},
+            {"title": "Duplicate", "url": OTHER + "?utm_source=crawler"},
+            {"title": "Outside source", "url": "https://example.org/index/new"},
+            {"title": "Malformed URL", "url": "https://[invalid"},
+            {"url": ALIAS},
+        ]}))
+        sync(self.store, ["openai"], fetcher=self.fetch)
+        before_runs = self.store.runs()
+        argv = ["library.py", "--data", str(self.store.root), "import-json", str(payload)]
+        with patch("ingest.fetch_listing", side_effect=AssertionError("unexpected network request")):
+            with patch("sys.argv", [*argv, "--dry-run"]):
+                previewed = run(parse_args())
+            self.assertEqual(len(self.store.entries()), 1)
+            self.assertEqual((previewed["received"], previewed["eligible"], previewed["skipped"],
+                              previewed["duplicates"]), (6, 2, 3, 1))
+            with patch("sys.argv", argv):
+                result = run(parse_args())
+                repeated = run(parse_args())
+        self.assertEqual((result["added"], result["already_known"]), (1, 1))
+        self.assertEqual(repeated["added"], 0)
+        self.assertEqual(self.store.runs(), before_runs)
+        entry = next(entry for entry in self.store.entries() if entry["url"] == OTHER.rstrip("/"))
+        self.assertEqual(entry["published"], "2026-11-26T08:00:00+08:00")
+        self.assertIsNone(entry["scope"])
+        self.assertIsNone(self.store.inspect(entry["id"])["revision"])
+        self.assertEqual(self.store.export(self.root / "before-approval"), 0)
+        self.store.approve(entry["id"], "link", "fixture use", "Editorial note")
+        output = self.root / "after-approval"
+        self.assertEqual(self.store.export(output), 1)
+        self.assertNotIn(PRIVATE, (output / "manifest.json").read_text())
+
+    def test_bad_external_batches_leave_catalog_unopened(self):
+        path = self.root / "rejected.json"
+        target = self.root / "unopened"
+        item = {"title": "Fixture", "url": URL}
+        cases = [
+            ({"sourceId": "unknown", "items": [item]}, "sourceId is not registered"),
+            ({"sourceId": "openai", "items": [item] * 51}, "max 50"),
+            ({"sourceId": "openai", "items": [{"title": "Missing URL"}]}, "no candidates matched"),
+        ]
+        for payload, error in cases:
+            with self.subTest(error=error):
+                path.write_text(json.dumps(payload))
+                with patch("sys.argv", ["library.py", "--data", str(target), "import-json", str(path)]):
+                    with self.assertRaisesRegex(CollectionError, error):
+                        run(parse_args())
+                self.assertFalse(target.exists())
+
+    def test_json_config_or_response_error_is_not_no_updates(self):
+        config = self.root / "config.json"
+        settings = {"url": "https://another.example/feed.json", "itemsPath": "items",
+                    "titlePaths": ["title"], "urlTemplate": "{raw:url}"}
+        config.write_text(json.dumps(settings))
+        with patch("ingest.fetch_listing") as fetch:
+            outcome = sync(self.store, ["openai"], json_config=config)["openai"]
+            self.assertEqual(outcome["status"], "failed")
+            fetch.assert_not_called()
+        settings["url"] = "https://openai.com/news/feed.json"
+        config.write_text(json.dumps(settings))
+        with patch("ingest.fetch_listing", return_value=(b'{"error":"upstream"}', settings["url"], "application/json")):
+            outcome = sync(self.store, ["openai"], json_config=config)["openai"]
+            self.assertEqual(outcome["status"], "failed")
+            self.assertIn("did not select an array", outcome["reason"])
 
     def test_cli_keeps_private_storage_outside_git_checkouts(self):
         from argparse import Namespace
