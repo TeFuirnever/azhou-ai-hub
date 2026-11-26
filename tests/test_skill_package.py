@@ -5,7 +5,7 @@ import re
 import unittest
 from pathlib import Path
 
-from scripts.check_repository import INVOCATION_CLASSES
+from scripts.check_repository import BOOK_SKILL_PATHS, INVOCATION_CLASSES
 
 
 ROOT = Path(__file__).parents[1]
@@ -206,10 +206,13 @@ class SkillPackageTest(unittest.TestCase):
 
     def test_public_install_examples_and_catalog_match_the_shipped_tree(self) -> None:
         shipped = sorted(path.parent.name for path in ROOT.glob("skills/*/SKILL.md"))
+        installable = set(shipped) | {
+            Path(relative).parent.name for relative in BOOK_SKILL_PATHS if (ROOT / relative).is_file()
+        }
         examples = {
-            "docs/installation.md": ["super-ask-azhou", "super-archify"],
-            "README.md": ["super-ask-azhou"],
-            "README.zh-CN.md": ["super-ask-azhou"],
+            "docs/installation.md": ["super-ask-azhou", "refactoring", "super-archify"],
+            "README.md": ["super-ask-azhou", "refactoring"],
+            "README.zh-CN.md": ["super-ask-azhou", "refactoring"],
         }
         for relative, expected in examples.items():
             text = (ROOT / relative).read_text(encoding="utf-8")
@@ -218,7 +221,7 @@ class SkillPackageTest(unittest.TestCase):
                 text, re.MULTILINE,
             )
             self.assertEqual(expected, commands, relative)
-            self.assertTrue(set(commands).issubset(shipped), relative)
+            self.assertTrue(set(commands).issubset(installable), relative)
         for relative in ("README.md", "README.zh-CN.md"):
             text = (ROOT / relative).read_text(encoding="utf-8")
             rows = re.findall(
