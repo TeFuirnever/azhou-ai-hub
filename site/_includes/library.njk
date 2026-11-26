@@ -44,8 +44,10 @@ layout: base.njk
     <script id="library-data" type="application/json">{{ sourceLibrary.searchRows | scriptJson | safe }}</script>
     <script type="module" src="{{ '/assets/library-search.js' | url }}"></script>
     {% endif %}
-    <h2 id="results-title">{{ '选文' if zh else 'Selections' }}</h2>
-    {% if sourceLibrary.entries.length %}<p id="library-status" role="status"></p>{% endif %}
+    <div class="library-section-head library-results-head">
+      <h2 id="results-title">{{ '选文' if zh else 'Selections' }}</h2>
+      {% if sourceLibrary.entries.length %}<p id="library-status" role="status"></p>{% endif %}
+    </div>
     <ul id="library-results" class="edition-list">
       {% for item in sourceLibrary.entries %}{% include "library-item.njk" %}{% endfor %}
     </ul>

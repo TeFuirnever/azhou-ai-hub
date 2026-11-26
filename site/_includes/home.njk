@@ -9,32 +9,53 @@ layout: base.njk
   <span class="copy-status" role="status"><span class="copy-check" aria-hidden="true">✓</span><span data-copy-message></span></span>
 </div>
 {% endmacro %}
+{% macro capability(label, description, href) %}
+<li><a class="capability-link" href="{{ href }}">
+  <strong>{{ label }}</strong>
+  <small>{{ description }}</small>
+  <span class="list-arrow" aria-hidden="true">→</span>
+</a></li>
+{% endmacro %}
 <section class="home-hero">
   <div class="wrap home-hero-inner">
     <div>
-    <h1>{{ '给 Agent 装上你需要的技能' if zh else 'Give your agent a skill for the job' }}</h1>
-    {% if sourceLibrary.entries.length %}
-    <p class="lede">{{ '查 AI 官方原文，找适合当前任务的技能。' if zh else 'Find original AI publications and agent skills for the task at hand.' }}</p>
-    {% else %}
-    <p class="lede">{{ '找适合当前任务的技能，订阅 AI 官方信源的选文更新。' if zh else 'Find agent skills for the task at hand and subscribe to selections from official AI sources.' }}</p>
-    {% endif %}
-    <div class="cta">
-      <a class="btn btn-primary" href="{{ site.routes[lang].skills | url }}">{{ '浏览技能' if zh else 'Browse skills' }}</a>
-      <a class="btn btn-outline" href="{{ site.routes[lang].library | url }}">{{ '打开来源库' if zh else 'Explore the Source Library' }}</a>
+      {% if zh %}
+      <h1>把 Agent<br>用进真实工作</h1>
+      <p class="lede">找趁手的 Agent 技能，<span>订阅值得读的 AI 官方文章。</span></p>
+      {% else %}
+      <h1>Put agents to work</h1>
+      <p class="lede">Find agent skills for the job and follow selections from official AI sources.</p>
+      {% endif %}
+      <div class="cta">
+        <a class="btn btn-primary" href="{{ site.routes[lang].skills | url }}">{{ '找 Agent 技能' if zh else 'Find agent skills' }}</a>
+        <a class="btn btn-outline" href="{{ site.routes[lang].library | url }}">{{ '打开来源库' if zh else 'Explore the Source Library' }}</a>
+      </div>
     </div>
-    <a href="#install">{{ '在 Codex 安装 Ask Azhou' if zh else 'Install Ask Azhou in Codex' }}</a>
-    </div>
-    <img class="home-art" src="{{ '/assets/azhou-workspace.png' | url }}" width="1672" height="941"
-      alt="{{ '阿舟在桌前的工作场景' if zh else 'Azhou at the workspace' }}" fetchpriority="high">
+    <figure class="home-scene">
+      <img class="home-art" src="{{ '/assets/azhou-workspace.png' | url }}" width="1672" height="941"
+        alt="{{ '阿舟坐在有书架和台灯的工作桌前' if zh else 'Azhou working at a desk beside a bookcase and a lamp' }}" fetchpriority="high">
+    </figure>
   </div>
 </section>
-{% if sourceLibrary.entries.length %}
-<section class="sec home-edition">
+<section class="sec home-section" aria-labelledby="capabilities">
+  <div class="wrap home-workspace">
+    <h2 id="capabilities">{{ '从任务开始' if zh else 'Start with a task' }}</h2>
+    <ul class="capability-list">
+      {{ capability("Hub Skills", "找一个可以装进 Agent 的技能" if zh else "Find a skill to add to your agent", site.routes[lang].skills | url) }}
+      {{ capability("Agent Rules Books", "把工程书里的方法用到代码和评审中" if zh else "Apply lessons from engineering books to code and reviews", site.routes[lang].books | url) }}
+      {{ capability("安装 Ask Azhou" if zh else "Install Ask Azhou", "让阿舟按任务推荐技能" if zh else "Get skill recommendations for your task", "#install") }}
+      {{ capability("阿舟 Agent 工作台" if zh else "Azhou Agent Workbench", "在 Codex 和 ZCode 查看一轮对话的耗时和速度" if zh else "See turn duration and speed in Codex and ZCode", site.blobBase ~ "/packages/azhou-agent-inspector/README.md") }}
+      {{ capability("pstack", "用工作流推进实现、评审和 PR 跟进" if zh else "Use engineering workflows for implementation and review", site.blobBase ~ "/packages/pstack-agent-harness/README.md") }}
+    </ul>
+  </div>
+</section>
+<section class="sec home-section home-edition" aria-labelledby="sources">
   <div class="wrap">
     <div class="library-section-head">
-      <h2>{{ '首发选文' if zh else 'The first edition' }}</h2>
+      <h2 id="sources">{{ '阿舟来源库' if zh else 'Azhou Source Library' }}</h2>
       <a href="{{ '/library/rss.xml' | url }}">{{ '订阅 RSS' if zh else 'Subscribe by RSS' }}</a>
     </div>
+    {% if sourceLibrary.entries.length %}
     <div{% if sourceLibrary.featured %} class="home-edition-grid"{% endif %}>
       {% if sourceLibrary.featured %}
       {% set feature = sourceLibrary.featured %}
@@ -54,35 +75,21 @@ layout: base.njk
       </ul>
     </div>
     <p><a href="{{ site.routes[lang].library | url }}">{{ '搜索全部来源' if zh else 'Search all sources' }}</a></p>
-  </div>
-</section>
-{% endif %}
-<section class="sec">
-  <div class="wrap">
-    <h2 id="capabilities">{{ '能力' if zh else 'Capabilities' }}</h2>
-    <ul class="cardgrid">
-      <li><a class="gcard" href="{{ site.routes[lang].skills | url }}">
-        <span class="gcard-t">Hub Skills</span>
-        <span class="gcard-d">{{ '按任务选用绘图、方案探索或仓库检查等技能。' if zh else 'Choose a skill for diagramming, exploring ideas or checking a repository.' }}</span>
-      </a></li>
-      <li><a class="gcard" href="{{ site.blobBase }}/packages/azhou-agent-inspector/README.md">
-        <span class="gcard-t">{{ '阿舟 Agent 工作台' if zh else 'Azhou Agent Workbench' }}</span>
-        <span class="gcard-d">{{ '在 Codex 和 ZCode 查看耗时、速率及性能详情。' if zh else 'See turn duration, speed and performance details in Codex and ZCode.' }}</span>
-      </a></li>
-      <li><a class="gcard" href="{{ site.blobBase }}/packages/pstack-agent-harness/README.md">
-        <span class="gcard-t">pstack</span>
-        <span class="gcard-d">{{ '用工程工作流推进实现、评审和 PR 跟进。' if zh else 'Use engineering workflows for implementation, review and pull request follow-up.' }}</span>
-      </a></li>
-      <li><a class="gcard" href="{{ site.routes[lang].books | url }}">
-        <span class="gcard-t">Agent Rules Books</span>
-        <span class="gcard-d">{{ '用书籍工程规则指导架构设计、重构和故障恢复。' if zh else 'Apply book-inspired rules to architecture, refactoring and failure recovery.' }}</span>
-      </a></li>
+    {% else %}
+    <p>{{ '首批选文待发布。现在可以浏览官方信源和订阅更新。' if zh else 'The first selections are awaiting publication. Browse official sources and subscribe for updates.' }}</p>
+    <ul class="channel-list home-sources">
+      {% for source in sourceLibrary.channels %}
+      <li><a href="{{ (site.routes[lang].library ~ 'sources/' ~ source.id ~ '/') | url }}">{{ source.name | escape }}</a>
+        <a href="{{ ('/library/sources/' ~ source.id ~ '/rss.xml') | url }}" aria-label="{{ source.name | escape }} RSS">RSS</a></li>
+      {% endfor %}
     </ul>
+    {% endif %}
   </div>
 </section>
-<section class="sec">
-  <div class="wrap">
+<section class="sec home-section" aria-labelledby="install">
+  <div class="wrap home-setup">
     <h2 id="install" tabindex="-1">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</h2>
+    <div class="home-setup-copy">
     <p>{{ '登录 Codex。在终端进入项目目录，使用 Node.js 22.20 或更新版本运行下面的命令。出现安装提示时，确认安装到当前项目。' if zh else 'Sign in to Codex. In a terminal, open your project folder and run this command with Node.js 22.20 or later. When prompted, confirm the install for this project.' }}</p>
     {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
     <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ '一次安装或按需选择三个组件（英文）' if zh else 'Install Hub Skills, pstack and Agent Rules Books together or separately' }}</a></p>
@@ -111,17 +118,20 @@ layout: base.njk
         <li><a href="{{ installGuide }}#upgrade-or-uninstall" hreflang="en">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
       </ul>
     </details>
+    </div>
   </div>
 </section>
-<section class="sec">
-  <div class="wrap">
+<section class="sec home-section" aria-labelledby="cursor-theme">
+  <div class="wrap home-setup">
     {% set cursor = '/assets/cursors/azhou-double-hug/' %}
     {% set cursorGuide = site.blobBase ~ cursor ~ 'README.md' %}
     <h2 id="cursor-theme">{{ '阿舟 macOS 鼠标指针' if zh else 'Azhou cursor theme for macOS' }}</h2>
+    <div class="home-setup-copy">
     <p>{{ '在 Mousecape 导入「百变阿舟 · 抱一下」后，选中主题并点击 Apply 生效。' if zh else 'Import Azhou Double Hug in Mousecape, then select the theme and click Apply.' }}</p>
     <p><a href="{{ '/assets/Azhou-Double-Hug-3.6.1.cape' | url }}" download>{{ '下载鼠标指针主题' if zh else 'Download the cursor theme' }}</a>
     · <a href="{{ cursorGuide }}">{{ '查看预览和安装步骤' if zh else 'Preview and install' }}</a>
     · <a href="{{ cursorGuide }}#restore">{{ '恢复系统指针' if zh else 'Restore system cursors' }}</a></p>
+    </div>
   </div>
 </section>
 <script>
@@ -155,7 +165,7 @@ layout: base.njk
         reset = setTimeout(() => showStatus("", ""), 3500);
       } catch {
         if (current !== attempt) return;
-        showStatus({{ ('复制失败，请选中下方文字复制。' if zh else 'Copy failed. Select the text below.') | dump | safe }}, "error");
+        showStatus({{ ('复制失败。请手动复制下方文字。' if zh else 'Copy failed. Copy the text below manually.') | dump | safe }}, "error");
       } finally {
         if (current === attempt) clearTimeout(pending);
       }

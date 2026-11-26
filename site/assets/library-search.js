@@ -96,7 +96,9 @@ async function search(updateUrl = true) {
   let indexUnavailable = false;
   if (term) {
     results.setAttribute("aria-busy", "true");
-    pending = setTimeout(() => setStatus(zh ? "正在搜索…" : "Searching…", "pending"), 200);
+    pending = setTimeout(() => {
+      if (current === sequence) setStatus(zh ? "正在搜索…" : "Searching…", "pending");
+    }, 200);
     try {
       const index = await loadIndex();
       if (current !== sequence) return;
@@ -129,10 +131,13 @@ async function search(updateUrl = true) {
   results.removeAttribute("aria-busy");
   const count = zh ? `${matches.size} 条结果` : `${matches.size} ${matches.size === 1 ? "result" : "results"}`;
   if (indexUnavailable) {
-    setStatus(zh ? `正文搜索暂不可用。标题和导读中找到 ${count}。` :
-      `Archive search is unavailable. ${count} in titles and notes.`, "error");
+    const fallback = zh
+      ? (matches.size ? `标题和导读中找到 ${count}。` : "标题和导读中没有匹配。")
+      : (matches.size ? `${count} in titles and notes.` : "No matches in titles or notes.");
+    setStatus((zh ? "正文搜索暂不可用。" : "Full-text search is unavailable. ") + fallback, "error");
   } else if (!matches.size) {
-    setStatus(zh ? "没有找到相关条目。" : "No matching articles.", "empty");
+    setStatus(zh ? "没有找到相关条目。试试更短的关键词或减少筛选条件。" :
+      "No matching articles. Try a shorter search or fewer filters.", "empty");
   } else if (filtered) {
     setStatus(count, "done");
   } else {
