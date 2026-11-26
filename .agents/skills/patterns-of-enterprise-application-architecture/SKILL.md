@@ -2,8 +2,6 @@
 name: patterns-of-enterprise-application-architecture
 description: Apply Martin Fowler-inspired enterprise architecture rules when choosing layers, service layers, transaction scripts, domain models, repositories, mappers, or DTOs.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Patterns of Enterprise Application Architecture Skill

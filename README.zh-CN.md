@@ -12,62 +12,34 @@
 [![GitHub release](https://img.shields.io/github/v/release/TeFuirnever/azhou-ai-hub?display_name=tag&sort=semver)](https://github.com/TeFuirnever/azhou-ai-hub/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f7d4a.svg)](LICENSE)
 
-<img src="assets/github/readme-hero.png" alt="Azhou AI Hub 主视觉：阿舟狐狸把卡片送进亮着绿灯的闸机，旁边是主张文字——17 个可安装 skill 包、一个确定性仓库门禁、只有人类批准的演化。" width="100%" />
-
-https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
-
 </div>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="assets/github/readme-banner-install.zh-CN-dark.jpg">
-  <img src="assets/github/readme-banner-install.zh-CN.jpg" alt="安装：一条命令，装一个 skill" width="100%">
-</picture>
+## 能力
 
-### 在 Codex 里首次安装
+| 能力 | 可以做什么 |
+|---|---|
+| [Hub Skills](#skills) | 有 21 个可安装包，支持架构绘图、方案探索和仓库检查等任务。 |
+| [阿舟 Agent 工作台](packages/azhou-agent-inspector/README.md) | 在 Codex 和 ZCode 查看整轮耗时、速率及可用的性能详情。 |
+| [pstack](packages/pstack-agent-harness/README.md) | 用工程工作流完成实现、评审和 PR 跟进。 |
+| [Agent Rules Books](#agent-rules-books) | 用 14 套书籍工程规则指导设计、代码改动和评审。 |
 
-先登录 Codex，并确认电脑已安装带 `npx` 的 Node.js；所有命令都在你想要安装 Ask Azhou 的项目目录下执行。示例命令均为 POSIX shell：Windows 请在 Git Bash 中运行（[Windows 说明](docs/installation.md#windows-notes)）；仓库 gate 与随附脚本覆盖哪些平台，见[操作系统支持表](docs/support-matrix.md#operating-system-support-deterministic-gate)。
+## 在 Codex 里首次安装
+
+想一次装齐 Hub Skills、pstack 和 Agent Rules Books，或按需选择其中几套，可以使用 [Codex 统一安装命令](docs/installation.md#install-hub-components-in-codex)。
+
+先登录 Codex，并确认电脑已安装 Node.js 22.20 或更新版本。在项目目录运行下面的命令，看到提示后确认安装到当前项目。Windows 用户请在 Git Bash 中运行[示例命令](docs/installation.md#windows-notes)。
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 ~~~
 
-在同一项目打开一个新的 Codex 会话，试着问下面的问题。
+在同一项目打开一个新的 Codex 会话。先输入 `$super-ask-azhou`，确认 Codex 找得到它，再试试下面的问题。
 
 > `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub Skill？
 
-应看到它推荐 `super-archify`。如果找不到 Ask Azhou，先看[首次安装排查](docs/installation.md#first-install-in-codex)；已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
+正常情况下，它会推荐 `super-archify`。如果 Codex 找不到 Ask Azhou，可以[检查安装](docs/installation.md#if-codex-cannot-find-ask-azhou)。已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
 
-四个 Foundation Skill 用同样的方式安装：
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-info --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-doctor --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-setup --agent codex
-npx skills add TeFuirnever/azhou-ai-hub --skill super-azhou-verify --agent codex
-~~~
-
-其余的包用同样的方式安装：
-
-~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-repo-pedant
-npx skills add TeFuirnever/azhou-ai-hub --skill super-excalidraw-diagram
-npx skills add TeFuirnever/azhou-ai-hub --skill super-eli5
-npx skills add TeFuirnever/azhou-ai-hub --skill super-arch-doc
-npx skills add TeFuirnever/azhou-ai-hub --skill super-session-insights
-npx skills add TeFuirnever/azhou-ai-hub --skill super-asd-ste100
-npx skills add TeFuirnever/azhou-ai-hub --skill super-archify
-npx skills add TeFuirnever/azhou-ai-hub --skill super-lavish
-npx skills add TeFuirnever/azhou-ai-hub --skill super-imagegen
-npx skills add TeFuirnever/azhou-ai-hub --skill super-i-have-adhd
-npx skills add TeFuirnever/azhou-ai-hub --skill super-rederive
-npx skills add TeFuirnever/azhou-ai-hub --skill super-gh-axi
-npx skills add TeFuirnever/azhou-ai-hub --skill super-frontend-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-diagram-design
-npx skills add TeFuirnever/azhou-ai-hub --skill super-brainstorming
-npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
-~~~
-
-每个 skill 只选一种安装方式（[单一路径规则](docs/installation.md#one-path-rule)）。包管理器安装解析的是可变默认分支，不留 Hub 回执。四个 `super-azhou-*` 包只是薄封装：npx 命令装的是 Skill，但调用时执行的是本仓库 checkout 里的 Foundation CLI（`scripts/azhou_hub.py`），所以磁盘上仍需要这份 checkout（clone 一次即可）。
+想安装 Ask Azhou 推荐的技能时，按[单个技能安装指南](docs/installation.md#package-manager-install)操作。每个技能只选[一种安装方式](docs/installation.md#one-path-rule)。四个 `super-azhou-*` 技能还需要一份本地仓库 checkout。
 
 上面的走查以 Codex 为目标。其余受维护的 harness——Claude Code、MiMo Code（`mimo`）、DeepSeek Harness（`dsh`）、zcode——各自的已验证安装路线与证据见[支持矩阵](docs/support-matrix.md)；也可以用仓库 checkout 走 [checkout 辅助安装](docs/installation.md#checkout-assisted-setup)或[手动复制](docs/installation.md#manual-copy)。
 
@@ -99,11 +71,13 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
 | [Diagram Design](skills/super-diagram-design/SKILL.md) | 51 种视觉类型下创建品牌化、编辑级的 HTML/SVG 图表，支持 .drawio/Mermaid/.excalidraw/PlantUML 导入。 | 上游 vendored（commit 钉定 + 逐文件 SHA-256）；包内 `self_check.py` 门禁。 |
 | [Frontend Design](skills/super-frontend-design/SKILL.md) | 为新 UI 或界面改版产出独特、非模板化的视觉设计方向：色板、字体排印、布局，以及避开 AI 默认观感的评审流程。 | 在 anthropics/skills 的钉定 commit 上 faithful 引入：上游指导正文逐字保留，Apache-2.0 许可逐字节 vendored，配 SHA-256 完整性测试。尚无行为 benchmark。 |
 | [Brainstorming](skills/super-brainstorming/SKILL.md) | 在动手前探清读者真正想要什么与为什么：枚举方案、写设计文档、守审批门。 | 上游 adapted（tag 钉定 + 逐文件 SHA-256 锚）；六处记录在案 delta；完整性测试。尚无行为 benchmark。 |
-| [Grill Me](skills/super-grill-me/SKILL.md) | 按轮拷问用户的方案、决定或想法：前提已定的问题逐个附上推荐答案，事实去查，决策留给用户。 | 上游 adapted（tag 钉定；上游触发句逐字保留；正文除一句外逐字保留）；SHA-256 完整性测试。尚无行为 benchmark。 |
+| [Grill Me](skills/super-grill-me/SKILL.md) | 按轮拷问用户的方案、决定或想法：前提已定的问题逐个附上推荐答案，事实去查，决策留给用户。 | 上游 adapted（tag 钉定；上游触发句逐字保留；正文除一句外逐字保留）；SHA-256 完整性测试。尚无行为 benchmark。 [Claude Code 宿主实测](evidence/super-grill-me-host-check-claude-2026-11-24.md). |
 
 [逐 skill 平台汇总](docs/skill-platform-view.md) · [评测合同](docs/eval-case-contract.md)
 
 ### 上手试试
+
+https://github.com/user-attachments/assets/35c1a361-d494-437f-ad6c-0049f6828fd3
 
 下表“必须返回什么”中的两个固定说法：hold＝明确挂起、留待后续处理的事项；稳定收据＝一次运行留下的可核对结果记录。
 
@@ -112,6 +86,39 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-grill-me
 | Super Repo Pedant | <code>这个阶段做完了，跑一次 super-repo-pedant reconcile。</code> | 已对齐的知识面、具名检查、明确 hold 和稳定收据。[运行 demo](docs/demos/super-repo-pedant.md)。 |
 | Excalidraw Diagram | <code>用 super-excalidraw-diagram 画登录时序图，交付可编辑源图和 PNG。</code> | 可编辑 <code>.excalidraw</code>、真实渲染/导出、确定性 gate、视觉复核状态和稳定收据。[运行 demo](docs/demos/super-excalidraw-diagram.md)。 |
 | Arch Doc | <code>用 super-arch-doc 从这个仓库的上游设计文档产出架构说明书。</code> | 带出处的研究笔记、图注全记账的模板骨架、仅 PlantUML 的图纪律、确定性收尾门禁和稳定收据。[运行 demo](docs/demos/super-arch-doc.md)。 |
+
+## Agent Rules Books
+
+从下面 14 套书籍工程规则中，选一套来处理眼前的工程问题。
+
+- `a-philosophy-of-software-design` 用来简化模块边界和 API。
+- `clean-architecture` 用来让业务规则独立于框架、数据库和界面。
+- `clean-code` 用来改进命名、函数和代码可读性。
+- `code-complete` 用来检查控制流、防御性代码和测试。
+- `designing-data-intensive-applications` 用来分析数据一致性、复制和可靠性。
+- `domain-driven-design` 用来为复杂业务建模、划分限界上下文。
+- `domain-driven-design-distilled` 用来梳理子域和上下文之间的关系。
+- `implementing-domain-driven-design` 用来实现聚合、领域事件和仓储。
+- `patterns-of-enterprise-application-architecture` 用来选择服务层、事务脚本和数据映射器等模式。
+- `refactoring` 用来改进现有代码结构，同时保留可观察的行为。
+- `refactoring-guru` 用来识别代码坏味道、选择重构手法。
+- `release-it` 用来评审超时、重试、熔断和故障恢复。
+- `the-pragmatic-programmer` 用来缩短反馈周期、判断哪些工作值得自动化。
+- `working-effectively-with-legacy-code` 用来通过接缝和刻画测试安全修改难以测试的代码。
+
+### 在 Azhou AI Hub 开发时使用
+
+Hub 维护的版本在 `.agents/skills/`。开发 Hub 时，直接使用当前 checkout 自带的规则。在这个 checkout 打开的 Codex 会话里，可以输入 `$refactoring 检查这次改动，建议一项能保持行为的最小重构。` Ask Azhou 核实当前工作区已启用对应规则后，也可以推荐它。
+
+### 在其他项目安装
+
+准备好 Node.js 和 npm 后，在自己的项目目录运行下面的命令，为 Codex 安装 Hub 维护的版本。把 `refactoring` 换成上面任意一个规则名即可。如果安装器询问安装范围，请选当前项目。
+
+~~~bash
+npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
+~~~
+
+在同一项目里打开新会话，确认能找到该技能后再调用。安装器默认从 Hub 的默认分支取规则。要与某个 Hub checkout 的版本完全一致，在仓库名后加 `@<commit>`。[安装和更新说明](https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-agent-rules-books)
 
 ## 为什么可信
 
@@ -146,14 +153,15 @@ python scripts/azhou_hub.py verify
 
 ## 集成
 
-pstack 集成位于 `packages/`。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。下文中的**候选版**（candidate）指已维护、但尚未接受为正式发布的源码版本；其证据以[支持矩阵](docs/support-matrix.md#optional-integrations)中带日期的收据为准，不构成发布声明。
+可选集成位于 `packages/`。这些项目不是 Skill；安装 Hub 的 Skill 不会启用任何集成。下文中的**候选版**（candidate）指已维护、但尚未接受为正式发布的源码版本；其证据以[支持矩阵](docs/support-matrix.md#optional-integrations)中带日期的收据为准，不构成发布声明。
 
 | 入口 | 完整项目包 | 当前边界 |
 |---|---|---|
+| `azhou-agent-inspector` | [阿舟 Agent 工作台](packages/azhou-agent-inspector/README.md) | Codex 会话侧面板、ZCode 输入框状态项与会话仪表盘。两个面板都显示整轮耗时和速率，可按需展开性能详情。宿主提供实际请求的用量和窗口上限时，详情会显示 Context 占用。通过各宿主自己的插件管理器安装。[各版本桌面验收](docs/support-matrix.md#azhou-agent-workbench)。 |
 | `pstack` | [pstack-agent-harness](packages/pstack-agent-harness/README.md) | `pstack-azhouzhou` 0.15.43 **候选版**：Codex／Claude 原生插件、自带捆绑 skills 的 zcode 插件，以及 MiMo 与 DeepSeek Harness 的共享 Skills 发现能力（维护者主机上的共享根 pstack 链接已于 2026-11-14 退役；以该方式向两者提供 pstack 移入单独任务处理，共享根中的其他 skill 不受影响）。带日期的证据与限制：[支持矩阵](docs/support-matrix.md#optional-integrations)。 |
 
 
-[阿舟鼠标指针 3.6.1](assets/cursors/azhou-double-hug/README.md) 是一套适用于 macOS 的独立 Mousecape 皮肤。
+[阿舟鼠标指针 3.6.1](assets/cursors/azhou-double-hug/README.md) 是一套适用于 macOS 的独立 Mousecape 皮肤。主题指南提供下载、安装和恢复系统指针的入口。
 
 同样在本仓库的 clone 中执行：
 
@@ -193,7 +201,7 @@ docs/skill-standard.md ── 约束 ──> skills/<name>/       可安装运�
 
 ## 开发
 
-在 Codex 中，`$refactoring` 把重构指南落到一次改动上，`$release-it` 评审故障恢复；14 套[书籍规则](THIRD_PARTY_NOTICES.md#agent-rules-books)随仓库放在 `.agents/skills/` 下——属于项目本地内容，不在 `skills/` 的 21 个可安装包之列——按需读取。
+开发 Hub 时，可以用 Hub Skill 完成仓库文档对齐等具体任务，也可以用已安装的 pstack 工作流推进实现或评审。每项任务由一套工作流主导，遇到具体工程判断时按需调用 [Agent Rules Books](#agent-rules-books)。[书籍规则来源与许可](THIRD_PARTY_NOTICES.md#agent-rules-books)
 
 仓库级 gate 只需要 Python 3.11+：
 

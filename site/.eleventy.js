@@ -1,15 +1,13 @@
 "use strict";
 
+const { RenderPlugin } = require("@11ty/eleventy");
 const { pathPrefix } = require("./_data/site");
 
 module.exports = function (eleventyConfig) {
-  // Reuse the repository's own hero asset without duplicating its bytes in
-  // the site tree; the shared footer carries the artwork license line and
-  // the required attribution (assets/azhou/NOTICE.md).
+  eleventyConfig.addPlugin(RenderPlugin);
   eleventyConfig.addPassthroughCopy({
-    "../assets/github/readme-hero.png": "./assets/hero.png",
-    "../assets/site/hero.webp": "./assets/hero.webp",
-    "../assets/site/hero-640.webp": "./assets/hero-640.webp",
+    "../assets/azhou/wallpaper-scene-q-v3.png": "./assets/azhou-workspace.png",
+    "../assets/cursors/azhou-double-hug/Azhou-Double-Hug-3.6.1.cape": "./assets/Azhou-Double-Hug-3.6.1.cape",
   });
 
   return {

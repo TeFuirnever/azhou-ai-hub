@@ -2,8 +2,6 @@
 name: refactoring
 description: Apply Martin Fowler-inspired refactoring rules when improving existing code structure while preserving observable behavior.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Refactoring Skill

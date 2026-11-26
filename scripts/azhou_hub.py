@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import signal
 import stat
@@ -35,6 +36,8 @@ MIN_PYTHON = (3, 11)
 DOCTOR_VERIFY_TIMEOUT_SECONDS = 600
 DOCTOR_VERIFY_TAIL_BYTES = 8192
 COMMANDS = ["doctor", "info", "setup", "verify", "version"]
+INSTALL_COMPONENTS = ("hub-skills", "pstack", "agent-rules-books")
+BOOK_SKILL_LIST = "skills/super-ask-azhou/references/book-skills.txt"
 RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v2"
 LEGACY_RECEIPT_SCHEMA = "azhou-ai-hub.install-receipt.v1"
 LINK_SUPPORTS_DIR_FD = (
@@ -494,7 +497,7 @@ def info_payload(root: Path = ROOT) -> dict[str, Any]:
             "minimum": ".".join(str(part) for part in MIN_PYTHON),
         },
         "installable_skills": canonical_skills(root),
-        "optional_integrations": ["pstack"],
+        "optional_integrations": ["pstack", "azhou-agent-inspector"],
         "integration_entry": "python scripts/azhou_hub.py integrations list --json",
         # Keep this list limited to the five portable foundation commands. The
         # receipt-owned lifecycle verbs are intentionally a separate contract.
@@ -590,9 +593,13 @@ def _target_root_error(target: Path) -> str | None:
 
 
 def canonical_source(root: Path, name: str) -> Path:
+    return _skill_source(root / "skills", name)
+
+
+def _skill_source(directory: Path, name: str) -> Path:
     if not name or Path(name).name != name or name in {".", ".."}:
         raise PackageError(f"invalid canonical skill name: {name!r}")
-    skills_root = (root / "skills").resolve()
+    skills_root = directory.resolve()
     source = (skills_root / name).resolve()
     try:
         source.relative_to(skills_root)
@@ -734,9 +741,12 @@ def setup_skills(
     dry_run: bool,
     receipt_path: Path | None = None,
     plan_id: str | None = None,
+    book_skills: frozenset[str] = frozenset(),
 ) -> dict[str, Any]:
     if mode not in {"copy", "link"}:
         raise ValueError(f"unsupported setup mode: {mode}")
+    if book_skills and receipt_path is not None:
+        raise PackageError("managed setup receipts are available for canonical Hub Skills")
 
     target = target.expanduser().resolve()
     if receipt_path is not None:
@@ -749,7 +759,10 @@ def setup_skills(
     rows: list[dict[str, str]] = []
     for name in sorted(set(skills)):
         try:
-            source = canonical_source(root, name)
+            source = (
+                _skill_source(root / ".agents" / "skills", name)
+                if name in book_skills else canonical_source(root, name)
+            )
         except PackageError as exc:
             rows.append(
                 {
@@ -990,6 +1003,92 @@ def setup_skills(
     return payload
 
 
+def install_components(args: argparse.Namespace, *, root: Path) -> int:
+    """Review both installers' plans, then apply them to one Codex project."""
+    import integration_common
+    import integration_pstack
+
+    selected = set(INSTALL_COMPONENTS if args.all else args.component)
+    skill_plan = None
+    pstack_plan = None
+    completed_skills = False
+
+    def check_skill_target() -> None:
+        if target.parent.is_symlink() or target.is_symlink():
+            raise PackageError(f"project skill directory uses a symlink: {target}")
+
+    try:
+        workspace = args.workspace.expanduser().resolve()
+        target = workspace / ".agents" / "skills"
+        if not workspace.is_dir():
+            raise PackageError(f"workspace must be an existing project directory: {workspace}")
+        names = set(canonical_skills(root)) if "hub-skills" in selected else set()
+        if "hub-skills" in selected and not names:
+            raise PackageError("the Hub Skills catalog is empty")
+        books = frozenset()
+        if "agent-rules-books" in selected:
+            books = frozenset((root / BOOK_SKILL_LIST).read_text(encoding="utf-8").splitlines())
+            if not books or books & set(canonical_skills(root)):
+                raise PackageError("book catalog is empty or overlaps the canonical skill catalog")
+        if names or books:
+            check_skill_target()
+            skill_args = {
+                "root": root, "target": target, "skills": names | books,
+                "mode": "copy", "book_skills": books,
+            }
+            skill_plan = setup_skills(**skill_args, dry_run=True)
+            print(f"Project skill directory: {target}")
+            for row in skill_plan["skills"]:
+                print(f"  {row['name']}: {row['status']}. {row['details']}")
+            if skill_plan["status"] != "dry_run":
+                raise PackageError(skill_plan.get("error", "resolve the skill conflicts shown above"))
+        if "pstack" in selected:
+            executable = args.codex_bin or shutil.which("codex")
+            if not executable:
+                raise PackageError("pstack requires Codex CLI; pass its executable with --codex-bin")
+            home = args.codex_home or workspace / ".azhou" / "hub" / "targets" / "pstack"
+            pstack_plan = integration_pstack.make_plan(
+                source=None, workspace=workspace, codex_home=home, codex_bin=Path(executable),
+                coexistence=True, hub_root=root,
+            )
+            print(f"pstack Codex home: {pstack_plan['codex_home']}")
+            print(f"pstack source: {pstack_plan['source']['source']}")
+            print(f"Codex executable: {pstack_plan['codex_bin']}")
+            print("pstack will be available on demand with SessionStart auto-routing off.")
+        if args.dry_run:
+            print("No files changed.")
+            return 0
+        try:
+            choice = input("Apply this installation plan? [y/N] ")
+        except EOFError:
+            choice = ""
+        if choice.strip().lower() not in {"y", "yes"}:
+            print("Installation canceled.")
+            return 1
+
+        if skill_plan and any(row["status"] == "planned" for row in skill_plan["skills"]):
+            check_skill_target()
+            with _mutation_lock(target):
+                installed = setup_skills(**skill_args, dry_run=False, plan_id=skill_plan["planId"])
+            if installed["status"] != "pass":
+                _print_setup(installed)
+                return 1
+            completed_skills = True
+        if pstack_plan:
+            result = integration_pstack.apply_plan(pstack_plan, plan_id=pstack_plan["plan_id"], hub_root=root)
+            if result["status"] != "installation-verified":
+                raise PackageError(f"pstack verification returned {result['status']}")
+            launch = ["env", f"CODEX_HOME={pstack_plan['codex_home']}", pstack_plan["codex_bin"], "-C", str(workspace)]
+            print(f"Open a Codex session with pstack using:\n  {shlex.join(launch)}")
+        print("Selected components are installed.")
+        return 0
+    except (PackageError, integration_common.IntegrationError, OSError, UnicodeError) as exc:
+        print(f"Install blocked: {exc}", file=sys.stderr)
+        if completed_skills:
+            print("Project skills were installed. Resolve the pstack error and rerun the same selection.", file=sys.stderr)
+        return 1
+
+
 def _check(name: str, status: str, details: str) -> dict[str, str]:
     return {"name": name, "status": status, "details": details}
 
@@ -1159,9 +1258,16 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
         rows.append({"name": item.get("name", ""), "status": "already_absent" if state == "missing" else state, "details": details, "destination": str(target / item.get("name", ""))})
     if any(row["status"] == "conflict" for row in rows):
         return _lifecycle_report("fail", rows)
+    record_needed = receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled"
     if not apply:
+        if all(row["status"] == "already_absent" for row in rows):
+            details = (
+                "The skill files are already absent. Run with --apply to record the uninstall."
+                if record_needed else "The skill files are already absent. No action needed."
+            )
+            return _lifecycle_report("dry_run", rows, details=details)
         return _lifecycle_report("dry_run", rows)
-    if receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled" and not LINK_SUPPORTS_DIR_FD and os.name != "nt":
+    if record_needed and not LINK_SUPPORTS_DIR_FD and os.name != "nt":
         return _lifecycle_report("fail", rows, error="safe uninstall recording is unavailable on this platform")
     for row in rows:
         if row["status"] == "current":
@@ -1174,7 +1280,7 @@ def uninstall_receipt(*, receipt_path: Path, target: Path, root: Path, apply: bo
             except (OSError, PackageError) as exc:
                 row["status"], row["details"] = "fail", str(exc)
                 return _lifecycle_report("partial", rows, error="uninstall failed")
-    if receipt["schema"] == RECEIPT_SCHEMA and receipt.get("lifecycle_state") != "uninstalled":
+    if record_needed:
         try:
             state, details = _receipt_item_state(receipt["skills"][0], receipt["mode"], target, root)
             if state != "missing":
@@ -1747,9 +1853,63 @@ def _print_setup(payload: dict[str, Any]) -> None:
     for row in payload["skills"]:
         print(f"[{row['status'].upper()}] {row['name']}: {row['details']}")
     if payload["status"] == "dry_run":
-        print("No files changed. Re-run with --apply --plan-id <reviewed-planId> to execute this plan.")
+        print("No files changed.")
+        if any(row["status"] == "planned" for row in payload["skills"]):
+            print("To install the planned skills, add the following arguments to the same command.")
+            print(f"  --apply --plan-id {payload['planId']}")
+        else:
+            print("The selected skills are already installed. No action needed.")
     elif payload["status"] == "dry_run_same_source":
         print("No files changed. The destination already links an identical canonical package from another checkout; resolve the duplicate checkout or choose a different target before applying.")
+
+
+def _print_lifecycle(command: str, payload: dict[str, Any], target: Path) -> None:
+    status = payload["status"]
+    if status == "nothing-to-migrate":
+        print(payload.get("message") or "nothing to migrate")
+        return
+
+    print(status)
+    if payload.get("error"):
+        print(json.dumps(payload["error"], ensure_ascii=False))
+    if payload.get("details"):
+        print(payload["details"])
+    for row in payload.get("skills", []):
+        destination = row.get("destination") or str(target.expanduser().resolve() / row["name"])
+        path = json.dumps(destination, ensure_ascii=False)
+        label = row["status"].upper()
+        if status == "dry_run" and command == "uninstall" and row["status"] == "current":
+            label = "WILL REMOVE"
+        details = row.get("details")
+        suffix = f": {json.dumps(details, ensure_ascii=False)}" if details else ""
+        print(f"[{label}] {row['name']} at {path}{suffix}")
+
+    if status == "dry_run":
+        print("No files changed.")
+        if command == "repair" and all(row["status"] == "current" for row in payload["skills"]):
+            print("No repairs are needed.")
+        elif not payload.get("details"):
+            if command in {"migrate", "uninstall"}:
+                print("Apply checks the current files again. If they change after this preview, run the preview again.")
+            print("Review the paths above before running again with --apply.")
+    if status in {"planned", "migrated", "already-current", "conflict"}:
+        print(f"From: {json.dumps(payload['source'], ensure_ascii=False)}")
+        print(f"To: {json.dumps(payload['target'], ensure_ascii=False)}")
+    for conflict in payload.get("conflicts", []):
+        print(f"[CONFLICT] {conflict}")
+    if status == "planned":
+        print(f"No files changed. Review the paths above, then run again with --apply --plan-id {payload['planId']}.")
+
+    recovery = payload.get("recovery")
+    if recovery:
+        print(f"Receipt: {json.dumps(recovery['receipt'], ensure_ascii=False)}")
+        print(f"Expected directory: {json.dumps(recovery['expected_directory'], ensure_ascii=False)}")
+        print(f"Observed record directory (may have changed): {json.dumps(recovery['observed_directory'], ensure_ascii=False)}")
+        print(f"Record name: {recovery['record_name']}; state: {recovery['record_state']}")
+        print(f"Directory identity: {recovery['directory_identity']}")
+        print(f"Record identity: {recovery['record_identity']}; receipt identity: {recovery['receipt_identity']}")
+    if status == "partial":
+        print((recovery or payload).get("next_action", "Stop concurrent changes and inspect the receipt and target manually; do not automatically delete or retry."))
 
 
 def run_verifier(root: Path, python: str) -> int:
@@ -2058,6 +2218,15 @@ def build_parser(root: Path = ROOT) -> argparse.ArgumentParser:
     setup.add_argument("--managed", action="store_true", help="Opt into receipt-owned lifecycle management")
     setup.add_argument("--json", action="store_true", help="Emit stable JSON receipt")
 
+    install = subcommands.add_parser("install", help="Install selected Hub components into a Codex project")
+    selection = install.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--all", action="store_true", help="Select Hub Skills, pstack, and Agent Rules Books")
+    selection.add_argument("--component", nargs="+", choices=INSTALL_COMPONENTS, help="Select one or more components")
+    install.add_argument("--workspace", type=Path, default=Path.cwd(), help="Target project (defaults to the current directory)")
+    install.add_argument("--codex-bin", type=Path, help="Absolute Codex executable path for pstack (defaults to codex on PATH)")
+    install.add_argument("--codex-home", type=Path, help="Absolute path to a dedicated Codex home for pstack")
+    install.add_argument("--dry-run", action="store_true", help="Show the plan without making any changes")
+
     for command, help_text in (("repair", "Restore missing artifacts from a managed receipt"), ("uninstall", "Remove artifacts from a managed receipt")):
         lifecycle = subcommands.add_parser(command, help=help_text)
         lifecycle.add_argument("--receipt", type=Path, required=True)
@@ -2104,6 +2273,8 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             import azhou_integrations
         return azhou_integrations.main(argv[1:], hub_root=root)
     args = build_parser(root).parse_args(argv)
+    if args.command == "install":
+        return install_components(args, root=root)
     skills = args.skill if getattr(args, "skill", None) else canonical_skills(root)
 
     if args.command == "scope":
@@ -2149,7 +2320,10 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
 
     if args.command in {"repair", "migrate", "migrate-receipts", "uninstall"} and not args.target.is_absolute():
         payload = _lifecycle_report("fail", [], error="--target must be an absolute path")
-        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_lifecycle(args.command, payload, args.target)
         return 1
 
     if args.command == "setup":
@@ -2237,17 +2411,7 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            print(payload["status"])
-            if args.command == "uninstall" and payload["status"] == "partial":
-                print(json.dumps(payload.get("error", "uninstall did not complete"), ensure_ascii=True))
-                recovery = payload.get("recovery")
-                if recovery:
-                    print(f"Receipt: {json.dumps(recovery['receipt'], ensure_ascii=True)}; expected directory: {json.dumps(recovery['expected_directory'], ensure_ascii=True)}")
-                    print(f"Observed record directory (may have changed): {json.dumps(recovery['observed_directory'], ensure_ascii=True)}")
-                    print(f"Record name: {recovery['record_name']}; state: {recovery['record_state']}")
-                    print(f"Directory identity: {recovery['directory_identity']}")
-                    print(f"Record identity: {recovery['record_identity']}; receipt identity: {recovery['receipt_identity']}")
-                print((recovery or payload).get("next_action", "Stop concurrent changes and inspect the receipt and target manually; do not automatically delete or retry."))
+            _print_lifecycle(args.command, payload, args.target)
         return 0 if payload["status"] in {"pass", "dry_run"} else 1
 
     if args.command == "migrate":
@@ -2261,7 +2425,10 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
                     payload = migrate_receipt(receipt_path=args.receipt, target=args.target, root=root, mode=args.mode, apply=args.apply)
             except PackageError as exc:
                 payload = _lifecycle_report("fail", [], error=str(exc))
-        print(json.dumps(payload, ensure_ascii=False, indent=2) if args.json else payload["status"])
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        else:
+            _print_lifecycle(args.command, payload, args.target)
         return 0 if payload["status"] in {"pass", "dry_run"} else 1
 
     if args.command == "migrate-receipts":
@@ -2278,10 +2445,8 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
             payload = {"status": "fail", "applied": False, "error": str(exc)}
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
-        elif payload["status"] == "nothing-to-migrate":
-            print(payload.get("message") or "nothing to migrate")
         else:
-            print(payload["status"])
+            _print_lifecycle(args.command, payload, args.target)
         return 0 if payload["status"] in {"planned", "migrated", "already-current", "nothing-to-migrate"} else 1
 
     if args.command == "verify":

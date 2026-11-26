@@ -1312,6 +1312,74 @@ class AzhouHubCliTest(unittest.TestCase):
             self.assertEqual(1, result)
             self.assertEqual("fail", payload["status"])
 
+    def test_setup_text_only_prompts_to_apply_when_there_is_work(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, _, target = self._fixture_repo(directory)
+            command = ["setup", "--target", str(target), "--skill", "sample", "--mode", "copy"]
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(command, root=root)
+            self.assertEqual(0, result)
+            self.assertFalse(target.exists())
+            args = next(line.split() for line in preview.getvalue().splitlines() if line.startswith("  --apply "))
+            result, installed = self._json_main([*command, *args, "--json"], root=root, auto_plan=False)
+            self.assertEqual(0, result, installed)
+            self.assertTrue((target / "sample" / "SKILL.md").is_file())
+
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(command, root=root)
+            self.assertEqual(0, result)
+            self.assertIn("The selected skills are already installed. No action needed.", preview.getvalue())
+            self.assertNotIn("--apply", preview.getvalue())
+
+    def test_lifecycle_text_explains_uninstall_plan_and_migration_refusal(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            common = ["--target", str(target), "--receipt", str(receipt)]
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(["uninstall", *common], root=root)
+            self.assertEqual(0, result)
+            destination = json.dumps(str(target.resolve() / "sample"), ensure_ascii=False)
+            self.assertIn(f"[WILL REMOVE] sample at {destination}", preview.getvalue())
+            self.assertIn("No files changed.", preview.getvalue())
+            self.assertIn("If they change after this preview, run the preview again.", preview.getvalue())
+            self.assertTrue((target / "sample").is_dir())
+
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(["migrate", *common, "--mode", "link"], root=root)
+            self.assertEqual(0, result)
+            self.assertIn(f"[PLANNED] sample at {destination}", preview.getvalue())
+
+            (target / "sample/SKILL.md").write_text("user-owned", encoding="utf-8")
+            refused = io.StringIO()
+            with redirect_stdout(refused):
+                result = azhou_hub.main(["migrate", *common, "--mode", "link", "--apply"], root=root)
+            self.assertEqual(1, result)
+            self.assertIn("managed copy digest differs", refused.getvalue())
+            self.assertEqual("user-owned", (target / "sample/SKILL.md").read_text(encoding="utf-8"))
+
+    def test_uninstall_text_only_prompt_to_record_an_active_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root, target, receipt = self._managed_fixture(directory, mode="copy")
+            shutil.rmtree(target / "sample")
+            command = ["uninstall", "--target", str(target), "--receipt", str(receipt)]
+
+            pending = io.StringIO()
+            with redirect_stdout(pending):
+                self.assertEqual(0, azhou_hub.main(command, root=root))
+            self.assertIn("Run with --apply to record the uninstall.", pending.getvalue())
+
+            result, applied = self._json_main([*command, "--apply", "--json"], root=root)
+            self.assertEqual(0, result, applied)
+            finished = io.StringIO()
+            with redirect_stdout(finished):
+                self.assertEqual(0, azhou_hub.main(command, root=root))
+            self.assertIn("No action needed.", finished.getvalue())
+            self.assertNotIn("--apply", finished.getvalue())
+
     def test_legacy_receipts_require_explicit_reviewed_namespace_migration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, target, current_receipt = self._managed_fixture(directory, mode="copy")
@@ -1326,6 +1394,12 @@ class AzhouHubCliTest(unittest.TestCase):
             )
             self.assertEqual(0, result, planned)
             self.assertEqual("planned", planned["status"])
+            preview = io.StringIO()
+            with redirect_stdout(preview):
+                result = azhou_hub.main(["migrate-receipts", "--target", str(target)], root=root)
+            self.assertEqual(0, result)
+            self.assertIn(legacy_receipt.parent.resolve().as_posix(), preview.getvalue())
+            self.assertIn(f"--apply --plan-id {planned['planId']}", preview.getvalue())
             self.assertTrue(legacy_receipt.is_file())
             self.assertFalse(current_receipt.exists())
 

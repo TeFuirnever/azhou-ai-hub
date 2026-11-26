@@ -9,12 +9,7 @@ eleventyExcludeFromCollections: true
 ---
 
 <article class="doc-card">
-  <nav class="crumbs" aria-label="Breadcrumb">
-    <a href="{{ '/' | url }}">azhou-ai-hub</a>
-    <span aria-hidden="true">/</span>
-    <span aria-current="page">Page not found</span>
-  </nav>
   <h1>Page not found</h1>
-  <p>The page you requested does not exist on this site. Try the <a href="{{ '/' | url }}">home page</a>, the <a href="{{ '/skills/' | url }}">skills catalog</a>, or the <a href="{{ '/docs/' | url }}">documentation map</a>.</p>
-  <p class="doc-source">Written in <code>site/404.njk</code> · <a href="{{ site.blobBase }}/site/404.njk">view the source</a></p>
+  <p>The page may have moved. Try the <a href="{{ site.routes.en.home | url }}">home page</a> or the <a href="{{ site.routes.en.skills | url }}">skills catalog</a>.</p>
+  <p lang="zh-CN">找不到这个页面。返回<a href="{{ site.routes.zh.home | url }}">中文首页</a>或<a href="{{ site.routes.zh.skills | url }}">浏览技能</a>。</p>
 </article>

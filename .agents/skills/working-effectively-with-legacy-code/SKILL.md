@@ -2,8 +2,6 @@
 name: working-effectively-with-legacy-code
 description: Apply Michael Feathers-inspired legacy-code rules when changing hard-to-test code safely with characterization tests, seams, sprout methods, or wrap methods.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Working Effectively with Legacy Code Skill

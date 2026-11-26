@@ -7,7 +7,7 @@
     "SKILL.md": "7481a4618fc660458ff3da8411af70cd5b6f5478a0e3ff5c353f0179d3eeb5fb",
     "THIRD_PARTY_NOTICES.md": "6595f9485861d8e1f46bdae09bde7288be4f82f3f286e2a41d3f8356d6fdc3b9",
     "assets/JetBrainsMono-OFL.txt": "c1ab7c666206842a02b35b30770dac0d7a10156ed401c9defc3f02a754d89e90",
-    "assets/template.html": "29ec25703aff22a4a370d61806208137b549225f1651f9d90df1a189cf70bdea",
+    "assets/template.html": "7f21fd87d83d4bc6ebdb833d78e8a40103abe117d33002b8713e6004d264f021",
     "bin/archify.mjs": "17fb2e4795413570696d5d9d3586cb7e610ee0008acf0c3051f07faf861e54fe",
     "bin/delivery-update.mjs": "24d92f908d91ece10ddcefe979f7950f9250023813c41777022ae5d948aa8e2c",
     "bin/export-svg.mjs": "002c8f6cf361646cc2e1d781ee00e6d5e50e2f27f668a0d0227ade717975da71",
@@ -44,12 +44,12 @@
     "examples/example-rebuild.waterfall.json": "77d610013a5aab031df739c207b66ebc26e1740371b51da06956ecf06b5e9929",
     "examples/holiday-planning.workflow.json": "b98354f921ca45842fed235db09fd4f19d94adc16865876f438c0d699d05e1ea",
     "examples/incident-response.workflow.json": "630be98449925d2716ecb8439f404b2bff5fe65ba905b0ad0baea6d96890c526",
-    "examples/locales/de.json": "328a9cefe36814ae3e9cd6fec41453ba05d2de454f4a8dc60d0de74070bda086",
-    "examples/locales/fr.json": "8d0e34ed74c5f67e0c3e5c3479eb6456213c3e7b8c2f5af872af69c8007ffd2d",
+    "examples/locales/de.json": "c1bb97cd007ccdd198b2ef66fb932c538b174707270729d3c946d5119ab4cd15",
+    "examples/locales/fr.json": "ccf67d03197c7af4c587524eea3a0714693aecd5971e2b8c166dfc5ecf15d7a5",
     "examples/locales/fr.partial.json": "8958a8354ffccce2ce63ac21b3f8a0f131086f532832445a3fe7feff02200397",
-    "examples/locales/it.json": "e88591e5f62a8e71a969c934bbec0e05520eb686fc2b31c71a6408a53e64f9a7",
-    "examples/locales/ja.json": "3c655454c9993479b3bc6532ec3428f3d0d2c232ee30fd3bf270ac40141a015c",
-    "examples/locales/pt.json": "7697fa11c95cbe0bedb833caab4fb5efac617c15cf65f7d290e20eadd709ee91",
+    "examples/locales/it.json": "885fd310db14191f31d7f02fc7e13c89e46b25d19590ad957a36da19eeeba0ce",
+    "examples/locales/ja.json": "e8c18dcf346c0ace25b43b4fd558909cd1a593667850d2b4fd64bb2343ac586c",
+    "examples/locales/pt.json": "5ebfd16373aafd175a252228c895cabdd78955814e895297adc2a94f9b6fdedf",
     "examples/orders.erd.json": "1777a374647084466f4d7ce3a968004be6ab70ac9cf82459b96bed7c556cdfdd",
     "examples/payment-incident.timeline.json": "c1f535b3cc915ddd47ecd7df4e3ef02c441c8c3191daced5cf4422cff8dec95f",
     "examples/payment-platform.tree.json": "1e99f37b3845d67fa97c9a2ff33109981c23bfdb0d03ba05b7d92944dcdfc61f",
@@ -102,14 +102,14 @@
     "explainer/vendor/pele/diagrams/xychart.js": "817de14381d9ba413dc70947824ff2538ba532c232592035a5b836094434e4bb",
     "explainer/writing.mjs": "f4e676a28db4207d8bf93af7c58aa36a51da4dac9619b145a39e33709cf667ff",
     "locales/README.md": "68f0a5dd29719f9a92dfc0b967beaf10455f14754d94784ec98ac056643f7982",
-    "locales/ar.json": "8b7eceb11f8e1dcd2ef4704713a8daf6cc4b32e9e74a4928fa4e776d3c27e450",
-    "locales/en.json": "0f52c4d85f805640ddcae20532cd5f7044405d34da90190674419973f75fa8ae",
-    "locales/es.json": "08b7e312471d84c24a3238da1cfff4e96a1216c424637d194c0e3164e1229566",
-    "locales/ko.json": "5b4083adb62f776ed826ae1630ce8dda6003db18c23d5cb6717d279369db0480",
+    "locales/ar.json": "26f6877b1659ba29590c490507712495028f8555eca261e1c38b6cb1aca1dc8e",
+    "locales/en.json": "5ce43a4850a7ae70f4eefec7d154fc79dcbefa7f363eeb83797bf1044bbd5797",
+    "locales/es.json": "f979549d0b69f81cf374aba9461590b83fb66cba51153ba39352b6d6767146b7",
+    "locales/ko.json": "2f2b3a2c2665cedeb7106cb74341f859dc5c4045473dbbef3e31781a23ef21de",
     "locales/manifest.json": "6fb461dd5a16ddc0a3dab24a89970291373dee3bb4d4766ce1ae3b591b97b085",
-    "locales/ru.json": "4a7cedf44878fe8df1937f79346f4e0fde400a9a3a900c88a17f1ced8f3755d2",
-    "locales/zh-CN.json": "c71b6accccca9d907e5ea36c169c0b930ddba07693d31fe7105b30a1e5fdd510",
-    "locales/zh-TW.json": "0ad2a21ae28cb3d19f04c8702c8ffd35d5e4dbb5d96984b136e119de7e4bc044",
+    "locales/ru.json": "e0257427805942ac2fafa46e7bf72b84ef1b6628d2032fb4cc10e4dc1e09de63",
+    "locales/zh-CN.json": "af42aefbdf50a6861d8e46a8493f4143876dc75e345a2397ed2c3736e3bcc4d6",
+    "locales/zh-TW.json": "06f041aa49af9994d80a9194a5a03b53061a23d07f4f3db34c322a30957d0994",
     "migrations/workflow-v2.mjs": "0eec02057b8490afca9b093de5ea6e636c7fad2361cd28a04cf2f3e4b6197434",
     "modules/code-analysis/.gitattributes": "eccbebbd50c7e8efa0b1e3288abfe469b477984d63e7ef238a6a59d7ee61b0fe",
     "modules/code-analysis/.gitignore": "1eee606ea33ae17e1aa09b14923fbf1bcac6d1b1c17ae6664c036381d5e50e7c",
@@ -322,7 +322,7 @@
     "references/delivery-contract.md": "418250feeb9a4d3e172e954822c16f7d02c9b1733fd06cfdaf41ac8f6ad1369c",
     "references/explainer-authoring.md": "cdc159e11582a516fa023bb2e57aabc4c280f3d9ea76183761e52dcd58e0e79e",
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
-    "references/provenance.md": "a913a7e229478bfbb4896621babc825e42999c72763a5d34d4d6caa1e185e83e",
+    "references/provenance.md": "ec522aeb10e9704f9ab1270d31c7aff719f786a8e46f304e04dfb1a62095de56",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
     "references/setup.md": "58958433d8f054a3c91cde05b3ba5cbbc2bad61aeb3811f50a47561ea913df5c",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
@@ -503,11 +503,11 @@
     {
       "base_sha256": "4fe243de7448f83d2123e987db5ec2539b662480a6e3ce3c90deb9e0c9ad11ef",
       "disposition": "adopt_upstream_with_documented_local_fix",
-      "local_sha256": "52e995c61a728c37da242bfaf7c83e289b00bc6b7723e020345305664b81580e",
-      "packaged_sha256": "29ec25703aff22a4a370d61806208137b549225f1651f9d90df1a189cf70bdea",
+      "local_sha256": "5296ebce756e65f87d81b9f3d5fa13ce768ecec226fe215708b89cc5300faa80",
+      "packaged_sha256": "7f21fd87d83d4bc6ebdb833d78e8a40103abe117d33002b8713e6004d264f021",
       "path": "assets/template.html",
       "target_sha256": "ce14fe404b80577bf5aceae189d78a50dded861a026f99c21997f57fdd3254fb",
-      "resolution": "Upstream 3.3.0 generator meta line carries the local super-archify label; whitespace-only line normalization replayed; drilldown, parent-return and Semantic Passport navigation hrefs pass one shared scheme allowlist guard before location or href writes"
+      "resolution": "Upstream 3.3.0 generator meta line carries the local super-archify label; whitespace-only line normalization replayed; the generic export-menu subtitle span and its header styles are removed (references/provenance.md); drilldown, parent-return and Semantic Passport navigation hrefs pass one shared scheme allowlist guard before location or href writes"
     },
     {
       "base_sha256": "3cebcee3fa339e3b98deacae8cb9a5570525e003d8823368d304d904ba9ceecd",
@@ -847,19 +847,21 @@
     },
     {
       "base_sha256": "77975293855578923fbbee29f478d9d84002c04d6a7b3e22cd9db8cf3fb414ba",
-      "disposition": "adopt_upstream",
-      "local_sha256": "77975293855578923fbbee29f478d9d84002c04d6a7b3e22cd9db8cf3fb414ba",
-      "packaged_sha256": "328a9cefe36814ae3e9cd6fec41453ba05d2de454f4a8dc60d0de74070bda086",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "b9e35392ed2cee6b8eec2a13c7696453202463a3277d8d0dacac93cb5de605f1",
+      "packaged_sha256": "c1bb97cd007ccdd198b2ef66fb932c538b174707270729d3c946d5119ab4cd15",
       "path": "examples/locales/de.json",
-      "target_sha256": "328a9cefe36814ae3e9cd6fec41453ba05d2de454f4a8dc60d0de74070bda086"
+      "target_sha256": "328a9cefe36814ae3e9cd6fec41453ba05d2de454f4a8dc60d0de74070bda086",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "ea1af868932eb22761094a4950b769fd0634430fe706fc4ea4335eca7f0529bb",
-      "disposition": "adopt_upstream",
-      "local_sha256": "ea1af868932eb22761094a4950b769fd0634430fe706fc4ea4335eca7f0529bb",
-      "packaged_sha256": "8d0e34ed74c5f67e0c3e5c3479eb6456213c3e7b8c2f5af872af69c8007ffd2d",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "41a3693f5914b711bec897c9da200d7fbe24d1b75570f7c9e475a244d9aadd6c",
+      "packaged_sha256": "ccf67d03197c7af4c587524eea3a0714693aecd5971e2b8c166dfc5ecf15d7a5",
       "path": "examples/locales/fr.json",
-      "target_sha256": "8d0e34ed74c5f67e0c3e5c3479eb6456213c3e7b8c2f5af872af69c8007ffd2d"
+      "target_sha256": "8d0e34ed74c5f67e0c3e5c3479eb6456213c3e7b8c2f5af872af69c8007ffd2d",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "8958a8354ffccce2ce63ac21b3f8a0f131086f532832445a3fe7feff02200397",
@@ -871,27 +873,30 @@
     },
     {
       "base_sha256": "be8cd15fcd0311521dc8ae1f35bbcf8e33a180e20e5ce94fd0d65dec4e147e6b",
-      "disposition": "adopt_upstream",
-      "local_sha256": "be8cd15fcd0311521dc8ae1f35bbcf8e33a180e20e5ce94fd0d65dec4e147e6b",
-      "packaged_sha256": "e88591e5f62a8e71a969c934bbec0e05520eb686fc2b31c71a6408a53e64f9a7",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "d66d00a01edfedc763e274018e83e6da84eeffb088037038f3d03d30067fb199",
+      "packaged_sha256": "885fd310db14191f31d7f02fc7e13c89e46b25d19590ad957a36da19eeeba0ce",
       "path": "examples/locales/it.json",
-      "target_sha256": "e88591e5f62a8e71a969c934bbec0e05520eb686fc2b31c71a6408a53e64f9a7"
+      "target_sha256": "e88591e5f62a8e71a969c934bbec0e05520eb686fc2b31c71a6408a53e64f9a7",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "bb6d66d7e1126c5c622423317a536728820d3fe686be90d0c9cc8f6ca4ff3e67",
-      "disposition": "adopt_upstream",
-      "local_sha256": "bb6d66d7e1126c5c622423317a536728820d3fe686be90d0c9cc8f6ca4ff3e67",
-      "packaged_sha256": "3c655454c9993479b3bc6532ec3428f3d0d2c232ee30fd3bf270ac40141a015c",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "2474e7ec5f1b4db82db9cdf659356d8b98f533169667f787e911c4037838b677",
+      "packaged_sha256": "e8c18dcf346c0ace25b43b4fd558909cd1a593667850d2b4fd64bb2343ac586c",
       "path": "examples/locales/ja.json",
-      "target_sha256": "3c655454c9993479b3bc6532ec3428f3d0d2c232ee30fd3bf270ac40141a015c"
+      "target_sha256": "3c655454c9993479b3bc6532ec3428f3d0d2c232ee30fd3bf270ac40141a015c",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "8e3c6a054183e96465bd882bc23d38eafe19c0484eda5709f4e2b37e132e0731",
-      "disposition": "adopt_upstream",
-      "local_sha256": "8e3c6a054183e96465bd882bc23d38eafe19c0484eda5709f4e2b37e132e0731",
-      "packaged_sha256": "7697fa11c95cbe0bedb833caab4fb5efac617c15cf65f7d290e20eadd709ee91",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "08d6b8288281087b474ee6efce82c70cf5276d29195c098c33a6b08fd0d17341",
+      "packaged_sha256": "5ebfd16373aafd175a252228c895cabdd78955814e895297adc2a94f9b6fdedf",
       "path": "examples/locales/pt.json",
-      "target_sha256": "7697fa11c95cbe0bedb833caab4fb5efac617c15cf65f7d290e20eadd709ee91"
+      "target_sha256": "7697fa11c95cbe0bedb833caab4fb5efac617c15cf65f7d290e20eadd709ee91",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "ea673bf7156d87ac43d754839155a1a145aafa481b5de540e04d1f8d3ec008d3",
@@ -1414,35 +1419,39 @@
     },
     {
       "base_sha256": "4a8d5c821a16fa94c97b68784481841c323e288d841acd84ac8415c063483a9f",
-      "disposition": "adopt_upstream",
-      "local_sha256": "4a8d5c821a16fa94c97b68784481841c323e288d841acd84ac8415c063483a9f",
-      "packaged_sha256": "8b7eceb11f8e1dcd2ef4704713a8daf6cc4b32e9e74a4928fa4e776d3c27e450",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "cae54a3c41cb26916637ebfcba67ccc4760cf37978e9ec4e75713b006f8e57d6",
+      "packaged_sha256": "26f6877b1659ba29590c490507712495028f8555eca261e1c38b6cb1aca1dc8e",
       "path": "locales/ar.json",
-      "target_sha256": "8b7eceb11f8e1dcd2ef4704713a8daf6cc4b32e9e74a4928fa4e776d3c27e450"
+      "target_sha256": "8b7eceb11f8e1dcd2ef4704713a8daf6cc4b32e9e74a4928fa4e776d3c27e450",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "1e8b43d8ba6d8ae75c2b393b2edb43cac5e142f33cbc2d1a2351e0e8baf9e1aa",
-      "disposition": "adopt_upstream",
-      "local_sha256": "1e8b43d8ba6d8ae75c2b393b2edb43cac5e142f33cbc2d1a2351e0e8baf9e1aa",
-      "packaged_sha256": "0f52c4d85f805640ddcae20532cd5f7044405d34da90190674419973f75fa8ae",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "18ae17202fc0030f26b7639d62121d365a23c4d5a3b1a69072d849c277e26009",
+      "packaged_sha256": "5ce43a4850a7ae70f4eefec7d154fc79dcbefa7f363eeb83797bf1044bbd5797",
       "path": "locales/en.json",
-      "target_sha256": "0f52c4d85f805640ddcae20532cd5f7044405d34da90190674419973f75fa8ae"
+      "target_sha256": "0f52c4d85f805640ddcae20532cd5f7044405d34da90190674419973f75fa8ae",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "f2b971994cb9f7091758e605931b4b4959103ed0090916fe281bfb2f2e1e5cc7",
-      "disposition": "adopt_upstream",
-      "local_sha256": "f2b971994cb9f7091758e605931b4b4959103ed0090916fe281bfb2f2e1e5cc7",
-      "packaged_sha256": "08b7e312471d84c24a3238da1cfff4e96a1216c424637d194c0e3164e1229566",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "b9dd08e1ceb5d587dfb6f10a00afc08980740cdee54c108a2f5bf3c1be58b298",
+      "packaged_sha256": "f979549d0b69f81cf374aba9461590b83fb66cba51153ba39352b6d6767146b7",
       "path": "locales/es.json",
-      "target_sha256": "08b7e312471d84c24a3238da1cfff4e96a1216c424637d194c0e3164e1229566"
+      "target_sha256": "08b7e312471d84c24a3238da1cfff4e96a1216c424637d194c0e3164e1229566",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "b7f2be52c61e4ced665ea62bb0670b4c2615a6c706127246a44bbcffdf65f8be",
-      "disposition": "adopt_upstream",
-      "local_sha256": "b7f2be52c61e4ced665ea62bb0670b4c2615a6c706127246a44bbcffdf65f8be",
-      "packaged_sha256": "5b4083adb62f776ed826ae1630ce8dda6003db18c23d5cb6717d279369db0480",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "d20f8e934b7efa44016efe55b15600d55485c28736e7503ef4b601c3cbf72cc5",
+      "packaged_sha256": "2f2b3a2c2665cedeb7106cb74341f859dc5c4045473dbbef3e31781a23ef21de",
       "path": "locales/ko.json",
-      "target_sha256": "5b4083adb62f776ed826ae1630ce8dda6003db18c23d5cb6717d279369db0480"
+      "target_sha256": "5b4083adb62f776ed826ae1630ce8dda6003db18c23d5cb6717d279369db0480",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "9a377676b5d16f97a6a1f9326aadbb447321e9ceb5744718181796ce3dcce0d8",
@@ -1454,27 +1463,30 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "4a7cedf44878fe8df1937f79346f4e0fde400a9a3a900c88a17f1ced8f3755d2",
+      "packaged_sha256": "e0257427805942ac2fafa46e7bf72b84ef1b6628d2032fb4cc10e4dc1e09de63",
       "path": "locales/ru.json",
-      "target_sha256": "4a7cedf44878fe8df1937f79346f4e0fde400a9a3a900c88a17f1ced8f3755d2"
+      "target_sha256": "4a7cedf44878fe8df1937f79346f4e0fde400a9a3a900c88a17f1ced8f3755d2",
+      "resolution": "Upstream v3.3.0 catalog, moved by upstream from examples/locales/ru.json, with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "83d870452e9ff3459a3cae88be6900d9a98b268e6cfba94b608a7c10f484e485",
-      "disposition": "adopt_upstream",
-      "local_sha256": "83d870452e9ff3459a3cae88be6900d9a98b268e6cfba94b608a7c10f484e485",
-      "packaged_sha256": "c71b6accccca9d907e5ea36c169c0b930ddba07693d31fe7105b30a1e5fdd510",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "e26a8eb841f7c8a0e91b96bc18ad398b52370891a74f8c36b559cff86818dbd9",
+      "packaged_sha256": "af42aefbdf50a6861d8e46a8493f4143876dc75e345a2397ed2c3736e3bcc4d6",
       "path": "locales/zh-CN.json",
-      "target_sha256": "c71b6accccca9d907e5ea36c169c0b930ddba07693d31fe7105b30a1e5fdd510"
+      "target_sha256": "c71b6accccca9d907e5ea36c169c0b930ddba07693d31fe7105b30a1e5fdd510",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "0db367aec82cf92b08d4335d5ed021480801f7ae79b1e2c1a0c79b27d4eafb2e",
-      "disposition": "adopt_upstream",
-      "local_sha256": "0db367aec82cf92b08d4335d5ed021480801f7ae79b1e2c1a0c79b27d4eafb2e",
-      "packaged_sha256": "0ad2a21ae28cb3d19f04c8702c8ffd35d5e4dbb5d96984b136e119de7e4bc044",
+      "disposition": "adopt_upstream_with_documented_local_fix",
+      "local_sha256": "d29f228ca205319b9bc4b30edb001b42d874c1fd4690d5461b8462669397463f",
+      "packaged_sha256": "06f041aa49af9994d80a9194a5a03b53061a23d07f4f3db34c322a30957d0994",
       "path": "locales/zh-TW.json",
-      "target_sha256": "0ad2a21ae28cb3d19f04c8702c8ffd35d5e4dbb5d96984b136e119de7e4bc044"
+      "target_sha256": "0ad2a21ae28cb3d19f04c8702c8ffd35d5e4dbb5d96984b136e119de7e4bc044",
+      "resolution": "Upstream v3.3.0 catalog with the viewer.export.subtitle entry removed alongside the generic export-menu subtitle (references/provenance.md)"
     },
     {
       "base_sha256": "0eec02057b8490afca9b093de5ea6e636c7fad2361cd28a04cf2f3e4b6197434",
@@ -4397,7 +4409,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "a913a7e229478bfbb4896621babc825e42999c72763a5d34d4d6caa1e185e83e",
-      "packaged_sha256": "0135326e4ff6723043a27bb548d6df915d6a869c4c806ab42d04137272251e17",
+      "packaged_sha256": "ec522aeb10e9704f9ab1270d31c7aff719f786a8e46f304e04dfb1a62095de56",
       "path": "references/provenance.md",
       "target_sha256": null
     },

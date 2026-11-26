@@ -39,6 +39,7 @@ The local capability-independent adaptations remain:
 - the generator-label and whitespace-only normalization (`assets/template.html` generator meta line, `renderers/workflow/workflow-compiler.mjs` whitespace-only lines);
 - the retained local `examples/archify-repository.tree.json` packaging delta, `renderers/shared/diagnostics.mjs`, `scripts/generate-brand-marks.mjs` and the unchanged mode README deltas;
 - the v3.2.0-era restore of the real sibling `bin/archify.mjs` identity in `bin/preview.mjs` and the upstream `archify` skillId in `skill-release.json`/`scripts/update-contract.mjs`; v3.3.0 keeps both, so `bin/preview.mjs` and `skill-release.json` now carry upstream bytes verbatim;
+- removal of the generic export-menu subtitle and its translations from the local Viewer;
 - the bounded CodeQL-driven security hardening added on this pin (see below), which keeps every flagged flow behavior-preserving and pins its regressions in repository-level `tests/test_archify.py`.
 
 ## Local compatibility fixes carried across this pin

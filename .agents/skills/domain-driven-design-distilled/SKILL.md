@@ -2,8 +2,6 @@
 name: domain-driven-design-distilled
 description: Apply Vaughn Vernon-inspired lightweight DDD rules when using bounded contexts, subdomains, context maps, and tactical modeling without excess ceremony.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Domain-Driven Design Distilled Skill

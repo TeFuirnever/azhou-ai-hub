@@ -2,8 +2,6 @@
 name: code-complete
 description: Apply Steve McConnell-inspired construction rules when implementing routines, variables, classes, control flow, defensive code, or tests.
 license: MIT
-metadata:
-  internal: true
 ---
 
 # Code Complete Skill

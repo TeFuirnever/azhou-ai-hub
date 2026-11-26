@@ -1,15 +1,19 @@
 <!doctype html>
-<html lang="{{ lang }}">
+<html lang="{{ "zh-CN" if lang == "zh" else lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{{ title }} · Azhou AI Hub</title>
+  <title>{{ title }}{% if title != "Azhou AI Hub" %} · Azhou AI Hub{% endif %}</title>
   {%- if description %}
   <meta name="description" content="{{ description }}">
   {%- endif %}
-  {%- set ogImage = site.siteUrl ~ "/assets/hero.png" %}
+  {%- set ogImage = site.siteUrl ~ "/assets/azhou-workspace.png" %}
   {%- set themeColorLight = "#f8f9fa" if bodyClass == "doc" else "#ffffff" %}
   <link rel="canonical" href="{{ site.siteUrl }}{{ page.url }}">
+  {%- if route %}
+  <link rel="alternate" hreflang="en" href="{{ site.siteUrl }}{{ site.routes.en[route] }}">
+  <link rel="alternate" hreflang="zh-CN" href="{{ site.siteUrl }}{{ site.routes.zh[route] }}">
+  {%- endif %}
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
   <meta name="theme-color" content="{{ themeColorLight }}" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#2a2b2e" media="(prefers-color-scheme: dark)">
@@ -47,16 +51,6 @@
       --az-accent-active: #1f4c34;
       --az-accent-surface: #e7f1eb;
       --az-btn-text: #ffffff;
-      --az-badge-bg: #e4efe8;
-      --az-badge-text: #1d5b3b;
-      --az-note-bg: #e7f1eb;
-      --az-note-text: #1d5b3b;
-      --az-note-border: rgba(47, 111, 79, .28);
-      --az-caution-bg: #feefe3;
-      --az-caution-text: #b31412;
-      --az-caution-border: rgba(179, 20, 18, .25);
-      --az-tint-bg: rgba(47, 111, 79, .06);
-      --az-tint-border: rgba(47, 111, 79, .2);
       --az-code-bg: #f1f3f4;
       --az-code-text: #37474f;
       --az-brand: #e8710a;
@@ -90,19 +84,6 @@
         --az-accent-active: #bce7cf;
         --az-accent-surface: rgba(143, 212, 171, .16);
         --az-btn-text: #0f2418;
-        --az-badge-bg: rgba(143, 212, 171, .16);
-        --az-badge-text: #8fd4ab;
-        --az-note-bg: rgba(143, 212, 171, .1);
-        --az-note-text: #a9dfc0;
-        --az-note-border: rgba(143, 212, 171, .3);
-        --az-caution-bg: rgba(242, 139, 130, .12);
-        --az-caution-text: #f5a39d;
-        --az-caution-border: rgba(242, 139, 130, .3);
-        /* Dark tint stays at .03 so the 13px secondary text on the toolbar
-           callout keeps 4.5:1 over the #303134 sec-alt surface; the prototype
-           value .08 measured below AA there. */
-        --az-tint-bg: rgba(143, 212, 171, .03);
-        --az-tint-border: rgba(143, 212, 171, .24);
         --az-code-bg: #36373a;
         --az-code-text: #f1f3f4;
         --az-brand: #f08c3d;
@@ -179,12 +160,6 @@
     /* ch-based caps measure Latin glyphs; on zh they orphan single CJK glyphs
        at the line end, so zh hero text wraps on the band width instead. */
     :lang(zh) .band h1, :lang(zh) .lede { max-width: none; }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 24px; }
-    .chip {
-      font: 500 12px/20px var(--az-mono);
-      background: var(--az-badge-bg); color: var(--az-badge-text);
-      border-radius: 4px; padding: 3px 8px;
-    }
     .cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 32px; }
     .btn {
       display: inline-flex; align-items: center; height: 36px; padding: 0 24px;
@@ -196,10 +171,23 @@
     .btn-primary:active { background: var(--az-accent-active); }
     .btn-outline { border: 1px solid var(--az-border); color: var(--az-text); }
     .btn-outline:hover { background: var(--az-bg-2); text-decoration: none; color: var(--az-text); }
-    picture { display: block; margin: 0; }
-    .hero { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--az-border); }
+    [hidden] { display: none !important; }
     .sec { padding: 60px 0; }
-    .sec-alt { background: var(--az-bg-2); border-top: 1px solid var(--az-border-2); border-bottom: 1px solid var(--az-border-2); }
+    .copy-block button { cursor: pointer; }
+    .copy-status { margin-inline-start: .75rem; color: var(--az-text-2); }
+    details summary { cursor: pointer; width: fit-content; padding-block: .5rem; color: var(--az-accent); }
+    #skill-filter { margin-top: 24px; }
+    #skill-filter label { display: block; margin-block-end: .25rem; }
+    .skill-search-controls { display: flex; align-items: center; gap: .5rem; }
+    #skill-search {
+      width: min(100%, 24rem); min-width: 0; min-height: 44px; padding: .5rem .75rem; border-radius: 4px;
+      border: 1px solid var(--az-text-2); background: var(--az-bg); color: var(--az-text); font: inherit;
+    }
+    #skill-search::-webkit-search-cancel-button { appearance: none; }
+    #clear-skill-search { flex: none; cursor: pointer; min-height: 44px; padding-inline: .75rem; }
+    #skill-count { color: var(--az-text-2); margin: .5rem 0 0; }
+    .skill-name { align-self: flex-start; margin-block-start: auto; overflow-wrap: anywhere; font-size: 12px; }
+    .gcard:active { background: var(--az-accent-surface); }
     .sec h2 { font: 500 24px/32px var(--az-font); letter-spacing: 0; margin: 0 0 16px; }
     .sec > .wrap > p { margin: 0 0 16px; max-width: 72ch; }
     code {
@@ -214,25 +202,6 @@
       overflow-x: auto; margin: 16px 0 24px;
     }
     pre.wrap-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-    pre.arch {
-      background: var(--az-card); color: var(--az-text);
-      border: 1px solid var(--az-border); border-radius: 8px;
-      white-space: pre;
-    }
-    .callout { border-radius: 16px; padding: 16px 20px; margin: 16px 0 24px; border: 1px solid; }
-    .callout p { margin: 0 0 8px; max-width: 70ch; }
-    .callout p:last-child { margin-bottom: 0; }
-    .callout a { color: inherit; }
-    .callout.note { background: var(--az-note-bg); border-color: var(--az-note-border); color: var(--az-note-text); }
-    .callout.caution { background: var(--az-caution-bg); border-color: var(--az-caution-border); color: var(--az-caution-text); }
-    .toolbar-callout {
-      border-radius: 16px; padding: 16px 20px; margin: 16px 0 24px;
-      background: var(--az-tint-bg); border: 1px solid var(--az-tint-border);
-    }
-    .toolbar-callout p { margin: 0 0 8px; max-width: 70ch; }
-    .toolbar-callout p:last-child { margin-bottom: 0; }
-    .tc-title { font: 500 14px/20px var(--az-font); color: var(--az-accent); }
-    .tc-foot { font: 400 13px/20px var(--az-font); color: var(--az-text-2); }
     .cardgrid {
       list-style: none; padding: 0; margin: 16px 0 32px;
       display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 16px;
@@ -244,12 +213,6 @@
       padding: 16px; text-decoration: none;
     }
     .gcard-t { font: 500 16px/1.3 var(--az-font); color: var(--az-accent); }
-    .badge {
-      align-self: flex-start;
-      font: 500 12px/20px var(--az-mono);
-      background: var(--az-badge-bg); color: var(--az-badge-text);
-      border-radius: 4px; padding: 2px 6px;
-    }
     .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); }
     @media (hover: hover) and (pointer: fine) {
       .gcard { transition: border-color 160ms ease, box-shadow 160ms ease; }
@@ -257,23 +220,6 @@
     }
     .gcard:focus-visible { border-color: var(--az-accent); box-shadow: var(--az-shadow-hover); }
     .doc-shell { max-width: 1440px; margin: 0 auto; padding: 32px 24px 72px; }
-    .doc-grid { display: grid; grid-template-columns: 269px minmax(0, 1fr); gap: 32px; align-items: start; }
-    .doc-nav { position: sticky; top: 88px; }
-    .dn-group {
-      font: 500 11px/20px var(--az-font);
-      letter-spacing: .08em; text-transform: uppercase;
-      color: var(--az-text-2);
-      margin: 0 0 8px;
-    }
-    .dn-list { list-style: none; margin: 0; padding: 0; }
-    .dn-list a {
-      display: block; padding: 6px 10px; border-radius: 4px;
-      font: 400 14px/20px var(--az-font);
-      color: var(--az-text); text-decoration: none;
-      overflow-wrap: anywhere;
-    }
-    .dn-list a:hover { background: var(--az-bg-3); text-decoration: none; }
-    .dn-note { margin: 24px 0 0; padding: 16px 0 0; border-top: 1px solid var(--az-border-2); font: 400 13px/20px var(--az-font); }
     .doc-card {
       background: var(--az-card);
       border-radius: 2px;
@@ -282,37 +228,26 @@
       max-width: 1072px;
     }
     .doc-card h1 { font: 500 32px/40px var(--az-font); letter-spacing: 0; margin: 0 0 24px; }
-    .doc-lede { margin: 0 0 16px; max-width: 72ch; }
-    .count { font: 500 13px/20px var(--az-mono); color: var(--az-text-2); margin: 0 0 16px; }
-    .crumbs {
-      display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline;
-      margin: 0 0 16px;
-      font: 400 13px/20px var(--az-font);
-      color: var(--az-text-2);
-    }
-    .crumbs a { color: var(--az-accent); text-decoration: none; }
-    .crumbs [aria-current="page"] { color: var(--az-text); }
     .doclist { list-style: none; padding: 0; margin: 16px 0 24px; }
     .doclist li { padding: 8px 0; border-bottom: 1px solid var(--az-border-2); }
-    .doc-source {
-      margin: 40px 0 0; padding: 16px 0 0;
-      border-top: 1px solid var(--az-border);
-      font: 400 13px/20px var(--az-font); color: var(--az-text-2);
-    }
     .site-foot { border-top: 0; }
     .site-foot .wrap { padding-top: 32px; padding-bottom: 48px; font: 400 13px/20px var(--az-font); color: var(--az-text-2); }
     body.doc .site-foot .wrap { max-width: 1440px; }
     .site-foot p { margin: 4px 0; max-width: 90ch; }
     .site-foot a { color: var(--az-accent); }
-    @media (max-width: 599px) {
+    @media (max-width: 679px) {
+      html { scroll-padding-top: 16px; }
+      .site-head { position: static; }
+      .site-head nav { gap: 4px; }
+      .brand { flex-basis: 100%; }
+      .spacer { display: none; }
+      .site-head nav a:not(.brand) { padding-inline: 7px; }
       .band .wrap { padding-top: 40px; padding-bottom: 40px; }
       .band h1 { font: 500 32px/40px var(--az-font); }
       .lede { font: 400 18px/28px var(--az-font); }
       .sec { padding: 40px 0; }
     }
     @media (max-width: 959px) {
-      .doc-grid { grid-template-columns: 1fr; gap: 24px; }
-      .doc-nav { position: static; }
       .doc-card { padding: 24px; }
     }
     @media (prefers-reduced-transparency: reduce) {
@@ -323,7 +258,7 @@
       * { transition-duration: 0.01ms !important; }
     }
     @media print {
-      .site-head, .site-foot, .brand-rule, .doc-nav { display: none; }
+      .site-head, .site-foot, .brand-rule { display: none; }
       body, body.doc { color: #000; background: #fff; }
       .doc-card { box-shadow: none; }
     }
@@ -334,20 +269,20 @@
   <div class="brand-rule" aria-hidden="true"></div>
   <header class="site-head">
     <nav aria-label="{{ '站内导航' if lang == 'zh' else 'Site' }}">
-      <a class="brand" href="{{ '/' | url }}"><span aria-hidden="true">🦊</span> Azhou AI Hub</a>
-      <a href="{{ '/skills/' | url }}"{% if page.url == '/skills/' %} aria-current="page"{% endif %}>{{ site.labels[lang].skills }}</a>
-      <a href="{{ '/docs/' | url }}"{% if page.url == '/docs/' %} aria-current="page"{% endif %}>{{ site.labels[lang].docs }}</a>
-      <a href="{{ '/support/' | url }}"{% if page.url == '/support/' %} aria-current="page"{% endif %}>{{ site.labels[lang].support }}</a>
+      <a class="brand" href="{{ site.routes[lang].home | url }}"><span aria-hidden="true">🦊</span> Azhou AI Hub</a>
+      {%- for entry in ["skills", "docs", "support"] %}
+      <a href="{{ site.routes[lang][entry] | url }}"{% if route == entry %} aria-current="page"{% endif %}>{{ site.labels[lang][entry] }}</a>
+      {%- endfor %}
       <span class="spacer"></span>
       <a href="{{ site.githubUrl }}">GitHub</a>
-      {%- if lang == "zh" %}
-      <a href="{{ '/' | url }}" lang="en" hreflang="en">{{ site.labels[lang].switchLang }}</a>
-      {%- else %}
-      <a href="{{ '/zh/' | url }}" lang="zh-CN" hreflang="zh-CN">{{ site.labels[lang].switchLang }}</a>
+      {%- if route %}
+      {%- set other = "en" if lang == "zh" else "zh" %}
+      {%- set otherBcp47 = "en" if other == "en" else "zh-CN" %}
+      <a id="switch-language" href="{{ site.routes[other][route] | url }}" lang="{{ otherBcp47 }}" hreflang="{{ otherBcp47 }}">{{ site.labels[lang].switchLang }}</a>
       {%- endif %}
     </nav>
   </header>
-  <main id="main"{% if bodyClass == "doc" %} class="doc-shell"{% endif %}>
+  <main id="main" tabindex="-1"{% if bodyClass == "doc" %} class="doc-shell"{% endif %}>
     {{ content | safe }}
   </main>
   <div class="brand-rule" aria-hidden="true"></div>
@@ -361,5 +296,15 @@
       <p>Azhou artwork © 小亮 (阿舟 / Azhou), CC BY-NC-ND 4.0</p>
     </div>
   </footer>
+  {%- if route %}
+  <script>
+    const languageLink = document.getElementById("switch-language");
+    function syncLanguageLink() {
+      languageLink.hash = window.location.hash;
+    }
+    window.addEventListener("hashchange", syncLanguageLink);
+    syncLanguageLink();
+  </script>
+  {%- endif %}
 </body>
 </html>

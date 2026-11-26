@@ -35,6 +35,17 @@ Explanation、structured output 与 visualization 都是工具；选择任务所
 
 Review Contract（Outcome、Evidence、Limits、Decision）只是轻量 candidate approach。目前只有一次 discussion example 与用户“更清楚”的反馈，尚无 quantitative proof；可在需要审阅和决策时试用，不强制每个 response 都套用，也不替代现有 Skill 的任务合同。
 
+## 把复杂留给系统
+
+- 可以从任务、当前页面或可靠证据判断的，由系统判断。影响授权、发布范围或数据归属的选择交给人。
+- 当前用不到的高级设置、历史和排查入口，等需要时再展开。
+- 用户已授权、目标已确认的常规操作，直接完成并报告结果。
+- 同一个动作在不同入口使用同样的名称、反馈和风险提示。
+- 每次操作都回应。可逆的操作提供撤销或再次切换，涉及删除和覆盖时先展示影响范围。
+- 刷新和后台更新保住正在阅读的位置、当前选择和未提交输入。出错时保留还能用的数据。
+- 常用操作容易找到。删除、覆盖和变更安装范围需要明确行动。
+- 入口就地说清下一步、操作对象和结果；失败时给出原因和可做的下一步。
+
 ## Rights-controlled assets 的 distribution intent
 
 已确认的产品意图是：在有权控制的 Azhou character/assets 范围内，随 official packages 正常使用；单独 extraction、modification 或 redistribution 需另行 permission。这是 intended distribution boundary，**不是新 license，也不是已生效的追溯限制**。它不撤回已有 grants，不覆盖 upstream / third-party assets，也不表示全部代码或素材都可发布。
