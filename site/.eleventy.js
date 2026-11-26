@@ -17,6 +17,7 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addNunjucksFilter("scriptJson", (data) => JSON.stringify(data).replaceAll("<", "\\u003c"));
   eleventyConfig.on("eleventy.after", async ({ dir }) => {
     const { renderFeed } = await import("./lib/rss.mjs");
+    const { libraryAgentFiles } = await import("./lib/library-agent.mjs");
     const feeds = [
       { path: "/library/", name: "阿舟来源库", entries: library.entries },
       ...library.channels.map((source) => ({
@@ -32,6 +33,11 @@ module.exports = function (eleventyConfig) {
         entries: feed.entries, sourceTitle: (item) => item.sourceName,
         articleUrl: (item) => `${siteUrl}/library/articles/${item.id}/`,
       }));
+    }
+    for (const [path, contents] of Object.entries(libraryAgentFiles(library, siteUrl))) {
+      const file = join(dir.output, path);
+      await mkdir(dirname(file), { recursive: true });
+      await writeFile(file, contents);
     }
     if (library.entries.length) {
       execFileSync(join(__dirname, "node_modules", ".bin", "pagefind"),

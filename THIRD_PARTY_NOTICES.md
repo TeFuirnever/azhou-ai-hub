@@ -8,6 +8,12 @@ The Source Library includes the original [AIHOT listing retry module](https://gi
 
 To refresh the import, choose an immutable AIHOT commit. Copy its listing retry module and root `LICENSE` into `packages/source-library/vendor/aihot/`, compare behavior with the Python adapter, and rerun the Source Library and repository tests. The import consists of the retry module and its license.
 
+## AIHOT Agent Markdown renderer
+
+The site uses the two preamble constants and the `answer` renderer from [AIHOT `publication/agent.ts`](https://github.com/KKKKhazix/AIHOT/blob/97e1f93260bbb98d317dbea9d817eb9b28bbd9e9/packages/backend/src/publication/agent.ts#L36-L58) by 数字生命卡兹克, with its [MIT license](site/vendor/aihot/LICENSE). [The vendored fragment](site/vendor/aihot/agent-answer.mts) uses local bindings for the locale type and site name. [The site adapter](site/lib/library-agent.mjs) supplies Azhou's published metadata, links and reading guidance.
+
+To reproduce this import, retain the local bindings on lines 1–4 of `site/vendor/aihot/agent-answer.mts` and append lines 36–37 and 47–58 of the pinned upstream file without edits. Copy the upstream root `LICENSE` to the same directory. When choosing a new pinned revision, locate these declarations again and run the site tests, public and preview builds, and repository verification.
+
 ## Agent Rules Books
 
 The project includes 14 book-inspired engineering skills by Maciej Ciemborowicz from [ciembor/agent-rules-books at the imported revision](https://github.com/ciembor/agent-rules-books/tree/893a88a6fce3a80c565bf39ac65021b43a8b2990). The upstream [MIT notice](LICENSES/agent-rules-books-MIT.txt) covers the rule files. The [upstream catalog](https://github.com/ciembor/agent-rules-books/blob/893a88a6fce3a80c565bf39ac65021b43a8b2990/README.md#release-matrix) lists the books. Each directory name doubles as its project skill name.
