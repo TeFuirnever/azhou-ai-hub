@@ -63,13 +63,23 @@ layout: base.njk
     catalogLanguageLink.href = translated.href;
   }
   function searchDraftKey() {
-    return "hub-skill-search:" + window.location.pathname + window.location.search;
+    const entry = history.state?.hubSkillSearchEntry;
+    return entry ? "hub-skill-search:" + entry : null;
   }
-  function restoreSearch(restoreDraft) {
-    let draft = null;
-    if (restoreDraft) {
+  function restoreSearch() {
+    if (!searchDraftKey()) {
+      const entry = Array.from(crypto.getRandomValues(new Uint32Array(2))).join("-");
       try {
-        draft = sessionStorage.getItem(searchDraftKey());
+        history.replaceState({ ...history.state, hubSkillSearchEntry: entry }, "");
+      } catch (error) {
+        if (error.name !== "SecurityError") throw error;
+      }
+    }
+    const key = searchDraftKey();
+    let draft = null;
+    if (key) {
+      try {
+        draft = sessionStorage.getItem(key);
       } catch {}
     }
     input.value = draft ?? new URLSearchParams(window.location.search).get("q") ?? "";
@@ -86,14 +96,18 @@ layout: base.njk
       if (current.href !== window.location.href) history.replaceState(history.state, "", current);
     } catch (error) {
       if (error.name !== "SecurityError") throw error;
-      try {
-        sessionStorage.setItem(key, query);
-      } catch {}
+      if (key) {
+        try {
+          sessionStorage.setItem(key, query);
+        } catch {}
+      }
       return;
     }
-    try {
-      sessionStorage.removeItem(key);
-    } catch {}
+    if (key) {
+      try {
+        sessionStorage.removeItem(key);
+      } catch {}
+    }
   }
   input.addEventListener("input", saveSearch);
   clear.addEventListener("click", () => {
@@ -102,10 +116,9 @@ layout: base.njk
     saveSearch();
   });
   window.addEventListener("pageshow", event => {
-    if (event.persisted) restoreSearch(true);
+    if (event.persisted) restoreSearch();
   });
-  window.addEventListener("popstate", () => restoreSearch(true));
-  const navigationType = performance.getEntriesByType("navigation")[0]?.type;
-  restoreSearch(navigationType === "reload" || navigationType === "back_forward");
+  window.addEventListener("popstate", restoreSearch);
+  restoreSearch();
   document.getElementById("skill-filter").hidden = false;
 </script>
