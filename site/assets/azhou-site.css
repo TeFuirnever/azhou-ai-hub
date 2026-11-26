@@ -293,10 +293,7 @@
 .library-results-head h2 { margin: 0; }
 #library-status { margin: 0; color: var(--az-text-2); }
 :is(#library-status, .copy-status)[data-state="error"] { color: var(--az-brand-text); }
-/* Only a search slow enough to announce itself dims the results it is about to replace. */
-#library-results[data-pending] { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) {
-  #library-results { transition: opacity var(--motion-feedback) var(--motion-ease); }
   #library-status:is([data-state="done"], [data-state="empty"], [data-state="error"]) {
     animation: state-arrive var(--motion-feedback) var(--motion-ease);
   }
@@ -335,6 +332,11 @@
   .site-head #switch-language {
     grid-column: 4 / 6; grid-row: 1; justify-self: end; white-space: nowrap;
     min-block-size: 0; padding-block: 9px; margin-block: -9px;
+  }
+  /* Touch keeps the full 44px target; the wider gap and top padding keep it clear of the row below and the viewport edge. */
+  @media (pointer: coarse) {
+    .site-head nav { padding-block-start: .4rem; row-gap: .4rem; }
+    .site-head #switch-language { min-block-size: 44px; padding-block: 12px; margin-block: -12px; }
   }
   .site-head nav a:not(.brand, #switch-language) {
     grid-row: 2;

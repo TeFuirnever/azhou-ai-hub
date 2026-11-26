@@ -295,6 +295,10 @@
       @supports selector(details::details-content) {
         details[open]::details-content { animation: state-arrive var(--motion-change) var(--motion-ease); }
       }
+      /* Without the content pseudo-element the children fade in themselves. */
+      @supports not selector(details::details-content) {
+        details[open] > :not(summary) { animation: state-arrive var(--motion-change) var(--motion-ease); }
+      }
       /* Where both the content pseudo-element and keyword interpolation exist,
          the disclosure opens and closes on its own box. Closing is the shorter
          change. flow-root keeps child margins inside the box so the last frame

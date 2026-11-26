@@ -97,9 +97,7 @@ async function search(updateUrl = true) {
   if (term) {
     results.setAttribute("aria-busy", "true");
     pending = setTimeout(() => {
-      if (current !== sequence) return;
-      setStatus(zh ? "正在搜索…" : "Searching…", "pending");
-      results.dataset.pending = "";
+      if (current === sequence) setStatus(zh ? "正在搜索…" : "Searching…", "pending");
     }, 200);
     try {
       const index = await loadIndex();
@@ -131,7 +129,6 @@ async function search(updateUrl = true) {
   if (title.textContent !== heading) title.textContent = heading;
   renderResults(matches);
   results.removeAttribute("aria-busy");
-  delete results.dataset.pending;
   const count = zh ? `${matches.size} 条结果` : `${matches.size} ${matches.size === 1 ? "result" : "results"}`;
   if (indexUnavailable) {
     const fallback = zh
