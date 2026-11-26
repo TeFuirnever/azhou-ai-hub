@@ -33,7 +33,7 @@ Installable packages and mutable project state have separate roots. Packages rem
 
 The optional integrations under `packages/` retain their native layouts and toolchains. They are separate from independently installable Skills. `scripts/azhou_hub.py integrations` dispatches to the existing adapters; normal Skill setup does not enable them. See the [integration contract](integrations.md) and [package provenance](integration-provenance.md).
 
-Each `hub-package.json` declares current runtime paths. Plans fingerprint their files and executable modes and stage receipt-owned private snapshots under the explicit workspace's `.azhou/hub/`. Original commit fields identify import provenance, not current package contents. Native installers retain ownership of their targets and native state; snapshots support recovery rather than becoming another development source.
+Each `hub-package.json` declares current runtime paths. Both Hub adapters fingerprint those files and their executable modes. The Workbench plan reports the marketplace source and installation instructions. Applying a reviewed pstack install plan stages a receipt-owned recovery snapshot under the explicit workspace's `.azhou/hub/`. Original commit fields identify import provenance. Each native plugin manager owns its installation targets and state.
 
 ## Evaluation boundary
 
