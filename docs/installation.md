@@ -1,5 +1,28 @@
 # Installation
 
+## Choose your agent host
+
+These routes are for individual Hub Skills. Use the skill root your host is configured to scan, and verify discovery in that host after installation.
+
+| Host | Where to start |
+|---|---|
+| Codex | Follow [the first-install walkthrough](#first-install-in-codex). |
+| Claude Code | Use [checkout-assisted setup](#checkout-assisted-setup) with the project's `.claude/skills/` root. |
+| ZCode | Use [checkout-assisted setup](#checkout-assisted-setup) with the project's `.agents/skills/` root. See the [ZCode discovery and load receipt](../evidence/canonical-skill-load-zcode-2026-09-02.md) for the tested version and packages. |
+| MiMo Code | Use [checkout-assisted setup](#checkout-assisted-setup) with the project's `.mimocode/skills/` root. The [MiMo discovery receipt](../evidence/mimocode-skill-discovery-2026-10-26.md) covers Ask Azhou discovery. |
+| DeepSeek Harness | Check the [support matrix](support-matrix.md) for shared user-root evidence. Confirm the host's project installation path before using a project-only install. |
+
+See the [support matrix](support-matrix.md) for the evidence and limits of each route. The [unified component installer](#install-hub-components-in-codex) targets Codex projects.
+
+## Install with an agent
+
+Use this procedure to install one named Hub Skill in the project the user has open.
+
+1. Identify the active agent host and project directory. If either is unclear, ask before changing files. If you cannot inspect or write to the project, give the user the relevant steps from the host guide.
+2. Check whether the host already discovers the requested Skill. If it does, report the installation scope and path when available. Reuse that copy and leave it intact.
+3. If the Skill is missing, use the matching [host route](#choose-your-agent-host). Install only the requested Skill from [Azhou AI Hub](https://github.com/TeFuirnever/azhou-ai-hub) in this project. Keep existing installations, plugins, and host settings intact. If the host has no confirmed project route, explain the limitation and ask before changing scope.
+4. Verify that the host discovers the installed Skill. Report the destination and verification result. If discovery needs a fresh session or cannot be checked, say so and give the next step.
+
 ## First install in Codex
 
 Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Codex and open a terminal in the folder you normally open as a Codex project. You need internet access for installation and Node.js with `npx`. Skills CLI 1.9.0, used to verify this walkthrough, requires Node.js 22.20 or later.
@@ -48,7 +71,7 @@ The existing Skill installation paths below remain independent. For the optional
 
 ## Install or update when a task needs it
 
-If Ask Azhou is missing from a project, follow [First install in Codex](#first-install-in-codex). A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
+If Ask Azhou is missing from a project, [choose the installation route for your agent host](#choose-your-agent-host). A recommendation can point to the missing skill and its installation route when it helps complete the task. Offer an update when you can verify that the active skill is older and the newer revision fixes a relevant problem, adds a capability the user needs, or addresses a security or compatibility issue. Check the installed skill and its source before making that suggestion. A newer Hub release by itself is insufficient because releases can change other packages. Use the installation method that owns the active copy.
 
 ## Install Agent Rules Books
 
