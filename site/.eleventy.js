@@ -11,6 +11,8 @@ module.exports = function (eleventyConfig) {
   eleventyConfig.addPlugin(RenderPlugin);
   eleventyConfig.addPassthroughCopy({
     "../assets/azhou/wallpaper-scene-q-v3.png": "./assets/azhou-workspace.png",
+    "../assets/site/workspace-1672.webp": "./assets/workspace-1672.webp",
+    "../assets/site/workspace-836.webp": "./assets/workspace-836.webp",
     "../assets/cursors/azhou-double-hug/Azhou-Double-Hug-3.6.1.cape": "./assets/Azhou-Double-Hug-3.6.1.cape",
     "./assets": "./assets",
   });
