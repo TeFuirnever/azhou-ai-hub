@@ -53,6 +53,8 @@ For change planning or review with an explicit base and head, use the experiment
 
 ## Verification
 
+Before merging or releasing a user-visible website, Skill, or CLI change to functionality, copy, or interaction, complete the [pre-release experience review](docs/principles.md#上线前体验复核) and record evidence for the final candidate.
+
 Freeze writes during version-bound verification: capture HEAD, index, complete changed-file bytes, runtime and evaluator/input identities before and after. A concurrent edit, commit or rebase invalidates that version-bound verdict even if the command exits zero; preserve it and rerun on a stable isolated revision. Do not rerun an evaluator in its frozen evidence directory. See [worktree verification](docs/worktree-policy.md#single-writer-and-verification-freeze) and [evaluation rules](docs/skill-standard.md#41-evaluation-integrity).
 
 Run before handoff:

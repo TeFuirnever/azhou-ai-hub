@@ -29,6 +29,8 @@ metadata:
 | manifest/exports/bin/worker/安装 | 相应构建及真实构建产物/安装入口 smoke；区分 build 与全仓类型检查 |
 | 真实 provider 行为 | 获授权且环境具备时跑实际场景；不暴露凭据，替身单列 |
 
+官网、Skill 或 CLI 的用户可见功能、文案或交互有变化时，按[上线前体验复核](../../../docs/principles.md#上线前体验复核)走实际入口，并将证据记入 PR 或发布记录。
+
 先看实际脚本与帮助确认参数传递，核对 runner 真正选择了哪些测试。测试选择与覆盖源码选择不同；不能用 zero tests、缩窄 affected source 或放宽阈值伪造通过。依赖图无法发现配置加载、子进程、生成物和外部入口时显式选择其用例。不复制 DSH 专用快照目录、命令或 hook 假设。
 
 已通过的证据只因代码/环境变化、失败或实质新风险重跑，不因随后 commit/push 机械重复。pre-commit fixer 修改了文件则检查新 bytes 并补受影响验证。

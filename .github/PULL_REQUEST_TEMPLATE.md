@@ -13,6 +13,8 @@
 
 - Regression or issue:
 - Deterministic commands and results:
+- [Experience review](https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/principles.md#上线前体验复核) for user-visible website, Skill, or CLI changes:
+  <!-- List the entry points, scenarios, and observed results. -->
 - Benchmark case / attempt:
 - Human or visual reviewer:
 - Paired votes when skill behavior changed:
