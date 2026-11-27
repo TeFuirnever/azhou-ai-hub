@@ -321,38 +321,37 @@
   .gcard { grid-template-columns: minmax(0, 1fr); }
   .skill-name { justify-self: start; }
   .site-head nav {
-    display: grid;
-    grid-template-columns: repeat(5, auto);
+    --nav-row-gap: .2rem;
+    display: flex;
+    flex-wrap: wrap;
     justify-content: space-between;
     align-items: center;
     column-gap: .2rem;
-    row-gap: .2rem;
-  /* The top padding leaves room for a focus ring at the viewport edge. */
-    padding-block: .5rem .4rem;
+    /* The links carry the row gap themselves, so the spacer line below costs no height. */
+    row-gap: 0;
+    /* 13px clears the 8px the brand lifts and the 5px of its focus ring, and does the same
+       for the language link on touch. */
+    padding-block: 13px .4rem;
   }
-  /* Identity and language share the first row and five links share the second. Each link
-     stays on one line at the default text size and wraps only when larger text needs the room.
+  /* Identity and language share the first row. The spacer then breaks the line and the five
+     links flow below it: each stays whole, and one that no longer fits moves to the next row.
      The language link widens its hit area through its margins so the row stays as short as the brand. */
-  .site-head nav .brand { grid-column: 1 / 4; grid-row: 1; justify-self: start; }
+  .site-head nav .brand { order: 1; flex-basis: auto; }
   .site-head #switch-language {
-    grid-column: 4 / 6; grid-row: 1; justify-self: end;
-    min-block-size: 0; padding-block: 9px; margin-block: -9px;
+    order: 2;
+    min-block-size: 0; padding-block: 9px; margin-block: -9px; margin-inline-start: auto;
   }
+  .site-head nav .spacer { display: block; order: 3; flex: 0 0 100%; height: 0; }
   /* Touch keeps the full 44px target; the wider gap and top padding keep it clear of the row below and the viewport edge. */
   @media (pointer: coarse) {
-    /* 11px clears the 12px the target lifts and the 5px of its focus ring. */
-    .site-head nav { padding-block-start: 11px; row-gap: .4rem; }
-    .site-head #switch-language { min-block-size: 44px; padding-block: 12px; margin-block: -12px; }
+    .site-head nav { --nav-row-gap: .4rem; }
+    .site-head #switch-language { min-block-size: 44px; padding-block: 12px; margin-block: -12px; margin-inline-start: auto; }
   }
-  /* Columns may shrink below their longest word, so very large text never widens the page. */
-  .site-head nav > * { min-inline-size: 0; }
   .site-head nav a:not(.brand, #switch-language) {
-    grid-row: 2;
+    order: 4;
     justify-content: center;
+    margin-block-start: var(--nav-row-gap);
     padding-inline: .1rem;
     font-size: clamp(.75rem, 3vw, .9rem);
-    /* A word that no longer fits its column breaks instead of painting into its neighbour. */
-    overflow-wrap: anywhere;
   }
-  .site-head nav .spacer { display: none; }
 }
