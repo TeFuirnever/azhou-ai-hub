@@ -20,7 +20,9 @@ for (const button of document.querySelectorAll("[data-copy]")) {
   let reset;
   let pending;
   let fade;
+  let retiring = false;
   function showStatus(text, state) {
+    retiring = false;
     fade?.cancel();
     status.dataset.state = state;
     if (message.textContent !== text) message.textContent = text;
@@ -28,6 +30,7 @@ for (const button of document.querySelectorAll("[data-copy]")) {
   // Each confirmed attempt answers, including a repeat tap while "Copied" is showing.
   function acknowledge(confirmed) {
     if (!animatable()) return;
+    retiring = false;
     fade?.cancel();
     message.animate([{ opacity: .65 }, { opacity: 1 }], { duration: feedback, easing });
     if (confirmed) {
@@ -39,9 +42,13 @@ for (const button of document.querySelectorAll("[data-copy]")) {
       showStatus("", "");
       return;
     }
+    retiring = true;
     fade = status.animate([{ opacity: 1 }, { opacity: 0 }], { duration: change, easing, fill: "forwards" });
-    fade.finished.then(() => showStatus("", ""), () => {});
+    fade.finished.then(() => { if (retiring) showStatus("", ""); }, () => {});
   }
+  motion.addEventListener("change", () => {
+    if (motion.matches && retiring) showStatus("", "");
+  });
   button.addEventListener("click", async () => {
     const current = ++attempt;
     clearTimeout(reset);

@@ -516,6 +516,22 @@
 .gcard-t { color: var(--az-text); font-size: 1.025rem; font-weight: 600; }
 .gcard-d { color: var(--az-text-2); font-size: .92rem; }
 .skill-name { justify-self: end; align-self: center; margin-block-start: 0; }
+.skill-catalog-row > summary {
+  position: relative;
+  width: auto;
+  margin: 0;
+  padding: 0 1rem 0 0;
+}
+.skill-catalog-row > summary::before {
+  position: absolute;
+  inset-block-start: 1.95rem;
+  inset-inline-end: .25rem;
+  margin: 0;
+}
+.skill-catalog-row > summary .gcard::before { display: none; }
+.skill-catalog-actions { padding: 0 .7rem .75rem; max-inline-size: 78ch; }
+.skill-catalog-actions p { margin: .35rem 0 .65rem; }
+.skill-catalog-actions pre { margin: .5rem 0 .65rem; padding: .75rem; }
 a:has(.doc-ext-arrow) { text-decoration: none; }
 .doc-link-text {
   text-decoration: underline;
@@ -581,7 +597,8 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
     background-color: var(--az-hover-fill, var(--az-bg-3));
   }
   .capability-link:hover strong,
-  .gcard:hover .gcard-t {
+  .gcard:hover .gcard-t,
+  .skill-catalog-row > summary:hover .gcard-t {
     color: var(--az-accent);
   }
 
@@ -747,8 +764,11 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: .65rem;
+  margin-block-start: .55rem;
 }
 .library-filters label { display: grid; gap: .25rem; color: var(--az-text-2); font-size: .9rem; }
+.library-reset { justify-self: start; }
+.library-query input::-webkit-search-cancel-button { appearance: none; }
 .edition-list, .channel-list { padding: 0; margin: 0; list-style: none; }
 .edition-item { border-block-start: 1px solid var(--az-border-2); padding: 1rem .55rem; }
 .edition-item:last-child { border-block-end: 1px solid var(--az-border-2); }

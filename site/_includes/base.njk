@@ -297,11 +297,15 @@
     [hidden] { display: none !important; }
     .sec { padding: 60px 0; }
     .copy-actions {
+      display: grid; grid-template-columns: max-content minmax(0, 1fr);
+      align-items: center; justify-items: start; gap: .25rem .75rem;
+    }
+    .term-bar .copy-actions {
       display: inline-flex; align-items: center;
     }
     .copy-status {
       display: inline-flex; align-items: center; gap: .4em;
-      min-block-size: 1.5rem; color: var(--az-term-muted);
+      min-block-size: 1.5rem; color: var(--az-text-2);
       font-size: 13px; line-height: 1.3;
       opacity: 0;
     }
@@ -310,12 +314,19 @@
     .copy-status[data-state="error"] { opacity: 1; }
     .copy-check, .copy-err { display: none; flex: none; }
     .copy-status[data-state="success"] .copy-check { display: inline-block; }
-    .copy-status[data-state="success"] { color: #ff8a57; }
+    .copy-status[data-state="success"] { color: var(--az-accent); }
     .copy-status[data-state="error"] .copy-err { display: inline-block; }
-    .copy-status[data-state="error"] { color: #ff7b72; }
+    .copy-status[data-state="error"] { color: var(--az-danger); }
+    .term-bar .copy-status { color: var(--az-term-muted); }
+    .term-bar .copy-status[data-state="success"] { color: #ff8a57; }
+    .term-bar .copy-status[data-state="error"] { color: #ff7b72; }
     .copy-check path {
       stroke-dasharray: 24;
       stroke-dashoffset: 0;
+    }
+    @media (max-width: 599px) {
+      .copy-actions:not(.term-bar .copy-actions) { grid-template-columns: minmax(0, 1fr); }
+      .copy-status:not(.term-bar .copy-status) { min-block-size: 3rem; }
     }
     details summary {
       cursor: pointer; width: fit-content; padding: .5rem .45rem; margin-inline: -.45rem;
@@ -814,7 +825,8 @@
         fade.finished.then(() => { if (retiring) clearMarkState(); }, () => {});
       }
       function landingBox(target) {
-        return target.matches(".cardgrid > li") ? target.firstElementChild : target;
+        if (!target.matches(".cardgrid > li")) return target;
+        return target.querySelector(":scope > details > summary") ?? target.firstElementChild;
       }
       function fragmentTarget(hash) {
         try {
