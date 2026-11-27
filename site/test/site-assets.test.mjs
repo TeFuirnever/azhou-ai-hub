@@ -23,6 +23,12 @@ test("extracted Azhou cursor PNGs exist with 1x (32px) and 2x (64px) dimensions"
   }
 });
 
+test("Azhou avatar and Apple touch icon PNGs match their advertised sizes", () => {
+  const artwork = join(siteDir, "..", "assets", "site");
+  assert.deepEqual(pngSize(join(artwork, "azhou-avatar.png")), { width: 64, height: 64 });
+  assert.deepEqual(pngSize(join(artwork, "apple-touch-icon.png")), { width: 180, height: 180 });
+});
+
 test("homepage preserves required section anchors", () => {
   const home = readFileSync(join(siteDir, "_includes", "home.njk"), "utf8");
   for (const anchor of ["install", "cursor-theme", "capabilities", "sources"]) {

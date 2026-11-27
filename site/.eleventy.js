@@ -13,6 +13,8 @@ module.exports = function (eleventyConfig) {
     "../assets/azhou/wallpaper-scene-q-v3.png": "./assets/azhou-workspace.png",
     "../assets/site/workspace-1672.webp": "./assets/workspace-1672.webp",
     "../assets/site/workspace-836.webp": "./assets/workspace-836.webp",
+    "../assets/site/azhou-avatar.png": "./assets/azhou-avatar.png",
+    "../assets/site/apple-touch-icon.png": "./assets/apple-touch-icon.png",
     "../assets/cursors/azhou-double-hug/Azhou-Double-Hug-3.6.1.cape": "./assets/Azhou-Double-Hug-3.6.1.cape",
     "./assets": "./assets",
   });
