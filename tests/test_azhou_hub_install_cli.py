@@ -41,13 +41,21 @@ class ComponentInstallCliTest(unittest.TestCase):
         self.assertEqual([], list(self.project.iterdir()))
 
     def test_book_selection_installs_only_book_packages(self) -> None:
-        self.cli("--component", "agent-rules-books")
+        report = self.cli("--component", "agent-rules-books")
+        self.assertIn("Open a new Codex chat", report)
         self.assertEqual(set(self.books), {path.name for path in self.target.iterdir() if path.name != ".azhou"})
         for name in self.books:
             source = ROOT / ".agents" / "skills" / name
             for path in source.iterdir():
                 self.assertEqual(path.read_bytes(), (self.target / name / path.name).read_bytes())
         self.assertFalse(self.home.exists())
+
+    def test_current_skills_finish_without_confirmation(self) -> None:
+        args = ("--component", "agent-rules-books")
+        self.cli(*args)
+        report = self.cli(*args, answer="")
+        self.assertIn("The selected skills are already installed. No files changed.", report)
+        self.assertNotIn("Apply this installation plan?", report)
 
     def test_all_installs_native_plugin_and_reuses_skill_copies(self) -> None:
         args = ("--all", "--codex-bin", str(self.binary))

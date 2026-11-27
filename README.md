@@ -28,8 +28,6 @@ Maintainers can use the [Source Library tools](packages/source-library/README.md
 
 ## First install in Codex
 
-To install Hub Skills, pstack and Agent Rules Books together or choose components individually, use the [unified Codex installer](docs/installation.md#install-hub-components-in-codex).
-
 Sign in to Codex and use Node.js 22.20 or later. Run the command from your project folder and confirm the project install when prompted. On Windows, use Git Bash for the [shell examples](docs/installation.md#windows-notes).
 
 ~~~bash
@@ -43,6 +41,8 @@ Open a new Codex chat in that project. Type `$super-ask-azhou` to check that Cod
 Expect a recommendation for `super-archify`. If Codex cannot find Ask Azhou, [check the installation](docs/installation.md#if-codex-cannot-find-ask-azhou). For an existing installation, see [check, update, or uninstall](docs/installation.md#upgrade-or-uninstall).
 
 When you want to use a recommended skill, follow the [single-skill install guide](docs/installation.md#package-manager-install). Use [one installation method per skill](docs/installation.md#one-path-rule). The four `super-azhou-*` skills also require a local checkout.
+
+To install Hub Skills, pstack and Agent Rules Books together or choose components individually, use the [unified Codex installer](docs/installation.md#install-hub-components-in-codex). If you select only skills that already match the installed copies, it exits without asking for confirmation.
 
 The walkthrough above targets Codex. For the other maintained harnesses — Claude Code, MiMo Code (`mimo`), DeepSeek Harness (`dsh`) and zcode — the verified install route and evidence per harness live in the [support matrix](docs/support-matrix.md), and a repository checkout can install via [checkout-assisted setup](docs/installation.md#checkout-assisted-setup) or [manual copy](docs/installation.md#manual-copy).
 

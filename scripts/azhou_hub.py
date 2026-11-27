@@ -1011,6 +1011,7 @@ def install_components(args: argparse.Namespace, *, root: Path) -> int:
     selected = set(INSTALL_COMPONENTS if args.all else args.component)
     skill_plan = None
     pstack_plan = None
+    copies_needed = False
     completed_skills = False
 
     def check_skill_target() -> None:
@@ -1042,6 +1043,7 @@ def install_components(args: argparse.Namespace, *, root: Path) -> int:
                 print(f"  {row['name']}: {row['status']}. {row['details']}")
             if skill_plan["status"] != "dry_run":
                 raise PackageError(skill_plan.get("error", "resolve the skill conflicts shown above"))
+            copies_needed = any(row["status"] == "planned" for row in skill_plan["skills"])
         if "pstack" in selected:
             executable = args.codex_bin or shutil.which("codex")
             if not executable:
@@ -1058,15 +1060,18 @@ def install_components(args: argparse.Namespace, *, root: Path) -> int:
         if args.dry_run:
             print("No files changed.")
             return 0
+        if not copies_needed and pstack_plan is None:
+            print("The selected skills are already installed. No files changed.")
+            return 0
         try:
             choice = input("Apply this installation plan? [y/N] ")
         except EOFError:
             choice = ""
         if choice.strip().lower() not in {"y", "yes"}:
-            print("Installation canceled.")
+            print("Installation canceled. No files changed.")
             return 1
 
-        if skill_plan and any(row["status"] == "planned" for row in skill_plan["skills"]):
+        if copies_needed:
             check_skill_target()
             with _mutation_lock(target):
                 installed = setup_skills(**skill_args, dry_run=False, plan_id=skill_plan["planId"])
@@ -1081,6 +1086,8 @@ def install_components(args: argparse.Namespace, *, root: Path) -> int:
             launch = ["env", f"CODEX_HOME={pstack_plan['codex_home']}", pstack_plan["codex_bin"], "-C", str(workspace)]
             print(f"Open a Codex session with pstack using:\n  {shlex.join(launch)}")
         print("Selected components are installed.")
+        if completed_skills and pstack_plan is None:
+            print("Open a new Codex chat in the project to use the installed skills.")
         return 0
     except (PackageError, integration_common.IntegrationError, OSError, UnicodeError) as exc:
         print(f"Install blocked: {exc}", file=sys.stderr)
