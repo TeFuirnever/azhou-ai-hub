@@ -416,14 +416,30 @@
     </div>
   </footer>
   <script>
+    function landingPosition(target) {
+      const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
+      const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+      const limit = document.documentElement.scrollHeight - innerHeight;
+      return Math.max(0, Math.min(limit, scrollY + target.getBoundingClientRect().top - pad - margin));
+    }
     {%- if route %}
     if ("ResizeObserver" in window) {
       let previousHeight;
       new ResizeObserver(([entry]) => {
         const height = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight;
         if (height === previousHeight) return;
+        let fragmentTarget;
+        if (previousHeight === undefined && performance.getEntriesByType("navigation")[0]?.type === "navigate" && location.hash) {
+          try { fragmentTarget = document.getElementById(decodeURIComponent(location.hash.slice(1))); } catch { fragmentTarget = null; }
+        }
+        const initialScroll = scrollY;
+        const initialLanding = fragmentTarget ? landingPosition(fragmentTarget) : null;
         previousHeight = height;
         document.documentElement.style.setProperty("--site-header-height", height + "px");
+        if (fragmentTarget && Math.abs(initialLanding - initialScroll) < 2) {
+          const corrected = landingPosition(fragmentTarget);
+          if (Math.abs(corrected - scrollY) >= 2) scrollTo(0, corrected);
+        }
       }).observe(document.querySelector(".site-head"), { box: "border-box" });
     }
     const languageLink = document.getElementById("switch-language");
@@ -545,7 +561,7 @@
         }, () => {});
       }
       window.addEventListener("hashchange", highlightTarget);
-      for (const type of ["pointerdown", "keydown", "wheel", "touchstart"]) {
+      for (const type of ["pointerdown", "keydown", "wheel", "touchstart", "input", "click"]) {
         window.addEventListener(type, dismissMark, { capture: true, passive: true });
       }
       motion.addEventListener("change", highlightTarget);
@@ -563,10 +579,7 @@
         cancelAnimationFrame(current.frame);
       }
       function landing(target) {
-        const pad = parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop) || 0;
-        const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
-        const limit = document.documentElement.scrollHeight - innerHeight;
-        const rest = Math.max(0, Math.min(limit, scrollY + target.getBoundingClientRect().top - pad - margin));
+        const rest = landingPosition(target);
         // Engines round fractional scroll offsets differently; land on a device pixel.
         return Math.round(rest * devicePixelRatio) / devicePixelRatio;
       }
