@@ -171,21 +171,21 @@ layout: base.njk
           · <a href="{{ cursorGuide }}#restore">{{ '恢复系统指针' if zh else 'Restore system cursors' }}</a></p>
           <div class="cursor-demo-grid">
             <div class="cursor-demo-tile cursor-demo-arrow">
-              <img class="cursor-demo-icon" src="{{ '/assets/cursors/arrow@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true">
+              <img class="cursor-demo-icon" src="{{ '/assets/cursors/arrow@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true" draggable="false">
               <span class="cursor-demo-label">{{ '箭头' if zh else 'Arrow' }}</span>
             </div>
             <div class="cursor-demo-tile cursor-demo-pointer">
-              <img class="cursor-demo-icon" src="{{ '/assets/cursors/pointer@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true">
+              <img class="cursor-demo-icon" src="{{ '/assets/cursors/pointer@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true" draggable="false">
               <span class="cursor-demo-label">{{ '链接' if zh else 'Link' }}</span>
             </div>
             <div class="cursor-demo-tile cursor-demo-text">
-              <img class="cursor-demo-icon" src="{{ '/assets/cursors/text@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true">
+              <img class="cursor-demo-icon" src="{{ '/assets/cursors/text@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true" draggable="false">
               <span class="cursor-demo-label">{{ '文本' if zh else 'Text' }}</span>
             </div>
             <div class="cursor-demo-tile cursor-demo-grab" id="cursor-demo-grab">
               <span class="cursor-demo-stack" aria-hidden="true">
-                <img class="cursor-demo-icon cursor-icon-open" src="{{ '/assets/cursors/grab@2x.png' | url }}" width="32" height="32" alt="">
-                <img class="cursor-demo-icon cursor-icon-hug" src="{{ '/assets/cursors/grabbing@2x.png' | url }}" width="32" height="32" alt="">
+                <img class="cursor-demo-icon cursor-icon-open" src="{{ '/assets/cursors/grab@2x.png' | url }}" width="32" height="32" alt="" draggable="false">
+                <img class="cursor-demo-icon cursor-icon-hug" src="{{ '/assets/cursors/grabbing@2x.png' | url }}" width="32" height="32" alt="" draggable="false">
               </span>
               <span class="cursor-demo-label">{{ '抓取（按住）' if zh else 'Grab (hold)' }}</span>
             </div>
@@ -253,14 +253,14 @@ layout: base.njk
 
     if (stage) {
       stage.addEventListener("pointerenter", (event) => {
-        if (event.pointerType !== "mouse" || !glow || motion.matches) return;
+        if (event.pointerType === "touch" || !glow || motion.matches) return;
         stageRect = stage.getBoundingClientRect();
         glow.style.setProperty("--mx", (event.clientX - stageRect.left) + "px");
         glow.style.setProperty("--my", (event.clientY - stageRect.top) + "px");
         glow.setAttribute("data-lit", "");
       });
       stage.addEventListener("pointermove", (event) => {
-        if (event.pointerType !== "mouse" || !glow || motion.matches) return;
+        if (event.pointerType === "touch" || !glow || motion.matches) return;
         lastStagePos = { x: event.clientX, y: event.clientY };
         if (stageFrame) return;
         stageFrame = requestAnimationFrame(() => {
@@ -280,14 +280,17 @@ layout: base.njk
     }
 
     if (scene) {
+      let enterTimer = 0;
       scene.addEventListener("pointerenter", (event) => {
-        if (event.pointerType !== "mouse" || !finePointer.matches || motion.matches) return;
+        if (event.pointerType === "touch" || !finePointer.matches || motion.matches) return;
         sceneRect = scene.getBoundingClientRect();
+        clearTimeout(enterTimer);
         scene.classList.remove("is-settling");
-        scene.classList.add("is-tilting");
+        scene.classList.add("is-entering", "is-tilting");
+        enterTimer = setTimeout(() => scene.classList.remove("is-entering"), 120);
       });
       scene.addEventListener("pointermove", (event) => {
-        if (event.pointerType !== "mouse" || !finePointer.matches || motion.matches) return;
+        if (event.pointerType === "touch" || !finePointer.matches || motion.matches) return;
         lastScenePos = { x: event.clientX, y: event.clientY };
         if (sceneFrame) return;
         sceneFrame = requestAnimationFrame(() => {
@@ -302,9 +305,10 @@ layout: base.njk
         });
       }, { passive: true });
       const resetTilt = () => {
+        clearTimeout(enterTimer);
         cancelAnimationFrame(sceneFrame);
         sceneFrame = 0;
-        scene.classList.remove("is-tilting");
+        scene.classList.remove("is-tilting", "is-entering");
         scene.classList.add("is-settling");
         scene.style.setProperty("--rx", "0deg");
         scene.style.setProperty("--ry", "0deg");
@@ -351,13 +355,16 @@ layout: base.njk
       let pending;
       let fade;
       let pathAnim;
+      let retiring = false;
       function showStatus(text, state) {
+        retiring = false;
         fade?.cancel();
         status.dataset.state = state;
         if (message.textContent !== text) message.textContent = text;
       }
       function acknowledge(confirmed) {
         if (!animatable()) return;
+        retiring = false;
         fade?.cancel();
         pathAnim?.cancel();
         message.animate([{ opacity: .55 }, { opacity: 1 }], { duration: feedback, easing });
@@ -373,13 +380,15 @@ layout: base.njk
           showStatus("", "");
           return;
         }
+        retiring = true;
         fade = status.animate([{ opacity: 1 }, { opacity: 0 }], { duration: change, easing, fill: "forwards" });
-        fade.finished.then(() => showStatus("", ""), () => {});
+        fade.finished.then(() => { if (retiring) showStatus("", ""); }, () => {});
       }
       motion.addEventListener("change", () => {
         if (motion.matches) {
-          fade?.cancel();
           pathAnim?.cancel();
+          if (retiring) showStatus("", "");
+          else fade?.cancel();
         }
       });
       button.addEventListener("click", async () => {

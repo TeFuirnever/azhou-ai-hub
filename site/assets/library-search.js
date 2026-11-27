@@ -140,7 +140,7 @@ async function search(updateUrl = true) {
   if (title.textContent !== heading) title.textContent = heading;
   renderResults(matches);
   results.removeAttribute("aria-busy");
-  if (clearButton) clearButton.hidden = !(filtered && !matches.size);
+  if (clearButton) clearButton.hidden = !filtered;
   const count = zh ? `${matches.size} 条结果` : `${matches.size} ${matches.size === 1 ? "result" : "results"}`;
   if (indexUnavailable) {
     const fallback = zh

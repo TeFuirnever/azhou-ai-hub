@@ -90,10 +90,13 @@
   .grid-pad, .grid-heading-cell, .grid-band-head {
     padding-inline: clamp(1.5rem, 3vw, 2.75rem);
   }
-  /* Focus rings on flush grid cells stay inside bounds and above neighbor borders. */
+  /* Keep focus rings above neighbor borders; inset only on flush full-cell links/headings. */
   .grid-frame :where(a, button, summary, input, select, [tabindex]):focus-visible {
     position: relative;
     z-index: 2;
+    outline-offset: 2px;
+  }
+  .grid-frame :where(.capability-link, .grid-heading-cell > h2):focus-visible {
     outline-offset: -3px;
   }
 }
@@ -126,7 +129,7 @@
   justify-content: flex-start;
   contain: layout style paint;
 }
-.hero-field::after {
+.hero-field::after, .hero-field-glow::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -200,7 +203,6 @@
   align-items: center;
   justify-content: center;
   padding: clamp(1.25rem, 3vw, 2.5rem);
-  perspective: 1200px;
 }
 .home-scene {
   margin: 0;
@@ -211,6 +213,9 @@
   padding: clamp(.4rem, .85vw, .75rem);
   transform: perspective(1200px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   transform-style: preserve-3d;
+}
+.home-scene.is-entering {
+  transition: transform var(--motion-feedback) var(--motion-ease);
 }
 .home-scene.is-settling {
   transition: transform var(--motion-expand) var(--motion-move);
@@ -340,6 +345,9 @@
   margin: 16px 0 24px;
   overflow: hidden;
 }
+.term-panel :focus-visible {
+  outline-color: #ff8a57;
+}
 .term-bar {
   display: flex;
   flex-wrap: wrap;
@@ -388,6 +396,9 @@
   background: var(--ed-bg);
   color: var(--ed-ink);
   padding: clamp(1.5rem, 3.2vw, 2.5rem);
+}
+.edition-feature :focus-visible {
+  outline-color: var(--ed-accent);
 }
 @media (prefers-color-scheme: dark) {
   .edition-feature {
@@ -455,12 +466,15 @@
   inline-size: 32px;
   block-size: 32px;
   image-rendering: auto;
+  pointer-events: none;
+  -webkit-user-drag: none;
 }
 .cursor-demo-stack {
   position: relative;
   display: inline-block;
   inline-size: 32px;
   block-size: 32px;
+  pointer-events: none;
 }
 .cursor-demo-stack .cursor-icon-hug {
   position: absolute;
@@ -512,6 +526,10 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
 @media (hover: hover) and (pointer: fine) {
   a:hover .doc-link-text, a:active .doc-link-text { text-decoration-color: currentColor; }
 }
+.doc-link-note {
+  color: var(--az-text-2);
+  text-decoration: none;
+}
 .doc-ext-arrow {
   display: inline-block;
   margin-inline-start: .15em;
@@ -524,15 +542,15 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
 @media (hover: hover) and (pointer: fine) {
   .btn-primary { --az-hover-fill: color-mix(in srgb, var(--az-btn-bg) 82%, var(--az-accent) 18%); }
   .term-copy-btn { --az-hover-fill: var(--az-term-hover); }
-  :is(.gcard, .capability-link, .channel-list a, .edition-item, .doclist li) { --az-hover-fill: var(--az-bg-3); }
+  :is(.gcard, .capability-link, .channel-list a, .edition-item) { --az-hover-fill: var(--az-bg-3); }
   .cursor-demo-tile { --az-hover-fill: var(--az-bg-2); }
   .gcard.hub-arrived { --az-hover-fill: var(--az-accent-surface); }
 
-  :is(.site-head nav a, .btn, .gcard, .capability-link, summary, .channel-list a, .edition-item, .doclist li, .cursor-demo-tile) {
+  :is(.site-head nav a, .btn, .gcard, .capability-link, summary, .channel-list a, .edition-item, .cursor-demo-tile) {
     position: relative;
     isolation: isolate;
   }
-  :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .doclist li, .cursor-demo-tile)::before,
+  :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .cursor-demo-tile)::before,
   summary::after {
     content: "";
     position: absolute;
@@ -558,7 +576,7 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
     background: color-mix(in srgb, var(--ed-btn-bg) 86%, var(--ed-accent) 14%);
     border-color: color-mix(in srgb, var(--ed-btn-bg) 86%, var(--ed-accent) 14%);
   }
-  :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .doclist li, .cursor-demo-tile):hover:not(:active, :disabled)::before,
+  :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .cursor-demo-tile):hover:not(:active, :disabled)::before,
   summary:hover:not(:active)::after {
     background-color: var(--az-hover-fill, var(--az-bg-3));
   }
@@ -568,7 +586,7 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .doclist li, .cursor-demo-tile)::before,
+    :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .cursor-demo-tile)::before,
     summary::after {
       transition: background-color var(--motion-feedback) var(--motion-ease);
     }
@@ -585,15 +603,15 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
     .doclist a:hover .doc-ext-arrow {
       transform: translate(3px, -3px);
     }
-    :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .doclist li):is(:active, :disabled)::before,
+    :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .cursor-demo-tile):is(:active, :disabled)::before,
     summary:active::after {
       transition: none;
     }
   }
 }
 
-/* Azhou custom cursors (fine pointer devices only; relative to this stylesheet) */
-@media (hover: hover) and (pointer: fine) {
+/* Azhou custom cursors (fine pointer devices only; preserve OS pointers in forced-colors) */
+@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
   html {
     cursor: url("cursors/arrow.png") 3 3, auto;
     cursor: -webkit-image-set(url("cursors/arrow.png") 1x, url("cursors/arrow@2x.png") 2x) 3 3, auto;
@@ -778,11 +796,11 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
 .article-toc summary { cursor: pointer; font-weight: 600; min-block-size: 2.1rem; margin-inline: -.35rem; padding-inline: .35rem; }
 .article-toc ol { padding-inline-start: 1.15rem; margin-block: .2rem .6rem; }
 .article-toc li + li { margin-block-start: .4rem; }
+.article-toc a { padding-inline-start: .5rem; margin-inline-start: -.5rem; }
 .article-toc a[aria-current="location"] {
   font-weight: 600;
   color: var(--az-text);
   box-shadow: inset 2px 0 0 var(--az-accent);
-  padding-inline-start: .45rem;
   text-decoration: none;
 }
 .article-copy { max-inline-size: 68ch; min-inline-size: 0; }
@@ -796,10 +814,11 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
 .library-results-head h2 { margin: 0; }
 #library-status { margin: 0; color: var(--az-text-2); }
 #library-clear-filters { margin-block-start: .75rem; }
-#library-status[data-state="error"], .copy-status[data-state="error"] { color: var(--az-danger); }
+#library-status[data-state="error"] { color: var(--az-danger); }
 #library-results[aria-busy="true"] { opacity: .55; }
 @media (prefers-reduced-motion: no-preference) {
-  #library-results { transition: opacity var(--motion-change) var(--motion-ease) 120ms; }
+  #library-results { transition: opacity var(--motion-change) var(--motion-ease); }
+  #library-results[aria-busy="true"] { transition-delay: 120ms; }
   #library-status:is([data-state="pending"], [data-state="done"], [data-state="empty"], [data-state="error"]),
   #skill-count[data-state="empty"],
   #skill-list.is-resetting,
@@ -807,6 +826,23 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
   [data-excerpt] {
     animation: state-arrive var(--motion-change) var(--motion-ease);
   }
+}
+@media (forced-colors: active) {
+  .grid-frame, .grid-row, .grid-band-head, .cursor-demo-grid { border-color: CanvasText; }
+  .grid-cell, .edition-feature, .cursor-demo-tile { outline: 1px solid CanvasText; }
+  .article-toc a[aria-current="location"] { text-decoration: underline; box-shadow: none; }
+}
+@media print {
+  .edition-feature {
+    --ed-bg: transparent;
+    --ed-ink: #000;
+    --ed-muted: #333;
+    --ed-accent: #000;
+    border: 1px solid #000;
+  }
+}
+@media (max-width: 24rem) {
+  .library-filters { grid-template-columns: minmax(0, 1fr); }
 }
 @media (min-width: 62rem) {
   .article-layout:has(.article-toc) { grid-template-columns: minmax(12rem, 1fr) minmax(0, 3fr); }
