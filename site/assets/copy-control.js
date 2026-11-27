@@ -1,6 +1,7 @@
 const zh = document.documentElement.lang === "zh-CN";
 
-for (const button of document.querySelectorAll("[data-copy]")) {
+for (const button of document.querySelectorAll(".copy-actions [data-copy]")) {
+  if (button.closest(".term-bar")) continue;
   if (!navigator.clipboard?.writeText) continue;
   const actions = button.parentElement;
   const status = actions.querySelector('[role="status"]');

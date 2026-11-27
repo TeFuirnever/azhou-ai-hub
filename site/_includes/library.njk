@@ -2,11 +2,12 @@
 layout: base.njk
 ---
 {% set zh = lang == 'zh' %}
+{% from "rss-subscribe.njk" import rssSubscribe %}
 <section class="library-intro">
   <div class="wrap">
     <div class="library-section-head">
       <h1>{{ '阿舟来源库' if zh else 'Azhou Source Library' }}</h1>
-      <a class="library-feed" href="{{ '/library/rss.xml' | url }}">{{ '全库 RSS' if zh else 'All RSS' }}</a>
+      {{ rssSubscribe('rss-all', site.siteUrl ~ '/library/rss.xml', zh, '阿舟来源库' if zh else 'Azhou Source Library') }}
     </div>
     {% if sourceLibrary.entries.length %}
     <p class="lede">{{ '搜索 AI 官方文章，阅读已获准的原文归档，或订阅选文更新。' if zh else 'Search official AI articles, read licensed archives, or subscribe to new selections.' }}</p>
@@ -63,8 +64,9 @@ layout: base.njk
     <h2 id="sources-title">{{ '按来源浏览' if zh else 'Browse sources' }}</h2>
     <ul class="channel-list">
       {% for source in sourceLibrary.channels %}
-      <li><a href="{{ (site.routes[lang].library ~ 'sources/' ~ source.id ~ '/') | url }}">{{ source.name | escape }}</a><a href="{{ ('/library/sources/' ~ source.id ~ '/rss.xml') | url }}" aria-label="{{ source.name | escape }} RSS">RSS</a></li>
+      <li><a href="{{ (site.routes[lang].library ~ 'sources/' ~ source.id ~ '/') | url }}">{{ source.name | escape }}</a>{{ rssSubscribe('rss-' ~ source.id, site.siteUrl ~ '/library/sources/' ~ source.id ~ '/rss.xml', zh, source.name, true) }}</li>
       {% endfor %}
     </ul>
   </aside>
 </div>
+<script type="module" src="{{ '/assets/copy-control.js' | url }}"></script>

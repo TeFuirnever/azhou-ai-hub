@@ -4,6 +4,7 @@ layout: base.njk
 
 {% set zh = lang == 'zh' %}
 {% from "install-actions.njk" import installActions %}
+{% from "rss-subscribe.njk" import rssSubscribe %}
 {% macro termBlock(source, label, commandText) %}
 <div class="term-panel">
   <div class="term-bar">
@@ -84,7 +85,7 @@ layout: base.njk
     <div class="grid-cell grid-band-head">
       <div class="library-section-head" data-reveal style="--reveal-i: 0">
         <h2 id="sources">{{ '阿舟来源库' if zh else 'Azhou Source Library' }}</h2>
-        <a href="{{ '/library/rss.xml' | url }}">{{ '订阅 RSS' if zh else 'Subscribe by RSS' }}</a>
+        {{ rssSubscribe('rss-all', site.siteUrl ~ '/library/rss.xml', zh, '阿舟来源库' if zh else 'Azhou Source Library') }}
       </div>
     </div>
     {% if sourceLibrary.entries.length %}
@@ -119,7 +120,7 @@ layout: base.njk
       <ul class="channel-list home-sources">
         {% for source in sourceLibrary.channels %}
         <li><a href="{{ (site.routes[lang].library ~ 'sources/' ~ source.id ~ '/') | url }}">{{ source.name | escape }}</a>
-          <a href="{{ ('/library/sources/' ~ source.id ~ '/rss.xml') | url }}" aria-label="{{ source.name | escape }} RSS">RSS</a></li>
+          {{ rssSubscribe('rss-' ~ source.id, site.siteUrl ~ '/library/sources/' ~ source.id ~ '/rss.xml', zh, source.name, true) }}</li>
         {% endfor %}
       </ul>
     </div>
@@ -340,7 +341,7 @@ layout: base.njk
     const copiedText = {{ ('已复制' if zh else 'Copied') | dump | safe }};
     const failedText = {{ ('复制失败。请手动复制下方内容。' if zh else 'Copy failed. Select and copy the text below.') | dump | safe }};
 
-    for (const button of document.querySelectorAll("[data-copy]")) {
+    for (const button of document.querySelectorAll(".term-bar [data-copy]")) {
       if (!navigator.clipboard?.writeText) continue;
       const actions = button.parentElement;
       const bar = actions.parentElement;
@@ -416,3 +417,4 @@ layout: base.njk
     }
   })();
 </script>
+<script type="module" src="{{ '/assets/copy-control.js' | url }}"></script>
