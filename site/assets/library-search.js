@@ -7,7 +7,14 @@ const byId = new Map(entries.map((entry) => [entry.id, entry]));
 const rows = new Map(Array.from(results.children, (row) => [row.dataset.entryId, row]));
 const zh = form.dataset.locale === "zh";
 const query = form.elements.namedItem("q");
+const endDate = form.elements.namedItem("to");
+const filterDetails = document.getElementById("library-filter-details");
+const reset = document.getElementById("library-reset");
+const filterNames = ["source", "kind", "from", "to"];
 const languageLink = document.getElementById("switch-language");
+const languageDraftKey = "hub-library-language-draft";
+let appliedQuery = "";
+let cleared;
 let sequence = 0;
 let indexReady;
 let pending;
@@ -64,28 +71,84 @@ function setStatus(text, state = "") {
   if (status.textContent !== text) status.textContent = text;
 }
 
+function filterValues() {
+  return filterNames.map(name => form.elements.namedItem(name).value);
+}
+
+function restoreFilters(values) {
+  filterNames.forEach((name, index) => {
+    form.elements.namedItem(name).value = values[index] ?? "";
+  });
+}
+
+function syncReset() {
+  const label = cleared ? reset.dataset.undo : reset.dataset.clear;
+  if (reset.textContent !== label) reset.textContent = label;
+  reset.hidden = !cleared && !query.value && !appliedQuery && !filterValues().some(Boolean);
+  if (reset.hidden && document.activeElement === reset) query.focus({ preventScroll: true });
+}
+
+function rememberDraft() {
+  const draft = query.value;
+  const current = history.state?.librarySearchDraft;
+  if (draft === (current ?? appliedQuery)) return;
+  try {
+    history.replaceState({ ...history.state, librarySearchDraft: draft }, "");
+  } catch (error) {
+    if (error.name !== "SecurityError") throw error;
+  }
+}
+
+languageLink.addEventListener("click", (event) => {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  try {
+    sessionStorage.setItem(languageDraftKey, JSON.stringify({ target: languageLink.href, draft: query.value }));
+  } catch {}
+});
+
+function readLanguageDraft() {
+  try {
+    const transfer = JSON.parse(sessionStorage.getItem(languageDraftKey));
+    sessionStorage.removeItem(languageDraftKey);
+    if (transfer?.target === location.href) return transfer.draft;
+  } catch {}
+}
+
 async function search(updateUrl = true) {
   const current = ++sequence;
   clearTimeout(pending);
-  const data = new FormData(form);
-  const term = normalize(data.get("q"));
-  const source = data.get("source");
-  const kind = data.get("kind");
-  const from = data.get("from");
-  const to = data.get("to");
+  const term = normalize(appliedQuery);
+  const filters = filterValues();
+  const [source, kind, from, to] = filters;
+  syncReset();
+  if (from && to && from > to) {
+    endDate.setAttribute("aria-invalid", "true");
+    endDate.setAttribute("aria-describedby", status.id);
+    results.removeAttribute("aria-busy");
+    setStatus(zh ? "结束日期须在起始日期当日或之后。" :
+      "Choose an end date on or after the start date.", "error");
+    return;
+  }
+  endDate.removeAttribute("aria-invalid");
+  endDate.removeAttribute("aria-describedby");
   const filtered = term || source || kind || from || to;
   const eligible = (entry) => entry && rows.has(entry.id) && (!source || entry.sources.includes(source)) &&
     (!kind || entry.kind === kind) && (!from || entry.published?.slice(0, 10) >= from) &&
     (!to || entry.published?.slice(0, 10) <= to);
-  const params = new URLSearchParams([...data].filter(([, value]) => value));
+  const params = new URLSearchParams();
+  if (appliedQuery) params.set("q", appliedQuery);
+  filterNames.forEach((name, index) => {
+    if (filters[index]) params.set(name, filters[index]);
+  });
   const alternate = new URL(languageLink.href);
   alternate.search = params.toString();
   if (languageLink.href !== alternate.href) languageLink.href = alternate.href;
   if (updateUrl) {
     const next = location.pathname + (params.size ? "?" + params : "") + location.hash;
-    if (next !== location.pathname + location.search + location.hash) {
+    if (next !== location.pathname + location.search + location.hash ||
+        history.state?.librarySearchDraft !== query.value) {
       try {
-        history.replaceState(history.state, "", next);
+        history.replaceState({ ...history.state, librarySearchDraft: query.value }, "", next);
       } catch (error) {
         if (error.name !== "SecurityError") throw error;
       }
@@ -147,17 +210,42 @@ async function search(updateUrl = true) {
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
+  cleared = undefined;
+  appliedQuery = query.value.trim();
   search();
 });
+query.addEventListener("input", () => {
+  cleared = undefined;
+  rememberDraft();
+  syncReset();
+});
 form.addEventListener("change", ({ target }) => {
-  if (target.name !== "q") search();
+  if (!filterNames.includes(target.name)) return;
+  cleared = undefined;
+  search();
+});
+reset.addEventListener("click", () => {
+  if (cleared) {
+    ({ draft: query.value, query: appliedQuery } = cleared);
+    restoreFilters(cleared.filters);
+    cleared = undefined;
+  } else {
+    cleared = { draft: query.value, query: appliedQuery, filters: filterValues() };
+    query.value = appliedQuery = "";
+    restoreFilters([]);
+  }
+  search();
 });
 function restoreSearch() {
   const params = new URLSearchParams(location.search);
-  for (const key of ["q", "source", "kind", "from", "to"]) {
-    form.elements.namedItem(key).value = params.get(key) ?? "";
-  }
+  cleared = undefined;
+  appliedQuery = params.get("q") ?? "";
+  query.value = history.state?.librarySearchDraft ?? readLanguageDraft() ?? appliedQuery;
+  rememberDraft();
+  restoreFilters(filterNames.map(name => params.get(name)));
+  if (filterValues().some(Boolean)) filterDetails.open = true;
   search(false);
 }
 window.addEventListener("popstate", restoreSearch);
-if (location.search) restoreSearch();
+restoreSearch();
+form.hidden = false;

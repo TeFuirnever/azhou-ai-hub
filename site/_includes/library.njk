@@ -18,7 +18,7 @@ layout: base.njk
 <div class="wrap library-grid">
   <section class="library-main" aria-labelledby="results-title">
     {% if sourceLibrary.entries.length %}
-    <form id="library-search" class="library-search" role="search" action="{{ site.routes[lang].library | url }}"
+    <form id="library-search" class="library-search" role="search" action="{{ site.routes[lang].library | url }}" hidden
       method="get" data-index="{{ '/pagefind/pagefind.js' | url }}"
       data-locale="{{ lang }}">
       <label for="library-query">{{ '搜索标题、正文或导读' if zh else 'Search titles, archived text, or notes' }}</label>
@@ -26,20 +26,26 @@ layout: base.njk
         <input type="search" id="library-query" name="q">
         <button class="btn btn-primary" type="submit">{{ '搜索' if zh else 'Search' }}</button>
       </div>
-      <div class="library-filters">
-        <label>{{ '来源' if zh else 'Source' }}<select name="source">
-          <option value="">{{ '全部来源' if zh else 'All sources' }}</option>
-          {% for source in sourceLibrary.channels %}<option value="{{ source.id }}">{{ source.name | escape }}</option>{% endfor %}
-        </select></label>
-        <label>{{ '类型' if zh else 'Type' }}<select name="kind">
-          <option value="">{{ '全部类型' if zh else 'All types' }}</option>
-          <option value="article">{{ '文章' if zh else 'Article' }}</option>
-          <option value="announcement">{{ '发布公告' if zh else 'Announcement' }}</option>
-          <option value="research">{{ '研究与文档' if zh else 'Research and documents' }}</option>
-        </select></label>
-        <label>{{ '起始日期' if zh else 'From date' }}<input name="from" type="date"></label>
-        <label>{{ '结束日期' if zh else 'Through date' }}<input name="to" type="date"></label>
-      </div>
+      <details id="library-filter-details">
+        <summary>{{ '筛选' if zh else 'Filters' }}</summary>
+        <div class="library-filters">
+          <label>{{ '来源' if zh else 'Source' }}<select name="source">
+            <option value="">{{ '全部来源' if zh else 'All sources' }}</option>
+            {% for source in sourceLibrary.channels %}<option value="{{ source.id }}">{{ source.name | escape }}</option>{% endfor %}
+          </select></label>
+          <label>{{ '类型' if zh else 'Type' }}<select name="kind">
+            <option value="">{{ '全部类型' if zh else 'All types' }}</option>
+            <option value="article">{{ '文章' if zh else 'Article' }}</option>
+            <option value="announcement">{{ '发布公告' if zh else 'Announcement' }}</option>
+            <option value="research">{{ '研究与文档' if zh else 'Research and documents' }}</option>
+          </select></label>
+          <label>{{ '起始日期' if zh else 'From date' }}<input name="from" type="date"></label>
+          <label>{{ '结束日期' if zh else 'Through date' }}<input name="to" type="date"></label>
+        </div>
+      </details>
+      <button class="btn btn-outline library-reset" type="button" id="library-reset" hidden
+        data-clear="{{ '清除搜索条件' if zh else 'Clear search criteria' }}"
+        data-undo="{{ '撤销清除' if zh else 'Undo clear' }}">{{ '清除搜索条件' if zh else 'Clear search criteria' }}</button>
     </form>
     <script id="library-data" type="application/json">{{ sourceLibrary.searchRows | scriptJson | safe }}</script>
     <script type="module" src="{{ '/assets/library-search.js' | url }}"></script>
