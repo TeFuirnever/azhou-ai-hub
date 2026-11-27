@@ -16,7 +16,8 @@
   {%- endif %}
   <link rel="alternate" type="application/rss+xml" title="Azhou Source Library" href="{{ '/library/rss.xml' | url }}">
   {% if sourceFeed %}<link rel="alternate" type="application/rss+xml" title="{{ title | escape }} RSS" href="{{ sourceFeed | url }}">{% endif %}
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
+  <link rel="icon" type="image/png" sizes="64x64" href="{{ '/assets/azhou-avatar.png' | url }}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ '/assets/apple-touch-icon.png' | url }}">
   <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)">
   <meta property="og:type" content="website">
@@ -106,7 +107,6 @@
       --az-term-hover: #222226;
       --az-code-bg: #ebe8e2;
       --az-code-text: #2b2b2b;
-      --az-brand-text: #a93b0c;
       --az-band: var(--az-bg-2);
       --az-band-border: var(--az-border-2);
       --az-shadow-head: 0 6px 16px rgba(18, 18, 18, .08);
@@ -140,7 +140,6 @@
         --az-term-hover: #242428;
         --az-code-bg: #1d1d20;
         --az-code-text: #ededed;
-        --az-brand-text: #ff8a57;
         --az-shadow-head: 0 8px 20px rgba(0, 0, 0, .55);
       }
     }
@@ -411,7 +410,7 @@
           text-decoration-color var(--motion-feedback) var(--motion-ease);
       }
       a:active { transition: none; }
-      .brand-mark { transition: border-color var(--motion-feedback) var(--motion-ease), color var(--motion-feedback) var(--motion-ease), transform var(--motion-feedback) var(--motion-ease); }
+      .brand .brand-mark { transition: transform var(--motion-feedback) var(--motion-ease); }
       .brand:active .brand-mark { transform: scale(.97); }
       .site-head {
         transition:
@@ -512,7 +511,10 @@
   <div class="brand-rule" aria-hidden="true"></div>
   <header class="site-head">
     <nav aria-label="{{ '站内导航' if lang == 'zh' else 'Site' }}">
-      <a class="brand" href="{{ site.routes[lang].home | url }}"><span class="brand-mark" aria-hidden="true">舟</span> {{ '阿舟 AI 能力站' if lang == 'zh' else 'Azhou AI Hub' }}</a>
+      <a class="brand" href="{{ site.routes[lang].home | url }}">
+        <img class="brand-mark" src="{{ '/assets/azhou-avatar.png' | url }}" width="32" height="32" alt="">
+        {{ '阿舟 AI 能力站' if lang == 'zh' else 'Azhou AI Hub' }}
+      </a>
       {%- for entry in ["skills", "library", "docs", "support"] %}
       <a href="{{ site.routes[lang][entry] | url }}"{% if route == entry %} aria-current="page"{% endif %}>{{ site.labels[lang][entry] }}</a>
       {%- endfor %}

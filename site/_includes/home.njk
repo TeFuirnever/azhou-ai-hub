@@ -95,7 +95,7 @@ layout: base.njk
           <p class="entry-meta">{{ feature.sourceName | escape }} <a href="{{ feature.license_url | escape }}">{{ feature.license | escape }}</a></p>
           <h3 lang="{{ feature.lang | escape }}">{{ feature.title | escape }}</h3>
           <p>{{ (feature.note if zh else feature.noteEn) | escape }}</p>
-          <a class="btn edition-cta" href="{{ (site.routes[lang].library ~ 'articles/' ~ feature.id ~ '/') | url }}">
+          <a class="btn btn-primary edition-cta" href="{{ (site.routes[lang].library ~ 'articles/' ~ feature.id ~ '/') | url }}">
             {{ '阅读归档' if zh else 'Read the archive' }}
           </a>
         </div>
@@ -128,7 +128,10 @@ layout: base.njk
   <section class="home-section grid-row" aria-labelledby="install">
     <div class="home-setup">
       <div class="grid-cell grid-heading-cell">
-        <h2 id="install" tabindex="-1" data-reveal style="--reveal-i: 0">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</h2>
+        <h2 id="install" tabindex="-1" data-reveal style="--reveal-i: 0">
+          <img class="brand-mark" src="{{ '/assets/azhou-avatar.png' | url }}" width="32" height="32" alt="">
+          {{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}
+        </h2>
       </div>
       <div class="grid-cell grid-pad">
         <div class="home-setup-copy" data-reveal style="--reveal-i: 1">
