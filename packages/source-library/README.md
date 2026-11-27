@@ -13,7 +13,7 @@ uv run --locked python library.py --data "$HOME/.local/share/azhou-source-librar
 uv run --locked python library.py --data "$HOME/.local/share/azhou-source-library/catalog" status
 ```
 
-`preview` 返回本次匹配数和最多 20 条元数据，不写入目录或信源状态。`sync` 只登记候选文章及采集状态，正文由后续 `archive` 导入。状态分为「有更新」「无更新」和「抓取失败」。失败时保留上次成功时间，成功重试按文章身份去重。`sync all` 检查五个可从 RSS 或网页列表发现文章的来源。小米 MiMo 需提供官方文章地址，用 `preview mimo --url <地址>` 试抓，或用 `sync mimo --url <地址>` 登记。
+`preview` 返回本次匹配数和最多 20 条元数据，不写入目录或信源状态。`sync` 只登记候选文章及采集状态，正文由后续 `archive` 导入。状态分为「有更新」「无更新」和「抓取失败」。失败时保留上次成功时间，成功重试按文章身份去重。`sync all` 检查已配置 RSS 或网页列表的来源。小米 MiMo 可用 `preview mimo --url <官方文章地址>` 试抓，或用 `sync mimo --url <官方文章地址>` 登记。缺少地址或 JSON 配置时，命令会提示补齐输入，采集状态保持原样。
 
 RSS 和网页列表遇到短暂网络故障或部分上游服务器错误时，在同一次命令内最多重试一次。若服务器给了 `Retry-After` 或解析未匹配，按本次抓取失败处理。[上游源码及引入记录](../../THIRD_PARTY_NOTICES.md#aihot-source-listing-retry)
 
@@ -73,7 +73,11 @@ uv run --locked python library.py --data "$azhou_catalog" backup /path/to/new-ba
 
 ## 审核与发布
 
-用 `review <id> link --basis "<发布依据>" --note "<自写导读>"` 登记链接审核。全文审核用 `review <id> full --revision <版本摘要> --basis "<发布依据>" --note "<自写导读>"`。用 `withdraw <id>` 从后续导出移除审核结果。
+用 `review <id> link --basis "<发布依据>" --note "<自写导读>"` 登记链接审核。全文审核用 `review <id> full --revision <版本摘要> --basis "<发布依据>" --note "<自写导读>"`。
+
+运行 `withdraw <id> --preview` 查看将从后续导出移除的审核记录。核对标题和公开范围后，用 `withdraw <id> --apply <plan_id>` 撤回这份审核。审核内容发生变化时，重新预览。私有归档仍可查看，需要恢复导出时可以重新审核。
+
+旧脚本里的 `withdraw <id>` 现在会报参数错误。请改用预览与执行两步。
 
 旧版归档可继续查看。若旧版归档缺少对应版本的标题和作者等记录，重新导入当时保存的网页，再按新版本摘要审核全文。
 

@@ -241,6 +241,22 @@ class LibraryTest(unittest.TestCase):
             run(Namespace(action="backup", data=self.store.root, target=target))
         self.assertFalse(target.exists())
 
+    def test_manual_source_without_input_is_usage_error(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+
+        target = self.root / "unopened"
+        for action in ("preview", "sync"):
+            with self.subTest(action=action):
+                command = ["library.py", "--data", str(target), action, "mimo"]
+                diagnostic = StringIO()
+                with patch("sys.argv", command), redirect_stderr(diagnostic):
+                    with self.assertRaises(SystemExit) as raised:
+                        run(parse_args())
+                self.assertEqual(raised.exception.code, 2)
+                self.assertIn("add --url <official article URL>", diagnostic.getvalue())
+                self.assertFalse(target.exists())
+
     def test_unchanged_failure_invalid_response_and_recovery(self):
         self.assertEqual(sync(self.store, ["openai"], fetcher=self.fetch)["openai"]["status"], "updated")
         self.assertEqual(sync(self.store, ["openai"], fetcher=self.fetch)["openai"]["status"], "no_updates")
@@ -306,7 +322,28 @@ class LibraryTest(unittest.TestCase):
         self.assertNotIn("javascript:", public["body"])
         self.assertNotIn("new pending version", public["body"])
         self.assertEqual(len(list((second / "media").iterdir())), 1)
-        self.store.withdraw(article_id)
+        def withdraw(*options):
+            with patch("sys.argv", ["library.py", "--data", str(self.store.root),
+                                    "withdraw", article_id, *options]):
+                return run(parse_args())
+
+        database = self.store.root / "catalog.sqlite3"
+        before = database.read_bytes()
+        with patch("sys.stderr"):
+            with self.assertRaises(SystemExit) as legacy:
+                withdraw()
+        self.assertEqual(legacy.exception.code, 2)
+        preview = withdraw("--preview")
+        self.assertEqual(preview["scope"], "full")
+        self.assertEqual(database.read_bytes(), before)
+        self.store.approve(article_id, "link", "local fixture", "New review")
+        with self.assertRaisesRegex(CollectionError, "approval changed"):
+            withdraw("--apply", preview["plan_id"])
+        current = withdraw("--preview")
+        self.assertEqual(current["scope"], "link")
+        self.assertEqual(withdraw("--apply", current["plan_id"])["withdrawn"], article_id)
+        self.assertEqual(withdraw("--preview")["status"], "no_approval")
+        self.assertEqual(self.store.inspect(article_id, newer["revision"])["revision"]["digest"], newer["revision"])
         third = self.root / "third"
         self.assertEqual(self.store.export(third), 0)
         self.assertEqual(list((third / "media").iterdir()), [])
