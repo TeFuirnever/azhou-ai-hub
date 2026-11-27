@@ -109,15 +109,13 @@
     }
     * { box-sizing: border-box; }
     :root { --site-header-fallback: 4.6rem; }
-    @media (min-width: 680px) and (max-width: 46rem) {
+    @media (max-width: 46rem) {
       :root { --site-header-fallback: 6.2rem; }
     }
-    @media (min-width: 680px) and (max-width: 46rem) and (pointer: coarse) {
+    @media (max-width: 46rem) and (pointer: coarse) {
       :root { --site-header-fallback: 6.4rem; }
     }
-    @media (min-width: 680px) {
-      html { scroll-padding-top: calc(var(--site-header-height, var(--site-header-fallback)) + 25px); }
-    }
+    html { scroll-padding-top: calc(var(--site-header-height, var(--site-header-fallback)) + 25px); }
     body {
       margin: 0;
       background: var(--az-bg);
@@ -302,6 +300,7 @@
       a:active { transition: none; }
       .site-head { transition: box-shadow var(--motion-feedback) var(--motion-ease); }
       details.hub-motion > summary::before { transition: transform var(--motion-change) var(--motion-move); }
+      details.hub-motion[open] > summary::before { transition-duration: var(--motion-expand); }
       @supports selector(details::details-content) {
         :where(details.hub-motion[open])::details-content { animation: state-arrive var(--motion-change) var(--motion-ease); }
       }
@@ -316,7 +315,6 @@
          the script below turns motion on only for a click on the summary. */
       @supports (interpolate-size: allow-keywords) and (transition-behavior: allow-discrete) and selector(details::details-content) {
         :root { interpolate-size: allow-keywords; }
-        details.hub-motion[open] > summary::before { transition-duration: var(--motion-expand); }
         details::details-content {
           display: flow-root;
           block-size: 0;
@@ -401,6 +399,22 @@
       {%- endif %}
     </nav>
   </header>
+  {%- if route %}
+  <script>
+    if ("ResizeObserver" in window) {
+      const head = document.querySelector(".site-head");
+      const report = (height) => document.documentElement.style.setProperty("--site-header-height", height + "px");
+      let previousHeight = head.getBoundingClientRect().height;
+      report(previousHeight);
+      new ResizeObserver(([entry]) => {
+        const height = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight;
+        if (height === previousHeight) return;
+        previousHeight = height;
+        report(height);
+      }).observe(head, { box: "border-box" });
+    }
+  </script>
+  {%- endif %}
   <main id="main" tabindex="-1"{% if bodyClass == "doc" %} class="doc-shell"{% endif %}>
     {{ content | safe }}
   </main>
@@ -423,18 +437,6 @@
       return Math.max(0, Math.min(limit, scrollY + target.getBoundingClientRect().top - pad - margin));
     }
     {%- if route %}
-    if ("ResizeObserver" in window) {
-      const head = document.querySelector(".site-head");
-      const report = (height) => document.documentElement.style.setProperty("--site-header-height", height + "px");
-      let previousHeight = head.getBoundingClientRect().height;
-      report(previousHeight);
-      new ResizeObserver(([entry]) => {
-        const height = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight;
-        if (height === previousHeight) return;
-        previousHeight = height;
-        report(height);
-      }).observe(head, { box: "border-box" });
-    }
     const languageLink = document.getElementById("switch-language");
     function syncLanguageLink() {
       languageLink.hash = window.location.hash;
@@ -547,13 +549,14 @@
         const fadeIn = box.animate([rest, held],
           { duration: duration("--motion-feedback"), easing, fill: "forwards" });
         const fadeOut = box.animate([held, rest],
-          { duration: duration("--motion-expand"), easing, delay: 1000, fill: "forwards" });
+          { duration: duration("--motion-expand"), easing, delay: duration("--motion-feedback") + 1000, fill: "forwards" });
         arrival = [fadeIn, fadeOut];
         fadeOut.finished.then(() => {
           if (arrival.includes(fadeOut)) dismissMark();
         }, () => {});
       }
-      window.addEventListener("hashchange", highlightTarget);
+      let gliding = false;
+      window.addEventListener("hashchange", () => { if (!gliding) highlightTarget(); });
       for (const type of ["pointerdown", "keydown", "wheel", "touchstart", "input", "click"]) {
         window.addEventListener(type, dismissMark, { capture: true, passive: true });
       }
@@ -630,8 +633,11 @@
           }
         }
         event.preventDefault();
+        gliding = true;
         window.dispatchEvent(new HashChangeEvent("hashchange"));
+        gliding = false;
         if (!await glideTo(landing(target))) return;
+        highlightTarget();
         if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
         target.focus({ preventScroll: true });
       });
