@@ -13,6 +13,7 @@ const reset = document.getElementById("library-reset");
 const filterNames = ["source", "kind", "from", "to"];
 const languageLink = document.getElementById("switch-language");
 const languageDraftKey = "hub-library-language-draft";
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 let appliedQuery = "";
 let cleared;
 let sequence = 0;
@@ -24,12 +25,14 @@ const normalize = (text) => text.normalize("NFKC").trim().toLocaleLowerCase();
 function renderResults(matches) {
   const focused = results.contains(document.activeElement) ? document.activeElement : null;
   const focusedId = focused?.closest("[data-entry-id]")?.dataset.entryId;
+  const previousIds = new Set(Array.from(results.children, (row) => row.dataset.entryId));
   for (const row of Array.from(results.children)) {
     if (!matches.has(row.dataset.entryId)) row.remove();
   }
   let position = results.firstElementChild;
   for (const [id, text] of matches) {
     const row = rows.get(id);
+    const isNew = !previousIds.has(id);
     const existing = row.querySelector("[data-excerpt]");
     if (text && !existing) {
       const excerpt = document.createElement("p");
@@ -40,6 +43,13 @@ function renderResults(matches) {
       existing.textContent = text;
     } else if (!text) {
       existing?.remove();
+    }
+    if (isNew && !reducedMotion.matches) {
+      row.classList.remove("is-entering");
+      void row.offsetWidth;
+      row.classList.add("is-entering");
+    } else {
+      row.classList.remove("is-entering");
     }
     if (row === position) {
       position = row.nextElementSibling;
@@ -204,7 +214,7 @@ async function search(updateUrl = true) {
   } else if (filtered) {
     setStatus(count, "done");
   } else {
-    setStatus("");
+    setStatus("", "");
   }
 }
 

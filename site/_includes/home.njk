@@ -3,134 +3,417 @@ layout: base.njk
 ---
 
 {% set zh = lang == 'zh' %}
-{% from "copy-control.njk" import copyControl %}
-{% macro capability(label, description, href) %}
-<li><a class="capability-link" href="{{ href }}">
+{% macro termBlock(source, label, commandText) %}
+<div class="term-panel">
+  <div class="term-bar">
+    <span class="copy-status" role="status">
+      <svg class="copy-check" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M3 8.5L6.5 12L13 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <svg class="copy-err" width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.2" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M8 4.8V8.4M8 11V11.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <span data-copy-message></span>
+    </span>
+    <div class="copy-actions" hidden>
+      <button class="btn term-copy-btn" type="button" data-copy="{{ source }}">{{ label }}</button>
+    </div>
+  </div>
+  <pre class="wrap-text"><code id="{{ source }}">{{ commandText }}</code></pre>
+</div>
+{% endmacro %}
+{% macro capability(label, description, href, external=false, idx=1) %}
+<li class="grid-cell capability-cell"><a class="capability-link" href="{{ href }}" data-reveal style="--reveal-i: {{ idx }}">
   <strong>{{ label }}</strong>
   <small>{{ description }}</small>
-  <span class="list-arrow" aria-hidden="true">→</span>
+  <span class="list-arrow" data-arrow="{{ 'ext' if external else 'right' }}" aria-hidden="true">{{ '↗' if external else '→' }}</span>
 </a></li>
 {% endmacro %}
-<section class="home-hero">
-  <div class="wrap home-hero-inner">
-    <div>
-      {% if zh %}
-      <h1>把 Agent<br>用进真实工作</h1>
-      <p class="lede">找趁手的 Agent 技能，<span>订阅值得读的 AI 官方文章。</span></p>
-      {% else %}
-      <h1>Put agents to work</h1>
-      <p class="lede">Find agent skills for the job and follow selections from official AI sources.</p>
-      {% endif %}
-      <div class="cta">
-        <a class="btn btn-primary" href="{{ site.routes[lang].skills | url }}">{{ '找 Agent 技能' if zh else 'Find agent skills' }}</a>
-        <a class="btn btn-outline" href="{{ site.routes[lang].library | url }}">{{ '打开来源库' if zh else 'Explore the Source Library' }}</a>
+
+<div class="grid-frame">
+  <section class="home-hero grid-row">
+    <div class="hero-stage grid-cell">
+      <div class="hero-field" aria-hidden="true">
+        {%- for i in range(0, 16) %}
+        <div class="hero-field-row">{% for j in range(0, 30) %}AZHOU {% endfor %}</div>
+        {%- endfor %}
+      </div>
+      <div class="hero-stage-inner">
+        {% if zh %}
+        <h1 class="hero-lead-item" style="--stagger-i: 0">把 Agent<br>用进真实工作</h1>
+        <p class="lede hero-lead-item" style="--stagger-i: 1">找趁手的 Agent 技能，<span>订阅值得读的 AI 官方文章。</span></p>
+        {% else %}
+        <h1 class="hero-lead-item" style="--stagger-i: 0">Put agents<br>to work</h1>
+        <p class="lede hero-lead-item" style="--stagger-i: 1">Find agent skills for the job, and follow selections from official AI sources.</p>
+        {% endif %}
+        <div class="cta hero-lead-item" style="--stagger-i: 2">
+          <a class="btn btn-primary" href="{{ site.routes[lang].skills | url }}">{{ '找 Agent 技能' if zh else 'Find agent skills' }}</a>
+          <a class="btn btn-outline" href="{{ site.routes[lang].library | url }}">{{ '打开来源库' if zh else 'Browse Source Library' }}</a>
+        </div>
       </div>
     </div>
-    <figure class="home-scene">
-      <img class="home-art" src="{{ '/assets/azhou-workspace.png' | url }}" width="1672" height="941"
-        alt="{{ '阿舟坐在有书架和台灯的工作桌前' if zh else 'Azhou working at a desk beside a bookcase and a lamp' }}" fetchpriority="high">
-    </figure>
-  </div>
-</section>
-<section class="sec home-section" aria-labelledby="capabilities">
-  <div class="wrap home-workspace">
-    <h2 id="capabilities">{{ '从任务开始' if zh else 'Start with a task' }}</h2>
-    <ul class="capability-list">
-      {{ capability("Hub Skills", "找一个可以装进 Agent 的技能" if zh else "Find a skill to add to your agent", site.routes[lang].skills | url) }}
-      {{ capability("Agent Rules Books", "把工程书里的方法用到代码和评审中" if zh else "Apply lessons from engineering books to code and reviews", site.routes[lang].books | url) }}
-      {{ capability("安装 Ask Azhou" if zh else "Install Ask Azhou", "让阿舟按任务推荐技能" if zh else "Get skill recommendations for your task", "#install") }}
-      {{ capability("阿舟 Agent 工作台" if zh else "Azhou Agent Workbench", "在 Codex 和 ZCode 查看一轮对话的耗时和速度" if zh else "See turn duration and speed in Codex and ZCode", site.blobBase ~ "/packages/azhou-agent-inspector/README.md") }}
-      {{ capability("pstack", "用工作流推进实现、评审和 PR 跟进" if zh else "Use engineering workflows for implementation and review", site.blobBase ~ "/packages/pstack-agent-harness/README.md") }}
-    </ul>
-  </div>
-</section>
-<section class="sec home-section home-edition" aria-labelledby="sources">
-  <div class="wrap">
-    <div class="library-section-head">
-      <h2 id="sources">{{ '阿舟来源库' if zh else 'Azhou Source Library' }}</h2>
-      <a href="{{ '/library/rss.xml' | url }}">{{ '订阅 RSS' if zh else 'Subscribe by RSS' }}</a>
+    <div class="hero-media grid-cell">
+      <figure class="home-scene">
+        <picture>
+          <source type="image/webp" srcset="{{ '/assets/workspace-836.webp' | url }} 836w, {{ '/assets/workspace-1672.webp' | url }} 1672w" sizes="(max-width: 45.999rem) 92vw, 42vw">
+          <img class="home-art" src="{{ '/assets/azhou-workspace.png' | url }}" width="1672" height="941"
+            alt="{{ '夕阳照进木质书房，长着狐耳和蓬松尾巴的阿舟坐在桌前用笔记本电脑工作，手边亮着台灯，背后是书架与绿植' if zh else 'Azhou, a fox-eared character with a fluffy orange tail, typing on a laptop at a sunlit wooden desk beside a glowing lamp and bookcase' }}" fetchpriority="high">
+        </picture>
+      </figure>
+    </div>
+  </section>
+
+  <section class="home-section grid-row" aria-labelledby="capabilities">
+    <div class="capability-grid">
+      <div class="grid-cell grid-heading-cell">
+        <h2 id="capabilities" data-reveal style="--reveal-i: 0">{{ '从任务开始' if zh else 'Start with a task' }}</h2>
+      </div>
+      <ul class="capability-list" role="list">
+        {{ capability("Hub Skills", "找一个可以装进 Agent 的技能" if zh else "Find a skill to add to your agent", site.routes[lang].skills | url, false, 1) }}
+        {{ capability("Agent Rules Books", "把工程书里的方法用到代码和评审中" if zh else "Apply lessons from engineering books to code and reviews", site.routes[lang].books | url, false, 2) }}
+        {{ capability("安装 Ask Azhou" if zh else "Install Ask Azhou", "让阿舟按任务推荐技能" if zh else "Get skill recommendations for your task", "#install", false, 3) }}
+        {{ capability("阿舟 Agent 工作台" if zh else "Azhou Agent Workbench", "在 Codex 和 ZCode 查看一轮对话的耗时和速度" if zh else "See turn duration and speed in Codex and ZCode", site.blobBase ~ "/packages/azhou-agent-inspector/README.md", true, 4) }}
+        {{ capability("pstack", "用工作流推进实现、评审和 PR 跟进" if zh else "Use engineering workflows for implementation and review", site.blobBase ~ "/packages/pstack-agent-harness/README.md", true, 4) }}
+      </ul>
+    </div>
+  </section>
+
+  <section class="home-section grid-row home-edition" aria-labelledby="sources">
+    <div class="grid-cell grid-band-head">
+      <div class="library-section-head" data-reveal style="--reveal-i: 0">
+        <h2 id="sources">{{ '阿舟来源库' if zh else 'Azhou Source Library' }}</h2>
+        <a href="{{ '/library/rss.xml' | url }}">{{ '订阅 RSS' if zh else 'Subscribe by RSS' }}</a>
+      </div>
     </div>
     {% if sourceLibrary.entries.length %}
-    <div{% if sourceLibrary.featured %} class="home-edition-grid"{% endif %}>
+    <div class="{% if sourceLibrary.featured %}home-edition-grid{% else %}grid-cell grid-pad{% endif %}">
       {% if sourceLibrary.featured %}
       {% set feature = sourceLibrary.featured %}
-      <article class="edition-feature">
-        <p class="entry-meta">{{ feature.sourceName | escape }} <a href="{{ feature.license_url | escape }}">{{ feature.license | escape }}</a></p>
-        <h3 lang="{{ feature.lang | escape }}">{{ feature.title | escape }}</h3>
-        <p>{{ (feature.note if zh else feature.noteEn) | escape }}</p>
-        <a class="btn btn-primary" href="{{ (site.routes[lang].library ~ 'articles/' ~ feature.id ~ '/') | url }}">
-          {{ '阅读归档' if zh else 'Read the archive' }}
-        </a>
+      <article class="edition-feature grid-cell">
+        <div class="edition-feature-inner" data-reveal style="--reveal-i: 1">
+          <p class="entry-meta">{{ feature.sourceName | escape }} <a href="{{ feature.license_url | escape }}">{{ feature.license | escape }}</a></p>
+          <h3 lang="{{ feature.lang | escape }}">{{ feature.title | escape }}</h3>
+          <p>{{ (feature.note if zh else feature.noteEn) | escape }}</p>
+          <a class="btn edition-cta" href="{{ (site.routes[lang].library ~ 'articles/' ~ feature.id ~ '/') | url }}">
+            {{ '阅读归档' if zh else 'Read the archive' }}
+          </a>
+        </div>
       </article>
       {% endif %}
-      <ul class="edition-list">
-        {% for item in sourceLibrary.entries %}
-        {% if not sourceLibrary.featured or item.id != sourceLibrary.featured.id %}{% include "library-item.njk" %}{% endif %}
+      <div class="grid-cell edition-list-cell">
+        <div data-reveal style="--reveal-i: 2">
+          <ul class="edition-list">
+            {% for item in sourceLibrary.entries %}
+            {% if not sourceLibrary.featured or item.id != sourceLibrary.featured.id %}{% include "library-item.njk" %}{% endif %}
+            {% endfor %}
+          </ul>
+          <p class="edition-more"><a href="{{ site.routes[lang].library | url }}">{{ '搜索全部来源' if zh else 'Search all sources' }}</a></p>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="grid-cell grid-pad" data-reveal>
+      <p>{{ '首批选文即将发布。现在可以先浏览官方来源，或订阅更新。' if zh else 'The first selections are coming soon. Browse the official sources or subscribe for updates.' }}</p>
+      <ul class="channel-list home-sources">
+        {% for source in sourceLibrary.channels %}
+        <li><a href="{{ (site.routes[lang].library ~ 'sources/' ~ source.id ~ '/') | url }}">{{ source.name | escape }}</a>
+          <a href="{{ ('/library/sources/' ~ source.id ~ '/rss.xml') | url }}" aria-label="{{ source.name | escape }} RSS">RSS</a></li>
         {% endfor %}
       </ul>
     </div>
-    <p><a href="{{ site.routes[lang].library | url }}">{{ '搜索全部来源' if zh else 'Search all sources' }}</a></p>
-    {% else %}
-    <p>{{ '首批选文即将发布。现在可以先浏览官方来源，或订阅更新。' if zh else 'The first selections are coming soon. Browse the official sources or subscribe for updates.' }}</p>
-    <ul class="channel-list home-sources">
-      {% for source in sourceLibrary.channels %}
-      <li><a href="{{ (site.routes[lang].library ~ 'sources/' ~ source.id ~ '/') | url }}">{{ source.name | escape }}</a>
-        <a href="{{ ('/library/sources/' ~ source.id ~ '/rss.xml') | url }}" aria-label="{{ source.name | escape }} RSS">RSS</a></li>
-      {% endfor %}
-    </ul>
     {% endif %}
-  </div>
-</section>
-<section class="sec home-section" aria-labelledby="install">
-  <div class="wrap home-setup">
-    <h2 id="install" tabindex="-1">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</h2>
-    <div class="home-setup-copy">
-    <p>{{ '登录 Codex。在终端进入项目目录，使用 Node.js 22.20 或更新版本运行下面的命令。出现安装提示时，确认安装到当前项目。' if zh else 'Sign in to Codex. In a terminal, open your project folder and run this command with Node.js 22.20 or later. When prompted, confirm the install for this project.' }}</p>
-    {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
-    <div class="copy-block">
-      {{ copyControl("install-command", '复制安装命令' if zh else 'Copy install command') }}
-      <pre class="wrap-text"><code id="install-command">npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
-    </div>
-    <p>{{ '在同一项目打开新的 Codex 会话。先输入 $super-ask-azhou，确认 Codex 找得到这个技能，再试试下面的问题。正常情况下，它会推荐 super-archify。' if zh else 'Open a new Codex chat in the same project. Type $super-ask-azhou to check that Codex can find the skill, then try the question below. Expect a recommendation for super-archify.' }}</p>
-    <div class="copy-block">
-      {{ copyControl("try-prompt", '复制试用问题' if zh else 'Copy example question') }}
-      <pre class="wrap-text"><code id="try-prompt">{{ '$super-ask-azhou 我有一段 Mermaid，想做成交互架构图。该用哪个技能？' if zh else '$super-ask-azhou I have a Mermaid diagram. Which skill turns it into an interactive architecture diagram?' }}</code></pre>
-    </div>
-    <details>
-      <summary>{{ '安装上面推荐的技能' if zh else 'Install the recommended skill' }}</summary>
-      <div class="copy-block">
-        {{ copyControl("install-recommended", '复制 Archify 安装命令' if zh else 'Copy Archify install command') }}
-        <pre class="wrap-text"><code id="install-recommended">npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex</code></pre>
+  </section>
+
+  <section class="home-section grid-row" aria-labelledby="install">
+    <div class="home-setup">
+      <div class="grid-cell grid-heading-cell">
+        <h2 id="install" tabindex="-1" data-reveal style="--reveal-i: 0">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</h2>
       </div>
-    </details>
-    <details>
-      <summary>{{ '一次安装多个组件' if zh else 'Install more components' }}</summary>
-      <p>{{ '需要本地 Hub 仓库和 Python 3.11 或更新版本。pstack 在独立的终端 Codex 环境中使用。' if zh else 'Requires a Hub checkout and Python 3.11 or later. pstack runs in a dedicated terminal Codex environment.' }}</p>
-      <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ '安装 Hub Skills、pstack 或 Agent Rules Books（英文）' if zh else 'Install Hub Skills, pstack, or Agent Rules Books' }}</a></p>
-    </details>
-    <details>
-      <summary>{{ '排查安装、更新或卸载' if zh else 'Troubleshoot, update, or uninstall' }}</summary>
-      {%- if zh %}<p>以下指南为英文。</p>{% endif %}
-      <ul>
-        <li><a href="{{ installGuide }}#alternate-installer" hreflang="en">{{ '下载超时' if zh else 'Repository download timed out' }}</a></li>
-        <li><a href="{{ installGuide }}#if-codex-cannot-find-ask-azhou" hreflang="en">{{ 'Codex 找不到技能' if zh else 'Codex cannot find the skill' }}</a></li>
-        <li><a href="{{ installGuide }}#upgrade-or-uninstall" hreflang="en">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
-      </ul>
-    </details>
+      <div class="grid-cell grid-pad">
+        <div class="home-setup-copy" data-reveal style="--reveal-i: 1">
+          <p>{{ '登录 Codex。在终端进入项目目录，使用 Node.js 22.20 或更新版本运行下面的命令。出现安装提示时，确认安装到当前项目。' if zh else 'Sign in to Codex. In a terminal, open your project folder and run this command with Node.js 22.20 or later. When prompted, confirm the install for this project.' }}</p>
+          {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
+          <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ '一次安装或按需选择三个组件（英文）' if zh else 'Install Hub Skills, pstack and Agent Rules Books together or separately' }}</a></p>
+          {{ termBlock("install-command", '复制安装命令' if zh else 'Copy install command', "npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex") }}
+          <p>{{ '在同一项目打开新的 Codex 会话。先输入 $super-ask-azhou，确认 Codex 找得到这个技能，再试试下面的问题。正常情况下，它会推荐 super-archify。' if zh else 'Open a new Codex chat in the same project. Type $super-ask-azhou to check that Codex can find the skill, then try the question below. Expect a recommendation for super-archify.' }}</p>
+          {{ termBlock("try-prompt", '复制试用问题' if zh else 'Copy example question', '$super-ask-azhou 我有一段 Mermaid，想做成交互架构图。该用哪个技能？' if zh else '$super-ask-azhou I have a Mermaid diagram. Which skill turns it into an interactive architecture diagram?') }}
+          <details>
+            <summary>{{ '安装上面推荐的技能' if zh else 'Install the recommended skill' }}</summary>
+            {{ termBlock("install-recommended", '复制 Archify 安装命令' if zh else 'Copy Archify install command', "npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex") }}
+          </details>
+          <details>
+            <summary>{{ '排查安装、更新或卸载' if zh else 'Troubleshoot, update, or uninstall' }}</summary>
+            {%- if zh %}<p>以下指南为英文。</p>{% endif %}
+            <ul>
+              <li><a href="{{ installGuide }}#alternate-installer" hreflang="en">{{ '下载超时' if zh else 'Repository download timed out' }}</a></li>
+              <li><a href="{{ installGuide }}#if-codex-cannot-find-ask-azhou" hreflang="en">{{ 'Codex 找不到技能' if zh else 'Codex cannot find the skill' }}</a></li>
+              <li><a href="{{ installGuide }}#upgrade-or-uninstall" hreflang="en">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
+            </ul>
+          </details>
+        </div>
+      </div>
     </div>
-  </div>
-</section>
-<section class="sec home-section" aria-labelledby="cursor-theme">
-  <div class="wrap home-setup">
-    {% set cursor = '/assets/cursors/azhou-double-hug/' %}
-    {% set cursorGuide = site.blobBase ~ cursor ~ 'README.md' %}
-    <h2 id="cursor-theme">{{ '阿舟 macOS 鼠标指针' if zh else 'Azhou cursor theme for macOS' }}</h2>
-    <div class="home-setup-copy">
-    <p>{{ '在 Mousecape 导入「百变阿舟 · 抱一下」后，选中主题并点击 Apply 生效。' if zh else 'Import Azhou Double Hug in Mousecape, then select the theme and click Apply.' }}</p>
-    <p><a href="{{ '/assets/Azhou-Double-Hug-3.6.1.cape' | url }}" download>{{ '下载鼠标指针主题' if zh else 'Download the cursor theme' }}</a>
-    · <a href="{{ cursorGuide }}">{{ '查看预览和安装步骤' if zh else 'Preview and install' }}</a>
-    · <a href="{{ cursorGuide }}#restore">{{ '恢复系统指针' if zh else 'Restore system cursors' }}</a></p>
+  </section>
+
+  <section class="home-section grid-row" aria-labelledby="cursor-theme">
+    <div class="home-setup">
+      {% set cursor = '/assets/cursors/azhou-double-hug/' %}
+      {% set cursorGuide = site.blobBase ~ cursor ~ 'README.md' %}
+      <div class="grid-cell grid-heading-cell">
+        <h2 id="cursor-theme" data-reveal style="--reveal-i: 0">{{ '阿舟 macOS 鼠标指针' if zh else 'Azhou cursor theme for macOS' }}</h2>
+      </div>
+      <div class="grid-cell grid-pad">
+        <div class="home-setup-copy" data-reveal style="--reveal-i: 1">
+          <p>{{ '包含 41 个手绘指针状态：常规指针保持安静，指向链接或按住抓取时会动起来。在 Mousecape 导入「百变阿舟 · 抱一下」后，选中主题并点击 Apply 生效。' if zh else '41 hand-drawn cursor states for macOS: the default arrow stays calm, while links and grabs come alive. Import Azhou Double Hug in Mousecape, then select the theme and click Apply.' }}</p>
+          <p><a href="{{ '/assets/Azhou-Double-Hug-3.6.1.cape' | url }}" download>{{ '下载鼠标指针主题' if zh else 'Download the cursor theme' }}</a>
+          · <a href="{{ cursorGuide }}">{{ '查看预览和安装步骤' if zh else 'Preview and install' }}</a>
+          · <a href="{{ cursorGuide }}#restore">{{ '恢复系统指针' if zh else 'Restore system cursors' }}</a></p>
+          <div class="cursor-demo-grid">
+            <div class="cursor-demo-tile cursor-demo-arrow">
+              <img class="cursor-demo-icon" src="{{ '/assets/cursors/arrow@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true" draggable="false">
+              <span class="cursor-demo-label">{{ '箭头' if zh else 'Arrow' }}</span>
+            </div>
+            <div class="cursor-demo-tile cursor-demo-pointer">
+              <img class="cursor-demo-icon" src="{{ '/assets/cursors/pointer@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true" draggable="false">
+              <span class="cursor-demo-label">{{ '链接' if zh else 'Link' }}</span>
+            </div>
+            <div class="cursor-demo-tile cursor-demo-text">
+              <img class="cursor-demo-icon" src="{{ '/assets/cursors/text@2x.png' | url }}" width="32" height="32" alt="" aria-hidden="true" draggable="false">
+              <span class="cursor-demo-label">{{ '文本' if zh else 'Text' }}</span>
+            </div>
+            <div class="cursor-demo-tile cursor-demo-grab" id="cursor-demo-grab">
+              <span class="cursor-demo-stack" aria-hidden="true">
+                <img class="cursor-demo-icon cursor-icon-open" src="{{ '/assets/cursors/grab@2x.png' | url }}" width="32" height="32" alt="" draggable="false">
+                <img class="cursor-demo-icon cursor-icon-hug" src="{{ '/assets/cursors/grabbing@2x.png' | url }}" width="32" height="32" alt="" draggable="false">
+              </span>
+              <span class="cursor-demo-label">{{ '抓取（按住）' if zh else 'Grab (hold)' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-</section>
-<script type="module" src="{{ '/assets/copy-control.js' | url }}"></script>
+  </section>
+</div>
+
+<script>
+  (() => {
+    const motion = matchMedia("(prefers-reduced-motion: reduce)");
+    const finePointer = matchMedia("(hover: hover) and (pointer: fine)");
+
+    // Hero image smooth load fade only when not already cached/complete.
+    const heroImg = document.querySelector(".home-art");
+    if (heroImg && !heroImg.complete && !motion.matches) {
+      heroImg.classList.add("is-loading");
+      const done = () => heroImg.classList.remove("is-loading");
+      heroImg.addEventListener("load", done, { once: true });
+      heroImg.addEventListener("error", done, { once: true });
+    }
+
+    // Hero AZHOU spotlight + workspace 3D tilt (fine mouse + reduced-motion off).
+    const stage = document.querySelector(".hero-stage");
+    const field = stage?.querySelector(".hero-field");
+    const scene = document.querySelector(".home-scene");
+    let glow = null;
+    let stageRect = null;
+    let sceneRect = null;
+    let stageFrame = 0;
+    let sceneFrame = 0;
+    let lastStagePos = null;
+    let lastScenePos = null;
+
+    const invalidateRects = () => { stageRect = null; sceneRect = null; };
+    window.addEventListener("scroll", invalidateRects, { passive: true });
+    window.addEventListener("resize", invalidateRects, { passive: true });
+
+    function teardownHeroPointer() {
+      cancelAnimationFrame(stageFrame);
+      cancelAnimationFrame(sceneFrame);
+      if (glow) { glow.remove(); glow = null; }
+      if (scene) {
+        scene.classList.remove("is-tilting", "is-settling");
+        scene.style.removeProperty("--rx");
+        scene.style.removeProperty("--ry");
+      }
+    }
+
+    function syncHeroPointer() {
+      const active = finePointer.matches && !motion.matches;
+      if (!active) {
+        teardownHeroPointer();
+        return;
+      }
+      if (stage && field && !glow) {
+        glow = field.cloneNode(true);
+        glow.classList.remove("hero-field");
+        glow.classList.add("hero-field-glow");
+        field.after(glow);
+      }
+    }
+
+    if (stage) {
+      stage.addEventListener("pointerenter", (event) => {
+        if (event.pointerType === "touch" || !glow || motion.matches) return;
+        stageRect = stage.getBoundingClientRect();
+        glow.style.setProperty("--mx", (event.clientX - stageRect.left) + "px");
+        glow.style.setProperty("--my", (event.clientY - stageRect.top) + "px");
+        glow.setAttribute("data-lit", "");
+      });
+      stage.addEventListener("pointermove", (event) => {
+        if (event.pointerType === "touch" || !glow || motion.matches) return;
+        lastStagePos = { x: event.clientX, y: event.clientY };
+        if (stageFrame) return;
+        stageFrame = requestAnimationFrame(() => {
+          stageFrame = 0;
+          if (!glow || !lastStagePos) return;
+          stageRect ??= stage.getBoundingClientRect();
+          glow.style.setProperty("--mx", (lastStagePos.x - stageRect.left) + "px");
+          glow.style.setProperty("--my", (lastStagePos.y - stageRect.top) + "px");
+          glow.setAttribute("data-lit", "");
+        });
+      }, { passive: true });
+      stage.addEventListener("pointerleave", () => {
+        cancelAnimationFrame(stageFrame);
+        stageFrame = 0;
+        glow?.removeAttribute("data-lit");
+      });
+    }
+
+    if (scene) {
+      let enterTimer = 0;
+      scene.addEventListener("pointerenter", (event) => {
+        if (event.pointerType === "touch" || !finePointer.matches || motion.matches) return;
+        sceneRect = scene.getBoundingClientRect();
+        clearTimeout(enterTimer);
+        scene.classList.remove("is-settling");
+        scene.classList.add("is-entering", "is-tilting");
+        enterTimer = setTimeout(() => scene.classList.remove("is-entering"), 120);
+      });
+      scene.addEventListener("pointermove", (event) => {
+        if (event.pointerType === "touch" || !finePointer.matches || motion.matches) return;
+        lastScenePos = { x: event.clientX, y: event.clientY };
+        if (sceneFrame) return;
+        sceneFrame = requestAnimationFrame(() => {
+          sceneFrame = 0;
+          if (!lastScenePos) return;
+          sceneRect ??= scene.getBoundingClientRect();
+          if (!sceneRect.width || !sceneRect.height) return;
+          const nx = Math.max(-1, Math.min(1, ((lastScenePos.x - sceneRect.left) / sceneRect.width) * 2 - 1));
+          const ny = Math.max(-1, Math.min(1, ((lastScenePos.y - sceneRect.top) / sceneRect.height) * 2 - 1));
+          scene.style.setProperty("--rx", (-ny * 3).toFixed(2) + "deg");
+          scene.style.setProperty("--ry", (nx * 3).toFixed(2) + "deg");
+        });
+      }, { passive: true });
+      const resetTilt = () => {
+        clearTimeout(enterTimer);
+        cancelAnimationFrame(sceneFrame);
+        sceneFrame = 0;
+        scene.classList.remove("is-tilting", "is-entering");
+        scene.classList.add("is-settling");
+        scene.style.setProperty("--rx", "0deg");
+        scene.style.setProperty("--ry", "0deg");
+      };
+      scene.addEventListener("pointerleave", resetTilt);
+      scene.addEventListener("pointercancel", resetTilt);
+    }
+
+    for (const mq of [motion, finePointer]) {
+      mq.addEventListener("change", syncHeroPointer);
+    }
+    syncHeroPointer();
+
+    // Grab demo tile: press-and-hold swaps Azhou open hands -> hugging tail on touch & mouse.
+    const grabTile = document.getElementById("cursor-demo-grab");
+    if (grabTile) {
+      const release = () => grabTile.removeAttribute("data-grabbing");
+      grabTile.addEventListener("pointerdown", () => grabTile.setAttribute("data-grabbing", "true"));
+      grabTile.addEventListener("pointerup", release);
+      grabTile.addEventListener("pointercancel", release);
+      grabTile.addEventListener("pointerleave", release);
+    }
+
+    // Copy buttons inside terminal panels.
+    const tokens = getComputedStyle(document.documentElement);
+    const easing = tokens.getPropertyValue("--motion-ease").trim();
+    const feedback = parseFloat(tokens.getPropertyValue("--motion-feedback"));
+    const change = parseFloat(tokens.getPropertyValue("--motion-change"));
+    const pendingText = {{ ('正在复制…' if zh else 'Copying…') | dump | safe }};
+    const copiedText = {{ ('已复制' if zh else 'Copied') | dump | safe }};
+    const failedText = {{ ('复制失败。请手动复制下方内容。' if zh else 'Copy failed. Select and copy the text below.') | dump | safe }};
+
+    for (const button of document.querySelectorAll("[data-copy]")) {
+      if (!navigator.clipboard?.writeText) continue;
+      const actions = button.parentElement;
+      const bar = actions.parentElement;
+      const status = bar.querySelector('[role="status"]');
+      const message = status.querySelector("[data-copy-message]");
+      const checkPath = status.querySelector(".copy-check path");
+      actions.hidden = false;
+      const animatable = () => !motion.matches && typeof status.animate === "function";
+      let attempt = 0;
+      let reset;
+      let pending;
+      let fade;
+      let pathAnim;
+      let retiring = false;
+      function showStatus(text, state) {
+        retiring = false;
+        fade?.cancel();
+        status.dataset.state = state;
+        if (message.textContent !== text) message.textContent = text;
+      }
+      function acknowledge(confirmed) {
+        if (!animatable()) return;
+        retiring = false;
+        fade?.cancel();
+        pathAnim?.cancel();
+        message.animate([{ opacity: .55 }, { opacity: 1 }], { duration: feedback, easing });
+        if (confirmed && checkPath) {
+          pathAnim = checkPath.animate(
+            [{ strokeDashoffset: 24 }, { strokeDashoffset: 0 }],
+            { duration: change, easing, fill: "forwards" }
+          );
+        }
+      }
+      function retire() {
+        if (!animatable()) {
+          showStatus("", "");
+          return;
+        }
+        retiring = true;
+        fade = status.animate([{ opacity: 1 }, { opacity: 0 }], { duration: change, easing, fill: "forwards" });
+        fade.finished.then(() => { if (retiring) showStatus("", ""); }, () => {});
+      }
+      motion.addEventListener("change", () => {
+        if (motion.matches) {
+          pathAnim?.cancel();
+          if (retiring) showStatus("", "");
+          else fade?.cancel();
+        }
+      });
+      button.addEventListener("click", async () => {
+        const current = ++attempt;
+        clearTimeout(reset);
+        clearTimeout(pending);
+        fade?.cancel();
+        if (status.dataset.state !== "pending") {
+          pending = setTimeout(() => showStatus(pendingText, "pending"), 120);
+        }
+        const source = document.getElementById(button.dataset.copy);
+        try {
+          await navigator.clipboard.writeText(source.textContent);
+          if (current !== attempt) return;
+          showStatus(copiedText, "success");
+          acknowledge(true);
+          reset = setTimeout(retire, 3500);
+        } catch {
+          if (current !== attempt) return;
+          showStatus(failedText, "error");
+          acknowledge(false);
+        } finally {
+          if (current === attempt) clearTimeout(pending);
+        }
+      });
+    }
+  })();
+</script>

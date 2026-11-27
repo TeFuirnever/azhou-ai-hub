@@ -70,6 +70,15 @@ eleventyComputed:
       };
       syncToc();
       wide.addEventListener("change", syncToc);
+      const tocLinks = Array.from(toc.querySelectorAll('a[href^="#"]'));
+      const setCurrentToc = (hash) => {
+        for (const link of tocLinks) {
+          if (hash && link.getAttribute("href") === hash) link.setAttribute("aria-current", "location");
+          else link.removeAttribute("aria-current");
+        }
+      };
+      setCurrentToc(location.hash);
+      window.addEventListener("hashchange", () => setCurrentToc(location.hash));
     </script>
     {% endif %}
     <div class="article-copy">

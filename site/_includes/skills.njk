@@ -21,7 +21,7 @@ layout: base.njk
        data-results="{{ '{total} 个技能中的 {count} 个' if zh else '{count} of {total} skills' }}"
        data-empty="{{ '没有匹配的技能。试试更短的关键词，或清空搜索。' if zh else 'No matching skills. Try fewer words or clear the search.' }}"></p>
   </div>
-  <ul class="cardgrid" id="skill-list">
+  <ul class="cardgrid" id="skill-list" data-reveal>
     {%- set other = 'en' if zh else 'zh' %}
     {%- for skill in skills %}
     <li id="{{ skill.name }}" data-other-language="{{ (skill.summary[other].title ~ ' ' ~ skill.summary[other].task) | escape }}">
@@ -55,6 +55,7 @@ layout: base.njk
 <script>
   const input = document.getElementById("skill-search");
   const clear = document.getElementById("clear-skill-search");
+  const list = document.getElementById("skill-list");
   const catalogLanguageLink = document.getElementById("switch-language");
   const count = document.getElementById("skill-count");
   const items = Array.from(document.querySelectorAll("#skill-list > li"), element => ({
@@ -67,15 +68,17 @@ layout: base.njk
   }
   function updateSkills() {
     const query = input.value.trim();
-    const terms = query.toLowerCase().split(/\s+/);
+    const terms = query ? query.toLowerCase().split(/\s+/) : [];
     let found = 0;
     for (const { element, keywords } of items) {
-      const visible = terms.every(term => keywords.includes(term));
+      const visible = !terms.length || terms.every(term => keywords.includes(term));
       if (element.hidden === visible) element.hidden = !visible;
       if (visible) found += 1;
     }
+    const nextState = !query ? "all" : (found ? "results" : "empty");
     const message = !query ? count.dataset.all :
       found ? count.dataset.results.replace("{total}", items.length).replace("{count}", found) : count.dataset.empty;
+    if (count.dataset.state !== nextState) count.dataset.state = nextState;
     if (count.textContent !== message) count.textContent = message;
     clear.disabled = input.value === "";
 
@@ -138,6 +141,11 @@ layout: base.njk
     input.value = "";
     input.focus();
     saveSearch();
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      list.classList.remove("is-resetting");
+      void list.offsetWidth;
+      list.classList.add("is-resetting");
+    }
   });
   window.addEventListener("pageshow", event => {
     if (event.persisted) restoreSearch();

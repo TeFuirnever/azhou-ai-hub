@@ -16,7 +16,7 @@ layout: base.njk
   </div>
 </section>
 <div class="wrap library-grid">
-  <section class="library-main" aria-labelledby="results-title">
+  <section class="library-main" aria-labelledby="results-title" data-reveal style="--reveal-i: 0">
     {% if sourceLibrary.entries.length %}
     <form id="library-search" class="library-search" role="search" action="{{ site.routes[lang].library | url }}" hidden
       method="get" data-index="{{ '/pagefind/pagefind.js' | url }}"
@@ -59,7 +59,7 @@ layout: base.njk
     </ul>
     {% if not sourceLibrary.entries.length %}<p>{{ '首批选文即将发布。现在可以先浏览官方来源，或订阅更新。' if zh else 'The first selections are coming soon. Browse the official sources or subscribe for updates.' }}</p>{% endif %}
   </section>
-  <aside class="library-sidebar" aria-labelledby="sources-title">
+  <aside class="library-sidebar" aria-labelledby="sources-title" data-reveal style="--reveal-i: 1">
     <h2 id="sources-title">{{ '按来源浏览' if zh else 'Browse sources' }}</h2>
     <ul class="channel-list">
       {% for source in sourceLibrary.channels %}

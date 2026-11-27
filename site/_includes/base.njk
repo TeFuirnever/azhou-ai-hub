@@ -17,8 +17,8 @@
   <link rel="alternate" type="application/rss+xml" title="Azhou Source Library" href="{{ '/library/rss.xml' | url }}">
   {% if sourceFeed %}<link rel="alternate" type="application/rss+xml" title="{{ title | escape }} RSS" href="{{ sourceFeed | url }}">{% endif %}
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🦊</text></svg>">
-  <meta name="theme-color" content="#f6f1e7" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#1a211d" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0a0a0b" media="(prefers-color-scheme: dark)">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Azhou AI Hub">
   <meta property="og:title" content="{{ title | escape }}">
@@ -34,24 +34,41 @@
   {%- endif %}
   <meta name="twitter:image" content="{{ ogImage }}">
   <script>
-    window.addEventListener("pagereveal", ({ viewTransition }) => {
-      if (!viewTransition) return;
+    (() => {
       const motion = matchMedia("(prefers-reduced-motion: reduce)");
-      const traversal = window.navigation?.activation?.navigationType === "traverse";
-      if (motion.matches || traversal || location.hash || scrollY > 0) {
-        viewTransition.skipTransition();
-        return;
+      let sameOriginRef = false;
+      try {
+        sameOriginRef = Boolean(document.referrer && new URL(document.referrer).origin === location.origin);
+      } catch {}
+      const hasActivationFrom = Boolean(window.navigation?.activation?.from);
+      let seen = false;
+      try {
+        seen = sessionStorage.getItem("az-hero-entered") === "1";
+      } catch {}
+      if (!motion.matches && !location.hash && scrollY === 0 && !sameOriginRef && !hasActivationFrom && !seen) {
+        document.documentElement.classList.add("az-hero-enter");
+        try {
+          sessionStorage.setItem("az-hero-entered", "1");
+        } catch {}
       }
-      const listener = new AbortController();
-      const stop = () => viewTransition.skipTransition();
-      const options = { capture: true, passive: true, signal: listener.signal };
-      for (const event of ["pointerdown", "keydown", "wheel", "touchmove", "scroll", "resize", "pagehide"]) {
-        window.addEventListener(event, stop, options);
-      }
-      motion.addEventListener("change", stop, options);
-      const cleanup = () => listener.abort();
-      viewTransition.finished.then(cleanup, cleanup);
-    });
+      window.addEventListener("pagereveal", ({ viewTransition }) => {
+        if (!viewTransition) return;
+        const traversal = window.navigation?.activation?.navigationType === "traverse";
+        if (motion.matches || traversal || location.hash || scrollY > 0) {
+          viewTransition.skipTransition();
+          return;
+        }
+        const listener = new AbortController();
+        const stop = () => viewTransition.skipTransition();
+        const options = { capture: true, passive: true, signal: listener.signal };
+        for (const event of ["pointerdown", "keydown", "wheel", "touchmove", "scroll", "resize", "pagehide"]) {
+          window.addEventListener(event, stop, options);
+        }
+        motion.addEventListener("change", stop, options);
+        const cleanup = () => listener.abort();
+        viewTransition.finished.then(cleanup, cleanup);
+      });
+    })();
   </script>
   <style>
     :root {
@@ -59,60 +76,80 @@
       --motion-feedback: 120ms;
       --motion-change: 160ms;
       --motion-expand: 240ms;
+      --motion-enter: 480ms;
+      --motion-stagger: 40ms;
       --motion-ease: cubic-bezier(.23, 1, .32, 1);
       /* State and opacity lean forward; anything that travels a distance
-         (a disclosure's box, an anchor glide) starts and settles gently. */
+         (a disclosure's box, an anchor glide, a tilt settle) starts and settles gently. */
       --motion-move: cubic-bezier(.4, 0, .2, 1);
-      --az-bg: #f6f1e7;
-      --az-bg-2: #f0ecde;
-      --az-bg-3: #e5e8d9;
-      --az-card: #fffbf1;
-      --az-border: #7c8970;
-      --az-border-2: #c5c9b7;
-      --az-text: #212d26;
-      --az-text-2: #4d5a51;
-      --az-accent: #31533f;
-      --az-accent-hover: #294636;
-      --az-accent-active: #223a2d;
-      --az-accent-surface: #e2e9d9;
-      --az-btn-text: #fffaf0;
-      --az-code-bg: #ebe6d9;
-      --az-code-text: #2e4236;
-      --az-brand-text: #a04023;
+      --az-bg: #f6f5f2;
+      --az-bg-2: #eeece8;
+      --az-bg-3: #e5e2dc;
+      --az-card: #ffffff;
+      --az-rule: #161616;
+      --az-border: #8a8780;
+      --az-border-2: #d6d3cc;
+      --az-text: #121212;
+      --az-text-2: #55534f;
+      --az-accent: #a93b0c;
+      --az-accent-hover: #8a300a;
+      --az-accent-active: #722708;
+      --az-accent-surface: #f3e3d9;
+      --az-accent-glow: #ff5a1f;
+      --az-danger: #b91c1c;
+      --az-btn-bg: #121212;
+      --az-btn-text: #f6f5f2;
+      --az-term-bg: #111113;
+      --az-term-text: #ededed;
+      --az-term-muted: #a5a4a0;
+      --az-term-border: #2a2a2e;
+      --az-term-hover: #222226;
+      --az-code-bg: #ebe8e2;
+      --az-code-text: #2b2b2b;
+      --az-brand-text: #a93b0c;
       --az-band: var(--az-bg-2);
       --az-band-border: var(--az-border-2);
-      --az-shadow-head: 0 6px 16px rgba(33, 45, 38, .09);
-      --az-font: "Avenir Next", "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
-      --az-display: "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", "SimSun", Georgia, serif;
-      --az-mono: "Roboto Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+      --az-shadow-head: 0 6px 16px rgba(18, 18, 18, .08);
+      --az-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "HarmonyOS Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+      --az-display: "SF Pro Display", -apple-system, BlinkMacSystemFont, "PingFang SC", "HarmonyOS Sans SC", "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+      --az-mono: "SFMono-Regular", "Roboto Mono", Menlo, Consolas, "Liberation Mono", monospace;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --az-bg: #1a211d;
-        --az-bg-2: #1e2822;
-        --az-bg-3: #304033;
-        --az-card: #222c25;
-        --az-border: #78917b;
-        --az-border-2: #515e50;
-        --az-text: #f0ebde;
-        --az-text-2: #c1cbbd;
-        --az-accent: #b4d1b3;
-        --az-accent-hover: #c9e1c9;
-        --az-accent-active: #9dbc9d;
-        --az-accent-surface: rgba(143, 212, 171, .16);
-        --az-btn-text: #192920;
-        --az-code-bg: #25332a;
-        --az-code-text: #e2ede0;
-        --az-brand-text: #f3a181;
-        --az-shadow-head: 0 6px 16px rgba(0, 0, 0, .42);
+        --az-bg: #0a0a0b;
+        --az-bg-2: #111113;
+        --az-bg-3: #1d1d20;
+        --az-card: #141416;
+        --az-rule: #3a3a3e;
+        --az-border: #6e6e73;
+        --az-border-2: #2a2a2e;
+        --az-text: #f2f1ee;
+        --az-text-2: #a5a4a0;
+        --az-accent: #ff8a57;
+        --az-accent-hover: #ffa57d;
+        --az-accent-active: #e8763f;
+        --az-accent-surface: rgba(255, 122, 69, .14);
+        --az-accent-glow: #ff6a2b;
+        --az-danger: #ff7b72;
+        --az-btn-bg: #f2f1ee;
+        --az-btn-text: #0a0a0b;
+        --az-term-bg: #141416;
+        --az-term-text: #ededed;
+        --az-term-muted: #a5a4a0;
+        --az-term-border: #3a3a3e;
+        --az-term-hover: #242428;
+        --az-code-bg: #1d1d20;
+        --az-code-text: #ededed;
+        --az-brand-text: #ff8a57;
+        --az-shadow-head: 0 8px 20px rgba(0, 0, 0, .55);
       }
     }
     * { box-sizing: border-box; }
     :root { --site-header-fallback: 4.6rem; }
-    @media (max-width: 46rem) {
+    @media (max-width: 45.999rem) {
       :root { --site-header-fallback: 6.2rem; }
     }
-    @media (max-width: 46rem) and (pointer: coarse) {
+    @media (max-width: 45.999rem) and (pointer: coarse) {
       :root { --site-header-fallback: 6.4rem; }
     }
     html { scroll-padding-top: calc(var(--site-header-height, var(--site-header-fallback)) + 25px); }
@@ -121,6 +158,7 @@
       background: var(--az-bg);
       color: var(--az-text);
       font: 400 16px/24px var(--az-font);
+      -webkit-font-smoothing: antialiased;
     }
     ::view-transition { pointer-events: none; }
     ::view-transition-group(*), ::view-transition-new(*) { animation: none; }
@@ -141,7 +179,7 @@
       }
     }
     /* Resting underlines stay legible on every surface, then answer the pointer
-       with the shared feedback curve. Writing the offset on :hover moved it. */
+       with the shared feedback curve. */
     a {
       color: var(--az-accent);
       text-decoration: underline;
@@ -150,13 +188,17 @@
       text-underline-offset: .15em;
     }
     @media (hover: hover) and (pointer: fine) {
-      a:hover, a:active { text-decoration-color: currentColor; }
+      a:where(:not(.btn, .capability-link, .gcard, .brand)):hover { color: var(--az-accent-hover); text-decoration-color: currentColor; }
+      a:where(:not(.btn, .capability-link, .gcard, .brand)):active { color: var(--az-accent-active); text-decoration-color: currentColor; }
     }
     :focus-visible { outline: 2px solid var(--az-accent); outline-offset: 2px; border-radius: 2px; }
-    ::selection { background: var(--az-accent); color: var(--az-btn-text); }
+    ::selection {
+      background: color-mix(in srgb, var(--az-accent-glow) 30%, transparent);
+      color: inherit;
+    }
     .skip-link {
       position: absolute; left: -9999px; top: 1rem; z-index: 100;
-      background: var(--az-accent); color: var(--az-btn-text);
+      background: var(--az-btn-bg); color: var(--az-btn-text);
       padding: .5rem .9rem; border-radius: 4px;
       font: 500 14px/20px var(--az-font); text-decoration: none;
     }
@@ -168,39 +210,79 @@
     .site-head {
       position: sticky; top: 0; z-index: 10;
       background: var(--az-bg);
+      background: color-mix(in srgb, var(--az-bg) 82%, transparent);
+      -webkit-backdrop-filter: saturate(1.4) blur(16px);
+      backdrop-filter: saturate(1.4) blur(16px);
       border-bottom: 1px solid var(--az-border-2);
       box-shadow: 0 6px 16px transparent;
     }
-    /* The shadow fades in paint rather than through an opacity layer, whose
-       teardown makes WebKit read its start value on the last frame. */
-    @media (min-width: 680px) {
-      .site-head[data-elevated] { box-shadow: var(--az-shadow-head); }
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .site-head { background: var(--az-bg); }
+    }
+    @media (prefers-reduced-transparency: reduce) {
+      .site-head {
+        background: var(--az-bg);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+      }
+    }
+    /* Paint-only elevation avoids WebKit opacity-layer teardown jumps. */
+    @media (min-width: 46rem) {
+      .site-head[data-elevated] {
+        box-shadow: var(--az-shadow-head);
+        border-bottom-color: color-mix(in srgb, var(--az-rule) 28%, transparent);
+      }
     }
     .site-head nav {
+      position: relative; isolation: isolate;
       display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center;
-      min-height: 64px; max-width: 1120px; margin: 0 auto; padding: 8px 24px;
+      min-height: 64px; max-width: 1440px; margin: 0 auto; padding: 8px 24px;
     }
-    body.doc .site-head nav { max-width: 1440px; }
-    .brand { font: 500 16px/24px var(--az-font); color: var(--az-text); text-decoration: none; padding: 8px 8px; margin: -8px 0 -8px -8px; }
+    .brand { font: 600 16px/24px var(--az-font); color: var(--az-text); text-decoration: none; padding: 8px 8px; margin: -8px 0 -8px -8px; }
     .site-head nav a:not(.brand) {
+      position: relative;
       font: 500 14px/20px var(--az-font);
       color: var(--az-text-2); text-decoration: none;
       padding: 8px 10px; border-radius: 4px;
     }
-    .site-head nav a[aria-current="page"] { background: var(--az-accent-surface); color: var(--az-accent); }
+    .site-head nav a[aria-current="page"] { color: var(--az-text); }
+    .site-head nav a[aria-current="page"]::after {
+      content: "";
+      position: absolute;
+      inset-inline: 10px;
+      inset-block-end: 4px;
+      block-size: 2px;
+      background: var(--az-accent);
+      pointer-events: none;
+    }
+    @media (forced-colors: active) {
+      .site-head nav a[aria-current="page"] { text-decoration: underline; }
+      .site-head nav a[aria-current="page"]::after { display: none; }
+    }
+    .nav-indicator {
+      display: none;
+      position: absolute;
+      top: 0; left: 0;
+      z-index: -1;
+      pointer-events: none;
+      border-radius: 4px;
+      background: var(--az-bg-3);
+      opacity: 0;
+      transform: translate3d(var(--x, 0px), var(--y, 0px), 0);
+      inline-size: var(--w, 0px);
+      block-size: var(--h, 0px);
+    }
     .spacer { flex: 1; }
-    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+    .wrap { max-width: 1440px; margin: 0 auto; padding: 0 24px; }
     .band { background: var(--az-band); border-bottom: 1px solid var(--az-band-border); }
     .band .wrap { padding-top: 60px; padding-bottom: 60px; }
     .band h1 {
-      font: 500 44px/52px var(--az-font);
-      letter-spacing: 0;
+      font: 650 44px/52px var(--az-display);
+      letter-spacing: -.035em;
       margin: 0 0 16px;
       max-width: 24ch;
     }
     .lede { font: 400 20px/32px var(--az-font); color: var(--az-text-2); margin: 0 0 16px; max-width: 52ch; }
-    /* ch-based caps measure Latin glyphs; on zh they orphan single CJK glyphs
-       at the line end, so zh hero text wraps on the band width instead. */
     :lang(zh) .band h1, :lang(zh) .lede { max-width: none; }
     .cta { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 32px; }
     .btn {
@@ -208,9 +290,8 @@
       appearance: none; border-radius: 4px; border: 0; background: transparent; cursor: pointer;
       font: 500 14px/20px var(--az-font); text-decoration: none;
     }
-    .btn-primary { background: var(--az-accent); color: var(--az-btn-text); }
-    .btn-outline { border: 1px solid var(--az-border); color: var(--az-text); }
-    .btn-outline:not(:disabled):active, .site-head nav a:active, summary:active, .channel-list a:active { background: var(--az-accent-surface); }
+    .btn-primary { background: var(--az-btn-bg); color: var(--az-btn-text); border: 1px solid var(--az-btn-bg); }
+    .btn-outline { border: 1px solid var(--az-rule); color: var(--az-text); background: transparent; }
     .btn:disabled { color: var(--az-text-2); cursor: default; }
     .btn-outline:disabled { border-color: var(--az-border-2); }
     [hidden] { display: none !important; }
@@ -219,16 +300,33 @@
       display: grid; grid-template-columns: max-content minmax(0, 1fr);
       align-items: center; justify-items: start; gap: .25rem .75rem;
     }
-    .copy-status {
-      display: flex; align-items: baseline; gap: .35em;
-      min-block-size: 1.5rem; color: var(--az-text-2);
+    .term-bar .copy-actions {
+      display: inline-flex; align-items: center;
     }
-    .copy-check { display: none; }
-    .copy-status[data-state="success"] .copy-check { display: inline; }
+    .copy-status {
+      display: inline-flex; align-items: center; gap: .4em;
+      min-block-size: 1.5rem; color: var(--az-text-2);
+      font-size: 13px; line-height: 1.3;
+      opacity: 0;
+    }
+    .copy-status[data-state="pending"],
+    .copy-status[data-state="success"],
+    .copy-status[data-state="error"] { opacity: 1; }
+    .copy-check, .copy-err { display: none; flex: none; }
+    .copy-status[data-state="success"] .copy-check { display: inline-block; }
     .copy-status[data-state="success"] { color: var(--az-accent); }
+    .copy-status[data-state="error"] .copy-err { display: inline-block; }
+    .copy-status[data-state="error"] { color: var(--az-danger); }
+    .term-bar .copy-status { color: var(--az-term-muted); }
+    .term-bar .copy-status[data-state="success"] { color: #ff8a57; }
+    .term-bar .copy-status[data-state="error"] { color: #ff7b72; }
+    .copy-check path {
+      stroke-dasharray: 24;
+      stroke-dashoffset: 0;
+    }
     @media (max-width: 599px) {
-      .copy-actions { grid-template-columns: minmax(0, 1fr); }
-      .copy-status { min-block-size: 3rem; }
+      .copy-actions:not(.term-bar .copy-actions) { grid-template-columns: minmax(0, 1fr); }
+      .copy-status:not(.term-bar .copy-status) { min-block-size: 3rem; }
     }
     details summary {
       cursor: pointer; width: fit-content; padding: .5rem .45rem; margin-inline: -.45rem;
@@ -242,34 +340,37 @@
       transform: rotate(-45deg);
     }
     details[open] > summary::before { transform: rotate(45deg); }
-    /* The arrival mark is paint only: a tint and a frame that never touch margins or padding. */
-    .hub-arrived { border-radius: 4px; }
+    .hub-arrived { border-radius: 2px; }
     #skill-filter { margin-top: 24px; }
     #skill-filter label { display: block; margin-block-end: .25rem; }
     .skill-search-controls { display: flex; align-items: center; gap: .5rem; }
     #skill-search {
       width: min(100%, 24rem); min-width: 0; min-height: 44px; padding: .5rem .75rem; border-radius: 4px;
-      border: 1px solid var(--az-text-2); background: var(--az-bg); color: var(--az-text); font: inherit;
+      border: 1px solid var(--az-border); background: var(--az-card); color: var(--az-text); font: inherit;
     }
     #skill-search::-webkit-search-cancel-button { appearance: none; }
     #clear-skill-search { flex: none; min-height: 44px; padding-inline: .75rem; }
     #skill-count { color: var(--az-text-2); margin: .5rem 0 0; font-variant-numeric: tabular-nums; }
     .skill-name { align-self: flex-start; margin-block-start: auto; overflow-wrap: anywhere; font-size: 12px; }
     .gcard:active { background: var(--az-accent-surface); }
-    .sec h2 { font: 500 24px/32px var(--az-font); letter-spacing: 0; margin: 0 0 16px; }
+    .sec h2 { font: 650 24px/32px var(--az-display); letter-spacing: -.02em; margin: 0 0 16px; }
     .sec > .wrap > p { margin: 0 0 16px; max-width: 72ch; }
     code {
-      font-family: var(--az-mono); font-size: 100%;
+      font-family: var(--az-mono); font-size: 94%;
       background: var(--az-code-bg); color: var(--az-code-text);
-      padding: 1px 4px; border-radius: 3px;
+      padding: 1px 5px; border-radius: 3px;
     }
     pre {
-      background: var(--az-code-bg); color: var(--az-code-text);
+      background: var(--az-term-bg); color: var(--az-term-text);
+      border: 1px solid var(--az-term-border);
       font: 400 14px/24px var(--az-mono);
       padding: 16px 20px; border-radius: 4px;
       overflow-x: auto; margin: 16px 0 24px;
     }
-    pre.wrap-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+    pre code {
+      background: transparent; color: inherit; padding: 0; font-size: 100%; border-radius: 0;
+    }
+    pre.wrap-text, .doc-card pre { white-space: pre-wrap; overflow-wrap: anywhere; }
     .cardgrid {
       list-style: none; padding: 0; margin: 16px 0 32px;
       display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 16px;
@@ -280,46 +381,70 @@
       border: 1px solid var(--az-border); border-radius: 8px;
       padding: 16px; text-decoration: none;
     }
-    .gcard-t { font: 500 16px/1.3 var(--az-font); color: var(--az-accent); }
+    .gcard-t { font: 600 16px/1.3 var(--az-font); color: var(--az-accent); }
     .gcard-d { font: 400 13px/1.45 var(--az-font); color: var(--az-text-2); overflow-wrap: anywhere; }
-    .btn-primary:active { background: var(--az-accent-active); }
+    .btn-primary:not(:disabled):active { background: var(--az-accent-active); border-color: var(--az-accent-active); color: #fff; }
+    .btn-outline:not(:disabled):active { background: var(--az-accent-surface); }
     @media (prefers-reduced-motion: reduce) {
       .hub-arrived, .gcard.hub-arrived { background: var(--az-accent-surface); }
-      :is(h1, h2, h3, h4, h5, h6).hub-arrived { box-shadow: 0 0 0 .35rem var(--az-accent-surface); }
+      :is(h1, h2, h3, h4, h5, h6).hub-arrived { box-shadow: -3px 0 0 0 var(--az-accent), 0 0 0 .35rem var(--az-accent-surface); }
     }
-    /* Forced colours drop tints and shadows; the mark stays as an outline there. */
     @media (forced-colors: active) {
       .hub-arrived { outline: 2px solid CanvasText; outline-offset: 2px; }
     }
     @media (prefers-reduced-motion: no-preference) {
       @keyframes state-arrive {
-        from { opacity: .65; }
+        from { opacity: .55; }
       }
-      .btn { transition: color var(--motion-feedback) var(--motion-ease), border-color var(--motion-feedback) var(--motion-ease); }
-      a { transition: text-decoration-color var(--motion-feedback) var(--motion-ease); }
+      .copy-status { transition: opacity var(--motion-feedback) var(--motion-ease); }
+      .btn {
+        transition:
+          color var(--motion-feedback) var(--motion-ease),
+          background-color var(--motion-feedback) var(--motion-ease),
+          border-color var(--motion-feedback) var(--motion-ease),
+          transform var(--motion-feedback) var(--motion-ease);
+      }
+      .btn:not(:disabled):active { transform: scale(.97); }
+      a {
+        transition:
+          color var(--motion-feedback) var(--motion-ease),
+          text-decoration-color var(--motion-feedback) var(--motion-ease);
+      }
       a:active { transition: none; }
-      .site-head { transition: box-shadow var(--motion-feedback) var(--motion-ease); }
+      .brand-mark { transition: border-color var(--motion-feedback) var(--motion-ease), color var(--motion-feedback) var(--motion-ease), transform var(--motion-feedback) var(--motion-ease); }
+      .brand:active .brand-mark { transform: scale(.97); }
+      .site-head {
+        transition:
+          box-shadow var(--motion-feedback) var(--motion-ease),
+          border-bottom-color var(--motion-change) var(--motion-ease);
+      }
+      @media (hover: hover) and (pointer: fine) and (min-width: 46rem) {
+        .nav-indicator {
+          display: block;
+          transition:
+            opacity var(--motion-change) var(--motion-ease),
+            transform var(--motion-expand) var(--motion-ease),
+            inline-size var(--motion-expand) var(--motion-ease),
+            block-size var(--motion-expand) var(--motion-ease);
+        }
+        .nav-indicator[data-jump] {
+          transition: opacity var(--motion-change) var(--motion-ease);
+        }
+        .nav-indicator[data-hovering] { opacity: 1; }
+      }
       details.hub-motion > summary::before { transition: transform var(--motion-change) var(--motion-move); }
       details.hub-motion[open] > summary::before { transition-duration: var(--motion-expand); }
       @supports selector(details::details-content) {
         :where(details.hub-motion[open])::details-content { animation: state-arrive var(--motion-change) var(--motion-ease); }
       }
-      /* Without the content pseudo-element the children fade in themselves. */
       @supports not selector(details::details-content) {
         details.hub-motion[open] > :not(summary) { animation: state-arrive var(--motion-change) var(--motion-ease); }
       }
-      /* Where the content pseudo-element and keyword interpolation exist, a disclosure
-         a person toggles opens and closes on its own box; closing is the shorter change.
-         flow-root keeps child margins inside the box so the last frame cannot jump.
-         Closed content stays hidden the browser's own way, which keeps it findable;
-         the script below turns motion on only for a click on the summary. */
       @supports (interpolate-size: allow-keywords) and (transition-behavior: allow-discrete) and selector(details::details-content) {
         :root { interpolate-size: allow-keywords; }
         details::details-content {
           display: flow-root;
           block-size: 0;
-          /* The negative margins cancel the padding, so resting layout stays put
-             while focus rings keep their room inside the clip. */
           padding: 6px 8px;
           margin: -6px -8px;
           overflow: clip;
@@ -337,6 +462,7 @@
     }
     @media (prefers-reduced-motion: reduce) {
       summary::before { transition: none; }
+      .btn { transition: color var(--motion-feedback) var(--motion-ease), background-color var(--motion-feedback) var(--motion-ease), border-color var(--motion-feedback) var(--motion-ease); }
     }
     .gcard:focus-visible { border-color: var(--az-accent); }
     .doc-shell { max-width: 1440px; margin: 0 auto; padding: 32px 24px 72px; }
@@ -346,15 +472,14 @@
       padding: 40px;
       max-width: 1072px;
     }
-    .doc-card h1 { font: 500 32px/40px var(--az-font); letter-spacing: 0; margin: 0 0 24px; }
+    .doc-card h1 { font: 650 32px/40px var(--az-display); letter-spacing: -.03em; margin: 0 0 24px; }
     .doclist { list-style: none; padding: 0; margin: 16px 0 24px; }
     .doclist li { padding: 8px 0; border-bottom: 1px solid var(--az-border-2); }
     .site-foot { border-top: 0; }
     .site-foot .wrap { padding-top: 32px; padding-bottom: 48px; font: 400 13px/20px var(--az-font); color: var(--az-text-2); }
-    body.doc .site-foot .wrap { max-width: 1440px; }
     .site-foot p { margin: 4px 0; max-width: 90ch; }
     .site-foot a { color: var(--az-accent); }
-    @media (max-width: 679px) {
+    @media (max-width: 45.999rem) {
       html { scroll-padding-top: 16px; }
       .site-head { position: static; }
       .site-head nav { gap: 4px; }
@@ -362,7 +487,7 @@
       .spacer { display: none; }
       .site-head nav a:not(.brand) { padding-inline: 7px; }
       .band .wrap { padding-top: 40px; padding-bottom: 40px; }
-      .band h1 { font: 500 32px/40px var(--az-font); }
+      .band h1 { font: 650 32px/40px var(--az-display); }
       .lede { font: 400 18px/28px var(--az-font); }
       .sec { padding: 40px 0; }
     }
@@ -377,6 +502,7 @@
       .site-head, .site-foot, .brand-rule { display: none; }
       body, body.doc { color: #000; background: #fff; }
       .doc-card { box-shadow: none; }
+      [data-reveal] { opacity: 1 !important; transform: none !important; }
     }
   </style>
   <link rel="stylesheet" href="{{ '/assets/azhou-site.css' | url }}">
@@ -418,7 +544,88 @@
   <main id="main" tabindex="-1"{% if bodyClass == "doc" %} class="doc-shell"{% endif %}>
     {{ content | safe }}
   </main>
-  <div class="brand-rule" aria-hidden="true"></div>
+  <script>
+    (() => {
+      const motion = matchMedia("(prefers-reduced-motion: reduce)");
+      const items = Array.from(document.querySelectorAll("[data-reveal]"));
+      const finishItem = (el) => {
+        el.dataset.reveal = "in";
+        el.removeAttribute("data-reveal-instant");
+      };
+      window.hubFlushReveal = () => {
+        for (const el of items) {
+          if (el.dataset.reveal === "pending") {
+            el.dataset.revealInstant = "";
+            el.dataset.reveal = "in";
+          }
+        }
+      };
+      if (!items.length || motion.matches || !("IntersectionObserver" in window) || location.hash || scrollY > 0) {
+        for (const el of items) finishItem(el);
+        return;
+      }
+      const cutoff = innerHeight * 0.92;
+      const pending = [];
+      for (const el of items) {
+        if (el.getBoundingClientRect().top > cutoff) {
+          el.dataset.reveal = "pending";
+          pending.push(el);
+        } else {
+          finishItem(el);
+        }
+      }
+      let observer = null;
+      const revealPassed = () => {
+        let remaining = 0;
+        for (const el of pending) {
+          if (el.dataset.reveal !== "pending") continue;
+          if (el.getBoundingClientRect().top <= innerHeight * 0.96) {
+            el.dataset.reveal = "in";
+            observer?.unobserve(el);
+          } else {
+            remaining += 1;
+          }
+        }
+        if (!remaining) window.removeEventListener("scroll", revealPassed);
+      };
+      if (pending.length) {
+        observer = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting && entry.boundingClientRect.top >= 0) continue;
+            entry.target.dataset.reveal = "in";
+            observer.unobserve(entry.target);
+          }
+        }, { threshold: 0.05, rootMargin: "0px 0px -24px 0px" });
+        for (const el of pending) observer.observe(el);
+        window.addEventListener("scroll", revealPassed, { passive: true });
+        document.addEventListener("beforematch", (event) => {
+          const host = event.target?.closest?.("[data-reveal='pending']");
+          if (host) {
+            host.dataset.revealInstant = "";
+            host.dataset.reveal = "in";
+            observer.unobserve(host);
+          }
+        });
+      }
+      motion.addEventListener("change", () => {
+        if (motion.matches) {
+          observer?.disconnect();
+          window.removeEventListener("scroll", revealPassed);
+          document.documentElement.classList.remove("az-hero-enter");
+          window.hubFlushReveal();
+        }
+      });
+      window.addEventListener("pageshow", (event) => {
+        if (event.persisted) {
+          observer?.disconnect();
+          window.removeEventListener("scroll", revealPassed);
+          document.documentElement.classList.remove("az-hero-enter");
+          window.hubFlushReveal();
+        }
+      });
+    })();
+  </script>
+  <div class="brand-rule foot-rule" aria-hidden="true"></div>
   <footer class="site-foot">
     <div class="wrap">
       {%- if lang == "zh" %}
@@ -446,10 +653,11 @@
     {%- endif %}
     (() => {
       const motion = matchMedia("(prefers-reduced-motion: reduce)");
+      const finePointer = matchMedia("(hover: hover) and (pointer: fine)");
+      const wideNav = matchMedia("(min-width: 46rem)");
       const tokens = getComputedStyle(document.documentElement);
       const easing = tokens.getPropertyValue("--motion-ease").trim();
       const curve = /^cubic-bezier\(([^)]+)\)$/.exec(tokens.getPropertyValue("--motion-move").trim());
-      // The glide reads the same curve as the stylesheet instead of keeping a second one.
       const bezier = curve && (([x1, y1, x2, y2]) => {
         const point = (a, b) => (t) => 3 * a * (1 - t) ** 2 * t + 3 * b * (1 - t) * t * t + t ** 3;
         const slope = (a, b) => (t) => 3 * (1 - t) ** 2 * a + 6 * (1 - t) * t * (b - a) + 3 * t * t * (1 - b);
@@ -469,16 +677,90 @@
 
       const head = document.querySelector(".site-head");
       const top = document.querySelector(".brand-rule");
-      if ("IntersectionObserver" in window) {
+      if (head && top && "IntersectionObserver" in window) {
         new IntersectionObserver(([entry]) => {
           head.toggleAttribute("data-elevated", !entry.isIntersecting);
         }).observe(top);
       }
 
-      // Motion is on only while a person toggles a disclosure with its summary. Find-in-page,
-      // scripts and layout breakpoints change it without motion, so a found line is exactly
-      // where the browser scrolled to. While a disclosure closes, its content stays rendered
-      // until the box has shrunk and cannot take focus.
+      // Header hover/focus sliding indicator on wide fine-pointer viewports.
+      const nav = document.querySelector(".site-head nav");
+      if (nav) {
+        const indicator = document.createElement("span");
+        indicator.className = "nav-indicator";
+        indicator.setAttribute("aria-hidden", "true");
+        nav.prepend(indicator);
+        let activeLink = null;
+        let lastRect = null;
+        const enabled = () => finePointer.matches && wideNav.matches && !motion.matches;
+        const syncNavClass = () => {
+          nav.classList.toggle("has-nav-indicator", enabled());
+          if (!enabled()) {
+            activeLink = null;
+            lastRect = null;
+            delete indicator.dataset.hovering;
+          }
+        };
+        const positionIndicator = (link, forceJump = false) => {
+          if (!enabled() || !link) return;
+          const navRect = nav.getBoundingClientRect();
+          const linkRect = link.getBoundingClientRect();
+          const wasHovering = indicator.hasAttribute("data-hovering");
+          const gap = lastRect ? Math.max(linkRect.left - lastRect.right, lastRect.left - linkRect.right) : 0;
+          const rowChanged = lastRect ? Math.abs(linkRect.top - lastRect.top) > 10 : false;
+          const shouldJump = forceJump || !wasHovering || gap > 80 || rowChanged;
+          if (shouldJump) indicator.setAttribute("data-jump", "");
+          indicator.style.setProperty("--x", (linkRect.left - navRect.left) + "px");
+          indicator.style.setProperty("--y", (linkRect.top - navRect.top) + "px");
+          indicator.style.setProperty("--w", linkRect.width + "px");
+          indicator.style.setProperty("--h", linkRect.height + "px");
+          if (shouldJump) {
+            void indicator.offsetWidth;
+            indicator.removeAttribute("data-jump");
+          }
+          indicator.setAttribute("data-hovering", "");
+          activeLink = link;
+          lastRect = linkRect;
+        };
+        const hideIndicator = () => {
+          activeLink = null;
+          indicator.removeAttribute("data-hovering");
+        };
+        nav.addEventListener("pointerover", (event) => {
+          if (event.pointerType === "touch" || !enabled()) return;
+          const link = event.target.closest("a");
+          if (link && nav.contains(link)) {
+            positionIndicator(link);
+          } else {
+            const focused = nav.querySelector("a:focus-visible");
+            if (focused) positionIndicator(focused);
+            else hideIndicator();
+          }
+        });
+        nav.addEventListener("pointerleave", () => {
+          const focused = enabled() ? nav.querySelector("a:focus-visible") : null;
+          if (focused) positionIndicator(focused);
+          else hideIndicator();
+        });
+        nav.addEventListener("focusin", (event) => {
+          if (!enabled()) return;
+          const link = event.target.closest("a");
+          if (link && link.matches(":focus-visible")) positionIndicator(link);
+        });
+        nav.addEventListener("focusout", (event) => {
+          if (!nav.contains(event.relatedTarget)) hideIndicator();
+        });
+        if ("ResizeObserver" in window) {
+          new ResizeObserver(() => {
+            if (activeLink && enabled()) positionIndicator(activeLink, true);
+          }).observe(nav);
+        }
+        for (const mq of [motion, finePointer, wideNav]) {
+          mq.addEventListener("change", syncNavClass);
+        }
+        syncNavClass();
+      }
+
       const settleDisclosures = [];
       for (const summary of document.querySelectorAll("main summary")) {
         const details = summary.parentElement;
@@ -491,8 +773,6 @@
           for (const child of content) child.inert = false;
         };
         settleDisclosures.push(settle);
-        // The box's own transition reports no event, so it is timed by the step it takes.
-        // Anything else that changes the box before then ends the step at once.
         details.addEventListener("toggle", () => {
           if (timer && details.open !== expected) settle();
         });
@@ -509,20 +789,40 @@
           timer = setTimeout(settle, duration(closing ? "--motion-change" : "--motion-expand") + 60);
         });
       }
-      // A hidden page shows no motion, and its timers run late.
       document.addEventListener("visibilitychange", () => {
         if (document.hidden) for (const settle of settleDisclosures) settle();
       });
 
-      // Arrival answers "where did I land" once instead of leaving a frame on the target.
-      // The next input dismisses it, which also covers a glide the user interrupts.
+      // Arrival answers "where did I land" once, fading softly if interrupted.
       let arrival = [];
       let marked = [];
-      function dismissMark() {
+      let retiring = false;
+      function clearMarkState() {
         for (const animation of arrival) animation.cancel();
         arrival = [];
         for (const element of marked) element.classList.remove("hub-arrived");
         marked = [];
+        retiring = false;
+      }
+      function dismissMark() {
+        if (!marked.length || retiring) return;
+        if (motion.matches || typeof marked[0].animate !== "function") {
+          clearMarkState();
+          return;
+        }
+        retiring = true;
+        for (const animation of arrival) animation.cancel();
+        arrival = [];
+        const box = marked[0];
+        const isHeading = box.matches(":is(h1, h2, h3, h4, h5, h6)");
+        const restShadow = isHeading ? "-3px 0 0 0 transparent, 0 0 0 .35rem transparent" : "0 0 0 0 transparent";
+        const fade = box.animate(
+          [{ backgroundColor: getComputedStyle(box).backgroundColor, boxShadow: getComputedStyle(box).boxShadow },
+           { backgroundColor: "transparent", boxShadow: restShadow }],
+          { duration: duration("--motion-feedback"), easing, fill: "forwards" }
+        );
+        arrival = [fade];
+        fade.finished.then(() => { if (retiring) clearMarkState(); }, () => {});
       }
       function landingBox(target) {
         if (!target.matches(".cardgrid > li")) return target;
@@ -536,7 +836,7 @@
         }
       }
       function highlightTarget() {
-        dismissMark();
+        clearMarkState();
         const target = fragmentTarget(location.hash);
         if (!target || !target.matches(":is(h1, h2, h3, h4, h5, h6, .cardgrid > li)")) return;
         const box = landingBox(target);
@@ -544,22 +844,28 @@
         box.classList.add("hub-arrived");
         if (motion.matches || typeof box.animate !== "function") return;
         const surface = tokens.getPropertyValue("--az-accent-surface").trim();
-        const frame = box.matches(":is(h1, h2, h3, h4, h5, h6)") ? "0 0 0 .35rem " : "0 0 0 0 ";
-        const rest = { backgroundColor: "transparent", boxShadow: frame + "transparent" };
-        const held = { backgroundColor: surface, boxShadow: frame + surface };
+        const accent = tokens.getPropertyValue("--az-accent").trim();
+        const isHeading = box.matches(":is(h1, h2, h3, h4, h5, h6)");
+        const rest = isHeading
+          ? { backgroundColor: "transparent", boxShadow: "-3px 0 0 0 transparent, 0 0 0 .35rem transparent" }
+          : { backgroundColor: "transparent", boxShadow: "0 0 0 0 transparent" };
+        const held = isHeading
+          ? { backgroundColor: surface, boxShadow: "-3px 0 0 0 " + accent + ", 0 0 0 .35rem " + surface }
+          : { backgroundColor: surface, boxShadow: "0 0 0 0 " + surface };
         const fadeIn = box.animate([rest, held],
           { duration: duration("--motion-feedback"), easing, fill: "forwards" });
         const fadeOut = box.animate([held, rest],
           { duration: duration("--motion-expand"), easing, delay: duration("--motion-feedback") + 1000, fill: "forwards" });
         arrival = [fadeIn, fadeOut];
         fadeOut.finished.then(() => {
-          if (arrival.includes(fadeOut)) dismissMark();
+          if (arrival.includes(fadeOut)) clearMarkState();
         }, () => {});
       }
       let announcing = false;
       window.addEventListener("hashchange", () => {
         if (announcing) return;
         if (glide) { glide.resolve(false); stopGlide(); }
+        window.hubFlushReveal?.();
         highlightTarget();
       });
       for (const type of ["pointerdown", "keydown", "wheel", "touchstart", "input", "click"]) {
@@ -571,9 +877,6 @@
       }, true);
       highlightTarget();
 
-      // In-page anchors glide only on an explicit click or Enter. Any scroll intent
-      // hands the page back at once and skips the focus hand-off. Entry by address,
-      // history traversal and reduced motion keep the native jump.
       let glide = null;
       function stopGlide() {
         if (!glide) return;
@@ -584,7 +887,6 @@
       }
       function landing(target) {
         const rest = landingPosition(target);
-        // Engines round fractional scroll offsets differently; land on a device pixel.
         return Math.round(rest * devicePixelRatio) / devicePixelRatio;
       }
       function glideTo(to) {
@@ -611,7 +913,7 @@
           window.addEventListener("visibilitychange", () => { if (document.hidden) settle(false); }, options);
           motion.addEventListener("change", () => settle(false), options);
           window.addEventListener("scroll", () => {
-            if (glide && Math.abs(scrollY - glide.expected) > 1) settle(false);
+            if (glide && Math.abs(scrollY - glide.expected) > 2.5) settle(false);
           }, options);
           const started = performance.now();
           const time = Math.min(320, 180 + Math.abs(span) * .08);
@@ -641,6 +943,7 @@
           }
         }
         event.preventDefault();
+        window.hubFlushReveal?.();
         announcing = true;
         window.dispatchEvent(new HashChangeEvent("hashchange"));
         announcing = false;
