@@ -301,13 +301,13 @@
       a { transition: text-decoration-color var(--motion-feedback) var(--motion-ease); }
       a:active { transition: none; }
       .site-head { transition: box-shadow var(--motion-feedback) var(--motion-ease); }
-      summary::before { transition: transform var(--motion-change) var(--motion-move); }
+      details.hub-motion > summary::before { transition: transform var(--motion-change) var(--motion-move); }
       @supports selector(details::details-content) {
-        details[open]::details-content { animation: state-arrive var(--motion-change) var(--motion-ease); }
+        :where(details.hub-motion[open])::details-content { animation: state-arrive var(--motion-change) var(--motion-ease); }
       }
       /* Without the content pseudo-element the children fade in themselves. */
       @supports not selector(details::details-content) {
-        details[open] > :not(summary) { animation: state-arrive var(--motion-change) var(--motion-ease); }
+        details.hub-motion[open] > :not(summary) { animation: state-arrive var(--motion-change) var(--motion-ease); }
       }
       /* Where the content pseudo-element and keyword interpolation exist, a disclosure
          a person toggles opens and closes on its own box; closing is the shorter change.
@@ -316,7 +316,7 @@
          the script below turns motion on only for a click on the summary. */
       @supports (interpolate-size: allow-keywords) and (transition-behavior: allow-discrete) and selector(details::details-content) {
         :root { interpolate-size: allow-keywords; }
-        details[open] > summary::before { transition-duration: var(--motion-expand); }
+        details.hub-motion[open] > summary::before { transition-duration: var(--motion-expand); }
         details::details-content {
           display: flow-root;
           block-size: 0;
