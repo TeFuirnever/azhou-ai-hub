@@ -7,10 +7,10 @@ layout: base.njk
 <article class="doc-card">
   <h1>{{ title }}</h1>
   <p>{{ '安装之前，先查你的 Agent 工具是否支持所需的技能或功能。以下链接指向英文文档。' if zh else 'Check whether your agent host supports the skill or feature you need before installing.' }}</p>
-  <ul class="doclist">
-    <li><a href="{{ site.blobBase }}/docs/skill-platform-view.md" hreflang="en">{{ '查某个技能支持哪些工具' if zh else 'Check a skill by agent host' }}</a></li>
-    <li><a href="{{ matrix }}" hreflang="en">{{ '查工具支持哪些功能' if zh else 'Compare host capabilities' }}</a></li>
-    <li><a href="{{ matrix }}#operating-system-support-deterministic-gate" hreflang="en">{{ '查操作系统支持' if zh else 'Check operating system support' }}</a></li>
-    <li><a href="{{ matrix }}#optional-integrations" hreflang="en">{{ '查可选集成' if zh else 'Check optional integrations' }}</a></li>
+  <ul class="doclist" data-reveal>
+    <li><a href="{{ site.blobBase }}/docs/skill-platform-view.md" hreflang="en"><span class="doc-link-text">{{ '查某个技能支持哪些工具' if zh else 'Check a skill by agent host' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+    <li><a href="{{ matrix }}" hreflang="en"><span class="doc-link-text">{{ '查工具支持哪些功能' if zh else 'Compare host capabilities' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+    <li><a href="{{ matrix }}#operating-system-support-deterministic-gate" hreflang="en"><span class="doc-link-text">{{ '查操作系统支持' if zh else 'Check operating system support' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+    <li><a href="{{ matrix }}#optional-integrations" hreflang="en"><span class="doc-link-text">{{ '查可选集成' if zh else 'Check optional integrations' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
   </ul>
 </article>

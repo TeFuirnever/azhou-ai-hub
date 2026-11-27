@@ -2,19 +2,14 @@ const form = document.querySelector("#library-search");
 const results = document.querySelector("#library-results");
 const status = document.querySelector("#library-status");
 const title = document.querySelector("#results-title");
+const clearButton = document.querySelector("#library-clear-filters");
 const entries = JSON.parse(document.querySelector("#library-data").textContent);
 const byId = new Map(entries.map((entry) => [entry.id, entry]));
 const rows = new Map(Array.from(results.children, (row) => [row.dataset.entryId, row]));
 const zh = form.dataset.locale === "zh";
 const query = form.elements.namedItem("q");
-const endDate = form.elements.namedItem("to");
-const filterDetails = document.getElementById("library-filter-details");
-const reset = document.getElementById("library-reset");
-const filterNames = ["source", "kind", "from", "to"];
 const languageLink = document.getElementById("switch-language");
-const languageDraftKey = "hub-library-language-draft";
-let appliedQuery = "";
-let cleared;
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 let sequence = 0;
 let indexReady;
 let pending;
@@ -24,12 +19,14 @@ const normalize = (text) => text.normalize("NFKC").trim().toLocaleLowerCase();
 function renderResults(matches) {
   const focused = results.contains(document.activeElement) ? document.activeElement : null;
   const focusedId = focused?.closest("[data-entry-id]")?.dataset.entryId;
+  const previousIds = new Set(Array.from(results.children, (row) => row.dataset.entryId));
   for (const row of Array.from(results.children)) {
     if (!matches.has(row.dataset.entryId)) row.remove();
   }
   let position = results.firstElementChild;
   for (const [id, text] of matches) {
     const row = rows.get(id);
+    const isNew = !previousIds.has(id);
     const existing = row.querySelector("[data-excerpt]");
     if (text && !existing) {
       const excerpt = document.createElement("p");
@@ -40,6 +37,13 @@ function renderResults(matches) {
       existing.textContent = text;
     } else if (!text) {
       existing?.remove();
+    }
+    if (isNew && !reducedMotion.matches) {
+      row.classList.remove("is-entering");
+      void row.offsetWidth;
+      row.classList.add("is-entering");
+    } else {
+      row.classList.remove("is-entering");
     }
     if (row === position) {
       position = row.nextElementSibling;
@@ -71,84 +75,28 @@ function setStatus(text, state = "") {
   if (status.textContent !== text) status.textContent = text;
 }
 
-function filterValues() {
-  return filterNames.map(name => form.elements.namedItem(name).value);
-}
-
-function restoreFilters(values) {
-  filterNames.forEach((name, index) => {
-    form.elements.namedItem(name).value = values[index] ?? "";
-  });
-}
-
-function syncReset() {
-  const label = cleared ? reset.dataset.undo : reset.dataset.clear;
-  if (reset.textContent !== label) reset.textContent = label;
-  reset.hidden = !cleared && !query.value && !appliedQuery && !filterValues().some(Boolean);
-  if (reset.hidden && document.activeElement === reset) query.focus({ preventScroll: true });
-}
-
-function rememberDraft() {
-  const draft = query.value;
-  const current = history.state?.librarySearchDraft;
-  if (draft === (current ?? appliedQuery)) return;
-  try {
-    history.replaceState({ ...history.state, librarySearchDraft: draft }, "");
-  } catch (error) {
-    if (error.name !== "SecurityError") throw error;
-  }
-}
-
-languageLink.addEventListener("click", (event) => {
-  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  try {
-    sessionStorage.setItem(languageDraftKey, JSON.stringify({ target: languageLink.href, draft: query.value }));
-  } catch {}
-});
-
-function readLanguageDraft() {
-  try {
-    const transfer = JSON.parse(sessionStorage.getItem(languageDraftKey));
-    sessionStorage.removeItem(languageDraftKey);
-    if (transfer?.target === location.href) return transfer.draft;
-  } catch {}
-}
-
 async function search(updateUrl = true) {
   const current = ++sequence;
   clearTimeout(pending);
-  const term = normalize(appliedQuery);
-  const filters = filterValues();
-  const [source, kind, from, to] = filters;
-  syncReset();
-  if (from && to && from > to) {
-    endDate.setAttribute("aria-invalid", "true");
-    endDate.setAttribute("aria-describedby", status.id);
-    results.removeAttribute("aria-busy");
-    setStatus(zh ? "结束日期须在起始日期当日或之后。" :
-      "Choose an end date on or after the start date.", "error");
-    return;
-  }
-  endDate.removeAttribute("aria-invalid");
-  endDate.removeAttribute("aria-describedby");
+  const data = new FormData(form);
+  const term = normalize(data.get("q"));
+  const source = data.get("source");
+  const kind = data.get("kind");
+  const from = data.get("from");
+  const to = data.get("to");
   const filtered = term || source || kind || from || to;
   const eligible = (entry) => entry && rows.has(entry.id) && (!source || entry.sources.includes(source)) &&
     (!kind || entry.kind === kind) && (!from || entry.published?.slice(0, 10) >= from) &&
     (!to || entry.published?.slice(0, 10) <= to);
-  const params = new URLSearchParams();
-  if (appliedQuery) params.set("q", appliedQuery);
-  filterNames.forEach((name, index) => {
-    if (filters[index]) params.set(name, filters[index]);
-  });
+  const params = new URLSearchParams([...data].filter(([, value]) => value));
   const alternate = new URL(languageLink.href);
   alternate.search = params.toString();
   if (languageLink.href !== alternate.href) languageLink.href = alternate.href;
   if (updateUrl) {
     const next = location.pathname + (params.size ? "?" + params : "") + location.hash;
-    if (next !== location.pathname + location.search + location.hash ||
-        history.state?.librarySearchDraft !== query.value) {
+    if (next !== location.pathname + location.search + location.hash) {
       try {
-        history.replaceState({ ...history.state, librarySearchDraft: query.value }, "", next);
+        history.replaceState(history.state, "", next);
       } catch (error) {
         if (error.name !== "SecurityError") throw error;
       }
@@ -192,6 +140,7 @@ async function search(updateUrl = true) {
   if (title.textContent !== heading) title.textContent = heading;
   renderResults(matches);
   results.removeAttribute("aria-busy");
+  if (clearButton) clearButton.hidden = !(filtered && !matches.size);
   const count = zh ? `${matches.size} 条结果` : `${matches.size} ${matches.size === 1 ? "result" : "results"}`;
   if (indexUnavailable) {
     const fallback = zh
@@ -204,48 +153,28 @@ async function search(updateUrl = true) {
   } else if (filtered) {
     setStatus(count, "done");
   } else {
-    setStatus("");
+    setStatus("", "");
   }
 }
 
 form.addEventListener("submit", (event) => {
   event.preventDefault();
-  cleared = undefined;
-  appliedQuery = query.value.trim();
   search();
-});
-query.addEventListener("input", () => {
-  cleared = undefined;
-  rememberDraft();
-  syncReset();
 });
 form.addEventListener("change", ({ target }) => {
-  if (!filterNames.includes(target.name)) return;
-  cleared = undefined;
-  search();
+  if (target.name !== "q") search();
 });
-reset.addEventListener("click", () => {
-  if (cleared) {
-    ({ draft: query.value, query: appliedQuery } = cleared);
-    restoreFilters(cleared.filters);
-    cleared = undefined;
-  } else {
-    cleared = { draft: query.value, query: appliedQuery, filters: filterValues() };
-    query.value = appliedQuery = "";
-    restoreFilters([]);
-  }
+clearButton?.addEventListener("click", () => {
+  form.reset();
+  query.focus();
   search();
 });
 function restoreSearch() {
   const params = new URLSearchParams(location.search);
-  cleared = undefined;
-  appliedQuery = params.get("q") ?? "";
-  query.value = history.state?.librarySearchDraft ?? readLanguageDraft() ?? appliedQuery;
-  rememberDraft();
-  restoreFilters(filterNames.map(name => params.get(name)));
-  if (filterValues().some(Boolean)) filterDetails.open = true;
+  for (const key of ["q", "source", "kind", "from", "to"]) {
+    form.elements.namedItem(key).value = params.get(key) ?? "";
+  }
   search(false);
 }
 window.addEventListener("popstate", restoreSearch);
-restoreSearch();
-form.hidden = false;
+if (location.search) restoreSearch();
