@@ -140,6 +140,21 @@
 .gcard-t, .capability-link strong { color: var(--az-text); font-size: 1.025rem; font-weight: 650; }
 .gcard-d, .capability-link small { color: var(--az-text-2); font-size: .92rem; }
 .gcard { grid-template-columns: minmax(10rem, .9fr) minmax(0, 1.3fr) minmax(0, 20%); }
+.skill-catalog-row > summary {
+  position: relative;
+  width: auto;
+  margin: 0;
+  padding: 0 1rem 0 0;
+}
+.skill-catalog-row > summary::before {
+  position: absolute;
+  inset-block-start: 1.95rem;
+  inset-inline-end: .25rem;
+  margin: 0;
+}
+.skill-catalog-actions { padding: 0 .7rem .75rem; max-inline-size: 78ch; }
+.skill-catalog-actions p { margin: .35rem 0 .65rem; }
+.skill-catalog-actions pre { margin: .5rem 0 .65rem; padding: .75rem; }
 .skill-name { justify-self: end; align-self: center; margin-block-start: 0; }
 .list-arrow { color: var(--az-brand-text); font-size: 1.25rem; }
 .capability-link:active { background: var(--az-accent-surface); }

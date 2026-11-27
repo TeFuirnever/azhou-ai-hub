@@ -3,10 +3,12 @@ layout: base.njk
 ---
 
 {% set zh = lang == 'zh' %}
+{% from "copy-control.njk" import copyControl %}
+{% set installGuide = site.blobBase ~ '/docs/installation.md' %}
 <article class="doc-card">
   <h1>{{ title }}</h1>
-  <p>{{ '按任务找技能，或让 Ask Azhou 为你推荐。' if zh else 'Find a skill by task, or ask Ask Azhou to recommend one.' }}
-    <a href="{{ site.routes[lang].home | url }}#install">{{ '在 Codex 开始' if zh else 'Start in Codex' }}</a>
+  <p>{{ '选择一个技能，查看安装方式和使用说明。也可以让 Ask Azhou 为你推荐。' if zh else 'Select a skill for installation and usage instructions, or ask Ask Azhou for a recommendation.' }}
+    <a href="{{ site.routes[lang].home | url }}#install">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</a>
   </p>
   <div id="skill-filter" role="search" hidden>
     <label for="skill-search">{{ '搜索任务或包名' if zh else 'Search tasks or package names' }}</label>
@@ -23,11 +25,29 @@ layout: base.njk
     {%- set other = 'en' if zh else 'zh' %}
     {%- for skill in skills %}
     <li id="{{ skill.name }}" data-other-language="{{ (skill.summary[other].title ~ ' ' ~ skill.summary[other].task) | escape }}">
-      <a class="gcard" href="{{ skill.url }}">
-        <span class="gcard-t">{{ skill.summary[lang].title | escape }}</span>
-        <span class="gcard-d">{{ skill.summary[lang].task | escape }}</span>
-        <code class="skill-name">{{ skill.name }}</code>
-      </a>
+      <details class="skill-catalog-row" name="hub-skill">
+        <summary>
+          <span class="gcard">
+            <span class="gcard-t">{{ skill.summary[lang].title | escape }}</span>
+            <span class="gcard-d">{{ skill.summary[lang].task | escape }}</span>
+            <code class="skill-name">{{ skill.name }}</code>
+          </span>
+        </summary>
+        <div class="skill-catalog-actions">
+          {% if skill.name.startsWith('super-azhou-') %}
+          <p>{{ '运行此技能需要本地 Hub 仓库。' if zh else 'This skill needs a local Hub checkout.' }}
+            <a href="{{ installGuide }}#checkout-assisted-setup" hreflang="en">{{ '查看安装步骤（英文）' if zh else 'See setup steps' }}</a></p>
+          {% elif skill.name == 'super-imagegen' %}
+          <p>{{ '此技能需要本机已有私有技能 azhou-imagegen。' if zh else 'This skill requires the private azhou-imagegen skill on your machine.' }}</p>
+          {% else %}
+          {% set commandId = 'install-' ~ skill.name %}
+          <p>{{ '在 Codex 项目目录运行，需要 Node.js 22.20 或更新版本。确认安装后，在同一项目打开新会话。' if zh else 'Run in your Codex project folder with Node.js 22.20 or later. Confirm installation, then open a new chat in the same project.' }}</p>
+          {{ copyControl(commandId, '复制安装命令' if zh else 'Copy install command') }}
+          <pre class="wrap-text"><code id="{{ commandId }}">npx skills add TeFuirnever/azhou-ai-hub --skill {{ skill.name | escape }} --agent codex</code></pre>
+          {% endif %}
+          <p><a href="{{ skill.url }}">{{ '查看技能说明' if zh else 'Read the skill guide' }}</a></p>
+        </div>
+      </details>
     </li>
     {%- endfor %}
   </ul>
@@ -39,7 +59,7 @@ layout: base.njk
   const count = document.getElementById("skill-count");
   const items = Array.from(document.querySelectorAll("#skill-list > li"), element => ({
     element,
-    keywords: (element.textContent + " " + element.dataset.otherLanguage).toLowerCase(),
+    keywords: (element.querySelector(".gcard").textContent + " " + element.dataset.otherLanguage).toLowerCase(),
   }));
   function setQuery(url, query) {
     if (query) url.searchParams.set("q", query);
@@ -126,3 +146,4 @@ layout: base.njk
   restoreSearch();
   document.getElementById("skill-filter").hidden = false;
 </script>
+<script type="module" src="{{ '/assets/copy-control.js' | url }}"></script>

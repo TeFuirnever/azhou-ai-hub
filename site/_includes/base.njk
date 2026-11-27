@@ -525,7 +525,8 @@
         marked = [];
       }
       function landingBox(target) {
-        return target.matches(".cardgrid > li") ? target.firstElementChild : target;
+        if (!target.matches(".cardgrid > li")) return target;
+        return target.querySelector(":scope > details > summary") ?? target.firstElementChild;
       }
       function fragmentTarget(hash) {
         try {

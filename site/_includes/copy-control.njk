@@ -1,0 +1,6 @@
+{% macro copyControl(source, label) %}
+<div class="copy-actions" hidden>
+  <button class="btn btn-outline" type="button" data-copy="{{ source }}">{{ label }}</button>
+  <span class="copy-status" role="status"><span class="copy-check" aria-hidden="true">✓</span><span data-copy-message></span></span>
+</div>
+{% endmacro %}
