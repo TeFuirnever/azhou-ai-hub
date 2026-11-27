@@ -583,14 +583,25 @@ a:has(.doc-ext-arrow) { text-decoration: none; }
   :is(.site-head nav a, .btn, .gcard, .capability-link, summary):hover {
     text-decoration: none;
   }
+  .btn-primary:hover:not(:disabled),
+  .btn-primary:active:not(:disabled) {
+    color: var(--az-btn-text);
+  }
   .btn-outline:hover:not(:disabled) {
     background: var(--az-btn-bg);
     color: var(--az-btn-text);
     border-color: var(--az-btn-bg);
   }
-  .edition-cta:hover:not(:disabled) {
+  .edition-cta:hover:not(:disabled),
+  .edition-cta:active:not(:disabled) {
     background: color-mix(in srgb, var(--ed-btn-bg) 86%, var(--ed-accent) 14%);
     border-color: color-mix(in srgb, var(--ed-btn-bg) 86%, var(--ed-accent) 14%);
+    color: var(--ed-btn-text);
+  }
+  .edition-feature a:not(.btn):hover,
+  .edition-feature a:not(.btn):active {
+    color: var(--ed-accent);
+    opacity: .85;
   }
   :is(.site-head nav a, .btn:not(.btn-outline, .edition-cta), .gcard, .capability-link, .channel-list a, .edition-item, .cursor-demo-tile):hover:not(:active, :disabled)::before,
   summary:hover:not(:active)::after {
