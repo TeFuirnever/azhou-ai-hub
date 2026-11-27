@@ -555,12 +555,19 @@
           if (arrival.includes(fadeOut)) dismissMark();
         }, () => {});
       }
-      let gliding = false;
-      window.addEventListener("hashchange", () => { if (!gliding) highlightTarget(); });
+      let announcing = false;
+      window.addEventListener("hashchange", () => {
+        if (announcing) return;
+        if (glide) { glide.resolve(false); stopGlide(); }
+        highlightTarget();
+      });
       for (const type of ["pointerdown", "keydown", "wheel", "touchstart", "input", "click"]) {
         window.addEventListener(type, dismissMark, { capture: true, passive: true });
       }
-      motion.addEventListener("change", highlightTarget);
+      motion.addEventListener("change", () => {
+        if (glide) { glide.resolve(false); stopGlide(); }
+        else highlightTarget();
+      }, true);
       highlightTarget();
 
       // In-page anchors glide only on an explicit click or Enter. Any scroll intent
@@ -633,9 +640,9 @@
           }
         }
         event.preventDefault();
-        gliding = true;
+        announcing = true;
         window.dispatchEvent(new HashChangeEvent("hashchange"));
-        gliding = false;
+        announcing = false;
         if (!await glideTo(landing(target))) return;
         highlightTarget();
         if (!target.hasAttribute("tabindex")) target.setAttribute("tabindex", "-1");
