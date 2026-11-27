@@ -3,6 +3,7 @@ layout: base.njk
 ---
 
 {% set zh = lang == 'zh' %}
+{% from "install-actions.njk" import installActions %}
 {% macro termBlock(source, label, commandText) %}
 <div class="term-panel">
   <div class="term-bar">
@@ -48,7 +49,7 @@ layout: base.njk
         <p class="lede hero-lead-item" style="--stagger-i: 1">Find agent skills for the job, and follow selections from official AI sources.</p>
         {% endif %}
         <div class="cta hero-lead-item" style="--stagger-i: 2">
-          <a class="btn btn-primary" href="{{ site.routes[lang].skills | url }}">{{ '找 Agent 技能' if zh else 'Find agent skills' }}</a>
+          <a class="btn btn-primary" href="{{ site.routes[lang].skills | url }}">{{ '找技能' if zh else 'Find skills' }}</a>
           <a class="btn btn-outline" href="{{ site.routes[lang].library | url }}">{{ '打开来源库' if zh else 'Browse Source Library' }}</a>
         </div>
       </div>
@@ -136,28 +137,17 @@ layout: base.njk
       <div class="grid-cell grid-pad">
         <div class="home-setup-copy" data-reveal style="--reveal-i: 1">
           {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
-          <p><a href="{{ installGuide }}#choose-your-agent-host" hreflang="en">{{ '按 Agent 宿主选择安装方式（英文）' if zh else 'Choose your agent host' }}</a></p>
-          <details>
-            <summary>{{ '让 Agent 安装 Ask Azhou' if zh else 'Ask your agent to install Ask Azhou' }}</summary>
-            <p>{{ '把这段提示词粘贴到当前项目的 Agent 会话中。' if zh else 'Paste this prompt into an agent session opened in your project.' }}</p>
-            {{ termBlock("install-agent-prompt", '复制安装提示词' if zh else 'Copy install prompt', '请按 https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-with-an-agent 在当前项目只安装 super-ask-azhou，并确认当前 Agent 宿主能找到它。' if zh else 'Follow https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-with-an-agent to install only super-ask-azhou in this project and check that this host discovers it.') }}
-          </details>
-          <p>{{ '手动安装示例（Codex）。登录 Codex。在终端进入项目目录，使用 Node.js 22.20 或更新版本运行下面的命令。出现安装提示时，确认安装到当前项目。' if zh else 'Manual install example (Codex). Sign in to Codex. In a terminal, open your project folder and run this command with Node.js 22.20 or later. When prompted, confirm the install for this project.' }}</p>
-          <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ 'Codex 统一安装器（英文）' if zh else 'Unified installer for Codex' }}</a></p>
-          {{ termBlock("install-command", '复制安装命令' if zh else 'Copy install command', "npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex") }}
-          <p>{{ '在同一项目打开新的 Codex 会话。先输入 $super-ask-azhou，确认 Codex 找得到这个技能，再试试下面的问题。正常情况下，它会推荐 super-archify。' if zh else 'Open a new Codex chat in the same project. Type $super-ask-azhou to check that Codex can find the skill, then try the question below. Expect a recommendation for super-archify.' }}</p>
+          {{ installActions("super-ask-azhou", zh, installGuide) }}
+          <p>{{ '在同一项目打开新的 Codex 会话，发下面的问题。Ask Azhou 应推荐 super-archify。' if zh else 'Open a new Codex chat in the same project and send this question. Ask Azhou should recommend super-archify.' }}</p>
           {{ termBlock("try-prompt", '复制试用问题' if zh else 'Copy example question', '$super-ask-azhou 我有一段 Mermaid，想做成交互架构图。该用哪个技能？' if zh else '$super-ask-azhou I have a Mermaid diagram. Which skill turns it into an interactive architecture diagram?') }}
-          <details>
-            <summary>{{ '安装上面推荐的技能' if zh else 'Install the recommended skill' }}</summary>
-            {{ termBlock("install-recommended", '复制 Archify 安装命令' if zh else 'Copy Archify install command', "npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex") }}
-          </details>
+          <p><a href="{{ site.routes[lang].skills | url }}#super-archify">{{ '查看 Archify 安装方式' if zh else 'See how to install Archify' }}</a></p>
           <details>
             <summary>{{ '排查安装、更新或卸载' if zh else 'Troubleshoot, update, or uninstall' }}</summary>
             {%- if zh %}<p>以下指南为英文。</p>{% endif %}
             <ul>
-              <li><a href="{{ installGuide }}#alternate-installer" hreflang="en">{{ '下载超时' if zh else 'Repository download timed out' }}</a></li>
-              <li><a href="{{ installGuide }}#if-codex-cannot-find-ask-azhou" hreflang="en">{{ 'Codex 找不到技能' if zh else 'Codex cannot find the skill' }}</a></li>
+              <li><a href="{{ installGuide }}#check-that-your-host-finds-the-skill" hreflang="en">{{ '宿主找不到技能' if zh else 'The host cannot find the skill' }}</a></li>
               <li><a href="{{ installGuide }}#upgrade-or-uninstall" hreflang="en">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
+              <li><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ 'Codex 统一安装器' if zh else 'Unified installer for Codex' }}</a></li>
             </ul>
           </details>
         </div>
