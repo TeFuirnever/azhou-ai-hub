@@ -26,7 +26,13 @@ Small enough to edit. Strict enough to verify. Neutral enough to run across harn
 
 Maintainers can use the [Source Library tools](packages/source-library/README.md) to check RSS, web or JSON sources, import candidate batches and retain selected publisher pages in a private catalog.
 
-## First install in Codex
+## Install Ask Azhou
+
+[Choose your agent host](docs/installation.md#choose-your-agent-host), or paste this prompt into an agent session opened in your project:
+
+> Follow https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-with-an-agent to install only super-ask-azhou in this project and check that this host discovers it.
+
+### First install in Codex
 
 Sign in to Codex and use Node.js 22.20 or later. Run the command from your project folder and confirm the project install when prompted. On Windows, use Git Bash for the [shell examples](docs/installation.md#windows-notes).
 
@@ -43,8 +49,6 @@ Expect a recommendation for `super-archify`. If Codex cannot find Ask Azhou, [ch
 When you want to use a recommended skill, follow the [single-skill install guide](docs/installation.md#package-manager-install). Use [one installation method per skill](docs/installation.md#one-path-rule). The four `super-azhou-*` skills also require a local checkout.
 
 To install Hub Skills, pstack and Agent Rules Books together or choose components individually, use the [unified Codex installer](docs/installation.md#install-hub-components-in-codex). If you select only skills that already match the installed copies, it exits without asking for confirmation.
-
-The walkthrough above targets Codex. For the other maintained harnesses — Claude Code, MiMo Code (`mimo`), DeepSeek Harness (`dsh`) and zcode — the verified install route and evidence per harness live in the [support matrix](docs/support-matrix.md), and a repository checkout can install via [checkout-assisted setup](docs/installation.md#checkout-assisted-setup) or [manual copy](docs/installation.md#manual-copy).
 
 [Update or uninstall](docs/installation.md#upgrade-or-uninstall) · [Verify what you installed](docs/installation.md#verify-what-you-installed) · [Installation guide](docs/installation.md) · [Offline recovery](docs/installation.md#offline-recovery)
 
