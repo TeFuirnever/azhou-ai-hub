@@ -145,33 +145,42 @@
 .capability-link:active { background: var(--az-accent-surface); }
 @media (hover: hover) and (pointer: fine) {
   .btn-primary { --az-hover-fill: var(--az-accent-hover); }
-  :is(.gcard, .capability-link) { --az-hover-fill: var(--az-card); }
-  :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link) {
+  :is(.gcard, .capability-link, .channel-list a) { --az-hover-fill: var(--az-card); }
+  /* A marked catalog row keeps its arrival tint under the pointer. */
+  .gcard.hub-arrived { --az-hover-fill: var(--az-accent-surface); }
+  /* summary draws its chevron on ::before, so its layer lives on ::after.
+     The layer fades its colour in paint: an opacity layer makes WebKit read its
+     start value on the last frame of the transition. */
+  :is(.site-head nav a, .btn, .gcard, .capability-link, summary, .channel-list a) {
     position: relative;
     isolation: isolate;
   }
-  :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link)::before {
+  :is(.site-head nav a, .btn, .gcard, .capability-link, .channel-list a)::before,
+  summary::after {
     content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
     border-radius: inherit;
-    background: var(--az-hover-fill, var(--az-bg-3));
+    background-color: transparent;
     pointer-events: none;
-    opacity: 0;
     transition: none;
   }
-  :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link):hover {
+  /* Source rows are text links and keep their underline; only the layer joins them. */
+  :is(.site-head nav a, .btn, .gcard, .capability-link, summary):hover {
     text-decoration: none;
   }
-  :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link):hover:not(:active, :disabled)::before {
-    opacity: 1;
+  :is(.site-head nav a, .btn, .gcard, .capability-link, .channel-list a):hover:not(:active, :disabled)::before,
+  summary:hover:not(:active)::after {
+    background-color: var(--az-hover-fill, var(--az-bg-3));
   }
   @media (prefers-reduced-motion: no-preference) {
-    :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link)::before {
-      transition: opacity var(--motion-feedback) var(--motion-ease);
+    :is(.site-head nav a, .btn, .gcard, .capability-link, .channel-list a)::before,
+    summary::after {
+      transition: background-color var(--motion-feedback) var(--motion-ease);
     }
-    :is(.site-head nav a:not(.brand), .btn, .gcard, .capability-link):is(:active, :disabled)::before {
+    :is(.site-head nav a, .btn, .gcard, .capability-link, .channel-list a):is(:active, :disabled)::before,
+    summary:active::after {
       transition: none;
     }
   }
@@ -209,6 +218,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: .6rem;
 }
+.library-query .btn { min-block-size: 2.75rem; }
 .library-search :where(input, select) {
   box-sizing: border-box;
   min-inline-size: 0;
@@ -271,7 +281,7 @@
   border-radius: .35rem;
   background: var(--az-bg-2);
 }
-.article-toc summary { cursor: pointer; font-weight: 650; min-block-size: 2.1rem; }
+.article-toc summary { cursor: pointer; font-weight: 650; min-block-size: 2.1rem; margin-inline: 0; padding-inline: 0; }
 .article-toc ol { padding-inline-start: 1.15rem; margin-block: .2rem .6rem; }
 .article-toc li + li { margin-block-start: .4rem; }
 .article-copy { max-inline-size: 68ch; min-inline-size: 0; }
@@ -311,18 +321,37 @@
   .gcard { grid-template-columns: minmax(0, 1fr); }
   .skill-name { justify-self: start; }
   .site-head nav {
-    display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-    gap: .2rem;
-    padding-block: .3rem;
+    --nav-row-gap: .2rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    column-gap: .2rem;
+    /* The links carry the row gap themselves, so the spacer line below costs no height. */
+    row-gap: 0;
+    /* 13px clears the 8px the brand lifts and the 5px of its focus ring, and does the same
+       for the language link on touch. */
+    padding-block: 13px .4rem;
   }
-  .site-head nav .brand { grid-column: 1 / -1; justify-self: start; white-space: normal; }
-  .site-head nav a:not(.brand) {
+  /* Identity and language share the first row. The spacer then breaks the line and the five
+     links flow below it: each stays whole, and one that no longer fits moves to the next row.
+     The language link widens its hit area through its margins so the row stays as short as the brand. */
+  .site-head nav .brand { order: 1; flex-basis: auto; }
+  .site-head #switch-language {
+    order: 2;
+    min-block-size: 0; padding-block: 9px; margin-block: -9px; margin-inline-start: auto;
+  }
+  .site-head nav .spacer { display: block; order: 3; flex: 0 0 100%; height: 0; }
+  /* Touch keeps the full 44px target; the wider gap and top padding keep it clear of the row below and the viewport edge. */
+  @media (pointer: coarse) {
+    .site-head nav { --nav-row-gap: .4rem; }
+    .site-head #switch-language { min-block-size: 44px; padding-block: 12px; margin-block: -12px; margin-inline-start: auto; }
+  }
+  .site-head nav a:not(.brand, #switch-language) {
+    order: 4;
     justify-content: center;
-    text-align: center;
-    white-space: normal;
-    padding-inline: .15rem;
+    margin-block-start: var(--nav-row-gap);
+    padding-inline: .1rem;
     font-size: clamp(.75rem, 3vw, .9rem);
   }
-  .site-head nav .spacer { display: none; }
 }

@@ -136,8 +136,8 @@ async function search(updateUrl = true) {
       : (matches.size ? `${count} in titles and notes.` : "No matches in titles or notes.");
     setStatus((zh ? "正文搜索暂不可用。" : "Full-text search is unavailable. ") + fallback, "error");
   } else if (!matches.size) {
-    setStatus(zh ? "没有找到相关条目。试试更短的关键词或减少筛选条件。" :
-      "No matching articles. Try a shorter search or fewer filters.", "empty");
+    setStatus(zh ? "没有匹配的选文。试试更短的关键词，或放宽筛选条件。" :
+      "No matching selections. Try fewer words or clear some filters.", "empty");
   } else if (filtered) {
     setStatus(count, "done");
   } else {

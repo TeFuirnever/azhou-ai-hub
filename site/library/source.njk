@@ -31,5 +31,5 @@ eleventyComputed:
   <ul class="edition-list">
     {% for item in channel.entries %}{% include "library-item.njk" %}{% endfor %}
   </ul>
-  {% if not channel.entries.length %}<p>{{ '此来源的首批条目待发布。' if zh else 'The first selection from this source is awaiting publication.' }}</p>{% endif %}
+  {% if not channel.entries.length %}<p>{{ '此来源的首批选文即将发布。现在可以先浏览其他官方来源，或订阅更新。' if zh else 'The first selections from this source are coming soon. Browse other official sources or subscribe for updates.' }}</p>{% endif %}
 </section>
