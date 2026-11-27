@@ -108,15 +108,15 @@
       }
     }
     * { box-sizing: border-box; }
-    /* The fallback is the header's own height at each layout, so a deep link lands
-       right before the observer has measured it. The two-row header has its own. */
     :root { --site-header-fallback: 4.6rem; }
-    html { scroll-padding-top: calc(var(--site-header-height, var(--site-header-fallback)) + 25px); }
     @media (min-width: 680px) and (max-width: 46rem) {
       :root { --site-header-fallback: 6.2rem; }
     }
     @media (min-width: 680px) and (max-width: 46rem) and (pointer: coarse) {
       :root { --site-header-fallback: 6.4rem; }
+    }
+    @media (min-width: 680px) {
+      html { scroll-padding-top: calc(var(--site-header-height, var(--site-header-fallback)) + 25px); }
     }
     body {
       margin: 0;
@@ -424,23 +424,16 @@
     }
     {%- if route %}
     if ("ResizeObserver" in window) {
-      let previousHeight;
+      const head = document.querySelector(".site-head");
+      const report = (height) => document.documentElement.style.setProperty("--site-header-height", height + "px");
+      let previousHeight = head.getBoundingClientRect().height;
+      report(previousHeight);
       new ResizeObserver(([entry]) => {
         const height = entry.borderBoxSize?.[0]?.blockSize ?? entry.target.offsetHeight;
         if (height === previousHeight) return;
-        let fragmentTarget;
-        if (previousHeight === undefined && performance.getEntriesByType("navigation")[0]?.type === "navigate" && location.hash) {
-          try { fragmentTarget = document.getElementById(decodeURIComponent(location.hash.slice(1))); } catch { fragmentTarget = null; }
-        }
-        const initialScroll = scrollY;
-        const initialLanding = fragmentTarget ? landingPosition(fragmentTarget) : null;
         previousHeight = height;
-        document.documentElement.style.setProperty("--site-header-height", height + "px");
-        if (fragmentTarget && Math.abs(initialLanding - initialScroll) < 2) {
-          const corrected = landingPosition(fragmentTarget);
-          if (Math.abs(corrected - scrollY) >= 2) scrollTo(0, corrected);
-        }
-      }).observe(document.querySelector(".site-head"), { box: "border-box" });
+        report(height);
+      }).observe(head, { box: "border-box" });
     }
     const languageLink = document.getElementById("switch-language");
     function syncLanguageLink() {
