@@ -1,0 +1,12 @@
+{% from "copy-control.njk" import copyControl %}
+{% macro rssSubscribe(id, feedUrl, zh, feedTitle, compact=false) %}
+<details class="rss-subscribe" id="{{ id }}">
+  <summary{% if compact %} aria-label="{{ ('订阅 ' if zh else 'Subscribe to ') ~ feedTitle ~ ' RSS' | escape }}"{% endif %}>{{ 'RSS' if compact else ('订阅 RSS' if zh else 'Subscribe by RSS') }}</summary>
+  <div class="rss-panel">
+    <p>{% if zh %}复制订阅地址，在 RSS 阅读器中选择「添加订阅」并粘贴，即可接收「{{ feedTitle | escape }}」的新增选文。{% else %}Copy this feed address and paste it into your RSS reader’s “Add subscription” option to follow new selections from {{ feedTitle | escape }}.{% endif %}</p>
+    {{ copyControl(id ~ '-url', '复制订阅地址' if zh else 'Copy feed address') }}
+    <p class="rss-address"><code id="{{ id }}-url">{{ feedUrl | escape }}</code></p>
+    <a href="{{ feedUrl | escape }}">{{ '查看 RSS 文件' if zh else 'View RSS feed' }}</a>
+  </div>
+</details>
+{% endmacro %}
