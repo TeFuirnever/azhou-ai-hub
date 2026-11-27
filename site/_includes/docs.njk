@@ -6,7 +6,7 @@ layout: base.njk
 <article class="doc-card">
   <h1>{{ title }}</h1>
   <ul class="doclist">
-    <li><a href="{{ site.routes[lang].home | url }}#install">{{ '在 Codex 开始' if zh else 'Start in Codex' }}</a></li>
+    <li><a href="{{ site.routes[lang].home | url }}#install">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</a></li>
     <li><a href="{{ site.blobBase }}/docs/installation.md#upgrade-or-uninstall" hreflang="en">{{ '更新或卸载技能（英文）' if zh else 'Update or uninstall a skill' }}</a></li>
     <li><a href="{{ site.routes[lang].support | url }}">{{ '查看 Agent 工具的支持情况' if zh else 'Check agent host support' }}</a></li>
     <li><a href="{{ site.blobBase }}/docs/foundations.md" hreflang="en">{{ '诊断、安装或验证本地仓库（英文）' if zh else 'Diagnose, set up, or verify a checkout' }}</a></li>

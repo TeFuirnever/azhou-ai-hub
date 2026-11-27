@@ -28,8 +28,6 @@
 
 ## 在 Codex 里首次安装
 
-想一次装齐 Hub Skills、pstack 和 Agent Rules Books，或按需选择其中几套，可以使用 [Codex 统一安装命令](docs/installation.md#install-hub-components-in-codex)。
-
 先登录 Codex，并确认电脑已安装 Node.js 22.20 或更新版本。在项目目录运行下面的命令，看到提示后确认安装到当前项目。Windows 用户请在 Git Bash 中运行[示例命令](docs/installation.md#windows-notes)。
 
 ~~~bash
@@ -43,6 +41,8 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 正常情况下，它会推荐 `super-archify`。如果 Codex 找不到 Ask Azhou，可以[检查安装](docs/installation.md#if-codex-cannot-find-ask-azhou)。已经装过时，可以[检查更新、更新或卸载](docs/installation.md#upgrade-or-uninstall)。
 
 想安装 Ask Azhou 推荐的技能时，按[单个技能安装指南](docs/installation.md#package-manager-install)操作。每个技能只选[一种安装方式](docs/installation.md#one-path-rule)。四个 `super-azhou-*` 技能还需要一份本地仓库 checkout。
+
+想一次装齐 Hub Skills、pstack 和 Agent Rules Books，或按需选择其中几套，可以使用 [Codex 统一安装命令](docs/installation.md#install-hub-components-in-codex)。如果只选了技能，且已安装的副本都与来源一致，命令会直接结束，无需确认。
 
 上面的走查以 Codex 为目标。其余受维护的 harness——Claude Code、MiMo Code（`mimo`）、DeepSeek Harness（`dsh`）、zcode——各自的已验证安装路线与证据见[支持矩阵](docs/support-matrix.md)；也可以用仓库 checkout 走 [checkout 辅助安装](docs/installation.md#checkout-assisted-setup)或[手动复制](docs/installation.md#manual-copy)。
 

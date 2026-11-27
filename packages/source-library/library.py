@@ -10,6 +10,9 @@ from collect import Candidate, CollectionError, SOURCES, discover, fetch, read_a
 from ingest import discover_json, import_batch
 
 STATUS_LABELS = {"updated": "有更新", "no_updates": "无更新", "failed": "抓取失败"}
+AUTOMATIC_SOURCES = tuple(
+    source for source, settings in SOURCES.items() if settings.get("feed") or settings.get("lists")
+)
 
 
 def private_path(path):
@@ -25,7 +28,7 @@ def preview(source, url=None, fetcher=None, *, json_config=None):
     if url:
         article, _, _, _ = read_article(SOURCES[source], url, fetcher or fetch)
         return [Candidate(article["url"], article["title"], article["published"])]
-    if not any(key in SOURCES[source] for key in ("feed", "lists")):
+    if source not in AUTOMATIC_SOURCES:
         raise CollectionError("this source is checked by article link; supply --url")
     return discover(SOURCES[source]) if fetcher is None else discover(SOURCES[source], fetcher)
 
@@ -82,8 +85,11 @@ def parse_args():
     commands.add_argument("--note", required=True)
     commands.add_argument("--revision")
     commands.add_argument("--kind", choices=["article", "announcement", "research"], default="article")
-    commands = sub.add_parser("withdraw")
+    commands = sub.add_parser("withdraw", help="preview or remove publication approval from future exports")
     commands.add_argument("id")
+    withdrawal = commands.add_mutually_exclusive_group(required=True)
+    withdrawal.add_argument("--preview", action="store_true", help="show the approval without changing it")
+    withdrawal.add_argument("--apply", metavar="PLAN_ID", help="withdraw the exact approval shown in the preview")
     commands = sub.add_parser("export", help="write an approved-only bundle for editorial review")
     commands.add_argument("target", type=Path)
     commands = sub.add_parser("backup", help="verify and copy the private database and referenced objects")
@@ -96,6 +102,9 @@ def parse_args():
         parser.error("use --url with a single source")
     if args.action == "sync" and args.source == "all" and args.json_config is not None:
         parser.error("use --json-config with a single source")
+    if args.action in {"preview", "sync"} and args.source not in ("all", *AUTOMATIC_SOURCES):
+        if args.url is None and args.json_config is None:
+            parser.error(f"{args.source} has no automatic listing; add --url <official article URL> or --json-config <file>")
     if args.action == "archive" and args.include_images and not args.fetch_original:
         parser.error("--include-images requires --fetch-original")
     return args
@@ -123,6 +132,8 @@ def run(args):
         return {"found": len(rows), "preview": [asdict(row) for row in rows[:20]]}
     if args.action == "import-json":
         return run_import(args)
+    if args.action == "withdraw":
+        return Catalog.withdraw(private_path(args.data), args.id, args.apply)
     with Catalog(private_path(args.data)) as store:
         if args.action == "status":
             return [dict(row, label=STATUS_LABELS[row["status"]]) for row in store.runs()]
@@ -131,7 +142,7 @@ def run(args):
         if args.action == "inspect":
             return store.inspect(args.id, args.revision)
         if args.action == "sync":
-            sources = [choice for choice in SOURCES if choice != "mimo"] if args.source == "all" else [args.source]
+            sources = AUTOMATIC_SOURCES if args.source == "all" else [args.source]
             return sync(store, sources, args.url, json_config=args.json_config)
         if args.action == "archive":
             if args.saved_html is None:
@@ -148,9 +159,6 @@ def run(args):
         if args.action == "review":
             store.approve(args.id, args.scope, args.basis, args.note, args.revision, args.kind)
             return {"approved": args.id, "scope": args.scope}
-        if args.action == "withdraw":
-            store.withdraw(args.id)
-            return {"withdrawn": args.id}
         if args.action == "backup":
             store.backup(private_path(args.target))
             return {"backup": str(args.target)}

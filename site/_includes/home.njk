@@ -3,12 +3,7 @@ layout: base.njk
 ---
 
 {% set zh = lang == 'zh' %}
-{% macro copyControl(source, label) %}
-<div class="copy-actions" hidden>
-  <button class="btn btn-outline" type="button" data-copy="{{ source }}">{{ label }}</button>
-  <span class="copy-status" role="status"><span class="copy-check" aria-hidden="true">✓</span><span data-copy-message></span></span>
-</div>
-{% endmacro %}
+{% from "copy-control.njk" import copyControl %}
 {% macro capability(label, description, href) %}
 <li><a class="capability-link" href="{{ href }}">
   <strong>{{ label }}</strong>
@@ -92,7 +87,6 @@ layout: base.njk
     <div class="home-setup-copy">
     <p>{{ '登录 Codex。在终端进入项目目录，使用 Node.js 22.20 或更新版本运行下面的命令。出现安装提示时，确认安装到当前项目。' if zh else 'Sign in to Codex. In a terminal, open your project folder and run this command with Node.js 22.20 or later. When prompted, confirm the install for this project.' }}</p>
     {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
-    <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ '一次安装或按需选择三个组件（英文）' if zh else 'Install Hub Skills, pstack and Agent Rules Books together or separately' }}</a></p>
     <div class="copy-block">
       {{ copyControl("install-command", '复制安装命令' if zh else 'Copy install command') }}
       <pre class="wrap-text"><code id="install-command">npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex</code></pre>
@@ -108,6 +102,11 @@ layout: base.njk
         {{ copyControl("install-recommended", '复制 Archify 安装命令' if zh else 'Copy Archify install command') }}
         <pre class="wrap-text"><code id="install-recommended">npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex</code></pre>
       </div>
+    </details>
+    <details>
+      <summary>{{ '一次安装多个组件' if zh else 'Install more components' }}</summary>
+      <p>{{ '需要本地 Hub 仓库和 Python 3.11 或更新版本。pstack 在独立的终端 Codex 环境中使用。' if zh else 'Requires a Hub checkout and Python 3.11 or later. pstack runs in a dedicated terminal Codex environment.' }}</p>
+      <p><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ '安装 Hub Skills、pstack 或 Agent Rules Books（英文）' if zh else 'Install Hub Skills, pstack, or Agent Rules Books' }}</a></p>
     </details>
     <details>
       <summary>{{ '排查安装、更新或卸载' if zh else 'Troubleshoot, update, or uninstall' }}</summary>
@@ -134,71 +133,4 @@ layout: base.njk
     </div>
   </div>
 </section>
-<script>
-  for (const button of document.querySelectorAll("[data-copy]")) {
-    if (!navigator.clipboard?.writeText) continue;
-    const actions = button.parentElement;
-    const status = actions.querySelector('[role="status"]');
-    const message = status.querySelector("[data-copy-message]");
-    const check = status.querySelector(".copy-check");
-    actions.hidden = false;
-    const motion = matchMedia("(prefers-reduced-motion: reduce)");
-    const tokens = getComputedStyle(document.documentElement);
-    const easing = tokens.getPropertyValue("--motion-ease").trim();
-    const feedback = parseFloat(tokens.getPropertyValue("--motion-feedback"));
-    const change = parseFloat(tokens.getPropertyValue("--motion-change"));
-    const animatable = () => !motion.matches && typeof status.animate === "function";
-    const pendingText = {{ ('正在复制…' if zh else 'Copying…') | dump | safe }};
-    const copiedText = {{ ('已复制' if zh else 'Copied') | dump | safe }};
-    const failedText = {{ ('复制失败。请手动复制下方内容。' if zh else 'Copy failed. Select and copy the text below.') | dump | safe }};
-    let attempt = 0;
-    let reset;
-    let pending;
-    let fade;
-    function showStatus(text, state) {
-      fade?.cancel();
-      status.dataset.state = state;
-      if (message.textContent !== text) message.textContent = text;
-    }
-    // Each confirmed attempt answers, including a repeat tap while "Copied" is showing.
-    function acknowledge(confirmed) {
-      if (!animatable()) return;
-      fade?.cancel();
-      message.animate([{ opacity: .65 }, { opacity: 1 }], { duration: feedback, easing });
-      if (confirmed) {
-        check.animate([{ opacity: 0, transform: "scale(.6)" }, { opacity: 1, transform: "none" }], { duration: feedback, easing });
-      }
-    }
-    function retire() {
-      if (!animatable()) {
-        showStatus("", "");
-        return;
-      }
-      fade = status.animate([{ opacity: 1 }, { opacity: 0 }], { duration: change, easing, fill: "forwards" });
-      fade.finished.then(() => showStatus("", ""), () => {});
-    }
-    button.addEventListener("click", async () => {
-      const current = ++attempt;
-      clearTimeout(reset);
-      clearTimeout(pending);
-      fade?.cancel();
-      if (status.dataset.state !== "pending") {
-        pending = setTimeout(() => showStatus(pendingText, "pending"), 120);
-      }
-      const source = document.getElementById(button.dataset.copy);
-      try {
-        await navigator.clipboard.writeText(source.textContent);
-        if (current !== attempt) return;
-        showStatus(copiedText, "success");
-        acknowledge(true);
-        reset = setTimeout(retire, 3500);
-      } catch {
-        if (current !== attempt) return;
-        showStatus(failedText, "error");
-        acknowledge(false);
-      } finally {
-        if (current === attempt) clearTimeout(pending);
-      }
-    });
-  }
-</script>
+<script type="module" src="{{ '/assets/copy-control.js' | url }}"></script>

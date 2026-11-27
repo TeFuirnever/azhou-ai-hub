@@ -267,9 +267,34 @@ class Catalog:
             self.db.execute("INSERT OR REPLACE INTO approvals VALUES (?,?,?,?,?)",
                             (article_id, scope, basis, json_text(fields), timestamp()))
 
-    def withdraw(self, article_id):
-        with self.db:
-            self.db.execute("DELETE FROM approvals WHERE article_id=?", (article_id,))
+    @staticmethod
+    def withdraw(root, article_id, plan_id=None):
+        database = root / "catalog.sqlite3"
+        if not database.is_file():
+            raise CollectionError(f"no private catalog at {root}")
+        mode = "ro" if plan_id is None else "rw"
+        try:
+            with closing(sqlite3.connect(f"{database.as_uri()}?mode={mode}", uri=True)) as db, db:
+                if plan_id is not None:
+                    db.execute("BEGIN IMMEDIATE")
+                approval = db.execute(
+                    "SELECT scope, basis, snapshot, reviewed FROM approvals WHERE article_id=?", (article_id,)
+                ).fetchone()
+                if approval is None:
+                    return {"status": "no_approval", "id": article_id}
+                current_plan = digest(json_text((str(database), article_id, approval)).encode())
+                if plan_id is None:
+                    return {"status": "preview", "id": article_id, "title": json.loads(approval[2])["title"],
+                            "scope": approval[0], "plan_id": current_plan,
+                            "effect": "Remove publication approval from future exports. Keep the private archive.",
+                            "next": f"Pass --apply {current_plan} to withdraw this approval."}
+                if plan_id != current_plan:
+                    raise CollectionError("approval changed or plan ID does not match; preview withdraw again")
+                db.execute("DELETE FROM approvals WHERE article_id=?", (article_id,))
+                return {"status": "withdrawn", "withdrawn": article_id,
+                        "effect": "Future exports omit this approval. The private archive and live site are unchanged."}
+        except sqlite3.Error as exc:
+            raise CollectionError(f"cannot read or withdraw approval: {exc}") from exc
 
     def export(self, target):
         destination = Path(target).expanduser().resolve()

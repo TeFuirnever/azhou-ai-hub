@@ -36,7 +36,7 @@ Keep a checkout of Azhou AI Hub as the installation source. Use Python 3.11 or l
 python /path/to/azhou-ai-hub/scripts/azhou_hub.py install --all
 ~~~
 
-Use `--component hub-skills agent-rules-books` in place of `--all` to select those two components. The available choices are `hub-skills`, `pstack` and `agent-rules-books`. Use `--workspace /path/to/project` to select another existing project directory. Review the paths and component plan, then enter `y` in the same command to install. Add `--dry-run` to exit after the preview.
+Use `--component hub-skills agent-rules-books` in place of `--all` to select those two components. The available choices are `hub-skills`, `pstack` and `agent-rules-books`. Use `--workspace /path/to/project` to select another existing project directory. When prompted, review the paths and plan, then enter `y` to install. If you selected only skills and all copies already match, the command reports that no files changed and exits. Add `--dry-run` to exit after the preview.
 
 The installer copies Hub Skills and Agent Rules Books into the project's `.agents/skills/` directory. pstack uses the native Codex plugin manager and a dedicated home at `.azhou/hub/targets/pstack` in that project. Use the printed command to start a terminal Codex session with that home. pstack is available on demand in that session, with SessionStart auto-routing off. The ChatGPT desktop app selects its own Codex home when the app process starts. Use `--codex-bin` or `--codex-home` to select a different executable or dedicated target explicitly.
 
