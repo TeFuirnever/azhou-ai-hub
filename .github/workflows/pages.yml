@@ -32,6 +32,9 @@ jobs:
       - name: Install site dependencies
         working-directory: site
         run: npm ci
+      - name: Test site
+        working-directory: site
+        run: npm test
       - name: Build site
         working-directory: site
         run: npm run build
