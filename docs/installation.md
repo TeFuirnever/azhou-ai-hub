@@ -1,5 +1,7 @@
 # Installation
 
+Start with [an installation prompt for your agent](#install-with-an-agent) or [choose a manual path for your host](#choose-your-agent-host). Use the [maintenance steps](#upgrade-or-uninstall) after you have an installed skill.
+
 ## Choose your agent host
 
 These routes are for individual Hub Skills. Use the skill root your host is configured to scan, and verify discovery in that host after installation.
@@ -20,7 +22,7 @@ Use this procedure to install one named Hub Skill in the project the user has op
 
 1. Identify the active agent host and project directory. If either is unclear, ask before changing files. If you cannot inspect or write to the project, give the user the relevant steps from the host guide.
 2. Check whether the host already discovers the requested Skill. If it does, report the installation scope and path when available. Reuse that copy and leave it intact.
-3. If the Skill is missing, use the matching [host route](#choose-your-agent-host). Install only the requested Skill from [Azhou AI Hub](https://github.com/TeFuirnever/azhou-ai-hub) in this project. Keep existing installations, plugins, and host settings intact. If the host has no confirmed project route, explain the limitation and ask before changing scope.
+3. If the Skill is missing, use the matching [host route](#choose-your-agent-host). Install only the requested Skill from [Azhou AI Hub](https://github.com/TeFuirnever/azhou-ai-hub) in this project. Keep existing installations, plugins, and host settings intact. The four `super-azhou-*` skills also require a local Hub checkout. For `super-imagegen`, verify the private `azhou-imagegen` prerequisite before installing. If the host has no confirmed project route, explain the limitation and ask before changing scope.
 4. Verify that the host discovers the installed Skill. Report the destination and verification result. If discovery needs a fresh session or cannot be checked, say so and give the next step.
 
 ## First install in Codex
@@ -40,6 +42,12 @@ Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Code
    > `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
 
    The expected recommendation is `super-archify` for an interactive HTML diagram. Install the recommended Skill separately when you want to run it.
+
+## Check that your host finds the skill
+
+Open a new agent session in the same project and use the host's skill list or picker. Look for the requested skill by its package name. Check the reported path and scope before calling it. A copied file is only installation evidence until the host discovers it.
+
+If you cannot find the skill, [check the host's configured project root](#choose-your-agent-host). For Codex, use the check below. For other hosts, use their own discovery tools and the [support matrix](support-matrix.md).
 
 ### If Codex cannot find Ask Azhou
 
@@ -77,7 +85,7 @@ If Ask Azhou is missing from a project, [choose the installation route for your 
 
 Hub contributors use the book skills tracked under `.agents/skills/` in their checkout. If a book skill is missing, check the current branch and restore the tracked files from the intended revision.
 
-In another project, choose a name from the [Agent Rules Books catalog](../README.md#agent-rules-books). Run the command in that project's directory, using Node.js and npm.
+In another project, choose a name from the [Agent Rules Books catalog](agent-rules-books.md). Run the command in that project's directory, using Node.js and npm.
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
@@ -308,21 +316,44 @@ Copy that directory to the same path on the offline host — or set `PLAYWRIGHT_
 
 ## Upgrade or uninstall
 
-For Skills CLI installations, use the owning scope and name the skill. Run project commands from the project where you installed it.
+Use the method and scope that own the installed copy. From the same project, first confirm the skill's name, scope, and path. Check for local changes before updating or removing anything.
+
+### Check a Skills CLI install
 
 ~~~bash
 npx skills list --agent codex
 npx skills check --project super-ask-azhou
 ~~~
 
-The check reports available updates and local changes without installing anything. Read its output before deciding whether to update. Run the command for the operation you need.
+The list example targets Codex. Run the check for your chosen skill. For a user-wide install, use `--global` for both commands.
+
+### Update or remove a Skills CLI install
+
+If the check shows changes you want to keep, save a copy before updating. Run the update only for the intended scope.
 
 ~~~bash
 npx skills update --project super-ask-azhou
+~~~
+
+Before removing, list the skills across all hosts in this scope from a terminal. Confirm the skill name and path. If you may need the same revision again, record the source revision or save the installed files.
+
+~~~bash
+npx skills list
+~~~
+
+The list may group copies that share a name. Check the host's actual skill directory before removing a separate copy. For example, use this only if you intend to remove the Ask Azhou copy under `.claude/skills/`.
+
+~~~bash
+npx skills remove super-ask-azhou --agent claude-code
+~~~
+
+A copy under `.agents/skills/` can be shared by multiple hosts. Skills CLI 1.9.0 can report success for `--agent codex` while leaving that shared copy in place. Keep it if any host still needs it. Only use the command below after confirming that every host in this scope can lose its copy of the named skill. Without an agent filter, this can remove separate host copies of that skill too.
+
+~~~bash
 npx skills remove super-ask-azhou
 ~~~
 
-For a user-wide install, add `--global` to `list` and `remove`, and replace `--project` with `--global` in `check` and `update`. See the [Skills CLI command reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md). For a Skill shared through `.agents/skills/`, removing it by name from its installation scope also affects other agents that use that copy. Run `list` again after removal. Verify the resulting skill in the harness after updating.
+An agent session can run removal without an interactive confirmation. For a user-wide install, add `--global` to list and remove, and use it in place of `--project` for update. Run the list again and check the path as well as the command's output. See the [Skills CLI command reference](https://github.com/vercel-labs/skills/blob/main/docs/commands.md#skills-remove).
 
 For a manual copy, review local changes before replacing the whole skill directory with the intended snapshot. For an unmanaged symlink, update its source checkout and rerun verification.
 

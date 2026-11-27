@@ -71,3 +71,9 @@ English and Chinese READMEs are reader mirrors. A material product, install, evi
 Checkout lifecycle ownership is a separate, explicit single-skill mode. Its receipts live only under the explicit target's `.azhou/hub/receipts/` namespace. A v2 receipt records the source digest, executable intent, and installed filesystem identity; its self-digest is only an accidental-corruption check. Every repair, same-target mode migration or uninstall also requires the explicit target and recomputes the canonical source and destination before mutation. A legacy v1 receipt must be explicitly upgraded with `repair --apply` before destructive lifecycle commands; the upgrader validates the v1 byte digests, then recomputes both executable-aware v2 digests and records the current object identity. No receipt authorizes hook cleanup, harness configuration changes, cross-root movement, forced overwrite or package-manager removal.
 
 The default public gate validates repository and checked-in benchmark integrity without secrets.
+
+## Retired surfaces
+
+- [Installed users: remove Agent Skin](decisions/agent-skin-retirement.md) covers Codex, DSH and the earlier ZCode retirement.
+- [Hub retirement and physical deletion](decisions/hub-retirement-physical-deletion.md) explains how to find the retired router and startup package in Git history. For an existing router installation, see the [removal prerequisite](integration-provenance.md#model-router-retired-integration-historical-record).
+- [Azhou Codex Pet retirement record](https://github.com/TeFuirnever/azhou-ai-hub/blob/1eeb03c6005ac08b2c852d6f61823181bcee4fe4/packages/agent-skin/evidence/azhou-pet-retirement-2026-11-18.md).

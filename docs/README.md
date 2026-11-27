@@ -2,17 +2,17 @@
 
 | Need | Maintained source |
 |---|---|
+| Install, verify, update or remove a skill | [Installation](installation.md) |
+| Find a skill by task | [Skill catalog](https://tefuirnever.github.io/azhou-ai-hub/skills/) |
+| Know what a host or skill verifies | [Support matrix](support-matrix.md), [per-skill platform view](skill-platform-view.md), and [skill verification](skill-evidence.md) |
+| Use engineering guidance from books | [Agent Rules Books](agent-rules-books.md) and [简体中文](agent-rules-books.zh-CN.md) |
 | Understand product direction and tradeoffs | [Principles](principles.md) |
-| Review the closed Agent Skin E2E decision record (obsolete since the 2026-11-11 PR #432 retirement) | [E2E structural trade-offs (AS-E2E-001)](decisions/agent-skin-e2e-structural-tradeoffs.md) |
-| Understand why retired Hub surfaces were physically deleted while frozen identifiers stay | [Hub retirement: physical deletion (HUB-RET-001)](decisions/hub-retirement-physical-deletion.md) |
-| Install a skill | [Installation](installation.md) |
 | Diagnose, set up or verify a repository checkout | [Foundation CLI](foundations.md) |
-| Use optional project packages or diagnose imported Pet state | [Integration runbook](integrations.md) and [package provenance](integration-provenance.md) |
+| Use optional project packages | [Integration runbook](integrations.md) and [package provenance](integration-provenance.md) |
 | Allocate or retire parallel coding-agent workspaces | [Treehouse worktree policy](worktree-policy.md) |
 | Try the Super Repo Pedant reference demo | [Super Repo Pedant demo](demos/super-repo-pedant.md) |
 | Try the Excalidraw Diagram reference demo | [Excalidraw Diagram demo](demos/super-excalidraw-diagram.md) |
 | Try the Arch Doc reference demo | [Arch Doc demo](demos/super-arch-doc.md) |
-| Know what each harness really supports | [Support matrix](support-matrix.md) and its derived [per-skill platform view](skill-platform-view.md) |
 | Write a minimal behavior eval case for a package without a behavior benchmark | [Eval-case contract](eval-case-contract.md) |
 | Understand repository boundaries | [Architecture](architecture.md) |
 | Build or evolve a skill | [Azhou Skill Standard](skill-standard.md) |
@@ -20,5 +20,7 @@
 | See planned work | [Roadmap](roadmap.md) |
 | Understand the Excalidraw package | [Excalidraw Diagram](super-excalidraw-diagram.md) |
 | Review open-source benchmark research | [Research](research/2026-08-23-open-source-benchmark.md) |
+
+See [retired tools and migration notes](architecture.md#retired-surfaces) for historical installations.
 
 Community, security and legal documents stay at repository root so GitHub and contributors can discover them.

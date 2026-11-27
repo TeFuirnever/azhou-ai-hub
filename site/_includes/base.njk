@@ -653,6 +653,18 @@
     window.addEventListener("hashchange", syncLanguageLink);
     syncLanguageLink();
     {%- endif %}
+    for (const details of document.querySelectorAll("details[data-manual-install]")) {
+      const key = "hub-manual-install:" + details.dataset.manualInstall;
+      try {
+        details.open = sessionStorage.getItem(key) === "1";
+      } catch {}
+      details.addEventListener("toggle", () => {
+        try {
+          if (details.open) sessionStorage.setItem(key, "1");
+          else sessionStorage.removeItem(key);
+        } catch {}
+      });
+    }
     (() => {
       const motion = matchMedia("(prefers-reduced-motion: reduce)");
       const finePointer = matchMedia("(hover: hover) and (pointer: fine)");

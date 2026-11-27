@@ -3,7 +3,7 @@ layout: base.njk
 ---
 
 {% set zh = lang == 'zh' %}
-{% from "copy-control.njk" import copyControl %}
+{% from "install-actions.njk" import installActions %}
 {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
 <article class="doc-card">
   <h1>{{ title }}</h1>
@@ -14,11 +14,14 @@ layout: base.njk
     <label for="skill-search">{{ '搜索任务或包名' if zh else 'Search tasks or package names' }}</label>
     <div class="skill-search-controls">
       <input id="skill-search" type="search" autocomplete="off" autocapitalize="none" spellcheck="false">
-      <button id="clear-skill-search" class="btn btn-outline" type="button" disabled>{{ '清空搜索' if zh else 'Clear search' }}</button>
+      <button id="clear-skill-search" class="btn btn-outline" type="button" hidden
+        data-clear="{{ '清除搜索条件' if zh else 'Clear search criteria' }}"
+        data-undo="{{ '撤销清除' if zh else 'Undo clear' }}">{{ '清除搜索条件' if zh else 'Clear search criteria' }}</button>
     </div>
     <p id="skill-count" role="status"
        data-all="{{ skills.length }} {{ '个技能' if zh else 'skills' }}"
        data-results="{{ '{total} 个技能中的 {count} 个' if zh else '{count} of {total} skills' }}"
+       data-linked="{{ '同时显示链接指定的技能。' if zh else 'Showing the linked skill as well.' }}"
        data-empty="{{ '没有匹配的技能。试试更短的关键词，或清空搜索。' if zh else 'No matching skills. Try fewer words or clear the search.' }}"></p>
   </div>
   <ul class="cardgrid" id="skill-list" data-reveal>
@@ -34,16 +37,14 @@ layout: base.njk
           </span>
         </summary>
         <div class="skill-catalog-actions">
-          {% if skill.name.startsWith('super-azhou-') %}
-          <p>{{ '运行此技能需要本地 Hub 仓库。' if zh else 'This skill needs a local Hub checkout.' }}
-            <a href="{{ installGuide }}#checkout-assisted-setup" hreflang="en">{{ '查看安装步骤（英文）' if zh else 'See setup steps' }}</a></p>
-          {% elif skill.name == 'super-imagegen' %}
-          <p>{{ '此技能需要本机已有私有技能 azhou-imagegen。' if zh else 'This skill requires the private azhou-imagegen skill on your machine.' }}</p>
+          {% if skill.name == 'super-imagegen' %}
+          <p>{{ '先确认本机已有私有技能 azhou-imagegen，再按技能说明配置。' if zh else 'This skill needs the private azhou-imagegen skill. Check that it is available on your machine, then follow the skill guide.' }}</p>
           {% else %}
-          {% set commandId = 'install-' ~ skill.name %}
-          <p>{{ '在 Codex 项目目录运行，需要 Node.js 22.20 或更新版本。确认安装后，在同一项目打开新会话。' if zh else 'Run in your Codex project folder with Node.js 22.20 or later. Confirm installation, then open a new chat in the same project.' }}</p>
-          {{ copyControl(commandId, '复制安装命令' if zh else 'Copy install command') }}
-          <pre class="wrap-text"><code id="{{ commandId }}">npx skills add TeFuirnever/azhou-ai-hub --skill {{ skill.name | escape }} --agent codex</code></pre>
+            {% set needsCheckout = skill.name.startsWith('super-azhou-') %}
+            {% if needsCheckout %}
+            <p>{{ '运行此技能需要本地 Hub 仓库。' if zh else 'This skill needs a local Hub checkout.' }}</p>
+            {% endif %}
+            {{ installActions(skill.name, zh, installGuide, not needsCheckout) }}
           {% endif %}
           <p><a href="{{ skill.url }}">{{ '查看技能说明' if zh else 'Read the skill guide' }}</a></p>
         </div>
@@ -62,6 +63,25 @@ layout: base.njk
     element,
     keywords: (element.querySelector(".gcard").textContent + " " + element.dataset.otherLanguage).toLowerCase(),
   }));
+  const languageUndoKey = "hub-skill-language-undo";
+  let cleared = null;
+  let linkedSkill;
+
+  catalogLanguageLink.addEventListener("click", (event) => {
+    if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    try {
+      sessionStorage.setItem(languageUndoKey, JSON.stringify({ target: catalogLanguageLink.href, cleared }));
+    } catch {}
+  });
+  function takeLanguageUndo() {
+    try {
+      const state = JSON.parse(sessionStorage.getItem(languageUndoKey));
+      sessionStorage.removeItem(languageUndoKey);
+      if (state?.target === location.href && typeof state.cleared === "string") return state.cleared;
+    } catch {}
+    return null;
+  }
+
   function setQuery(url, query) {
     if (query) url.searchParams.set("q", query);
     else url.searchParams.delete("q");
@@ -70,22 +90,67 @@ layout: base.njk
     const query = input.value.trim();
     const terms = query ? query.toLowerCase().split(/\s+/) : [];
     let found = 0;
+    let showingLinked = false;
     for (const { element, keywords } of items) {
-      const visible = !terms.length || terms.every(term => keywords.includes(term));
+      const matches = terms.every(term => keywords.includes(term));
+      const showLinked = !matches && element === linkedSkill;
+      const visible = matches || showLinked;
       if (element.hidden === visible) element.hidden = !visible;
-      if (visible) found += 1;
+      if (matches) found += 1;
+      if (showLinked) showingLinked = true;
     }
     const nextState = !query ? "all" : (found ? "results" : "empty");
     const message = !query ? count.dataset.all :
       found ? count.dataset.results.replace("{total}", items.length).replace("{count}", found) : count.dataset.empty;
     if (count.dataset.state !== nextState) count.dataset.state = nextState;
-    if (count.textContent !== message) count.textContent = message;
-    clear.disabled = input.value === "";
+    const result = showingLinked ? message + " " + count.dataset.linked : message;
+    if (count.textContent !== result) count.textContent = result;
+    const label = cleared === null ? clear.dataset.clear : clear.dataset.undo;
+    if (clear.textContent !== label) clear.textContent = label;
+    clear.hidden = cleared === null && !input.value;
+    if (clear.hidden && document.activeElement === clear) input.focus({ preventScroll: true });
 
     const translated = new URL(catalogLanguageLink.href);
     setQuery(translated, query);
     if (catalogLanguageLink.href !== translated.href) catalogLanguageLink.href = translated.href;
   }
+  function skillAtHash() {
+    try {
+      const id = decodeURIComponent(location.hash.slice(1));
+      return items.find(({ element }) => element.id === id)?.element;
+    } catch {
+      return undefined;
+    }
+  }
+  function restoreOpenSkill() {
+    linkedSkill = skillAtHash();
+    if (linkedSkill) linkedSkill.querySelector("details").open = true;
+    else if (!location.hash) {
+      const open = list.querySelector("li > details[open]");
+      if (open) open.open = false;
+    }
+  }
+  function saveOpenSkill() {
+    const open = list.querySelector("li > details[open]")?.parentElement;
+    if (linkedSkill && linkedSkill !== open) {
+      linkedSkill = undefined;
+      updateSkills();
+    }
+    if (!open && !skillAtHash()) return;
+    const current = new URL(location.href);
+    current.hash = open?.id ?? "";
+    catalogLanguageLink.hash = current.hash;
+    if (current.href === location.href) return;
+    try {
+      history.replaceState(history.state, "", current);
+    } catch (error) {
+      if (error.name !== "SecurityError") throw error;
+    }
+  }
+  for (const { element } of items) {
+    element.querySelector("details").addEventListener("toggle", saveOpenSkill);
+  }
+
   function searchDraftKey() {
     const entry = history.state?.hubSkillSearchEntry;
     return entry ? "hub-skill-search:" + entry : null;
@@ -101,28 +166,40 @@ layout: base.njk
     }
     const key = searchDraftKey();
     let draft = null;
+    let savedUndo = null;
     if (key) {
       try {
         draft = sessionStorage.getItem(key);
+        savedUndo = sessionStorage.getItem(key + ":undo");
       } catch {}
     }
+    const incomingUndo = takeLanguageUndo();
+    cleared = draft === null ? (history.state?.hubSkillUndo ?? incomingUndo) : savedUndo;
     input.value = draft ?? new URLSearchParams(window.location.search).get("q") ?? "";
-    if (draft === null) updateSkills();
-    else saveSearch();
+    saveSearch();
   }
   function saveSearch() {
     updateSkills();
+    const hiddenSkill = list.querySelector("li[hidden] > details[open]");
+    if (hiddenSkill) {
+      hiddenSkill.open = false;
+      saveOpenSkill();
+    }
     const current = new URL(window.location.href);
     const key = searchDraftKey();
     const query = input.value.trim();
     setQuery(current, query);
     try {
-      if (current.href !== window.location.href) history.replaceState(history.state, "", current);
+      if (current.href !== window.location.href || (history.state?.hubSkillUndo ?? null) !== cleared) {
+        history.replaceState({ ...history.state, hubSkillUndo: cleared }, "", current);
+      }
     } catch (error) {
       if (error.name !== "SecurityError") throw error;
       if (key) {
         try {
           sessionStorage.setItem(key, query);
+          if (cleared === null) sessionStorage.removeItem(key + ":undo");
+          else sessionStorage.setItem(key + ":undo", cleared);
         } catch {}
       }
       return;
@@ -130,28 +207,42 @@ layout: base.njk
     if (key) {
       try {
         sessionStorage.removeItem(key);
+        sessionStorage.removeItem(key + ":undo");
       } catch {}
     }
   }
-  input.addEventListener("input", (event) => {
-    if (!event.isComposing) saveSearch();
-  });
-  input.addEventListener("compositionend", saveSearch);
-  clear.addEventListener("click", () => {
-    input.value = "";
-    input.focus();
+  function editedSearch() {
+    linkedSkill = undefined;
+    cleared = null;
     saveSearch();
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      list.classList.remove("is-resetting");
-      void list.offsetWidth;
-      list.classList.add("is-resetting");
+  }
+  input.addEventListener("input", (event) => {
+    if (!event.isComposing) editedSearch();
+  });
+  input.addEventListener("compositionend", editedSearch);
+  clear.addEventListener("click", () => {
+    if (cleared === null) {
+      cleared = input.value;
+      input.value = "";
+    } else {
+      input.value = cleared;
+      cleared = null;
     }
+    saveSearch();
   });
+  function restoreCatalog() {
+    restoreOpenSkill();
+    restoreSearch();
+  }
   window.addEventListener("pageshow", event => {
-    if (event.persisted) restoreSearch();
+    if (event.persisted) restoreCatalog();
   });
-  window.addEventListener("popstate", restoreSearch);
-  restoreSearch();
+  window.addEventListener("popstate", restoreCatalog);
+  window.addEventListener("hashchange", () => {
+    restoreOpenSkill();
+    updateSkills();
+  });
+  restoreCatalog();
   document.getElementById("skill-filter").hidden = false;
 </script>
 <script type="module" src="{{ '/assets/copy-control.js' | url }}"></script>

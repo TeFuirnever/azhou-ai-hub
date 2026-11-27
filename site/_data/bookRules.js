@@ -3,19 +3,14 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-function readBookRules(readme) {
-  const heading = "Agent Rules Books";
-  const sections = fs.readFileSync(path.resolve(__dirname, "../..", readme), "utf8").split(/^## /m);
-  const section = sections.find((text) => text.split(/\r?\n/, 1)[0] === heading);
-  if (!section) {
-    throw new Error(`${readme}: missing Agent Rules Books section`);
-  }
-  return section.slice(heading.length).trim().replace(/^### /gm, "## ");
+function readBookRules(file) {
+  const source = fs.readFileSync(path.resolve(__dirname, "..", "..", "docs", file), "utf8");
+  return source.replace(/^# Agent Rules Books\r?\n\r?\n/, "").trim().replace(/^### /gm, "## ");
 }
 
 module.exports = function () {
   return {
-    en: readBookRules("README.md"),
-    zh: readBookRules("README.zh-CN.md"),
+    en: readBookRules("agent-rules-books.md"),
+    zh: readBookRules("agent-rules-books.zh-CN.md"),
   };
 };
