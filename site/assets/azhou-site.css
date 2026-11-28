@@ -491,7 +491,7 @@
   flex-direction: column;
   align-items: center;
   transform-origin: 50% 0;
-  transform: rotate(var(--pendant-angle, 0deg));
+  transform: rotate(0deg);
 }
 .cursor-pendant-string {
   inline-size: 1px;
