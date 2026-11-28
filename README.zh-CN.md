@@ -72,7 +72,7 @@ npx skills add https://tefuirnever.github.io/azhou-ai-hub/downloads/super-ask-az
 
 </details>
 
-Repo Pedant 的[演进保护](skills/super-repo-pedant/references/evolution-contract.md)在 Git 配置改变项目身份时暂停依赖身份的操作；创建全局候选时拒绝本地状态中属于其他项目的记录，并在显式指定的信号文件不可用时停止创建候选。
+Repo Pedant 的[演进保护](skills/super-repo-pedant/references/evolution-contract.md)在 Git 配置改变项目身份时暂停依赖身份的操作；创建全局候选时拒绝本地状态中属于其他项目的记录，并在显式指定的信号文件不可用时停止创建候选。当前信号必须带隐私和授权分类，且只能包含已定义字段；旧版信号可以省略分类。无效行计入解析错误，归档时仍保留在活动批次中。项目、会话和证据 digest 继续接受运行时既有的 16–64 位十六进制长度。
 
 ### 上手试试
 
