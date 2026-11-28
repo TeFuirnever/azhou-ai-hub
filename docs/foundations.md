@@ -52,6 +52,9 @@ This observation is not an atomic snapshot or a lock. Ignore rules and all possi
 
 When interfaces, state, receipts, generation, installation or verification entry points change, attach an impact record to the task evidence. Start from affected consumers and trace back to the actual entry, defaults, rejection point and commit point. Identify authoritative and derived state, compatibility aliases, dynamic routing, isolation boundaries, and the source-to-generated-to-installed chain where applicable. Record the owner, required scenarios and gates for each affected surface, and disclose unresolved consumers instead of assuming the path list is complete. Reuse current machine-readable registries as the authority for their sets.
 
+- After making the change, search affected current docs, user-facing copy and generated outputs for the previous names, counts, URLs and claims. Correct any wording that no longer holds.
+- When a user or reviewer points out an omission, trace its cause and check related entry points, variants and consumers for the same omission. Fix affected cases within the authorized scope.
+
 ### Treehouse diagnostics
 
 When a task is running inside a Treehouse pool, the doctor can also verify the explicit pool without changing its lease:
