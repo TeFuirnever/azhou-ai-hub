@@ -54,6 +54,8 @@ const codexPage = `<!doctype html><body>${harness}<script>
     ttftMs: 200, cacheHitPercent: 75, contextUsagePercent: 40.5, responses: 2,
   });
   let refreshMode = "interrupted";
+  let previousRefresh;
+  let nextRefresh;
   window.addEventListener("message", event => {
     if (event.source !== frame.contentWindow || event.data?.jsonrpc !== "2.0") return;
     const { method, id, params } = event.data;
@@ -65,8 +67,10 @@ const codexPage = `<!doctype html><body>${harness}<script>
       if (refreshMode === "failed") {
         send({ id, error: { code: -32603, message: "Fixture failure" } });
       } else if (refreshMode === "switch") {
+        previousRefresh = id;
         push({ state: "empty" });
-        send({ id, result: { structuredContent: usage(999) } });
+      } else if (refreshMode === "hold") {
+        nextRefresh = id;
       } else {
         send({ id, result: { structuredContent: { state: "interrupted", lastCompleted: usage(182) } } });
       }
@@ -79,6 +83,21 @@ const codexPage = `<!doctype html><body>${harness}<script>
   const text = (selector) => panel(selector)?.textContent;
   checkUi(async () => {
     await until(() => text(".rate") === "42.5 tok/s", "Codex did not render the initial tool result");
+    const legacy = document.createElement("iframe");
+    legacy.src = "/codex-panel";
+    document.body.append(legacy);
+    const legacyRefresh = () => legacy.contentDocument?.getElementById("refresh");
+    await until(() => legacyRefresh()?.hidden, "A panel awaiting a host should hide Refresh");
+    const legacyWindow = legacy.contentWindow;
+    legacyWindow.openai = { callTool: async () => ({ structuredContent: usage(18) }) };
+    legacyWindow.dispatchEvent(new legacyWindow.CustomEvent("openai:set_globals", {
+      detail: { globals: { toolOutput: usage(17) } },
+    }));
+    if (legacyRefresh().hidden) throw new Error("A late legacy host did not enable Refresh");
+    legacyRefresh().click();
+    await until(() => legacy.contentDocument.querySelector(".rate")?.textContent === "18 tok/s",
+      "The late legacy host did not refresh the snapshot");
+    legacy.remove();
     await until(() => text("[data-metric=cacheHitPercent]") === "75%", "Codex did not render cache hit rate");
     const performance = panel("#performance");
     for (const expected of ["首个 token 等待 0.2 秒", "缓存命中 75%", "Context 占用 40.5%"]) {
@@ -127,8 +146,19 @@ const codexPage = `<!doctype html><body>${harness}<script>
     panel("#refresh").click();
     await until(() => !panel("#refresh").hasAttribute("aria-disabled"), "Codex refresh did not finish after a new host result");
     if (!panel("#snapshot").hidden || !text("#state").includes("尚无可用")) {
-      throw new Error("Late refresh response restored the previous session's metrics");
+      throw new Error("The latest host result did not supersede the first refresh");
     }
+    refreshMode = "hold";
+    panel("#refresh").click();
+    await until(() => nextRefresh, "Codex did not allow a refresh of the new session");
+    send({ id: previousRefresh, result: { structuredContent: usage(999) } });
+    await new Promise(resolve => setTimeout(resolve, 25));
+    if (!panel("#snapshot").hidden || panel("#refresh").getAttribute("aria-disabled") !== "true") {
+      throw new Error("An old response changed the visible session or ended its new refresh");
+    }
+    send({ id: nextRefresh, result: { structuredContent: usage(287) } });
+    await until(() => text(".rate") === "287 tok/s" && !panel("#refresh").hasAttribute("aria-disabled"),
+      "The latest refresh did not complete");
 
     push({ state: "running", lastCompleted: { ...usage(12345.6), durationMs: 9725112,
       outputTokens: 123456789012, ttftMs: null, cacheHitPercent: 0 } });

@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -1315,14 +1316,35 @@ class AzhouHubCliTest(unittest.TestCase):
     def test_setup_text_only_prompts_to_apply_when_there_is_work(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)
+            target = target.with_name("O’Brien's skills")
             command = ["setup", "--target", str(target), "--skill", "sample", "--mode", "copy"]
             preview = io.StringIO()
             with redirect_stdout(preview):
                 result = azhou_hub.main(command, root=root)
             self.assertEqual(0, result)
             self.assertFalse(target.exists())
-            args = next(line.split() for line in preview.getvalue().splitlines() if line.startswith("  --apply "))
-            result, installed = self._json_main([*command, *args, "--json"], root=root, auto_plan=False)
+            plan_id = next(line.removeprefix("Plan ID: ") for line in preview.getvalue().splitlines() if line.startswith("Plan ID: "))
+            printed = next(line.strip() for line in preview.getvalue().splitlines() if " --apply " in line or " '--apply' " in line)
+            if os.name == "nt":
+                self.assertTrue(printed.startswith("& "))
+                self.assertIn(str(target).replace("'", "''").replace("’", "’’"), printed)
+                apply_args = [*command, "--apply", "--plan-id", plan_id]
+                powershell = shutil.which("pwsh") or shutil.which("powershell")
+                if powershell:
+                    script = root / "scripts/azhou_hub.py"
+                    script.parent.mkdir(exist_ok=True)
+                    script.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+                    argv = subprocess.check_output([powershell, "-NoProfile", "-Command", printed], encoding="utf-8")
+                    emitted_args = json.loads(argv)
+                    parser = azhou_hub.build_parser(root)
+                    self.assertEqual(parser.parse_args(apply_args), parser.parse_args(emitted_args))
+                    apply_args = emitted_args
+            else:
+                python, script, *apply_args = shlex.split(printed)
+                self.assertEqual(sys.executable, python)
+                self.assertEqual(root / "scripts/azhou_hub.py", Path(script))
+                self.assertEqual(plan_id, apply_args[-1])
+            result, installed = self._json_main([*apply_args, "--json"], root=root, auto_plan=False)
             self.assertEqual(0, result, installed)
             self.assertTrue((target / "sample" / "SKILL.md").is_file())
 

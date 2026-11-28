@@ -111,6 +111,18 @@ try {
           document.querySelector("${source}").parentElement.clientWidth + 1`), "The command fits without horizontal scrolling");
       });
     }
+    await check(`${lang}: install prompt opens on clipboard denial`, { width }, `${site.routes[lang].home}#install`, async page => {
+      const prompt = "#agent-install-super-ask-azhou";
+      const fallback = ".home-setup-copy [data-copy-fallback]";
+      const copy = 'button[data-copy="agent-install-super-ask-azhou"]';
+      await until(() => page.evaluate(`document.querySelector('${copy}').getClientRects().length > 0`), "Install copy button is ready");
+      assert.equal(await isOpen(page, fallback), false, "The raw prompt stays closed normally");
+      await page.permission("clipboard-write", "denied");
+      await page.click(copy);
+      await until(() => isOpen(page, fallback), "Denied copy opens the manual prompt");
+      assert.ok(await page.evaluate(`document.querySelector('${prompt}').getClientRects().length > 0`));
+      assert.equal(await page.evaluate(`document.activeElement.matches('${copy}')`), true, "Recovery keeps focus at the action");
+    });
     await check(`${lang}: open Ask Azhou without clearing the skill search`, { width }, `${skillsPath}?q=super-archify`, async page => {
       const row = "#super-ask-azhou";
       assert.ok(Object.hasOwn(await page.attributes(row), "hidden"));
@@ -350,8 +362,56 @@ try {
       });
     }
 
+    const selectedSource = library.entries[0]?.sources[0];
+    if (selectedSource) {
+      const sourcePath = `${path}sources/${selectedSource}/`;
+      await check(`${lang}: return from an article to its source selections`, { width }, sourcePath, async page => {
+        const article = ".library-source-content .edition-item:first-child h3 a";
+        await page.evaluate(`document.querySelector("${article}").focus()`);
+        await page.key("Enter");
+        await until(() => page.evaluate(`document.querySelector("#library-return")?.pathname === ${JSON.stringify(site.pathPrefix + sourcePath.slice(1))}`), "Article return points at the originating source");
+        await page.evaluate('document.querySelector("#library-return").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`location.pathname === ${JSON.stringify(site.pathPrefix + sourcePath.slice(1))}`), "Returns to the originating source");
+      });
+    }
+
+    const archived = library.entries.find(entry => entry.scope === "full");
+    if (archived) {
+      const search = `?q=${encodeURIComponent(archived.title)}#results-title`;
+      await check(`${lang}: reloading a translated reading chapter keeps the return context`, { width }, path + search, async page => {
+        await until(async () => (await page.attributes("#library-status"))["data-state"] === "done", "Archived text appears in the list");
+        await page.evaluate(`document.querySelector('#library-results [data-entry-id="${archived.id}"] h3 a').focus()`);
+        await page.key("Enter");
+        await until(() => page.evaluate('Boolean(document.querySelector(".article-toc"))'), "Archive opens");
+        const other = lang === "en" ? "zh" : "en";
+        const translated = site.pathPrefix + site.routes[other].library.slice(1);
+        await page.evaluate('document.querySelector("#switch-language").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`location.pathname.startsWith(${JSON.stringify(translated + "articles/")}) &&
+          document.querySelector("#library-return")?.hash === "#results-title"`), "The translated archive remembers the list");
+        if (!await isOpen(page, ".article-toc")) {
+          await page.evaluate('document.querySelector(".article-toc summary").focus()');
+          await page.key("Enter");
+        }
+        const chapter = await page.evaluate('document.querySelector(".article-toc ol a").hash');
+        await page.evaluate('document.querySelector(".article-toc ol a").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`location.hash === ${JSON.stringify(chapter)} && Boolean(history.state?.libraryReturn)`),
+          "Following the chapter preserves the return information");
+        const loaded = await page.evaluate("performance.timeOrigin");
+        await page.command("Page.reload");
+        await until(() => page.evaluate(`performance.timeOrigin > ${loaded} &&
+          document.querySelector("#library-return")?.hash === "#results-title"`), "Reloaded chapter restores the return information");
+        await page.evaluate('document.querySelector("#library-return").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`location.pathname === ${JSON.stringify(translated)} && location.hash === "#results-title"`),
+          "Returns to the translated search list and anchor");
+      });
+    }
+
     if (query) {
-      await check(`${lang}: built Pagefind index answers a real query`, { width }, path, async page => {
+      await check(`${lang}: built Pagefind index answers a real query`, { width }, `${path}#results-title`, async page => {
         await until(async () => !Object.hasOwn(await page.attributes("#library-search"), "hidden"), "Search script is ready");
         await page.click("#library-query");
         await page.command("Input.insertText", { text: query.query });
@@ -363,6 +423,28 @@ try {
         assert.ok(loaded.some(path => path === `${site.pathPrefix}pagefind/pagefind.js`), "The real Pagefind entry module must load");
         assert.ok(loaded.some(path => path.startsWith(`${site.pathPrefix}pagefind/wasm.`) && path.endsWith(".pagefind")), `The Pagefind WASM index must load: ${loaded.join(", ")}`);
         assert.ok(loaded.some(path => path.startsWith(`${site.pathPrefix}pagefind/fragment/`)), "Pagefind must retrieve a real article fragment");
+        const other = lang === "en" ? "zh" : "en";
+        const translated = site.pathPrefix + site.routes[other].library.slice(1);
+        const draft = " unfinished draft";
+        await page.evaluate('document.querySelector("#library-query").focus()');
+        await page.command("Input.insertText", { text: draft });
+        assert.equal(await page.evaluate('document.querySelector("#library-query").value'), query.query + draft);
+        await page.evaluate(`document.querySelector('#library-results [data-entry-id="${query.id}"] h3 a').focus()`);
+        await page.key("Enter");
+        await until(() => page.evaluate(`document.querySelector("#library-return")?.search.includes("q=")`), "Article remembers its query");
+        await page.evaluate('document.querySelector("#switch-language").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`document.querySelector("#library-return")?.pathname === ${JSON.stringify(translated)} && document.querySelector("#library-return").search.includes("q=")`),
+          "The translated article keeps its return query");
+        await page.evaluate('document.querySelector("#library-return").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`location.pathname === ${JSON.stringify(translated)} && document.querySelector("#library-status")?.dataset.state === "done"`),
+          "The translated list restores the search results");
+        assert.equal(await page.evaluate('document.querySelector("#library-query").value'), query.query + draft);
+        assert.equal(await page.evaluate("location.hash"), "#results-title");
+        await until(() => page.evaluate(`document.activeElement.matches('#library-results [data-entry-id="${query.id}"] h3 a')`),
+          "Returning to the translated list restores focus to the opened result");
+        assert.equal(await page.evaluate(`Boolean(document.querySelector('#library-results [data-entry-id="${query.id}"]'))`), true);
       });
     } else {
       console.log(`SKIP: ${lang} Pagefind query (the published library is empty)`);

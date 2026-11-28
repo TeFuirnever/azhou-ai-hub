@@ -100,6 +100,19 @@ test("source, kind, and inclusive date bounds combine without needing the full-t
   assert.equal(new URL(page.language.href).search, page.location.search);
 });
 
+test("changing a filter searches the keyword already in the input", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const page = await libraryPage();
+  page.submit("Alpha");
+  await flush();
+  page.input(" Beta ");
+  page.change("source", "beta");
+  await flush();
+  assert.deepEqual(page.ids(), [b]);
+  assert.equal(page.location.searchParams.get("q"), "Beta");
+  assert.equal(page.location.searchParams.get("source"), "beta");
+});
+
 test("clear and undo retain the applied query, unsent draft, and all filters separately", async t => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const page = await libraryPage();

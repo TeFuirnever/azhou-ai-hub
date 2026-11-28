@@ -1,7 +1,12 @@
 const zh = document.documentElement.lang === "zh-CN";
 
 for (const button of document.querySelectorAll(".copy-actions [data-copy]")) {
-  if (!navigator.clipboard?.writeText) continue;
+  const source = document.getElementById(button.dataset.copy);
+  const fallback = source?.closest("[data-copy-fallback]");
+  if (!navigator.clipboard?.writeText) {
+    fallback?.setAttribute("open", "");
+    continue;
+  }
   const actions = button.parentElement;
   const status = (button.closest(".term-bar") ?? actions).querySelector('[role="status"]');
   const message = status.querySelector("[data-copy-message]");
@@ -55,7 +60,6 @@ for (const button of document.querySelectorAll(".copy-actions [data-copy]")) {
     if (status.dataset.state !== "pending") {
       pending = setTimeout(() => showStatus(pendingText, "pending"), 120);
     }
-    const source = document.getElementById(button.dataset.copy);
     try {
       await navigator.clipboard.writeText(source.textContent);
       if (current !== attempt) return;
@@ -65,6 +69,7 @@ for (const button of document.querySelectorAll(".copy-actions [data-copy]")) {
       reset = setTimeout(retire, 3500);
     } catch {
       if (current !== attempt) return;
+      fallback?.setAttribute("open", "");
       showStatus(failedText, "error");
     } finally {
       if (current === attempt) clearTimeout(pending);

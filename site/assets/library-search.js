@@ -222,6 +222,7 @@ query.addEventListener("input", () => {
 form.addEventListener("change", ({ target }) => {
   if (!filterNames.includes(target.name)) return;
   cleared = undefined;
+  appliedQuery = query.value.trim();
   search();
 });
 reset.addEventListener("click", () => {
