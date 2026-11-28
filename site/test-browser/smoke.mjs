@@ -192,12 +192,26 @@ try {
       await setMotion("no-preference");
       await until(async () => !(await hidden(toggle)), "Fine pointer reveals the pendant toggle");
       assert.equal(await pressed(), "false");
-      await page.evaluate(`document.querySelector("${grid}").scrollIntoView({ block: "center", behavior: "instant" })`);
-      const point = await page.evaluate(`(() => {
-        const { left, top, width, height } = document.querySelector("${grid}").getBoundingClientRect();
-        return { left, top, right: left + width, bottom: top + height, x: left + width / 2, y: top + height / 2 };
+      const centerDemo = () => page.evaluate(`(async () => {
+        const demo = document.querySelector("${grid}");
+        demo.scrollIntoView({ block: "center", behavior: "instant" });
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        const { left, top, width, height } = demo.getBoundingClientRect();
+        const x = left + width / 2;
+        const y = top + height / 2;
+        return { left, top, right: left + width, bottom: top + height, x, y,
+          reachable: demo.contains(document.elementFromPoint(x, y)) };
       })()`);
       const move = (x, y) => page.command("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+      const clickToggleAndReturnToDemo = async expected => {
+        await page.click(toggle);
+        assert.equal(await pressed(), expected, "The button accepts an actual mouse click");
+        const current = await centerDemo();
+        assert.ok(current.reachable, "The demo center is a valid mouse target after scrolling");
+        await move(current.x, current.y);
+      };
+      const point = await centerDemo();
+      assert.ok(point.reachable, "The demo center is a valid mouse target");
       await move(point.x, point.y);
       assert.ok(await hidden(pendant), "Moving the pointer cannot enable the pendant");
       await page.evaluate(`document.querySelector("${toggle}").focus({ preventScroll: true })`);
@@ -253,8 +267,7 @@ try {
       await setMotion("no-preference");
       await until(async () => !(await hidden(toggle)), "The toggle returns when preferences allow it");
       assert.equal(await pressed(), "false", "Restoring preferences must not reactivate the pendant");
-      await page.click(toggle);
-      await move(point.x, point.y);
+      await clickToggleAndReturnToDemo("true");
       await until(async () => !(await hidden(pendant)), "Click can enable the pendant again");
       await setMotion("no-preference", [{ name: "forced-colors", value: "active" }]);
       await until(() => hidden(pendant), "Forced colors hides the active pendant");
@@ -262,12 +275,9 @@ try {
       await setMotion("no-preference");
       await until(async () => !(await hidden(toggle)), "Leaving forced colors restores the toggle");
       assert.equal(await pressed(), "false");
-      await page.click(toggle);
-      await move(point.x + 3, point.y);
+      await clickToggleAndReturnToDemo("true");
       await until(async () => !(await hidden(pendant)), "The pendant can be enabled again after forced colors");
-      await page.click(toggle);
-      await move(point.x + 5, point.y);
-      assert.equal(await pressed(), "false");
+      await clickToggleAndReturnToDemo("false");
       assert.ok(await hidden(pendant), "Closing remains effective on later mouse movement");
     });
 
