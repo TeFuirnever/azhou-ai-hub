@@ -71,7 +71,7 @@
     "explainer/parse.mjs": "a1ed1447e8f76603f544952a3483614039357755620945d5cfed51b1a1c42261",
     "explainer/patch.mjs": "a571191e2b65403d49343237c2e915b81c6d0f80c13b9cfedc17de3f60dd0804",
     "explainer/prepare.mjs": "476808c5a1cd0412d7fb2a91b8de0720bfa8aec01e3bd2f54712ce1c4881fa69",
-    "explainer/reader.css": "2febf6aa78e3a93e5dd723e920f2ed6c4dd01a9f311ff8b23fe353b53ef6d1b4",
+    "explainer/reader.css": "d581a41c221d0574201fabd8d338adbdcc0503d1e13fd417dc0891a46fb0160a",
     "explainer/reader.js": "08fa489e975fb83f9fcff7e4f91fef5d5bbaf3ac06f4b9247534c49bb9ef56bf",
     "explainer/render.mjs": "adefa5776bd0b3824d07c4d7808a3b040b7e8223c785882346f1be42cac58fdf",
     "explainer/revision.mjs": "29032cab30c03b2e4c48730f40175e0e59aa4794893c02e5ae38668776c18288",
@@ -322,7 +322,7 @@
     "references/delivery-contract.md": "418250feeb9a4d3e172e954822c16f7d02c9b1733fd06cfdaf41ac8f6ad1369c",
     "references/explainer-authoring.md": "cdc159e11582a516fa023bb2e57aabc4c280f3d9ea76183761e52dcd58e0e79e",
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
-    "references/provenance.md": "501bd0dd80336a38bcfa90671f815e31411f0bcf6a23e0e23177f65fb493c2d0",
+    "references/provenance.md": "c8ab1d4a57a5f86f680f9b2d522a39a6e3716b897b9ed8a3b39e8c417e253f8f",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
     "references/setup.md": "b169bd32e51ff17f970d78b03de4f0b1c9b64952746a1163fab2cd8af394cdd3",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
@@ -441,7 +441,7 @@
     "story/story-stage-html.mjs": "2c7d30f3e562f45c3d3c9a1d3f8e3b2dd5f60a856a45c4a76a39ebb075061811",
     "story/story-stage-runtime.js": "275f43063fa78d07fda567fe90e1d562313eb93da88a1468d1fe8d77c606b03f",
     "story/story-svg.mjs": "7728156b0f52308a1f862f492644399e40b3b8e2367e9c72786f6093694e3e46",
-    "story/story.css": "cbedc286e06236141619991504cfe6893ad715d7a2bf1f82613556ab5f9fcd42",
+    "story/story.css": "5973058fa2e5b5d24e4f90bba2b1f19e1a199f9aa8d680fa39edc0a192f9c2b7",
     "story/story.js": "e474e07afbb196675ce4ea2cc4f5e2b792e50c4c65a4d95b69f0b6f8143132bb",
     "story/svg-bake.mjs": "3436c4ed4a113c65acb2802fc06e099e872502ea0fb8f023abc78d08721cb685",
     "story/tool.mjs": "d638ded09ceca3d222875b33c38aae89acbd35a55a9d6ee693ed3d937bf14335",
@@ -1170,10 +1170,10 @@
       "base_sha256": "20ae425a84157c2d478241250975e74fca8938b47b85c5414149710ff4a3538f",
       "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": "9c9014ce5a310b8fa2f1c1510fcb3e59f580467f26fc53372ba6a20bf4afa735",
-      "packaged_sha256": "2febf6aa78e3a93e5dd723e920f2ed6c4dd01a9f311ff8b23fe353b53ef6d1b4",
+      "packaged_sha256": "d581a41c221d0574201fabd8d338adbdcc0503d1e13fd417dc0891a46fb0160a",
       "path": "explainer/reader.css",
       "target_sha256": "938509ac8694c411065c5a902c7b80b57f09a44e7c75f4ca979de99f4b07b518",
-      "resolution": "Reapplied the explainer control and reduced-motion styles from Hub PR #603."
+      "resolution": "Reapplied the prior Hub styles and added symmetric dialog and toast feedback with the shared 120/160 ms timing."
     },
     {
       "base_sha256": "202d3ad200accd89a1484fe64610d9bc8bb4544c14c3f51522ba74f965b332c6",
@@ -4410,7 +4410,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "98f33d07143a6a7e8ed3ac4c5cd8d6f7081fdd23b8e914775adcc4425187cb2c",
-      "packaged_sha256": "501bd0dd80336a38bcfa90671f815e31411f0bcf6a23e0e23177f65fb493c2d0",
+      "packaged_sha256": "c8ab1d4a57a5f86f680f9b2d522a39a6e3716b897b9ed8a3b39e8c417e253f8f",
       "path": "references/provenance.md",
       "target_sha256": null
     },
@@ -5378,11 +5378,12 @@
     },
     {
       "base_sha256": null,
-      "disposition": "adopt_upstream",
+      "disposition": "adopt_upstream_with_documented_local_fix",
       "local_sha256": null,
-      "packaged_sha256": "cbedc286e06236141619991504cfe6893ad715d7a2bf1f82613556ab5f9fcd42",
+      "packaged_sha256": "5973058fa2e5b5d24e4f90bba2b1f19e1a199f9aa8d680fa39edc0a192f9c2b7",
       "path": "story/story.css",
-      "target_sha256": "cbedc286e06236141619991504cfe6893ad715d7a2bf1f82613556ab5f9fcd42"
+      "target_sha256": "cbedc286e06236141619991504cfe6893ad715d7a2bf1f82613556ab5f9fcd42",
+      "resolution": "Keep narrow-screen tooltip movement behind prefers-reduced-motion: no-preference."
     },
     {
       "base_sha256": null,
