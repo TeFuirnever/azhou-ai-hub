@@ -42,6 +42,12 @@ SOURCES = {"user_feedback", "receipt", "check", "history", "hook", "synthetic", 
 PROVENANCE = {"curated", "learned", "imported", "unknown"}
 REQUIRED_CHECKS = {"schema", "privacy", "authorization", "size", "regression"}
 FORBIDDEN_KEYS = {"raw_text", "transcript", "command", "tool_input", "tool_output", "secret", "prompt_body"}
+SIGNAL_FIELDS = {
+    "schema_version", "signal_id", "observed_at", "project_id", "runtime", "session_digest",
+    "source", "provenance", "category", "mechanism", "severity", "outcome", "user_feedback",
+    "evidence_digest", "privacy", "authorization",
+}
+SIGNAL_CLASSIFICATIONS = {"privacy": "digests-only", "authorization": "observation-only"}
 
 
 class EvolutionError(ValueError):
@@ -152,6 +158,8 @@ def validate_signal(signal: Any) -> list[str]:
         return ["signal: expected object"]
     if signal.get("schema_version") not in (SIGNAL_SCHEMA, LEGACY_SIGNAL_SCHEMA):
         errors.append("schema_version")
+    if set(signal) - SIGNAL_FIELDS:
+        errors.append("unknown_fields")
     if not isinstance(signal.get("signal_id"), str) or not DIGEST_RE.fullmatch(signal["signal_id"]):
         errors.append("signal_id")
     for field in ("project_id", "session_digest", "evidence_digest"):
@@ -170,6 +178,14 @@ def validate_signal(signal: Any) -> list[str]:
         errors.append("runtime")
     if signal.get("user_feedback") not in ("accepted", "corrected", "rejected", "none"):
         errors.append("user_feedback")
+    if signal.get("schema_version") == SIGNAL_SCHEMA:
+        for field, value in SIGNAL_CLASSIFICATIONS.items():
+            if signal.get(field) != value:
+                errors.append(field)
+    elif signal.get("schema_version") == LEGACY_SIGNAL_SCHEMA:
+        for field, value in SIGNAL_CLASSIFICATIONS.items():
+            if field in signal and signal[field] != value:
+                errors.append(field)
     try:
         parse_time(signal.get("observed_at", ""))
     except EvolutionError:

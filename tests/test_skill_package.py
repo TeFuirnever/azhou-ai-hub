@@ -422,6 +422,24 @@ class SkillPackageTest(unittest.TestCase):
         for path in paths:
             self.assertIsInstance(json.loads(path.read_text(encoding="utf-8")), (list, dict))
 
+    def test_evolution_signal_schema_matches_current_and_legacy_runtime_rules(self) -> None:
+        schema = json.loads((SKILL_DIR / "assets" / "evolution-signal.schema.json").read_text(encoding="utf-8"))
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual("digests-only", schema["properties"]["privacy"]["const"])
+        self.assertEqual("observation-only", schema["properties"]["authorization"]["const"])
+        self.assertNotIn("privacy", schema["required"])
+        self.assertNotIn("authorization", schema["required"])
+
+        requirements = {}
+        for clause in schema["allOf"]:
+            version = clause["if"]["properties"]["schema_version"]["const"]
+            requirements[version] = set(clause["then"].get("required", []))
+        self.assertEqual(
+            {"privacy", "authorization"},
+            requirements["super-repo-pedant.evolution-signal.v1"],
+        )
+        self.assertFalse(requirements["repo-pedant.evolution-signal.v1"])
+
 
 if __name__ == "__main__":
     unittest.main()

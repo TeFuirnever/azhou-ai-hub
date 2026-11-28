@@ -13,6 +13,8 @@ Each observation is an atomic, project-scoped record. Required fields:
 - explicit user feedback when present: `accepted`, `corrected`, `rejected`, or `none`;
 - privacy and authorization classifications.
 
+Current `super-repo-pedant.evolution-signal.v1` records require `privacy=digests-only` and `authorization=observation-only`. The supported legacy `repo-pedant.evolution-signal.v1` may omit those two fields; if present, their values must match. Both versions reject fields outside the signal schema. Invalid rows count as parse errors and remain byte-preserved in the live batch when other valid signals are archived. Field validation cannot detect raw text placed inside an otherwise allowed string, so producers must still redact evidence before recording it.
+
 Silence is not positive evidence. Missing feedback remains `none`. A fallback store, parser truncation, redaction, or coverage gap must be visible in the receipt.
 
 ## Candidate lifecycle

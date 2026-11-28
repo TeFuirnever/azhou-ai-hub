@@ -950,6 +950,103 @@ class ManageEvolutionTest(unittest.TestCase):
         }
         self.assertEqual([], MODULE.validate_signal(signal))
 
+    def test_signal_schema_properties_match_runtime_allowlist(self) -> None:
+        schema_path = SCRIPT.parent.parent / "assets" / "evolution-signal.schema.json"
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        self.assertEqual(MODULE.SIGNAL_FIELDS, set(schema["properties"]))
+        self.assertEqual(MODULE.SIGNAL_CLASSIFICATIONS["privacy"], schema["properties"]["privacy"]["const"])
+        self.assertEqual(
+            MODULE.SIGNAL_CLASSIFICATIONS["authorization"],
+            schema["properties"]["authorization"]["const"],
+        )
+
+    def test_current_signals_require_classifications_and_known_fields(self) -> None:
+        mutations = {
+            "missing privacy": lambda signal: signal.pop("privacy"),
+            "invalid privacy": lambda signal: signal.__setitem__("privacy", "raw-content"),
+            "missing authorization": lambda signal: signal.pop("authorization"),
+            "invalid authorization": lambda signal: signal.__setitem__("authorization", "unrestricted"),
+            "unknown field": lambda signal: signal.__setitem__("review_note", "unclassified text"),
+            "invalid category": lambda signal: signal.__setitem__("category", "unclassified"),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                project = Path(directory)
+                created = self.add_signal(project, session="invalid", category="privacy", severity="critical")
+                self.assertEqual(0, created.returncode, created.stderr)
+                signal = json.loads(created.stdout)
+                mutate(signal)
+                live = project / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+                line = json.dumps(signal, ensure_ascii=False, separators=(",", ":"))
+                live.write_text(line + "\n", encoding="utf-8")
+                before = live.read_bytes()
+
+                self.assertTrue(MODULE.validate_signal(signal))
+                self.assertIsNone(MODULE.parse_signal_line(line))
+                proposed = self.propose(project)
+                self.assertEqual(2, proposed.returncode, proposed.stdout + proposed.stderr)
+                self.assertIn("two independent ordinary failures", proposed.stderr)
+                self.assertEqual(before, live.read_bytes())
+                candidates = project / ".azhou/super-repo-pedant/evolution/candidates"
+                self.assertFalse(list(candidates.glob("*.json")))
+
+    def test_legacy_signals_without_classifications_still_propose(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            signals = []
+            for session in ("legacy-one", "legacy-two"):
+                created = self.add_signal(project, session=session)
+                self.assertEqual(0, created.returncode, created.stderr)
+                signal = json.loads(created.stdout)
+                signal["schema_version"] = MODULE.LEGACY_SIGNAL_SCHEMA
+                signal.pop("privacy")
+                signal.pop("authorization")
+                signals.append(signal)
+            live = project / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            live.write_text("".join(json.dumps(signal, separators=(",", ":")) + "\n" for signal in signals), encoding="utf-8")
+
+            proposed = self.propose(project)
+
+            self.assertEqual(0, proposed.returncode, proposed.stdout + proposed.stderr)
+            candidate = json.loads(proposed.stdout)
+            self.assertEqual(2, candidate["independent_sessions"])
+            self.assertEqual(0, candidate["parse_errors"])
+            archived = self.run_cli("archive", "--project", str(project), "--candidate", candidate["candidate"])
+            self.assertEqual(0, archived.returncode, archived.stdout + archived.stderr)
+            archive_path = Path(json.loads(archived.stdout)["archive"])
+            self.assertEqual(2, len(archive_path.read_text(encoding="utf-8").splitlines()))
+            self.assertEqual(b"", live.read_bytes())
+
+    def test_invalid_signal_is_preserved_when_valid_evidence_is_archived(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            valid = []
+            for session in ("valid-one", "valid-two"):
+                created = self.add_signal(project, session=session)
+                self.assertEqual(0, created.returncode, created.stderr)
+                valid.append(json.loads(created.stdout))
+            malformed = json.loads(self.add_signal(project, session="malformed", category="privacy", severity="critical").stdout)
+            malformed["authorization"] = "unrestricted"
+            malformed_line = json.dumps(malformed, ensure_ascii=False, separators=(",", ":"))
+            live = project / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+            raw_lines = [json.dumps(signal, ensure_ascii=False, separators=(",", ":")) for signal in valid]
+            live.write_text("\n".join([*raw_lines, malformed_line]) + "\n", encoding="utf-8")
+            before_bad_line = (malformed_line + "\n").encode("utf-8")
+
+            proposed = self.propose(project)
+            self.assertEqual(0, proposed.returncode, proposed.stdout + proposed.stderr)
+            candidate = json.loads(proposed.stdout)
+            self.assertEqual(sorted(signal["signal_id"] for signal in valid), candidate["signal_ids"])
+            self.assertEqual(1, candidate["parse_errors"])
+
+            archived = self.run_cli("archive", "--project", str(project), "--candidate", candidate["candidate"])
+
+            self.assertEqual(0, archived.returncode, archived.stdout + archived.stderr)
+            self.assertEqual(before_bad_line, live.read_bytes())
+            archive_path = Path(json.loads(archived.stdout)["archive"])
+            archived_rows = [json.loads(line) for line in archive_path.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual({signal["signal_id"] for signal in valid}, {signal["signal_id"] for signal in archived_rows})
+
     def test_raw_fields_are_rejected(self) -> None:
         signal = {
             "schema_version": MODULE.SIGNAL_SCHEMA,
