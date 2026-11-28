@@ -954,11 +954,28 @@ class ManageEvolutionTest(unittest.TestCase):
         schema_path = SCRIPT.parent.parent / "assets" / "evolution-signal.schema.json"
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         self.assertEqual(MODULE.SIGNAL_FIELDS, set(schema["properties"]))
+        for field in ("project_id", "session_digest", "evidence_digest"):
+            self.assertEqual(r"^[a-f0-9]{16,64}$", schema["properties"][field]["pattern"])
         self.assertEqual(MODULE.SIGNAL_CLASSIFICATIONS["privacy"], schema["properties"]["privacy"]["const"])
         self.assertEqual(
             MODULE.SIGNAL_CLASSIFICATIONS["authorization"],
             schema["properties"]["authorization"]["const"],
         )
+
+    def test_signal_digest_widths_keep_runtime_compatibility(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            created = self.add_signal(Path(directory), session="width-boundaries")
+            self.assertEqual(0, created.returncode, created.stderr)
+            signal = json.loads(created.stdout)
+            for field in ("project_id", "session_digest", "evidence_digest"):
+                for width in (16, 64):
+                    with self.subTest(field=field, width=width):
+                        row = dict(signal, **{field: "a" * width})
+                        self.assertEqual([], MODULE.validate_signal(row))
+                for width in (15, 65):
+                    with self.subTest(field=field, width=width):
+                        row = dict(signal, **{field: "a" * width})
+                        self.assertIn(field, MODULE.validate_signal(row))
 
     def test_current_signals_require_classifications_and_known_fields(self) -> None:
         mutations = {

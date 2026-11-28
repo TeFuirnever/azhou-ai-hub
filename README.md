@@ -72,7 +72,7 @@ Open a new chat in the same project. Ask your agent to use `super-ask-azhou` for
 
 </details>
 
-Repo Pedant's [evolution safeguards](skills/super-repo-pedant/references/evolution-contract.md) stop identity-dependent actions when Git configuration changes the project identity, reject foreign identities in local state for global proposals, and stop proposals if explicitly included signal files are unavailable.
+Repo Pedant's [evolution safeguards](skills/super-repo-pedant/references/evolution-contract.md) stop identity-dependent actions when Git configuration changes the project identity, reject foreign identities in local state for global proposals, and stop proposals if explicitly included signal files are unavailable. Current signals require privacy and authorization classifications and known fields; legacy rows may omit the classifications. Invalid rows count as parse errors and remain in the live batch during archive. Project, session, and evidence digests retain the runtime's 16–64 hexadecimal character range.
 
 ### Worked examples
 

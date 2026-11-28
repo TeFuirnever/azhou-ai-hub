@@ -427,6 +427,7 @@ class SkillPackageTest(unittest.TestCase):
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual("digests-only", schema["properties"]["privacy"]["const"])
         self.assertEqual("observation-only", schema["properties"]["authorization"]["const"])
+        self.assertEqual(1, len(schema["allOf"]))
         self.assertNotIn("privacy", schema["required"])
         self.assertNotIn("authorization", schema["required"])
 
@@ -434,11 +435,11 @@ class SkillPackageTest(unittest.TestCase):
         for clause in schema["allOf"]:
             version = clause["if"]["properties"]["schema_version"]["const"]
             requirements[version] = set(clause["then"].get("required", []))
+        self.assertEqual(["super-repo-pedant.evolution-signal.v1"], list(requirements))
         self.assertEqual(
             {"privacy", "authorization"},
             requirements["super-repo-pedant.evolution-signal.v1"],
         )
-        self.assertFalse(requirements["repo-pedant.evolution-signal.v1"])
 
 
 if __name__ == "__main__":
