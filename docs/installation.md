@@ -31,6 +31,8 @@ Use this procedure to install one named Hub Skill in the project the user has op
 
 ## First install in Codex
 
+[Already installed Ask Azhou from the GitHub repository? Switch to the website download.](#switch-ask-azhou-to-the-website-download)
+
 Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Codex and open a terminal in the folder you normally open as a Codex project. You need internet access for installation and Node.js with `npx`. Skills CLI 1.9.1, used to verify this walkthrough, requires Node.js 22.20 or later.
 
 1. **Install in this project.** Run the following in the terminal and confirm the installation. The installer shows where it put Ask Azhou.
@@ -327,6 +329,10 @@ Copy that directory to the same path on the offline host — or set `PLAYWRIGHT_
 ## Upgrade or uninstall
 
 Use the method and scope that own the installed copy. From the same project, first confirm the skill's name, scope, and path. Check for local changes before updating or removing anything.
+
+### Switch Ask Azhou to the website download
+
+If you installed Ask Azhou in this Codex project with the older Skills CLI command that used `TeFuirnever/azhou-ai-hub`, run the [current install command](#first-install-in-codex) from the same project with Ask Azhou still installed. Skills CLI reuses `.agents/skills/super-ask-azhou/` and switches the source in `skills-lock.json` to the website archive. Later project checks and updates use that archive.
 
 ### Check a Skills CLI install
 
