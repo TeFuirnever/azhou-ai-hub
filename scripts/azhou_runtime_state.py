@@ -214,7 +214,9 @@ def plan_directory_migration(
             except (OSError, ValueError, json.JSONDecodeError):
                 conflicts.append("target migration receipt is invalid")
             else:
-                if receipt.get("planId") != plan_id:
+                if not isinstance(receipt, dict):
+                    conflicts.append("target migration receipt is invalid")
+                elif receipt.get("planId") != plan_id:
                     conflicts.append("target migration receipt does not match the source plan")
         status = "conflict" if conflicts else "already-current"
 
