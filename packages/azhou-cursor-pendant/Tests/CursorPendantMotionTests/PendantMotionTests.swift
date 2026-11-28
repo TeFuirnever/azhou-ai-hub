@@ -66,3 +66,15 @@ import Testing
     #expect(visibility.opacity(at: 0.160) == closing)
     #expect(visibility.opacity(at: 0.321) == 1)
 }
+
+@Test func ownsTheTopPixelAndStackedDisplaySeam() {
+    let upper = CGRect(x: 0, y: 0, width: 1512, height: 982)
+    let lower = CGRect(x: 0, y: -900, width: 1512, height: 900)
+    let topPixel = CGPoint(x: 100, y: 982)
+    let seam = CGPoint(x: 100, y: 0)
+
+    #expect(PendantMotion.screenContains(topPixel, on: upper))
+    #expect(!PendantMotion.screenContains(seam, on: upper))
+    #expect(PendantMotion.screenContains(seam, on: lower))
+    #expect(!PendantMotion.screenContains(CGPoint(x: 1512, y: 982), on: upper))
+}

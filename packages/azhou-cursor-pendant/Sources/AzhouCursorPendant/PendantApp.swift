@@ -141,8 +141,10 @@ final class PendantController: NSObject, NSApplicationDelegate {
         }
 
         let pointer = NSEvent.mouseLocation
-        if screenFrame?.contains(pointer) != true {
-            guard let frame = NSScreen.screens.first(where: { $0.frame.contains(pointer) })?.frame else {
+        if screenFrame.map({ PendantMotion.screenContains(pointer, on: $0) }) != true {
+            guard let frame = NSScreen.screens.first(where: {
+                PendantMotion.screenContains(pointer, on: $0.frame)
+            })?.frame else {
                 if screenFrame != nil { resetMotion() }
                 return
             }

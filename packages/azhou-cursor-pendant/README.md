@@ -21,7 +21,7 @@ open "$app"
 
 ## 验证与来源
 
-运行 `swift test --package-path packages/azhou-cursor-pendant`，核对跟随、摆幅、回稳和屏幕边缘。安装后在 Finder 和另一款应用之间移动鼠标，检查跟随和点击，再从菜单栏暂停并恢复。
+使用 Xcode 提供的 Swift 工具链运行 `swift test --package-path packages/azhou-cursor-pendant`，核对跟随、摆幅、回稳和屏幕边缘。安装后在 Finder 和另一款应用之间移动鼠标，检查跟随和点击，再从菜单栏暂停并恢复。
 
 位置计算与弹簧由 `CursorPendantMotion` 持有。AppKit 控制器读取鼠标和屏幕坐标，用不接收鼠标事件的浮窗显示现有阿舟素材。挂件为当前用户运行，启动由用户控制。代码与素材来源见[来源记录](../../docs/integration-provenance.md#azhou-cursor-pendant)。
 

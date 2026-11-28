@@ -75,6 +75,11 @@ public struct PendantMotion {
         )
     }
 
+    // AppKit flips Quartz's display coordinates in Y, so the top edge belongs to this screen.
+    public static func screenContains(_ point: CGPoint, on screen: CGRect) -> Bool {
+        point.x >= screen.minX && point.x < screen.maxX && point.y > screen.minY && point.y <= screen.maxY
+    }
+
     private static func pivot(for pointer: CGPoint, on screen: CGRect) -> CGPoint {
         let x = pointer.x - screen.minX
         let y = screen.maxY - pointer.y
