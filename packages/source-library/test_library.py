@@ -410,5 +410,91 @@ class LibraryTest(unittest.TestCase):
         self.assertEqual(entry["revision"]["media"], [])
 
 
+    def test_export_corrupt_media_rolls_back_publication_and_can_retry(self):
+        saved = self.store.archive("openai", URL, "local fixture", self.fetch)
+        self.store.approve(saved["id"], "full", "local fixture", "Reviewed note", saved["revision"])
+        revision = self.store.inspect(saved["id"])["revision"]
+        media = self.store.root / "objects" / revision["media"][0]
+        original = media.read_bytes()
+        approval = tuple(self.store.db.execute("SELECT * FROM approvals").fetchone())
+        destination = self.root / "retry-export"
+
+        media.write_bytes(b"corrupted after review")
+        with self.assertRaisesRegex(CollectionError, "archived media failed verification"):
+            self.store.export(destination)
+        self.assertFalse(destination.exists())
+        self.assertIsNone(self.store.inspect(saved["id"])["first_exported"])
+        self.assertEqual(tuple(self.store.db.execute("SELECT * FROM approvals").fetchone()), approval)
+
+        media.write_bytes(original)
+        with patch("catalog.timestamp", return_value="2026-11-28T00:00:00+00:00"):
+            self.assertEqual(self.store.export(destination), 1)
+        [public] = json.loads((destination / "manifest.json").read_text())["articles"]
+        self.assertEqual(public["first_published"], "2026-11-28T00:00:00+00:00")
+        self.assertEqual((destination / "media" / media.name).read_bytes(), original)
+
+    def test_export_publish_failure_does_not_commit_first_publication(self):
+        saved = self.store.archive("openai", URL, "local fixture", self.fetch)
+        self.store.approve(saved["id"], "link", "local fixture", "Reviewed note")
+        destination = self.root / "publish-retry"
+        before = tuple(self.store.db.execute("SELECT * FROM approvals").fetchone())
+        with patch("catalog.Path.rename", side_effect=OSError("injected publish failure")):
+            with self.assertRaisesRegex(OSError, "injected publish failure"):
+                self.store.export(destination)
+        self.assertFalse(destination.exists())
+        self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["private"])
+        self.assertIsNone(self.store.inspect(saved["id"])["first_exported"])
+        self.assertEqual(tuple(self.store.db.execute("SELECT * FROM approvals").fetchone()), before)
+        self.assertEqual(self.store.export(destination), 1)
+        self.assertTrue((destination / "manifest.json").is_file())
+
+    def test_backup_rejects_corrupt_objects_without_publishing_a_partial_backup(self):
+        saved = self.store.archive("openai", URL, "local fixture", self.fetch)
+        revision = self.store.inspect(saved["id"])["revision"]
+        for index, name in enumerate([revision["raw_object"], *revision["media"]]):
+            with self.subTest(object=name):
+                source = self.store.root / "objects" / name
+                original = source.read_bytes()
+                source.write_bytes(b"corrupt object")
+                destination = self.root / f"backup-{index}"
+                try:
+                    with self.assertRaisesRegex(CollectionError, "archived object failed verification"):
+                        self.store.backup(destination)
+                    self.assertFalse(destination.exists())
+                    self.assertEqual(sorted(path.name for path in self.root.iterdir()), ["private"])
+                finally:
+                    source.write_bytes(original)
+        destination = self.root / "valid-backup"
+        self.store.backup(destination)
+        with Catalog(destination) as restored:
+            self.assertEqual(restored.inspect(saved["id"])["revision"], revision)
+
+    def test_alias_merge_refuses_existing_review_or_archive_without_changing_records(self):
+        from collect import Candidate
+
+        for protected in ["review", "archive"]:
+            with self.subTest(protected=protected), Catalog(self.root / protected) as store:
+                store.record_discovery("openai", [
+                    Candidate(URL, "Canonical"), Candidate(ALIAS, "Existing separate record"),
+                ])
+                canonical = store.lookup(URL)
+                duplicate = store.lookup(ALIAS)
+                self.responses[ALIAS] = (html(PRIVATE, canonical=ALIAS), ALIAS, "text/html")
+                if protected == "review":
+                    store.approve(duplicate, "link", "existing review", "Keep this approval")
+                else:
+                    store.archive("openai", ALIAS, "existing archive", self.fetch)
+                tables = ("articles", "aliases", "sources", "revisions", "approvals")
+                def rows():
+                    return {table: [tuple(row) for row in store.db.execute(f"SELECT * FROM {table} ORDER BY rowid")]
+                            for table in tables}
+                before = rows()
+                self.responses[ALIAS] = (html(PRIVATE, canonical=URL), ALIAS, "text/html")
+                with self.assertRaisesRegex(CollectionError, "separate records"):
+                    store.archive("openai", ALIAS, "new alias observation", self.fetch)
+                self.assertEqual(rows(), before)
+                self.assertEqual(store.lookup(URL), canonical)
+                self.assertEqual(store.lookup(ALIAS), duplicate)
+
 if __name__ == "__main__":
     unittest.main()

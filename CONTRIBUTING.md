@@ -9,7 +9,7 @@ Contributions start with a real task or observed failure and end with reproducib
 1. Search [issues](https://github.com/TeFuirnever/azhou-ai-hub/issues) and [discussions](https://github.com/TeFuirnever/azhou-ai-hub/discussions).
 2. Fork the repository and branch from <code>main</code>.
 3. Keep one pull request focused on one falsifiable behavior or repository outcome.
-4. Run the full local gate before opening the PR:
+4. Run the repository gate before opening the PR:
 
 ~~~bash
 python3 scripts/verify.py
@@ -18,6 +18,19 @@ python3 scripts/verify.py
 The repository gate requires Python 3.11+. Excalidraw render/export work also follows its [locked dependency setup](skills/super-excalidraw-diagram/references/setup.md).
 
 Maintainer and coding-agent workflows that need parallel local checkouts follow the [Treehouse worktree policy](docs/worktree-policy.md). Ordinary contributors can continue to use a normal fork and focused task branch.
+
+### Component tests
+
+The Python repository gate includes root unit tests, package validation and registered benchmark checks. Run the applicable component suite as well; these suites have separate jobs in [CI](.github/workflows/ci.yml).
+
+| Component | Working directory | Commands |
+| --- | --- | --- |
+| Website templates and interactions | `site/` | `npm ci`, then `npm test` and `npm run build` |
+| Source Library collection and publication | `packages/source-library/` | `uv run --locked python -m unittest -v test_library` |
+| Inspector ZCode adapter | `packages/azhou-agent-inspector/` | `node --test test/*.test.mjs` |
+| Inspector Codex adapter | `packages/azhou-agent-inspector/` | `python3 -B -m unittest discover -s test -p '*_test.py'` |
+
+Root tests under `tests/` are discovered by `python3 scripts/verify.py`; website tests under `site/test/` are discovered by `npm test`. Pages also runs the website tests before building and deploying. Browser bridge checks and pstack generation/native gates retain their component-specific setup in the CI workflow. Passing unit or DOM tests does not establish browser layout or live-host integration behavior.
 
 ## Local tools and production files
 

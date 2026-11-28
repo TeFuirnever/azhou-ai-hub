@@ -130,3 +130,113 @@ class PanelTests(unittest.TestCase):
             self.assertIn(f"data:image/webp;base64,{data}", html)
         self.assertNotIn("__ART__", html)
         self.assertNotIn("__WALLPAPER__", html)
+
+    def test_thread_binding_accepts_consistent_metadata_and_rejects_ambiguous_ids(self):
+        sid, other = str(uuid4()), str(uuid4())
+        self.assertEqual(monitor.thread_id({
+            "threadId": sid.upper(),
+            "x-codex-turn-metadata": json.dumps({"thread_id": sid, "session_id": sid}),
+        }), sid)
+        for meta in [
+            {"openai/session": sid},
+            {"threadId": "../" + sid},
+            {"threadId": sid + "/extra"},
+            {"threadId": sid, "x-codex-turn-metadata": {"session_id": other}},
+            {"x-codex-turn-metadata": "{invalid"},
+        ]:
+            with self.subTest(meta=meta):
+                self.assertIsNone(monitor.thread_id(meta))
+
+    def test_foreign_turn_events_cannot_replace_bound_turn_counters(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder).resolve()
+            (home / "sessions").mkdir()
+            sid = str(uuid4())
+            events = [
+                ("session_meta", {"id": sid}),
+                ("event_msg", {"type": "task_started", "turn_id": "selected"}),
+                ("token_usage_record", {"turn_id": "selected", "response_id": "selected-response",
+                                       "turn_token_usage": {"output_tokens": 10}}),
+                ("token_usage_record", {"turn_id": "other", "response_id": "foreign-private-response",
+                                       "turn_token_usage": {"output_tokens": 9000}}),
+                ("event_msg", {"type": "task_complete", "turn_id": "other", "duration_ms": 1}),
+                ("event_msg", {"type": "turn_aborted", "turn_id": "other"}),
+                ("event_msg", {"type": "task_complete", "turn_id": "selected", "duration_ms": 2000}),
+            ]
+            path = home / "sessions" / f"rollout-fixture-{sid}.jsonl"
+            path.write_text("".join(json.dumps({"type": kind, "payload": payload}) + "\n"
+                                    for kind, payload in events), encoding="utf8")
+            result = monitor.dispatch("tools/call", {"name": monitor.TOOL, "_meta": {"threadId": sid}}, home)
+            self.assertEqual(result["structuredContent"], {
+                "state": "complete", "cacheHitPercent": None, "durationMs": 2000,
+                "ttftMs": None, "outputTokens": 10, "responses": 1, "effectiveTps": 5.0,
+            })
+            self.assertEqual(json.loads(result["content"][0]["text"]), result["structuredContent"])
+            self.assertNotIn("foreign-private-response", json.dumps(result))
+            self.assertNotIn(sid, json.dumps(result))
+
+    def test_invalid_counters_remain_unknown_instead_of_fabricating_metrics(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder).resolve()
+            (home / "sessions").mkdir()
+            sid = str(uuid4())
+            path = home / "sessions" / f"rollout-fixture-{sid}.jsonl"
+            for value in [-1, True, 1.5, "12", None]:
+                with self.subTest(value=value):
+                    events = [
+                        ("session_meta", {"id": sid}),
+                        ("event_msg", {"type": "task_started", "turn_id": "t"}),
+                        ("token_usage_record", {"turn_id": "t", "turn_token_usage": {
+                            "output_tokens": value, "input_tokens": value, "cached_input_tokens": value,
+                        }}),
+                        ("event_msg", {"type": "task_complete", "turn_id": "t",
+                                       "duration_ms": value, "time_to_first_token_ms": value}),
+                    ]
+                    path.write_text("".join(json.dumps({"type": kind, "payload": payload}) + "\n"
+                                            for kind, payload in events), encoding="utf8")
+                    result = monitor.snapshot(home, sid)
+                    self.assertEqual(result["state"], "complete")
+                    for name in ["durationMs", "ttftMs", "outputTokens", "cacheHitPercent", "effectiveTps"]:
+                        self.assertIsNone(result[name], name)
+
+    def test_zero_usage_is_valid_but_zero_duration_and_overcounted_cache_have_no_rate(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder).resolve()
+            (home / "sessions").mkdir()
+            sid = str(uuid4())
+            path = home / "sessions" / f"rollout-fixture-{sid}.jsonl"
+            for output, duration, input_tokens, cached, speed, hit in [
+                (0, 1000, 10, 0, 0.0, 0.0),
+                (10, 0, 0, 0, None, None),
+                (10, 2000, 10, 11, 5.0, None),
+            ]:
+                with self.subTest(output=output, duration=duration, cached=cached):
+                    events = [
+                        ("session_meta", {"id": sid}),
+                        ("event_msg", {"type": "task_started", "turn_id": "t"}),
+                        ("token_usage_record", {"turn_id": "t", "turn_token_usage": {
+                            "output_tokens": output, "input_tokens": input_tokens, "cached_input_tokens": cached,
+                        }}),
+                        ("event_msg", {"type": "task_complete", "turn_id": "t", "duration_ms": duration}),
+                    ]
+                    path.write_text("".join(json.dumps({"type": kind, "payload": payload}) + "\n"
+                                            for kind, payload in events), encoding="utf8")
+                    result = monitor.snapshot(home, sid)
+                    self.assertEqual(result["outputTokens"], output)
+                    self.assertEqual(result["durationMs"], duration)
+                    self.assertEqual(result["effectiveTps"], speed)
+                    self.assertEqual(result["cacheHitPercent"], hit)
+
+    def test_malformed_rollout_is_unavailable_and_a_repaired_file_recovers(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home = Path(folder).resolve()
+            (home / "sessions").mkdir()
+            sid = str(uuid4())
+            path = home / "sessions" / f"rollout-fixture-{sid}.jsonl"
+            meta = {"name": monitor.TOOL, "_meta": {"threadId": sid}}
+            path.write_text('{"broken":\n', encoding="utf8")
+            self.assertEqual(monitor.dispatch("tools/call", meta, home)["structuredContent"],
+                             {"state": "unavailable"})
+            path.write_text(json.dumps({"type": "session_meta", "payload": {"id": sid}}) + "\n",
+                            encoding="utf8")
+            self.assertEqual(monitor.dispatch("tools/call", meta, home)["structuredContent"], {"state": "empty"})
