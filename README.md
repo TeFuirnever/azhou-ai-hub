@@ -98,6 +98,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
 - [Azhou Agent Workbench](packages/azhou-agent-inspector/README.md) shows turn duration and speed in Codex and ZCode.
 - [pstack](packages/pstack-agent-harness/README.md) provides engineering and review workflows. See its [current support status](docs/support-matrix.md#optional-integrations).
 - [Azhou mouse cursors](assets/cursors/azhou-double-hug/README.md) are a standalone Mousecape theme for macOS.
+- [Azhou Cursor Pendant](packages/azhou-cursor-pendant/README.md) follows the mouse across macOS apps. Build the experimental app locally from the repository.
 
 <details>
 <summary>Integration support details</summary>
