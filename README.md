@@ -27,6 +27,8 @@ Sign in to Codex. Run this from your project with Node.js 22.20 or later, then c
 npx skills add https://tefuirnever.github.io/azhou-ai-hub/downloads/super-ask-azhou.tgz --agent codex
 ~~~
 
+[Switch an existing Ask Azhou install to the website download](docs/installation.md#switch-ask-azhou-to-the-website-download)
+
 </details>
 
 <a name="try-it-in-codex"></a>
