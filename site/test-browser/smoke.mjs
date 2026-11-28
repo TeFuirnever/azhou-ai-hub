@@ -120,6 +120,16 @@ try {
         "Changing language keeps the open Ask Azhou card and the undo action");
       await page.click("#clear-skill-search");
       assert.equal(await page.evaluate('document.querySelector("#skill-search").value'), "super-archify");
+
+      await page.evaluate(`document.querySelector("${row} summary").focus()`);
+      await page.key("Enter");
+      await page.click("#switch-language");
+      const original = site.pathPrefix + skillsPath.slice(1);
+      await until(() => page.evaluate(`document.readyState === "complete" && location.pathname === ${JSON.stringify(original)}`),
+        "Returns to the original language");
+      assert.equal(await page.evaluate("location.hash"), "");
+      assert.equal(await page.evaluate(`document.querySelector("${row} > details").open`), false);
+      assert.equal(await page.evaluate('document.querySelector("#skill-search").value'), "super-archify");
     });
 
     const foundation = "#super-azhou-doctor";
