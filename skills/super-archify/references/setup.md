@@ -57,3 +57,7 @@ The packaged files keep their upstream bytes, so these upstream behaviors ship a
 - **Rebuild after editing a diagram.** `pr attach` hashes the current SVG bytes but never compares them with the build receipt's recorded digest, so a diagram edited after `pr build` is published against the old receipt's revision metadata.
 - **Do not edit the PR description while an attach is uploading.** The final publication rebuilds the description from the preflight snapshot, discarding edits made outside the pack block during the upload.
 - **Story excerpts quote the head, not the cited revision.** The code excerpt reader runs `git show` at the repository head and ignores the citation's `source.revision`, so a base-revision citation can be presented with head content (or fail if the file was deleted); re-verify such citations before relying on the walkthrough's quotes.
+
+## Feedback links in HTML
+
+Diagram and explainer HTML includes upstream Archify feedback and support links by default. Set `meta.feedback_links: false` in a diagram or `@meta feedback_links=false` in an explainer to omit the feedback menu and star prompt. The explainer's Archify brand link remains. A story attachment follows its source diagram; `story stage` always includes its own feedback footer. Check the resulting HTML when these links matter to the recipient.

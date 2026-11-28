@@ -324,7 +324,7 @@
     "references/pr-review.md": "19b7a96effddaec87b0badf0f4f190d05ce5973f8951f520a80cce9f6c085487",
     "references/provenance.md": "501bd0dd80336a38bcfa90671f815e31411f0bcf6a23e0e23177f65fb493c2d0",
     "references/repository-authoring.md": "5b8d1fb14f941928f555828efda86d0a2ff78b4247d08b08216afa805070c8e9",
-    "references/setup.md": "58958433d8f054a3c91cde05b3ba5cbbc2bad61aeb3811f50a47561ea913df5c",
+    "references/setup.md": "b169bd32e51ff17f970d78b03de4f0b1c9b64952746a1163fab2cd8af394cdd3",
     "references/story-authoring.md": "5c64104efb79c146d5668b9cc3c8333fc1b7fc965549b521eb983d6397483eed",
     "references/update-awareness.md": "16b437a47790fda48f0e74f6aa053715fb06b6e8cd1ba994d1c01ffefa12a76b",
     "references/upstream-compatibility.md": "2a1920214b92c1a71c604df143ce807c74bcae8441d60fdc57fd15b7cc251e0f",
@@ -4426,7 +4426,7 @@
       "base_sha256": null,
       "disposition": "update_local_source_and_setup_record",
       "local_sha256": "58958433d8f054a3c91cde05b3ba5cbbc2bad61aeb3811f50a47561ea913df5c",
-      "packaged_sha256": "9a1a373c923e0cd45280ef43dc9be7580a43c227a89f8bbdb21bfed19be1f12b",
+      "packaged_sha256": "b169bd32e51ff17f970d78b03de4f0b1c9b64952746a1163fab2cd8af394cdd3",
       "path": "references/setup.md",
       "target_sha256": null
     },
