@@ -77,17 +77,21 @@ try {
       const discovery = `${site.blobBase}/docs/installation.md#check-that-your-host-finds-the-skill`;
       assert.equal((await page.attributes(`main a[href="${discovery}"]`)).hreflang, "en");
       await page.click(getHelp);
-      await until(() => page.evaluate(`location.pathname === ${JSON.stringify(support)} && location.hash === "#get-help"`),
+      await until(() => page.evaluate(`document.readyState === "complete" &&
+        location.pathname === ${JSON.stringify(support)} && location.hash === "#get-help"`),
         "Help opens at the right section");
-      assert.ok((await page.box(`main a[href="${discovery}"]`)).height > 0, "Recovery link is visible");
-      for (const target of ["/discussions", "/issues/new?template=bug.yml", "/security/advisories/new"]) {
-        assert.ok((await page.box(`main a[href="${site.githubUrl}${target}"]`)).height > 0,
-          `The ${target} action is visible`);
+      const visibleLinks = await page.evaluate(`[...document.querySelectorAll("main a")]
+        .filter(link => link.getClientRects().length).map(link => link.href)`);
+      const expectedLinks = [discovery, ...["/discussions", "/issues/new?template=bug.yml", "/security/advisories/new"]
+        .map(target => site.githubUrl + target)];
+      for (const href of expectedLinks) {
+        assert.ok(visibleLinks.includes(href), `The ${href} action is visible`);
       }
       await page.click("#switch-language");
       const other = lang === "en" ? "zh" : "en";
       const translated = site.pathPrefix + site.routes[other].support.slice(1);
-      await until(() => page.evaluate(`location.pathname === ${JSON.stringify(translated)} && location.hash === "#get-help"`),
+      await until(() => page.evaluate(`document.readyState === "complete" &&
+        location.pathname === ${JSON.stringify(translated)} && location.hash === "#get-help"`),
         "Changing language keeps the help section");
     });
     const skillsPath = site.routes[lang].skills;
