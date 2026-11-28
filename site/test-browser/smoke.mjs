@@ -101,12 +101,14 @@ try {
       assert.equal((await page.attributes(row)).hidden, undefined);
       await until(() => page.evaluate(`document.querySelector("${row} summary").getBoundingClientRect().bottom <= innerHeight`),
         "Ask Azhou appears in the viewport");
-      await page.click(`${row} summary`);
+      await page.evaluate(`document.querySelector("${row} summary").focus()`);
+      await page.key("Enter");
       await until(async () => Object.hasOwn(await page.attributes(row), "hidden"), "Closing the card restores the filtered list");
+      assert.equal(await page.evaluate('document.activeElement.id'), "ask-azhou-install-link");
     });
 
     const foundation = "#super-azhou-doctor";
-    await check(`${lang}: Foundation install shows the local checkout path`, { width }, `${skillsPath}${foundation}`, async page => {
+    await check(`${lang}: Foundation install shows the local checkout path`, { width }, `${skillsPath}?q=super-archify${foundation}`, async page => {
       const guide = `${site.blobBase}/docs/installation.md#checkout-assisted-setup`;
       const manual = `${foundation} [data-manual-install]`;
       assert.ok(await isOpen(page, `${foundation} > details`));
@@ -115,6 +117,10 @@ try {
       assert.equal((await page.attributes(`${manual} a`)).href, guide);
       assert.equal(await page.evaluate(`document.querySelector("${manual} code") === null`), true,
         "A checkout-only skill does not show the ordinary install command");
+      await page.evaluate(`document.querySelector("${foundation} > details > summary").focus()`);
+      await page.key("Enter");
+      await until(async () => Object.hasOwn(await page.attributes(foundation), "hidden"), "Closing the deep-linked card restores the filter");
+      assert.equal(await page.evaluate('document.activeElement.id'), "clear-skill-search");
     });
 
     await check(`${lang}: homepage RSS opens at ${width}px`, { width }, site.routes[lang].home, async page => {

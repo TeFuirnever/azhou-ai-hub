@@ -60,6 +60,7 @@ layout: base.njk
   const list = document.getElementById("skill-list");
   const catalogLanguageLink = document.getElementById("switch-language");
   const count = document.getElementById("skill-count");
+  const askAzhouLink = document.getElementById("ask-azhou-install-link");
   const items = Array.from(document.querySelectorAll("#skill-list > li"), element => ({
     element,
     keywords: (element.querySelector(".gcard").textContent + " " + element.dataset.otherLanguage).toLowerCase(),
@@ -134,8 +135,14 @@ layout: base.njk
   function saveOpenSkill() {
     const open = list.querySelector("li > details[open]")?.parentElement;
     if (linkedSkill && linkedSkill !== open) {
+      const previous = linkedSkill;
+      const hadFocus = previous.contains(document.activeElement);
       linkedSkill = undefined;
       updateSkills();
+      if (previous.hidden && hadFocus) {
+        const returnTo = previous.id === askAzhouLink.hash.slice(1) ? askAzhouLink : clear;
+        returnTo.focus();
+      }
     }
     if (!open && !skillAtHash()) return;
     const current = new URL(location.href);
@@ -231,7 +238,6 @@ layout: base.njk
     }
     saveSearch();
   });
-  const askAzhouLink = document.getElementById("ask-azhou-install-link");
   askAzhouLink.addEventListener("click", event => {
     if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     linkedSkill = document.getElementById(askAzhouLink.hash.slice(1));
