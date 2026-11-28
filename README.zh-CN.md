@@ -35,7 +35,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 
 在同一项目打开新会话，让 Agent 用 `super-ask-azhou` 回答下面的问题。在 Codex 里可以直接粘贴整段示例。Ask Azhou 应推荐 `super-archify`。
 
-> `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub Skill？
+> `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub 技能？
 
 [安装 Archify](https://tefuirnever.github.io/azhou-ai-hub/zh/skills/#super-archify) · [排查已安装的技能（英文）](docs/installation.md#check-that-your-host-finds-the-skill) · [更新或卸载（英文）](docs/installation.md#upgrade-or-uninstall)
 

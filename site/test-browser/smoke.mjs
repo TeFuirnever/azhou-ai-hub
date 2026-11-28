@@ -105,6 +105,21 @@ try {
       await page.key("Enter");
       await until(async () => Object.hasOwn(await page.attributes(row), "hidden"), "Closing the card restores the filtered list");
       assert.equal(await page.evaluate('document.activeElement.id'), "ask-azhou-install-link");
+
+      await page.click("#clear-skill-search");
+      await page.click("#ask-azhou-install-link");
+      await until(() => isOpen(page, `${row} > details`), "Ask Azhou opens after clearing search");
+      assert.equal(await page.evaluate('document.querySelector("#skill-search").value'), "");
+      await page.click("#switch-language");
+      const other = lang === "en" ? "zh" : "en";
+      const translated = site.pathPrefix + site.routes[other].skills.slice(1);
+      const undo = other === "zh" ? "撤销清除" : "Undo clear";
+      await until(() => page.evaluate(`document.readyState === "complete" &&
+        location.pathname === ${JSON.stringify(translated)} && location.hash === "${row}" &&
+        document.querySelector("#clear-skill-search")?.textContent === ${JSON.stringify(undo)}`),
+        "Changing language keeps the open Ask Azhou card and the undo action");
+      await page.click("#clear-skill-search");
+      assert.equal(await page.evaluate('document.querySelector("#skill-search").value'), "super-archify");
     });
 
     const foundation = "#super-azhou-doctor";
