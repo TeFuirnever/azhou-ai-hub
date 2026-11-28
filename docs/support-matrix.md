@@ -90,6 +90,10 @@ This dated inventory preserves source references and prior observations; it does
 
 Source paths for this limited inventory are the pinned pstack `package.json`, manifests, `docs/reference.md`, `docs/pi-equivalence.md` and host mappings; animation `docs/references.md`, `Native/App.swift` and `Native/Wallpaper.swift`. The dated acceptance record carries the current machine observations. No old guide version has been substituted for an observed current version.
 
+## Azhou Cursor Pendant
+
+The [Azhou Cursor Pendant](../packages/azhou-cursor-pendant/README.md) is an experimental AppKit menu bar app that builds on macOS with Swift 6. The first local candidate targets the maintainer's Apple Silicon Mac running macOS 27.2.1. The package supplies a local build script and a user-level install procedure. Broader macOS version, display, and Space coverage is unverified.
+
 ## Operating system support (deterministic gate)
 
 The deterministic verification gate (`python scripts/verify.py`, Python 3.11+ standard library only) is enforced per operating system. This table covers the gate and the shipped runtime scripts; the harness rows above are OS-neutral claims about adapters and receipts and are not extended by it.

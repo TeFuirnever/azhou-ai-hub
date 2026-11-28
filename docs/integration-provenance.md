@@ -87,3 +87,7 @@ The 0.12.11 ZCode Context check used its own temporary native marketplace regist
 On 2026-11-26, both native managers updated the existing Hub registrations from 0.12.11 to 0.12.12. The cached entry points matched Hub revision `cd7dad43`. After the ZCode restart, the desktop loaded the updated dashboard. [Native follow-up](../evidence/azhou-agent-workbench-native-0.12.12-2026-11-26.md).
 
 On 2026-11-26, both native managers updated the existing Hub registrations to 0.12.13. The installed manifests and entry points matched Hub revision `81bb1538`. The private install record retains the previous payloads. [Workbench 0.12.13 verification](../evidence/azhou-agent-workbench-native-0.12.13-2026-11-26.md).
+
+## Azhou Cursor Pendant
+
+The standalone [macOS cursor pendant](../packages/azhou-cursor-pendant/README.md) is built from this repository. Its Swift code uses the root MIT license. The build copies [the existing 2× Azhou grab pose](../site/assets/cursors/README.md) as `Pendant.png` and includes the original [artwork license](../assets/azhou/LICENSE) and [notice](../assets/azhou/NOTICE.md). The animation follows the parameters selected for the [web pendant](design/azhou-cursor-pendant.md). The desktop code uses AppKit and the shared Azhou artwork under its existing terms.

@@ -98,6 +98,7 @@ npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
 - [阿舟 Agent 工作台](packages/azhou-agent-inspector/README.md)在 Codex 和 ZCode 显示对话耗时和速度。
 - [pstack](packages/pstack-agent-harness/README.md)提供实现和审查工作流。当前状态见[支持矩阵](docs/support-matrix.md#optional-integrations)。
 - [阿舟鼠标指针](assets/cursors/azhou-double-hug/README.md)是独立的 macOS Mousecape 主题。
+- [阿舟跟随挂件](packages/azhou-cursor-pendant/README.md)在 macOS 上跨应用跟随鼠标，可从仓库本地构建体验。
 
 <details>
 <summary>集成支持详情</summary>
