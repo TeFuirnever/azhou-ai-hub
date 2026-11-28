@@ -178,6 +178,8 @@ try {
       const toggle = "[data-cursor-pendant-toggle]";
       const pendant = "[data-cursor-pendant]";
       const grid = ".cursor-demo-grid";
+      assert.ok(await page.evaluate('matchMedia("(hover: hover) and (pointer: fine)").matches'),
+        "The desktop Chrome fixture must report a fine pointer");
       const hidden = async selector => Object.hasOwn(await page.attributes(selector), "hidden");
       const pressed = async () => (await page.attributes(toggle))["aria-pressed"];
       const setMotion = (value, extra = []) => page.command("Emulation.setEmulatedMedia", {
