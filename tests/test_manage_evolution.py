@@ -665,6 +665,93 @@ class ManageEvolutionTest(unittest.TestCase):
                     with MODULE.transaction_lock(state_root, project):
                         self.fail("transaction entered without a lock")
 
+    def test_project_identity_refuses_inherited_git_redirect_or_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            project = root / "project"
+            project.mkdir()
+            config = root / "gitconfig"
+            config.write_text('[remote "origin"]\n url = https://example.invalid/shared.git\n')
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(config)})
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), *self.add_signal_args(project, session="one")],
+                env=env, capture_output=True, text=True, encoding="utf-8",
+            )
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+            self.assertIn("identity", result.stderr.lower())
+            self.assertFalse((project / ".azhou").exists())
+
+            foreign = root / "foreign"
+            foreign.mkdir()
+            clean_env = dict(env, GIT_CONFIG_GLOBAL=os.devnull)
+            subprocess.run(["git", "-C", str(foreign), "init", "-q"], env=clean_env, check=True)
+            subprocess.run(["git", "-C", str(foreign), "config", "--local", "remote.origin.url",
+                            "https://example.invalid/foreign.git"], env=clean_env, check=True)
+            redirected = dict(clean_env, GIT_DIR=str(foreign / ".git"))
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), *self.add_signal_args(project, session="two")],
+                env=redirected, capture_output=True, text=True, encoding="utf-8",
+            )
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+            self.assertIn("identity", result.stderr.lower())
+            self.assertFalse((project / ".azhou").exists())
+            with mock.patch.object(MODULE.subprocess, "run", side_effect=subprocess.TimeoutExpired("git", 5)):
+                with self.assertRaisesRegex(MODULE.EvolutionError, "identity"):
+                    MODULE.project_identity(project)
+
+    def test_global_candidate_refuses_foreign_identity_in_local_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "project"
+            project.mkdir()
+            added = self.add_signal(project, session="live", category="safety", severity="critical")
+            self.assertEqual(0, added.returncode, added.stderr)
+            row = json.loads(added.stdout)
+            row.update(project_id="a" * 24, signal_id="b" * 64, session_digest="c" * 24)
+            state = project / ".azhou/super-repo-pedant/evolution"
+            live = state / "signals.jsonl"
+            original = live.read_bytes()
+            live.write_bytes(original + (json.dumps(row) + "\n").encode())
+            before_live = live.read_bytes()
+            result = self.propose(project, "--scope", "global")
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+            self.assertIn("identity", result.stderr.lower())
+            self.assertEqual(before_live, live.read_bytes())
+            self.assertFalse((state / "candidates").exists())
+            live.write_bytes(original)
+            archive = state / "archive/old.jsonl"
+            archive.parent.mkdir()
+            archive.write_text(json.dumps(row) + "\n", encoding="utf-8")
+            before = archive.read_bytes()
+            result = self.propose(project, "--scope", "global", "--include-signal-file", str(archive))
+            self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+            self.assertIn("identity", result.stderr.lower())
+            self.assertEqual(before, archive.read_bytes())
+            self.assertFalse((state / "candidates").exists())
+
+    def test_global_candidate_with_only_external_signals_does_not_need_local_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "target"
+            target.mkdir()
+            files = []
+            for name in ("first", "second"):
+                project = root / name
+                project.mkdir()
+                self.assertEqual(0, self.add_signal(project, session=name).returncode)
+                files.append(project / ".azhou/super-repo-pedant/evolution/signals.jsonl")
+            config = root / "gitconfig"
+            config.write_text('[remote "origin"]\n url = https://example.invalid/shared.git\n')
+            env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+            env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": str(config)})
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), *self.propose_args(target, "--scope", "global",
+                    "--include-signal-file", str(files[0]), "--include-signal-file", str(files[1]))],
+                env=env, capture_output=True, text=True, encoding="utf-8",
+            )
+            self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+            self.assertEqual(2, json.loads(result.stdout)["projects"])
+
     def test_global_candidate_requires_two_projects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

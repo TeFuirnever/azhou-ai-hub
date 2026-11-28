@@ -72,6 +72,8 @@ Open a new chat in the same project. Ask your agent to use `super-ask-azhou` for
 
 </details>
 
+Repo Pedant's [evolution safeguards](skills/super-repo-pedant/references/evolution-contract.md) stop identity-dependent actions when Git configuration changes the project identity, and reject foreign identities in local state when forming global proposals.
+
 ### Worked examples
 
 - [Draw a login sequence](docs/demos/super-excalidraw-diagram.md) and get an editable file and PNG.
