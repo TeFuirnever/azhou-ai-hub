@@ -1,10 +1,9 @@
 const zh = document.documentElement.lang === "zh-CN";
 
 for (const button of document.querySelectorAll(".copy-actions [data-copy]")) {
-  if (button.closest(".term-bar")) continue;
   if (!navigator.clipboard?.writeText) continue;
   const actions = button.parentElement;
-  const status = actions.querySelector('[role="status"]');
+  const status = (button.closest(".term-bar") ?? actions).querySelector('[role="status"]');
   const message = status.querySelector("[data-copy-message]");
   const check = status.querySelector(".copy-check");
   actions.hidden = false;
@@ -21,22 +20,18 @@ for (const button of document.querySelectorAll(".copy-actions [data-copy]")) {
   let reset;
   let pending;
   let fade;
+  let acknowledgment;
   let retiring = false;
   function showStatus(text, state) {
     retiring = false;
     fade?.cancel();
+    acknowledgment?.cancel();
     status.dataset.state = state;
     if (message.textContent !== text) message.textContent = text;
   }
-  // Each confirmed attempt answers, including a repeat tap while "Copied" is showing.
-  function acknowledge(confirmed) {
-    if (!animatable()) return;
-    retiring = false;
-    fade?.cancel();
-    message.animate([{ opacity: .65 }, { opacity: 1 }], { duration: feedback, easing });
-    if (confirmed) {
-      check.animate([{ opacity: 0, transform: "scale(.6)" }, { opacity: 1, transform: "none" }], { duration: feedback, easing });
-    }
+  function acknowledge(firstConfirmation) {
+    if (!animatable() || !firstConfirmation) return;
+    acknowledgment = check.animate([{ opacity: .7 }, { opacity: 1 }], { duration: feedback, easing });
   }
   function retire() {
     if (!animatable()) {
@@ -48,7 +43,9 @@ for (const button of document.querySelectorAll(".copy-actions [data-copy]")) {
     fade.finished.then(() => { if (retiring) showStatus("", ""); }, () => {});
   }
   motion.addEventListener("change", () => {
-    if (motion.matches && retiring) showStatus("", "");
+    if (!motion.matches) return;
+    acknowledgment?.cancel();
+    if (retiring) showStatus("", "");
   });
   button.addEventListener("click", async () => {
     const current = ++attempt;
@@ -62,13 +59,13 @@ for (const button of document.querySelectorAll(".copy-actions [data-copy]")) {
     try {
       await navigator.clipboard.writeText(source.textContent);
       if (current !== attempt) return;
+      const firstConfirmation = status.dataset.state !== "success";
       showStatus(copiedText, "success");
-      acknowledge(true);
+      acknowledge(firstConfirmation);
       reset = setTimeout(retire, 3500);
     } catch {
       if (current !== attempt) return;
       showStatus(failedText, "error");
-      acknowledge(false);
     } finally {
       if (current === attempt) clearTimeout(pending);
     }

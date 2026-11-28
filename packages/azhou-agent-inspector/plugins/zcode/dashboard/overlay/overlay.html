@@ -10,8 +10,8 @@
   :root {
     color-scheme: dark light;
     --motion-press: 100ms;
-    --motion-feedback: 140ms;
-    --motion-change: 180ms;
+    --motion-feedback: 120ms;
+    --motion-change: 160ms;
     --motion-ease: cubic-bezier(.23, 1, .32, 1);
     --bg: #0b1020; --ink: #e8ecf7; --muted: #aab3cf; --secondary: #8b94ad;
     --surface: #141b33; --hover: #1d2747; --pressed: #26325a;
@@ -88,18 +88,18 @@
   body.line .info { margin: 0 0 0 4px; }
   body.line .ctrls { top: 50%; right: 8px; transform: translateY(-50%); }
   body.line :is(#btnSpark, .spark) { display: none; }
+  .dot { transition: background-color var(--motion-feedback) var(--motion-ease); }
+  .state { transition: color var(--motion-feedback) var(--motion-ease); }
+  .cbtn {
+    transition: border-color var(--motion-feedback) var(--motion-ease),
+                background-color var(--motion-feedback) var(--motion-ease),
+                color var(--motion-feedback) var(--motion-ease), opacity var(--motion-feedback) var(--motion-ease),
+                transform var(--motion-feedback) var(--motion-ease);
+  }
+  #btnPause span { transition: opacity var(--motion-feedback) var(--motion-ease); }
+  .spark { transition: opacity var(--motion-change) var(--motion-ease); }
   @media (prefers-reduced-motion: no-preference) {
-    .dot { transition: background-color var(--motion-feedback) ease; }
-    .cbtn {
-      transition: border-color var(--motion-feedback) ease, background-color var(--motion-feedback) ease,
-                  color var(--motion-feedback) ease, opacity var(--motion-feedback) ease,
-                  transform var(--motion-feedback) var(--motion-ease);
-    }
     .cbtn:not([aria-disabled="true"]):active { transform: scale(.98); transition-duration: var(--motion-press); }
-    #btnPause span { transition: opacity var(--motion-feedback) var(--motion-ease); }
-    .spark { transform: translateY(3px); transition: opacity var(--motion-change) var(--motion-ease),
-                                                       transform var(--motion-change) var(--motion-ease); }
-    .spark.on { transform: none; }
   }
 </style>
 </head>
