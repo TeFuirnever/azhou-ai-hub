@@ -27,8 +27,6 @@
 npx skills add https://tefuirnever.github.io/azhou-ai-hub/downloads/super-ask-azhou.tgz --agent codex
 ~~~
 
-[已在项目里装过 Ask Azhou？切换到官网直链（英文）](docs/installation.md#switch-ask-azhou-to-the-website-download)
-
 </details>
 
 <a name="在-codex-里试一次"></a>
