@@ -25,12 +25,14 @@ The Python repository gate includes root unit tests, package validation and regi
 
 | Component | Working directory | Commands |
 | --- | --- | --- |
-| Website templates and interactions | `site/` | `npm ci`, then `npm test` and `npm run build` |
+| Website templates, build output and browser interactions | `site/` | `npm ci`, `npm test`, `npm run build`, `npm run test:build`, then `npm run test:browser` |
 | Source Library collection and publication | `packages/source-library/` | `uv run --locked python -m unittest -v test_library` |
 | Inspector ZCode adapter | `packages/azhou-agent-inspector/` | `node --test test/*.test.mjs` |
 | Inspector Codex adapter | `packages/azhou-agent-inspector/` | `python3 -B -m unittest discover -s test -p '*_test.py'` |
 
-Root tests under `tests/` are discovered by `python3 scripts/verify.py`; website tests under `site/test/` are discovered by `npm test`. Pages also runs the website tests before building and deploying. Browser bridge checks and pstack generation/native gates retain their component-specific setup in the CI workflow. Passing unit or DOM tests does not establish browser layout or live-host integration behavior.
+Root tests under `tests/` are discovered by `python3 scripts/verify.py`, including real CLI migration recovery. Website unit and DOM tests under `site/test/` run with `npm test` before a build. After building, `test:build` checks the published RSS, article and asset routes over loopback HTTP, using Python 3.11+ for strict XML parsing. It also checks that damaged output fails the gate. `test:browser` exercises the built website in a fresh headless Chrome/Chromium profile; set `CHROME_BIN` when the executable is not on the standard path.
+
+Both CI and Pages run the build-output and browser checks before accepting the site artifact. Browser bridge checks and pstack generation/native gates retain their component-specific setup in the CI workflow. Browser smoke checks cover their stated interactions; visual approval and live-host integration still require their applicable experience review.
 
 ## Local tools and production files
 

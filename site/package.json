@@ -5,7 +5,9 @@
   "description": "Static documentation site for the Azhou AI Hub repository, built with Eleventy.",
   "scripts": {
     "build": "eleventy",
-    "test": "node --test"
+    "test": "node --test test/*.test.mjs",
+    "test:build": "node --test test-build/*.test.mjs",
+    "test:browser": "node test-browser/smoke.mjs"
   },
   "devDependencies": {
     "@11ty/eleventy": "3.1.8",
