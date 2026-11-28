@@ -75,8 +75,8 @@ layout: base.njk
         {{ capability("Hub Skills", "找一个可以装进 Agent 的技能" if zh else "Find a skill to add to your agent", site.routes[lang].skills | url, false, 1) }}
         {{ capability("Agent Rules Books", "把工程书里的方法用到代码和评审中" if zh else "Apply lessons from engineering books to code and reviews", site.routes[lang].books | url, false, 2) }}
         {{ capability("安装 Ask Azhou" if zh else "Install Ask Azhou", "让阿舟按任务推荐技能" if zh else "Get skill recommendations for your task", "#install", false, 3) }}
-        {{ capability("阿舟 Agent 工作台" if zh else "Azhou Agent Workbench", "在 Codex 和 ZCode 查看一轮对话的耗时和速度" if zh else "See turn duration and speed in Codex and ZCode", site.blobBase ~ "/packages/azhou-agent-inspector/README.md", true, 4) }}
-        {{ capability("pstack", "用工作流推进实现、评审和 PR 跟进" if zh else "Use engineering workflows for implementation and review", site.blobBase ~ "/packages/pstack-agent-harness/README.md", true, 4) }}
+        {{ capability("阿舟 Agent 工作台" if zh else "Azhou Agent Workbench", "在 Codex 或 ZCode 的插件管理器里安装，查看对话耗时和速度" if zh else "Install through the Codex or ZCode plugin manager to see turn duration and speed", site.blobBase ~ "/packages/azhou-agent-inspector/README.md", true, 4) }}
+        {{ capability("pstack", "通过候选版工程工作流推进实现与审查" if zh else "Use candidate engineering workflows for implementation and review", site.blobBase ~ "/packages/pstack-agent-harness/README.md", true, 4) }}
       </ul>
     </div>
   </section>
@@ -139,14 +139,14 @@ layout: base.njk
         <div class="home-setup-copy" data-reveal style="--reveal-i: 1">
           {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
           {{ installActions("super-ask-azhou", zh, installGuide) }}
-          <p>{{ '在同一项目打开新的 Codex 会话，发下面的问题。Ask Azhou 应推荐 super-archify。' if zh else 'Open a new Codex chat in the same project and send this question. Ask Azhou should recommend super-archify.' }}</p>
-          {{ termBlock("try-prompt", '复制试用问题' if zh else 'Copy example question', '$super-ask-azhou 我有一段 Mermaid，想做成交互架构图。该用哪个技能？' if zh else '$super-ask-azhou I have a Mermaid diagram. Which skill turns it into an interactive architecture diagram?') }}
+          <p>{{ '在同一项目打开新会话，让 Agent 用 super-ask-azhou 回答下面的问题。在 Codex 里可以直接粘贴整段示例。Ask Azhou 应推荐 super-archify。' if zh else 'Open a new chat in the same project. Ask your agent to use super-ask-azhou for the question below. In Codex, paste the example as written. Ask Azhou should recommend super-archify.' }}</p>
+          {{ termBlock("try-prompt", '复制试用问题' if zh else 'Copy example question', '$super-ask-azhou 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub 技能？' if zh else '$super-ask-azhou I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?') }}
           <p><a href="{{ site.routes[lang].skills | url }}#super-archify">{{ '查看 Archify 安装方式' if zh else 'See how to install Archify' }}</a></p>
           <details>
             <summary>{{ '排查安装、更新或卸载' if zh else 'Troubleshoot, update, or uninstall' }}</summary>
             {%- if zh %}<p>以下指南为英文。</p>{% endif %}
             <ul>
-              <li><a href="{{ installGuide }}#check-that-your-host-finds-the-skill" hreflang="en">{{ '宿主找不到技能' if zh else 'The host cannot find the skill' }}</a></li>
+              <li><a href="{{ installGuide }}#check-that-your-host-finds-the-skill" hreflang="en">{{ 'Agent 找不到已安装的技能（英文）' if zh else 'Your agent cannot find an installed skill' }}</a></li>
               <li><a href="{{ installGuide }}#upgrade-or-uninstall" hreflang="en">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
               <li><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ 'Codex 统一安装器' if zh else 'Unified installer for Codex' }}</a></li>
             </ul>

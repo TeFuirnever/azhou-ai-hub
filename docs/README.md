@@ -2,8 +2,11 @@
 
 | Need | Maintained source |
 |---|---|
-| Install, verify, update or remove a skill | [Installation](installation.md) |
 | Find a skill by task | [Skill catalog](https://tefuirnever.github.io/azhou-ai-hub/skills/) |
+| Install a skill in your project | [Installation](installation.md) |
+| Your agent cannot find an installed skill | [Check skill discovery](installation.md#check-that-your-host-finds-the-skill) |
+| Update or uninstall a skill | [Skill maintenance](installation.md#upgrade-or-uninstall) |
+| Ask a question or report a problem | [Support](../SUPPORT.md) |
 | Know what a host or skill verifies | [Support matrix](support-matrix.md), [per-skill platform view](skill-platform-view.md), and [skill verification](skill-evidence.md) |
 | Use engineering guidance from books | [Agent Rules Books](agent-rules-books.md) and [简体中文](agent-rules-books.zh-CN.md) |
 | Understand product direction and tradeoffs | [Principles](principles.md) |

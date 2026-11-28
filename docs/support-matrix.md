@@ -2,9 +2,18 @@
 
 The maintained agent-harness set is **Codex, Claude Code, MiMo Code (`mimo`), DeepSeek Harness (`dsh`), and zcode**. All other harnesses, including Pi and Kimi Code, are unsupported by this project. A portable package may remain readable elsewhere, but that is not a support commitment. This matrix separates shared package behavior from host integration evidence: discovery, invocation, hooks, memory APIs, and optional integrations.
 
-MiMo Code is the newly selected fourth target. Its 2026-10-26 local check establishes CLI identity and discovery of the canonical Skill names installed at receipt time — a list that predates and does not include the later Super Lavish, Super Imagegen, Super i-have-adhd, Super Gh Axi, Super Rederive, Super Frontend Design, Super Diagram Design, Super Brainstorming and Super Grill Me additions (the current repository catalog has 21 packages; the Super LLM Wiki retirement stands); it does not establish model invocation, lifecycle hooks, MCP transport, or session-store parsing. Capability rows below retain those limits.
+- [Check a specific skill by agent host](skill-platform-view.md).
+- [Find the installation steps for your host](installation.md#choose-your-agent-host).
+- [Troubleshoot a missing skill](installation.md#check-that-your-host-finds-the-skill).
 
-DeepSeek Harness is the newly selected fifth target. Its 2026-11-02 local check established desktop identity (`com.deepseek.dsh`, then `0.2.1-rc.5`, Electron, bundled `dsh` profile launcher) and shared-user-root discovery of the pstack skills with zero broken links ([receipt](../evidence/deepseek-skill-discovery-2026-11-02.md)): all 68 skills resolved through `~/.agents/skills` from the skills-root tree as of 2026-11-02 — historical for pstack, superseded on the maintainer host by the 2026-11-14 pstack-link retirement ([bundled-skills receipt](../evidence/zcode-plugin-bundled-skills-2026-11-14.md)); non-pstack shared-root skills are unaffected, and DSH/MiMo pstack serving through the shared root is deferred to the separately scoped DSH task — with dispatch surfaces `subagent`, `subagent_fork`, `spawn_teammate` and `workflow` registered in-session and no model-list surface exposed. It does not establish host-level skill invocation, lifecycle hooks, or session-store parsing. The installed desktop app reports `0.2.2-rc.1` on 2026-11-14; this version observation adds no host-level Skill invocation, lifecycle-hook, or session-store claim. Capability rows below retain those limits.
+<details>
+<summary>MiMo Code and DeepSeek Harness discovery evidence</summary>
+
+MiMo Code is a maintained target. Its 2026-10-26 local check establishes CLI identity and discovery of the canonical Skill names installed at receipt time — a list that predates and does not include the later Super Lavish, Super Imagegen, Super i-have-adhd, Super Gh Axi, Super Rederive, Super Frontend Design, Super Diagram Design, Super Brainstorming and Super Grill Me additions (the current repository catalog has 21 packages; the Super LLM Wiki retirement stands); it does not establish model invocation, lifecycle hooks, MCP transport, or session-store parsing. Capability rows below retain those limits.
+
+DeepSeek Harness is a maintained target. Its 2026-11-02 local check established desktop identity (`com.deepseek.dsh`, then `0.2.1-rc.5`, Electron, bundled `dsh` profile launcher) and shared-user-root discovery of the pstack skills with zero broken links ([receipt](../evidence/deepseek-skill-discovery-2026-11-02.md)): all 68 skills resolved through `~/.agents/skills` from the skills-root tree as of 2026-11-02 — historical for pstack, superseded on the maintainer host by the 2026-11-14 pstack-link retirement ([bundled-skills receipt](../evidence/zcode-plugin-bundled-skills-2026-11-14.md)); non-pstack shared-root skills are unaffected, and DSH/MiMo pstack serving through the shared root is deferred to the separately scoped DSH task — with dispatch surfaces `subagent`, `subagent_fork`, `spawn_teammate` and `workflow` registered in-session and no model-list surface exposed. It does not establish host-level skill invocation, lifecycle hooks, or session-store parsing. The installed desktop app reports `0.2.2-rc.1` on 2026-11-14; this version observation adds no host-level Skill invocation, lifecycle-hook, or session-store claim. Capability rows below retain those limits.
+
+</details>
 
 | Capability | Codex | Claude Code | MiMo Code | zcode | DeepSeek Harness | Other harnesses (unsupported) |
 |---|---|---|---|---|---|---|
@@ -64,7 +73,7 @@ The observed global Skill traversal-limit warning and one pstack model-list refr
 
 ### Historical and unsupported harness references
 
-This dated inventory preserves source references and prior observations; it does not extend the four-harness support set. A Skill, subagent or startup hook is not a graphical-animation interface. No row below claims this Hub animation works there.
+This dated inventory preserves source references and prior observations; it does not extend the maintained harness set. A Skill, subagent or startup hook is not a graphical-animation interface. No row below claims this Hub animation works there.
 
 | Target | Identity and version evidence this round | Existing mechanism and animation boundary |
 |---|---|---|

@@ -8,7 +8,7 @@ layout: base.njk
 <article class="doc-card">
   <h1>{{ title }}</h1>
   <p>{{ '选择一个技能，查看安装方式和使用说明。也可以让 Ask Azhou 为你推荐。' if zh else 'Select a skill for installation and usage instructions, or ask Ask Azhou for a recommendation.' }}
-    <a href="{{ site.routes[lang].home | url }}#install">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</a>
+    <a id="ask-azhou-install-link" href="#super-ask-azhou">{{ '安装 Ask Azhou' if zh else 'Install Ask Azhou' }}</a>
   </p>
   <div id="skill-filter" role="search" hidden>
     <label for="skill-search">{{ '搜索任务或包名' if zh else 'Search tasks or package names' }}</label>
@@ -44,7 +44,8 @@ layout: base.njk
             {% if needsCheckout %}
             <p>{{ '运行此技能需要本地 Hub 仓库。' if zh else 'This skill needs a local Hub checkout.' }}</p>
             {% endif %}
-            {{ installActions(skill.name, zh, installGuide, not needsCheckout) }}
+            {{ installActions(skill.name, zh, installGuide, needsCheckout) }}
+            <p><a href="{{ installGuide }}#check-that-your-host-finds-the-skill" hreflang="en">{{ 'Agent 找不到已安装的技能（英文）' if zh else 'Your agent cannot find an installed skill' }}</a></p>
           {% endif %}
           <p><a href="{{ skill.url }}">{{ '查看技能说明' if zh else 'Read the skill guide' }}</a></p>
         </div>
@@ -229,6 +230,12 @@ layout: base.njk
       cleared = null;
     }
     saveSearch();
+  });
+  const askAzhouLink = document.getElementById("ask-azhou-install-link");
+  askAzhouLink.addEventListener("click", event => {
+    if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    linkedSkill = document.getElementById(askAzhouLink.hash.slice(1));
+    updateSkills();
   });
   function restoreCatalog() {
     restoreOpenSkill();

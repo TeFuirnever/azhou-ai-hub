@@ -1,8 +1,8 @@
 # 🦊 Azhou AI Hub
 
-Skills that help your agent draw diagrams, explain complex ideas, and review code. Install them one at a time as you need them.
+Give your agent a skill to draw diagrams, explain complex ideas, or review code. Install the skills you need one at a time. The Azhou Source Library collects articles and updates from official AI sources.
 
-[简体中文](README.zh-CN.md) · [Find skills](https://tefuirnever.github.io/azhou-ai-hub/skills/) · [Install Ask Azhou](#install-ask-azhou) · [Read official AI articles](https://tefuirnever.github.io/azhou-ai-hub/library/)
+[简体中文](README.zh-CN.md) · [Find skills](https://tefuirnever.github.io/azhou-ai-hub/skills/) · [Install Ask Azhou](#install-ask-azhou) · [Browse the Source Library](https://tefuirnever.github.io/azhou-ai-hub/library/)
 
 ## Install Ask Azhou
 
@@ -10,14 +10,14 @@ Start with Ask Azhou if you are unsure which skill to use. It recommends a skill
 
 ### Let your agent install
 
-Paste this into an agent session in your project. The guide asks the agent to check for an existing install and use the route for your host.
+Open an agent session in your project and paste this install prompt. Your agent checks whether it can already find Ask Azhou before installing it.
 
 > Follow https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-with-an-agent to install only super-ask-azhou in this project and check that this host discovers it.
 
 <details>
 <summary>Install manually</summary>
 
-[Choose your agent host](docs/installation.md#choose-your-agent-host).
+[Choose your agent host](docs/installation.md#choose-your-agent-host). To install a different skill with Skills CLI, see [package-manager install](docs/installation.md#package-manager-install).
 
 ### First install in Codex
 
@@ -29,13 +29,15 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 
 </details>
 
-### Try it in Codex
+<a name="try-it-in-codex"></a>
 
-Open a new chat in the same project and send this question. Ask Azhou should recommend `super-archify`. If the host cannot find Ask Azhou, [check the install](docs/installation.md#check-that-your-host-finds-the-skill).
+### Try Ask Azhou
+
+Open a new chat in the same project. Ask your agent to use `super-ask-azhou` for the question below. In Codex, paste the example as written. Ask Azhou should recommend `super-archify`.
 
 > `$super-ask-azhou` I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?
 
-[Install a recommended skill](docs/installation.md#package-manager-install) · [Update or uninstall](docs/installation.md#upgrade-or-uninstall)
+[Install Archify](https://tefuirnever.github.io/azhou-ai-hub/skills/#super-archify) · [Find an installed skill](docs/installation.md#check-that-your-host-finds-the-skill) · [Update or uninstall](docs/installation.md#upgrade-or-uninstall)
 
 ## Skills
 
@@ -109,9 +111,9 @@ npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
 
 ## Project
 
-- [Install and maintain skills](docs/installation.md) · [Support matrix](docs/support-matrix.md) · [Verification basis](docs/skill-evidence.md)
-- [Developer docs](docs/README.md) · [Skill Standard](docs/skill-standard.md) · [Principles](docs/principles.md) · [Roadmap](docs/roadmap.md) · [Changelog](CHANGELOG.md)
-- [Report a problem or contribute](CONTRIBUTING.md) · [Security](SECURITY.md) · [Retired tools](docs/architecture.md#retired-surfaces)
+- [Install and maintain skills](docs/installation.md) · [Get help or report a bug](SUPPORT.md) · [Check a skill by agent host](docs/skill-platform-view.md)
+- [Documentation index](docs/README.md) · [Skill Standard](docs/skill-standard.md) · [Contribute](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
+- [Verification basis](docs/skill-evidence.md) · [Security](SECURITY.md) · [Retired tools](docs/architecture.md#retired-surfaces)
 
 <details>
 <summary>Developer commands (Foundation CLI)</summary>
