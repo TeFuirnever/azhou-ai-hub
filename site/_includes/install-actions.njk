@@ -1,5 +1,5 @@
 {% from "copy-control.njk" import copyControl %}
-{% macro installActions(skillName, zh, installGuide, needsCheckout=false) %}
+{% macro installActions(skillName, zh, installGuide, site, needsCheckout=false) %}
   {% set promptId = 'agent-install-' ~ skillName %}
   {% set target = installGuide ~ '#install-with-an-agent' %}
   <p>{{ '在当前项目打开 Agent 会话，粘贴这段安装提示词。' if zh else 'Open an agent session in your project and paste this install prompt.' }}</p>
@@ -14,7 +14,7 @@
       {% set commandId = 'install-' ~ skillName %}
       <p>{{ 'Codex 示例：在项目目录用 Node.js 22.20 或更新版本运行，然后在同一项目打开新会话。' if zh else 'Codex example. Run from your project with Node.js 22.20 or later, then open a new chat in the same project.' }}</p>
       {{ copyControl(commandId, '复制安装命令' if zh else 'Copy install command') }}
-      <pre class="wrap-text"><code id="{{ commandId }}">npx skills add TeFuirnever/azhou-ai-hub --skill {{ skillName }} --agent codex</code></pre>
+      <pre class="wrap-text"><code id="{{ commandId }}">npx skills add {% if skillName == 'super-ask-azhou' %}{{ site.siteUrl ~ site.askAzhouDownloadPath }}{% else %}TeFuirnever/azhou-ai-hub --skill {{ skillName }}{% endif %} --agent codex</code></pre>
     {% endif %}
   </details>
 {% endmacro %}

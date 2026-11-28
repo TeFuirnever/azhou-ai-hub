@@ -95,6 +95,22 @@ try {
         "Changing language keeps the help section");
     });
     const skillsPath = site.routes[lang].skills;
+
+    const installCommand = `npx skills add ${site.siteUrl}${site.askAzhouDownloadPath} --agent codex`;
+    for (const entry of [`${site.routes[lang].home}#install`, `${skillsPath}#super-ask-azhou`]) {
+      await check(`${lang}: copy the Ask Azhou download command from ${entry} at ${width}px`, { width }, entry, async page => {
+        const manual = '[data-manual-install="super-ask-azhou"]';
+        const source = "#install-super-ask-azhou";
+        await page.permission("clipboard-read", "granted");
+        await page.permission("clipboard-write", "granted");
+        if (!await isOpen(page, manual)) await page.click(`${manual} > summary`);
+        await page.click('button[data-copy="install-super-ask-azhou"]');
+        assert.equal(await page.evaluate(`document.querySelector("${source}").textContent`), installCommand);
+        assert.equal(await page.evaluate("navigator.clipboard.readText()"), installCommand);
+        assert.ok(await page.evaluate(`document.querySelector("${source}").parentElement.scrollWidth <=
+          document.querySelector("${source}").parentElement.clientWidth + 1`), "The command fits without horizontal scrolling");
+      });
+    }
     await check(`${lang}: open Ask Azhou without clearing the skill search`, { width }, `${skillsPath}?q=super-archify`, async page => {
       const row = "#super-ask-azhou";
       assert.ok(Object.hasOwn(await page.attributes(row), "hidden"));

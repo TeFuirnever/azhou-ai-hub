@@ -30,7 +30,7 @@ Package-manager installations stay owned by their package manager. This Skill ca
 Use the project directory as the working directory for a project-scoped install. Add `--global` when the user chooses user scope. Confirm the chosen scope and the Skill name before an operation.
 
 ~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+npx skills add https://tefuirnever.github.io/azhou-ai-hub/downloads/super-ask-azhou.tgz --agent codex
 npx skills list --agent codex
 npx skills check --project super-ask-azhou
 npx skills update --project super-ask-azhou

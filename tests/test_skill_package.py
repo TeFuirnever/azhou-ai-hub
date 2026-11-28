@@ -209,19 +209,21 @@ class SkillPackageTest(unittest.TestCase):
         installable = set(shipped) | {
             Path(relative).parent.name for relative in BOOK_SKILL_PATHS if (ROOT / relative).is_file()
         }
-        examples = {
-            "docs/installation.md": ["super-ask-azhou", "refactoring", "super-archify"],
-            "README.md": ["super-ask-azhou", "refactoring"],
-            "README.zh-CN.md": ["super-ask-azhou", "refactoring"],
+        repo_examples = {
+            "docs/installation.md": ["refactoring", "super-archify"],
+            "README.md": ["refactoring"],
+            "README.zh-CN.md": ["refactoring"],
+            "skills/super-azhou-setup/references/setup.md": [],
         }
-        for relative, expected in examples.items():
+        for relative, expected in repo_examples.items():
             text = (ROOT / relative).read_text(encoding="utf-8")
             commands = re.findall(
-                r"^[ \t]*npx skills add TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+) --agent codex$",
+                r"^[ \t]*npx skills add (?:TeFuirnever/azhou-ai-hub --skill ([a-z0-9-]+)"
+                r"|https://tefuirnever\.github\.io/azhou-ai-hub/downloads/(super-ask-azhou)\.tgz) --agent codex$",
                 text, re.MULTILINE,
             )
-            self.assertEqual(expected, commands, relative)
-            self.assertTrue(set(commands).issubset(installable), relative)
+            self.assertEqual([("", "super-ask-azhou"), *((name, "") for name in expected)], commands, relative)
+            self.assertTrue({repo or download for repo, download in commands}.issubset(installable), relative)
         for relative in ("README.md", "README.zh-CN.md"):
             text = (ROOT / relative).read_text(encoding="utf-8")
             rows = re.findall(

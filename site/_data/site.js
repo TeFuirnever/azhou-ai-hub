@@ -17,6 +17,7 @@ const siteUrl = `${siteOrigin.origin}/${REPO_NAME}`;
 module.exports = {
   githubUrl,
   siteUrl,
+  askAzhouDownloadPath: "/downloads/super-ask-azhou.tgz",
   blobBase: `${githubUrl}/blob/main`,
   treeBase: `${githubUrl}/tree/main`,
   pathPrefix: `/${REPO_NAME}/`,

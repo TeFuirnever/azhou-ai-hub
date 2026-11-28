@@ -24,7 +24,7 @@
 登录 Codex，在项目目录用 Node.js 22.20 或更新版本运行下面的命令，按提示确认安装到当前项目。
 
 ~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+npx skills add https://tefuirnever.github.io/azhou-ai-hub/downloads/super-ask-azhou.tgz --agent codex
 ~~~
 
 </details>
