@@ -376,6 +376,40 @@ try {
       });
     }
 
+    const archived = library.entries.find(entry => entry.scope === "full");
+    if (archived) {
+      const search = `?q=${encodeURIComponent(archived.title)}#results-title`;
+      await check(`${lang}: reloading a translated reading chapter keeps the return context`, { width }, path + search, async page => {
+        await until(async () => (await page.attributes("#library-status"))["data-state"] === "done", "Archived text appears in the list");
+        await page.evaluate(`document.querySelector('#library-results [data-entry-id="${archived.id}"] h3 a').focus()`);
+        await page.key("Enter");
+        await until(() => page.evaluate('Boolean(document.querySelector(".article-toc"))'), "Archive opens");
+        const other = lang === "en" ? "zh" : "en";
+        const translated = site.pathPrefix + site.routes[other].library.slice(1);
+        await page.evaluate('document.querySelector("#switch-language").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`location.pathname.startsWith(${JSON.stringify(translated + "articles/")}) &&
+          document.querySelector("#library-return")?.hash === "#results-title"`), "The translated archive remembers the list");
+        if (!await isOpen(page, ".article-toc")) {
+          await page.evaluate('document.querySelector(".article-toc summary").focus()');
+          await page.key("Enter");
+        }
+        const chapter = await page.evaluate('document.querySelector(".article-toc ol a").hash');
+        await page.evaluate('document.querySelector(".article-toc ol a").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`location.hash === ${JSON.stringify(chapter)} && Boolean(history.state?.libraryReturn)`),
+          "Following the chapter preserves the return information");
+        const loaded = await page.evaluate("performance.timeOrigin");
+        await page.command("Page.reload");
+        await until(() => page.evaluate(`performance.timeOrigin > ${loaded} &&
+          document.querySelector("#library-return")?.hash === "#results-title"`), "Reloaded chapter restores the return information");
+        await page.evaluate('document.querySelector("#library-return").focus()');
+        await page.key("Enter");
+        await until(() => page.evaluate(`location.pathname === ${JSON.stringify(translated)} && location.hash === "#results-title"`),
+          "Returns to the translated search list and anchor");
+      });
+    }
+
     if (query) {
       await check(`${lang}: built Pagefind index answers a real query`, { width }, `${path}#results-title`, async page => {
         await until(async () => !Object.hasOwn(await page.attributes("#library-search"), "hidden"), "Search script is ready");
@@ -408,6 +442,8 @@ try {
           "The translated list restores the search results");
         assert.equal(await page.evaluate('document.querySelector("#library-query").value'), query.query + draft);
         assert.equal(await page.evaluate("location.hash"), "#results-title");
+        await until(() => page.evaluate(`document.activeElement.matches('#library-results [data-entry-id="${query.id}"] h3 a')`),
+          "Returning to the translated list restores focus to the opened result");
         assert.equal(await page.evaluate(`Boolean(document.querySelector('#library-results [data-entry-id="${query.id}"]'))`), true);
       });
     } else {

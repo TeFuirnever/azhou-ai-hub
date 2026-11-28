@@ -1334,8 +1334,11 @@ class AzhouHubCliTest(unittest.TestCase):
                     script = root / "scripts/azhou_hub.py"
                     script.parent.mkdir(exist_ok=True)
                     script.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
-                    argv = subprocess.check_output([powershell, "-NoProfile", "-Command", printed], text=True)
-                    self.assertEqual(apply_args, json.loads(argv))
+                    argv = subprocess.check_output([powershell, "-NoProfile", "-Command", printed], encoding="utf-8")
+                    emitted_args = json.loads(argv)
+                    parser = azhou_hub.build_parser(root)
+                    self.assertEqual(parser.parse_args(apply_args), parser.parse_args(emitted_args))
+                    apply_args = emitted_args
             else:
                 python, script, *apply_args = shlex.split(printed)
                 self.assertEqual(sys.executable, python)

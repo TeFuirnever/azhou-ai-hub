@@ -2,6 +2,7 @@ const back = document.getElementById("library-return");
 const language = document.getElementById("switch-language");
 const transferKey = "hub-library-reading-context";
 const draftKey = "hub-library-language-draft";
+const focusKey = "hub-library-return-focus";
 
 const sameTab = (event) =>
   event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
@@ -23,15 +24,44 @@ function receiveContext() {
 }
 
 function trackArticleLinks() {
-  document.querySelector(".edition-list")?.addEventListener("click", event => {
+  const list = document.querySelector(".edition-list");
+  if (!list) return;
+  list.addEventListener("click", event => {
     const link = event.target.closest("[data-entry-id] h3 a");
     if (!link || !sameTab(event)) return;
     sendContext(link, {
       listing: location.href,
       entryKey: window.navigation?.currentEntry?.key,
+      entryId: link.closest("[data-entry-id]").dataset.entryId,
       draft: document.getElementById("library-query")?.value,
     });
   });
+
+  function restoreFocus() {
+    let context;
+    try {
+      context = JSON.parse(sessionStorage.getItem(focusKey));
+      if (context?.target !== location.href) return;
+      sessionStorage.removeItem(focusKey);
+    } catch { return; }
+    if (typeof context.entryId !== "string") return;
+    const focusResult = () => {
+      if (document.activeElement !== document.body && document.activeElement !== document.documentElement) return;
+      list.querySelector(`[data-entry-id="${CSS.escape(context.entryId)}"] h3 a`)?.focus();
+    };
+    if (list.getAttribute("aria-busy") !== "true") {
+      focusResult();
+      return;
+    }
+    const observer = new MutationObserver(() => {
+      if (list.getAttribute("aria-busy") === "true") return;
+      observer.disconnect();
+      focusResult();
+    });
+    observer.observe(list, { attributes: true, attributeFilter: ["aria-busy"] });
+  }
+  restoreFocus();
+  window.addEventListener("pageshow", restoreFocus);
 }
 
 function articleReturn() {
@@ -51,7 +81,8 @@ function articleReturn() {
 
   const saved = receiveContext() ?? history.state?.libraryReturn;
   const origin = listing(saved?.listing);
-  const source = origin ?? listing(document.referrer);
+  const referrerListing = listing(document.referrer);
+  const source = origin ?? referrerListing;
   if (!source) return;
 
   const context = origin ? saved : { listing: source.url.href };
@@ -61,7 +92,11 @@ function articleReturn() {
   back.href = target.href;
   if (source.relative) back.textContent = back.dataset.sourceLabel;
   else if (target.search) back.textContent = back.dataset.resultsLabel;
-  try { history.replaceState({ ...history.state, libraryReturn: context }, ""); } catch {}
+  const keepContext = () => {
+    try { history.replaceState({ ...history.state, libraryReturn: context }, ""); } catch {}
+  };
+  keepContext();
+  window.addEventListener("hashchange", keepContext);
 
   function restoreDraft() {
     if (typeof context.draft !== "string") return;
@@ -74,8 +109,22 @@ function articleReturn() {
     if (!sameTab(event)) return;
     const navigation = window.navigation;
     const index = navigation?.currentEntry?.index;
-    const previous = navigation?.entries().find(entry =>
+    const entries = navigation?.entries() ?? [];
+    let previous = entries.find(entry =>
       entry.key === context.entryKey && entry.url === target.href && entry.index < index);
+    if (!context.entryKey && referrerListing?.url.pathname === target.pathname) {
+      // Storage can be denied. Only the immediately preceding verified listing is safe to reuse.
+      previous = entries.find(entry => entry.index === index - 1 && entry.url &&
+        withoutHash(entry.url) === withoutHash(target.href));
+    }
+    if (typeof context.entryId === "string") {
+      try {
+        sessionStorage.setItem(focusKey, JSON.stringify({
+          target: previous?.url ?? target.href,
+          entryId: context.entryId,
+        }));
+      } catch {}
+    }
     if (!previous) {
       restoreDraft();
       return;
