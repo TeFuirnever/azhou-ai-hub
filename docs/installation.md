@@ -31,15 +31,15 @@ Use this procedure to install one named Hub Skill in the project the user has op
 
 ## First install in Codex
 
-Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Codex and open a terminal in the folder you normally open as a Codex project. You need internet access for installation and Node.js with `npx`. Skills CLI 1.9.0, used to verify this walkthrough, requires Node.js 22.20 or later.
+Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Codex and open a terminal in the folder you normally open as a Codex project. You need internet access for installation and Node.js with `npx`. Skills CLI 1.9.1, used to verify this walkthrough, requires Node.js 22.20 or later.
 
 1. **Install in this project.** Run the following in the terminal and confirm the installation. The installer shows where it put Ask Azhou.
 
    ~~~bash
-   npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+   npx skills add https://tefuirnever.github.io/azhou-ai-hub/downloads/super-ask-azhou.tgz --agent codex
    ~~~
 
-   This command installs into the current project. Add `--global` on the first install if you want a user-wide copy instead. For later updates and removal, use the scope you installed into.
+   This command downloads the Ask Azhou package from the Hub website and installs it in the current project. Add `--global` on the first install if you want a user-wide copy instead. For later updates and removal, use the scope you installed into.
 
 2. **Try Ask Azhou.** Open a new Codex chat in the same project. Type `$super-ask-azhou` and check that Codex offers the skill, then enter the following question.
 
@@ -109,7 +109,7 @@ This example installs Super Archify for Codex in the current project. For anothe
 
 ## Alternate installer
 
-If Skills CLI times out cloning the repository, use Codex's bundled skill installer to fetch just Ask Azhou. Run this from your Codex project directory with your system's Python command.
+If you cannot download the Ask Azhou archive from the Hub website, use Codex's bundled skill installer to install Ask Azhou from GitHub. Run this from your Codex project directory with your system's Python command.
 
 ~~~bash
 python "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-ask-azhou --method git --dest "$PWD/.agents/skills"

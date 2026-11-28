@@ -4,6 +4,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+- Publish a standalone Ask Azhou archive with each website build. The default Codex command downloads only this skill.
 - The README example links directly to Archify installation. The docs and support pages link to installation troubleshooting, public bug reports, and private security reports. The skill catalog preserves search and undo when you open a card or switch languages, and returns keyboard focus when you close a filtered card. [PR #634](https://github.com/TeFuirnever/azhou-ai-hub/pull/634) · [Pages deployment](https://github.com/TeFuirnever/azhou-ai-hub/actions/runs/46102475829)
 - Put the Agent installation prompt first in both READMEs, on the Hub homepage, and on skill cards with a public install route. Manual steps open on demand. Skill links open the intended card, and search can be cleared and restored across language switches. [PR #627](https://github.com/TeFuirnever/azhou-ai-hub/pull/627)
 - Redesigned the Hub website with a hairline-grid surface and system sans typography, extracted Azhou pointer cursors with a four-tile interactive cursor demo, responsive WebP workspace artwork, unified state-transition motion across disclosures, navigation, filtering and copy controls, and full `prefers-reduced-motion` and `forced-colors` support. [PR #623](https://github.com/TeFuirnever/azhou-ai-hub/pull/623)

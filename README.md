@@ -24,7 +24,7 @@ Open an agent session in your project and paste this install prompt. Your agent 
 Sign in to Codex. Run this from your project with Node.js 22.20 or later, then confirm the project install when prompted.
 
 ~~~bash
-npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
+npx skills add https://tefuirnever.github.io/azhou-ai-hub/downloads/super-ask-azhou.tgz --agent codex
 ~~~
 
 </details>

@@ -138,7 +138,7 @@ layout: base.njk
       <div class="grid-cell grid-pad">
         <div class="home-setup-copy" data-reveal style="--reveal-i: 1">
           {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
-          {{ installActions("super-ask-azhou", zh, installGuide) }}
+          {{ installActions("super-ask-azhou", zh, installGuide, site) }}
           <p>{{ '在同一项目打开新会话，让 Agent 用 super-ask-azhou 回答下面的问题。在 Codex 里可以直接粘贴整段示例。Ask Azhou 应推荐 super-archify。' if zh else 'Open a new chat in the same project. Ask your agent to use super-ask-azhou for the question below. In Codex, paste the example as written. Ask Azhou should recommend super-archify.' }}</p>
           {{ termBlock("try-prompt", '复制试用问题' if zh else 'Copy example question', '$super-ask-azhou 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub 技能？' if zh else '$super-ask-azhou I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?') }}
           <p><a href="{{ site.routes[lang].skills | url }}#super-archify">{{ '查看 Archify 安装方式' if zh else 'See how to install Archify' }}</a></p>

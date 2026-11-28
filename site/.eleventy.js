@@ -3,8 +3,8 @@
 const { RenderPlugin } = require("@11ty/eleventy");
 const { execFileSync } = require("node:child_process");
 const { mkdir, writeFile } = require("node:fs/promises");
-const { dirname, join } = require("node:path");
-const { pathPrefix, siteUrl } = require("./_data/site");
+const { dirname, join, resolve } = require("node:path");
+const { askAzhouDownloadPath, pathPrefix, siteUrl } = require("./_data/site");
 const library = require("./_data/sourceLibrary");
 
 module.exports = function (eleventyConfig) {
@@ -20,6 +20,12 @@ module.exports = function (eleventyConfig) {
   });
   eleventyConfig.addNunjucksFilter("scriptJson", (data) => JSON.stringify(data).replaceAll("<", "\\u003c"));
   eleventyConfig.on("eleventy.after", async ({ dir }) => {
+    const archive = resolve(join(dir.output, askAzhouDownloadPath));
+    await mkdir(dirname(archive), { recursive: true });
+    execFileSync("git", [
+      "archive", "--format=tar.gz", `--output=${archive}`, "HEAD", "LICENSE", "skills/super-ask-azhou",
+    ], { cwd: join(__dirname, "..") });
+
     const { renderFeed } = await import("./lib/rss.mjs");
     const { libraryAgentFiles } = await import("./lib/library-agent.mjs");
     const feeds = [

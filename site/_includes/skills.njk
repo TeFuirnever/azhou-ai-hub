@@ -44,7 +44,7 @@ layout: base.njk
             {% if needsCheckout %}
             <p>{{ '运行此技能需要本地 Hub 仓库。' if zh else 'This skill needs a local Hub checkout.' }}</p>
             {% endif %}
-            {{ installActions(skill.name, zh, installGuide, needsCheckout) }}
+            {{ installActions(skill.name, zh, installGuide, site, needsCheckout) }}
             <p><a href="{{ installGuide }}#check-that-your-host-finds-the-skill" hreflang="en">{{ 'Agent 找不到已安装的技能（英文）' if zh else 'Your agent cannot find an installed skill' }}</a></p>
           {% endif %}
           <p><a href="{{ skill.url }}">{{ '查看技能说明' if zh else 'Read the skill guide' }}</a></p>
