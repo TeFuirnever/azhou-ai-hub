@@ -9,12 +9,16 @@
 使用 macOS 和 Swift 6，打开仓库根目录。构建命令输出一个本地签名的 `.app` 路径。
 
 ```sh
-bundle=$(./packages/azhou-cursor-pendant/build-app.sh) &&
-app="$HOME/Applications/Azhou Cursor Pendant.app" &&
-mkdir -p "$HOME/Applications" &&
-test ! -e "$app" &&
-ditto "$bundle" "$app" &&
-open "$app"
+app="$HOME/Applications/Azhou Cursor Pendant.app"
+if [ -e "$app" ] || [ -L "$app" ]; then
+  printf '已有桌面挂件。升级请先退出挂件，再用新构建的应用替换旧版。\n'
+else
+  bundle=$(./packages/azhou-cursor-pendant/build-app.sh) &&
+    mkdir -p "$HOME/Applications" &&
+    mkdir "$app" &&
+    ditto "$bundle" "$app" &&
+    open "$app"
+fi
 ```
 
 已有旧版时，先从菜单栏退出，再在 Finder 中用新构建的应用替换旧版。需要移除时，先退出挂件，再把个人「应用程序」中的该应用移到废纸篓。首次体验范围见[支持矩阵](../../docs/support-matrix.md#azhou-cursor-pendant)。

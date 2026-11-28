@@ -1851,7 +1851,20 @@ def _print_doctor(payload: dict[str, Any]) -> None:
         print(f"[{check['status'].upper()}] {check['name']}: {check['details']}")
 
 
-def _print_setup(payload: dict[str, Any]) -> None:
+def _setup_apply_command(root: Path, args: argparse.Namespace, plan_id: str) -> str:
+    command = [sys.executable, str(root / "scripts/azhou_hub.py"), "setup",
+               "--target", str(args.target), "--mode", args.mode]
+    for skill in args.skill or []:
+        command.extend(("--skill", skill))
+    if args.managed:
+        command.extend(("--managed", "--receipt", str(args.receipt)))
+    command.extend(("--apply", "--plan-id", plan_id))
+    if os.name == "nt":
+        return "& " + " ".join("'" + part.replace("'", "''") + "'" for part in command)
+    return shlex.join(command)
+
+
+def _print_setup(payload: dict[str, Any], apply_command: str | None = None) -> None:
     print(f"Azhou AI Hub setup: {payload['status']} ({payload['mode']} -> {payload['target']})")
     if payload.get("planId"):
         print(f"Plan ID: {payload['planId']}")
@@ -1862,8 +1875,10 @@ def _print_setup(payload: dict[str, Any]) -> None:
     if payload["status"] == "dry_run":
         print("No files changed.")
         if any(row["status"] == "planned" for row in payload["skills"]):
-            print("To install the planned skills, add the following arguments to the same command.")
-            print(f"  --apply --plan-id {payload['planId']}")
+            if apply_command:
+                shell = " in PowerShell" if os.name == "nt" else ""
+                print(f"Review the planned paths, then run this command{shell} to install:")
+                print(f"  {apply_command}")
         else:
             print("The selected skills are already installed. No action needed.")
     elif payload["status"] == "dry_run_same_source":
@@ -2395,7 +2410,10 @@ def main(argv: list[str] | None = None, *, root: Path = ROOT) -> int:
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:
-            _print_setup(payload)
+            apply_command = None
+            if payload["status"] == "dry_run" and any(row["status"] == "planned" for row in payload["skills"]):
+                apply_command = _setup_apply_command(root, args, payload["planId"])
+            _print_setup(payload, apply_command)
         if payload["status"] == "dry_run_same_source":
             return 3
         return 0 if payload["status"] in {"pass", "dry_run"} else 1

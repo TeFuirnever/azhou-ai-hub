@@ -2,9 +2,12 @@
 {% macro installActions(skillName, zh, installGuide, site, needsCheckout=false) %}
   {% set promptId = 'agent-install-' ~ skillName %}
   {% set target = installGuide ~ '#install-with-an-agent' %}
-  <p>{{ '在当前项目打开 Agent 会话，粘贴这段安装提示词。' if zh else 'Open an agent session in your project and paste this install prompt.' }}</p>
+  <p>{{ '复制安装提示词，粘贴到当前项目的 Agent 会话。' if zh else 'Copy the prompt and paste it into an agent chat in your project.' }}</p>
   {{ copyControl(promptId, '复制安装提示词' if zh else 'Copy install prompt') }}
-  <pre class="wrap-text"><code id="{{ promptId }}">{% if zh %}请按 {{ target }} 在当前项目只安装 {{ skillName }}，并确认当前 Agent 宿主能找到它。{% if needsCheckout %}先找到本地 Hub 仓库，并告诉我在当前项目里运行这个技能时要提供哪个路径。{% endif %}{% else %}Follow {{ target }} to install only {{ skillName }} in this project and check that this host discovers it.{% if needsCheckout %} First locate a local Hub checkout and tell me which path to provide when I run the skill in this project.{% endif %}{% endif %}</code></pre>
+  <details data-copy-fallback>
+    <summary>{{ '查看安装提示词' if zh else 'View install prompt' }}</summary>
+    <pre class="wrap-text"><code id="{{ promptId }}">{% if zh %}请按 {{ target }} 在当前项目只安装 {{ skillName }}，并确认当前 Agent 宿主能找到它。{% if needsCheckout %}先找到本地 Hub 仓库，并告诉我在当前项目里运行这个技能时要提供哪个路径。{% endif %}{% else %}Follow {{ target }} to install only {{ skillName }} in this project and check that this host discovers it.{% if needsCheckout %} First locate a local Hub checkout and tell me which path to provide when I run the skill in this project.{% endif %}{% endif %}</code></pre>
+  </details>
   <details data-manual-install="{{ skillName }}">
     <summary>{{ '手动安装' if zh else 'Install manually' }}</summary>
     {% if needsCheckout %}
@@ -16,5 +19,6 @@
       {{ copyControl(commandId, '复制安装命令' if zh else 'Copy install command') }}
       <pre class="wrap-text"><code id="{{ commandId }}">npx skills add {% if skillName == 'super-ask-azhou' %}{{ site.siteUrl ~ site.askAzhouDownloadPath }}{% else %}TeFuirnever/azhou-ai-hub --skill {{ skillName }}{% endif %} --agent codex</code></pre>
     {% endif %}
+    <p><a href="{{ installGuide }}#check-that-your-host-finds-the-skill" hreflang="en">{{ 'Agent 找不到已安装的技能（英文）' if zh else 'Your agent cannot find an installed skill' }}</a></p>
   </details>
 {% endmacro %}

@@ -139,14 +139,16 @@ layout: base.njk
         <div class="home-setup-copy" data-reveal style="--reveal-i: 1">
           {% set installGuide = site.blobBase ~ '/docs/installation.md' %}
           {{ installActions("super-ask-azhou", zh, installGuide, site) }}
-          <p>{{ '在同一项目打开新会话，让 Agent 用 super-ask-azhou 回答下面的问题。在 Codex 里可以直接粘贴整段示例。Ask Azhou 应推荐 super-archify。' if zh else 'Open a new chat in the same project. Ask your agent to use super-ask-azhou for the question below. In Codex, paste the example as written. Ask Azhou should recommend super-archify.' }}</p>
-          {{ termBlock("try-prompt", '复制试用问题' if zh else 'Copy example question', '$super-ask-azhou 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub 技能？' if zh else '$super-ask-azhou I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?') }}
-          <p><a href="{{ site.routes[lang].skills | url }}#super-archify">{{ '查看 Archify 安装方式' if zh else 'See how to install Archify' }}</a></p>
           <details>
-            <summary>{{ '排查安装、更新或卸载' if zh else 'Troubleshoot, update, or uninstall' }}</summary>
+            <summary>{{ '安装后试一下' if zh else 'Try it after installing' }}</summary>
+            <p>{{ '在同一项目开一个新会话。在 Codex 粘贴下面的问题，看到推荐 Super Archify，就可以开始用了。' if zh else 'Open a new chat in the same project. Paste the example in Codex. Ask Azhou should recommend Super Archify.' }}</p>
+            {{ termBlock("try-prompt", '复制试用问题' if zh else 'Copy example question', '$super-ask-azhou 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub 技能？' if zh else '$super-ask-azhou I have a Mermaid diagram and want to turn it into an interactive architecture diagram. Which Hub Skill should I use?') }}
+            <p><a href="{{ site.routes[lang].skills | url }}#super-archify">{{ '查看 Archify 安装方式' if zh else 'See how to install Archify' }}</a></p>
+          </details>
+          <details>
+            <summary>{{ '更新、卸载或批量安装' if zh else 'Update, uninstall, or install multiple skills' }}</summary>
             {%- if zh %}<p>以下指南为英文。</p>{% endif %}
             <ul>
-              <li><a href="{{ installGuide }}#check-that-your-host-finds-the-skill" hreflang="en">{{ 'Agent 找不到已安装的技能（英文）' if zh else 'Your agent cannot find an installed skill' }}</a></li>
               <li><a href="{{ installGuide }}#upgrade-or-uninstall" hreflang="en">{{ '更新或卸载技能' if zh else 'Update or uninstall a skill' }}</a></li>
               <li><a href="{{ installGuide }}#install-hub-components-in-codex" hreflang="en">{{ 'Codex 统一安装器' if zh else 'Unified installer for Codex' }}</a></li>
             </ul>
@@ -195,6 +197,8 @@ layout: base.njk
           </div>
           <button class="btn btn-outline cursor-pendant-toggle" type="button" data-cursor-pendant-toggle aria-pressed="false" hidden>{{ '试玩跟随挂件' if zh else 'Try the cursor pendant' }}</button>
           <span class="cursor-pendant-hint">{{ '把鼠标移到上方卡片里' if zh else 'Move your mouse over the cards above' }}</span>
+          <p><a href="{{ site.blobBase }}/packages/azhou-cursor-pendant/README.md">{{ '安装 macOS 桌面跟随挂件' if zh else 'Install the macOS desktop pendant' }}</a>
+            {{ '切到其他应用，阿舟也会跟着鼠标。' if zh else 'Azhou follows your pointer across apps.' }}</p>
         </div>
       </div>
     </div>

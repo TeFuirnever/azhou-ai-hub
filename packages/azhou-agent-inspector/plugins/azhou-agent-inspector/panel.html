@@ -131,7 +131,7 @@
         <img alt="" width="40" height="40" src="data:image/webp;base64,__ART__">
         <h1>阿舟 Agent 工作台</h1>
       </div>
-      <button type="button" id="refresh" aria-label="刷新会话数据">刷新</button>
+      <button type="button" id="refresh" aria-label="刷新会话数据" hidden>刷新</button>
     </header>
     <p id="state" class="status" role="status">正在读取当前会话…</p>
     <p id="feedback" class="feedback" role="status"></p>
@@ -194,6 +194,7 @@
     const metrics = document.querySelectorAll("[data-metric]");
 
     let revision = 0;
+    let activeRefresh;
     let feedbackReset;
     function acceptSnapshot(data, clearFeedback = true) {
       if (data !== null && !Object.hasOwn(notices, data?.state)) return false;
@@ -223,6 +224,8 @@
       }).join("\n");
       if (clearFeedback) {
         clearTimeout(feedbackReset);
+        activeRefresh = undefined;
+        refresh.removeAttribute("aria-disabled");
         feedback.textContent = "";
       }
       return true;
@@ -230,6 +233,12 @@
 
     let sequence = 0;
     let ready = false;
+    const canRefresh = () => ready || typeof window.openai?.callTool === "function";
+    function syncRefreshAvailability() {
+      refresh.hidden = !canRefresh();
+      if (refresh.hidden && !revision) state.textContent = "在 Codex 中打开工作台，即可查看会话数据。";
+    }
+
     const pending = new Map();
     function rpc(method, params) {
       const id = ++sequence;
@@ -262,34 +271,38 @@
     });
 
     async function update() {
-      if (refresh.getAttribute("aria-disabled") === "true") return;
-      const requestedAt = revision;
+      if (!canRefresh() || activeRefresh) return;
+      const current = Symbol();
+      activeRefresh = current;
       clearTimeout(feedbackReset);
       refresh.setAttribute("aria-disabled", "true");
       feedback.textContent = "正在刷新…";
       try {
         let result;
         if (ready) result = await rpc("tools/call", { name: "session_performance", arguments: {} });
-        else if (window.openai?.callTool) result = await window.openai.callTool("session_performance", {});
-        else throw Error("offline");
+        else result = await window.openai.callTool("session_performance", {});
 
         // A host push may already have replaced the visible session while the call was pending.
-        if (revision === requestedAt) {
+        if (activeRefresh === current) {
           if (!acceptSnapshot(result?.structuredContent, false)) throw Error("missing snapshot");
           feedback.textContent = "已刷新。";
           feedbackReset = setTimeout(() => { feedback.textContent = ""; }, 3500);
         }
       } catch {
-        if (revision === requestedAt) {
+        if (activeRefresh === current) {
           feedback.textContent = snapshot.hidden ? "刷新失败，请重试。" : "刷新失败，仍显示上次数据。";
         }
       } finally {
-        refresh.removeAttribute("aria-disabled");
+        if (activeRefresh === current) {
+          activeRefresh = undefined;
+          refresh.removeAttribute("aria-disabled");
+        }
       }
     }
 
     refresh.addEventListener("click", update);
     acceptSnapshot(window.openai?.toolOutput);
+    if (canRefresh()) syncRefreshAvailability();
     if (parent !== window) {
       rpc("ui/initialize", {
         appInfo: { name: "azhou-agent-inspector", version: __PLUGIN_VERSION__ },
@@ -297,12 +310,11 @@
         appCapabilities: {},
       }).then(() => {
         ready = true;
+        syncRefreshAvailability();
         parent.postMessage({ jsonrpc: "2.0", method: "ui/notifications/initialized", params: {} }, "*");
-      }).catch(() => {
-        if (!revision) acceptSnapshot(null);
-      });
-    } else if (!revision) {
-      acceptSnapshot(null);
+      }).catch(syncRefreshAvailability);
+    } else {
+      syncRefreshAvailability();
     }
   </script>
 </body>
