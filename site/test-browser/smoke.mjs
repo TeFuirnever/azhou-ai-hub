@@ -174,6 +174,101 @@ try {
       await until(() => isOpen(page, `#${id}`), "Homepage RSS opens");
       await assertFeedVisible(page, id, feed, width);
     });
+    await check(`${lang}: cursor pendant stays local and respects input preferences`, { width: 1100 }, site.routes[lang].home, async page => {
+      const toggle = "[data-cursor-pendant-toggle]";
+      const pendant = "[data-cursor-pendant]";
+      const grid = ".cursor-demo-grid";
+      const hidden = async selector => Object.hasOwn(await page.attributes(selector), "hidden");
+      const pressed = async () => (await page.attributes(toggle))["aria-pressed"];
+      const setMotion = (value, extra = []) => page.command("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value }, ...extra],
+      });
+      assert.ok(await hidden(toggle), "Reduced motion uses the static preview");
+      assert.equal(await page.evaluate(`document.querySelectorAll("${grid} .cursor-demo-tile").length`), 4);
+      const download = 'section[aria-labelledby="cursor-theme"] a[download]';
+      assert.ok((await page.attributes(download)).href.endsWith("/Azhou-Double-Hug-3.6.1.cape"));
+      await setMotion("no-preference");
+      await until(async () => !(await hidden(toggle)), "Fine pointer reveals the pendant toggle");
+      assert.equal(await pressed(), "false");
+      await page.evaluate(`document.querySelector("${grid}").scrollIntoView({ block: "center", behavior: "instant" })`);
+      const point = await page.evaluate(`(() => {
+        const { left, top, width, height } = document.querySelector("${grid}").getBoundingClientRect();
+        return { left, top, right: left + width, bottom: top + height, x: left + width / 2, y: top + height / 2 };
+      })()`);
+      const move = (x, y) => page.command("Input.dispatchMouseEvent", { type: "mouseMoved", x, y });
+      await move(point.x, point.y);
+      assert.ok(await hidden(pendant), "Moving the pointer cannot enable the pendant");
+      await page.evaluate(`document.querySelector("${toggle}").focus({ preventScroll: true })`);
+      await page.key("Enter");
+      assert.equal(await pressed(), "true");
+      assert.ok(await hidden(pendant), "Enabling still waits for movement inside the demo");
+      await move(point.x + 8, point.y);
+      await until(async () => !(await hidden(pendant)), "The pendant appears with the mouse in the demo");
+      await move(point.right - 3, point.bottom - 3);
+      await until(() => page.evaluate(`(() => {
+        const grid = document.querySelector("${grid}").getBoundingClientRect();
+        const pendant = document.querySelector("${pendant}");
+        const pos = pendant.getBoundingClientRect();
+        return pos.width > 0 && pos.left >= grid.left && pos.right <= grid.right
+          && pos.top >= grid.top && pos.bottom <= grid.bottom
+          && getComputedStyle(pendant).pointerEvents === "none";
+      })()`), "The decorative pendant remains inside the demo at the lower-right edge");
+
+      const grab = "#cursor-demo-grab";
+      const target = await page.evaluate(`(() => {
+        const rect = document.querySelector("${grab}").getBoundingClientRect();
+        return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+      })()`);
+      const mouse = { ...target, button: "left", clickCount: 1 };
+      await move(target.x, target.y);
+      await page.command("Input.dispatchMouseEvent", { ...mouse, type: "mousePressed" });
+      assert.equal((await page.attributes(grab))["data-grabbing"], "true");
+      await page.command("Input.dispatchMouseEvent", { ...mouse, type: "mouseReleased" });
+      assert.ok(!Object.hasOwn(await page.attributes(grab), "data-grabbing"));
+      await move(point.x, point.bottom + 20);
+      await until(() => hidden(pendant), "Leaving the demo hides the pendant");
+      assert.equal(await pressed(), "true");
+      const text = await page.evaluate(`(() => {
+        const content = document.querySelector('section[aria-labelledby="cursor-theme"] .home-setup-copy p').firstChild;
+        const sample = new Range();
+        sample.setStart(content, 0);
+        sample.setEnd(content, 8);
+        const rect = sample.getBoundingClientRect();
+        return { left: rect.left, right: rect.right, y: rect.top + rect.height / 2, expected: sample.toString().trim() };
+      })()`);
+      const start = { x: text.left + 1, y: text.y };
+      const end = { x: text.right - 1, y: text.y };
+      await page.command("Input.dispatchMouseEvent", { ...start, type: "mousePressed", button: "left", clickCount: 1 });
+      await page.command("Input.dispatchMouseEvent", { ...end, type: "mouseMoved", button: "left", buttons: 1 });
+      await page.command("Input.dispatchMouseEvent", { ...end, type: "mouseReleased", button: "left", clickCount: 1 });
+      assert.equal(await page.evaluate("getSelection().toString().trim()"), text.expected);
+
+      await move(point.x, point.y);
+      await until(async () => !(await hidden(pendant)), "Returning to the demo restores the pendant");
+      await setMotion("reduce");
+      await until(() => hidden(pendant), "Changing the motion preference hides the active pendant");
+      assert.ok(await hidden(toggle));
+      await setMotion("no-preference");
+      await until(async () => !(await hidden(toggle)), "The toggle returns when preferences allow it");
+      assert.equal(await pressed(), "false", "Restoring preferences must not reactivate the pendant");
+      await page.click(toggle);
+      await move(point.x, point.y);
+      await until(async () => !(await hidden(pendant)), "Click can enable the pendant again");
+      await setMotion("no-preference", [{ name: "forced-colors", value: "active" }]);
+      await until(() => hidden(pendant), "Forced colors hides the active pendant");
+      assert.ok(await hidden(toggle));
+      await setMotion("no-preference");
+      await until(async () => !(await hidden(toggle)), "Leaving forced colors restores the toggle");
+      assert.equal(await pressed(), "false");
+      await page.click(toggle);
+      await move(point.x + 3, point.y);
+      await until(async () => !(await hidden(pendant)), "The pendant can be enabled again after forced colors");
+      await page.click(toggle);
+      await move(point.x + 5, point.y);
+      assert.equal(await pressed(), "false");
+      assert.ok(await hidden(pendant), "Closing remains effective on later mouse movement");
+    });
+
     await check(`${lang}: RSS mouse and keyboard activation at ${width}px`, { width }, path, async page => {
       assert.equal(await isOpen(page), false);
       // Tab traverses the rendered document's actual focus order. No click()
