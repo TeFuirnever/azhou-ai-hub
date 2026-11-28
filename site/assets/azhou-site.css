@@ -414,6 +414,8 @@
 
 /* Cursor demo grid */
 .cursor-demo-grid {
+  position: relative;
+  overflow: clip;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 1px;
@@ -464,6 +466,42 @@
 .cursor-demo-label {
   font: 500 13px/1.3 var(--az-font);
   color: var(--az-text-2);
+}
+
+/* The pendant is decorative and stays inside the demo grid. */
+.cursor-pendant-toggle { margin-block-start: 1rem; margin-inline-end: .65rem; }
+.cursor-pendant-toggle[aria-pressed="true"] {
+  background: var(--az-btn-bg);
+  border-color: var(--az-btn-bg);
+  color: var(--az-btn-text);
+}
+.cursor-pendant-hint { display: none; color: var(--az-text-2); font-size: .875rem; }
+.cursor-pendant-toggle[aria-pressed="true"]:not([hidden]) + .cursor-pendant-hint { display: inline-block; }
+.cursor-pendant {
+  position: absolute;
+  z-index: 2;
+  inset: 0 auto auto 0;
+  inline-size: 32px;
+  block-size: 48px;
+  pointer-events: none;
+  user-select: none;
+}
+.cursor-pendant-swing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform-origin: 50% 0;
+  transform: rotate(0deg);
+}
+.cursor-pendant-string {
+  inline-size: 1px;
+  block-size: 16px;
+  background: var(--az-text-2);
+}
+.cursor-pendant img { display: block; inline-size: 32px; block-size: 32px; }
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
+  .cursor-pendant, .cursor-pendant-toggle,
+  .cursor-pendant-toggle[aria-pressed="true"]:not([hidden]) + .cursor-pendant-hint { display: none; }
 }
 
 /* Catalog / Skills / Docs lists */

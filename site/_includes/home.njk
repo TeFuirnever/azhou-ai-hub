@@ -189,7 +189,12 @@ layout: base.njk
               </span>
               <span class="cursor-demo-label">{{ '抓取（按住）' if zh else 'Grab (hold)' }}</span>
             </div>
+            <span class="cursor-pendant" data-cursor-pendant hidden aria-hidden="true">
+              <span class="cursor-pendant-swing"><span class="cursor-pendant-string"></span><img src="{{ '/assets/cursors/grabbing@2x.png' | url }}" width="32" height="32" alt="" draggable="false"></span>
+            </span>
           </div>
+          <button class="btn btn-outline cursor-pendant-toggle" type="button" data-cursor-pendant-toggle aria-pressed="false" hidden>{{ '试玩跟随挂件' if zh else 'Try the cursor pendant' }}</button>
+          <span class="cursor-pendant-hint">{{ '把鼠标移到上方卡片里' if zh else 'Move your mouse over the cards above' }}</span>
         </div>
       </div>
     </div>
@@ -418,3 +423,5 @@ layout: base.njk
   })();
 </script>
 <script type="module" src="{{ '/assets/copy-control.js' | url }}"></script>
+
+<script src="{{ '/assets/cursor-pendant.js' | url }}" defer></script>

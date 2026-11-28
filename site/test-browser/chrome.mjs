@@ -19,8 +19,11 @@ export async function until(predicate, description, timeout = 10_000) {
 // from personal browser sessions. CDP supplies real input and permission APIs.
 export async function launchChrome() {
   const profile = await mkdtemp(join(tmpdir(), "azhou-site-browser-"));
+  // Headless runners may have no physical mouse. Match the desktop input this suite sends.
+  // Chromium's pointer and hover bitfields use 4 for fine and 2 for hover.
+  const desktopPointer = "--blink-settings=primaryPointerType=4,availablePointerTypes=4,primaryHoverType=2,availableHoverTypes=2";
   const args = ["--headless", "--no-first-run", "--disable-background-networking",
-    "--disable-dev-shm-usage", "--remote-debugging-port=0", `--user-data-dir=${profile}`, "about:blank"];
+    "--disable-dev-shm-usage", "--remote-debugging-port=0", desktopPointer, `--user-data-dir=${profile}`, "about:blank"];
   if (process.getuid?.() === 0) args.push("--no-sandbox");
   const child = spawn(process.env.CHROME_BIN || "google-chrome", args, { stdio: ["ignore", "ignore", "pipe"] });
   let exited = false, startupError, stderr = "", socket;
