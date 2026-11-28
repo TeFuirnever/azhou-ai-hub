@@ -1035,34 +1035,56 @@ class ManageEvolutionTest(unittest.TestCase):
             self.assertEqual(b"", live.read_bytes())
 
     def test_invalid_signal_is_preserved_when_valid_evidence_is_archived(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            project = Path(directory)
-            valid = []
-            for session in ("valid-one", "valid-two"):
-                created = self.add_signal(project, session=session)
-                self.assertEqual(0, created.returncode, created.stderr)
-                valid.append(json.loads(created.stdout))
-            malformed = json.loads(self.add_signal(project, session="malformed", category="privacy", severity="critical").stdout)
-            malformed["authorization"] = "unrestricted"
-            malformed_line = json.dumps(malformed, ensure_ascii=False, separators=(",", ":"))
-            live = project / ".azhou/super-repo-pedant/evolution/signals.jsonl"
-            raw_lines = [json.dumps(signal, ensure_ascii=False, separators=(",", ":")) for signal in valid]
-            live.write_text("\n".join([*raw_lines, malformed_line]) + "\n", encoding="utf-8")
-            before_bad_line = (malformed_line + "\n").encode("utf-8")
+        cases = (
+            ("lf", [b"\n", b"\n"], b"\n"),
+            ("crlf", [b"\r\n", b"\r\n"], b"\r\n"),
+            ("mixed_unterminated", [b"\n", b"\r\n"], b""),
+        )
+        for name, separators, malformed_ending in cases:
+            with self.subTest(line_endings=name), tempfile.TemporaryDirectory() as directory:
+                project = Path(directory)
+                valid = []
+                for session in ("valid-one", "valid-two"):
+                    created = self.add_signal(project, session=session)
+                    self.assertEqual(0, created.returncode, created.stderr)
+                    valid.append(json.loads(created.stdout))
+                malformed = json.loads(self.add_signal(project, session="malformed", category="privacy", severity="critical").stdout)
+                malformed["authorization"] = "unrestricted"
+                malformed_bytes = json.dumps(malformed, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                live = project / ".azhou/super-repo-pedant/evolution/signals.jsonl"
+                live.parent.mkdir(parents=True, exist_ok=True)
+                valid_bytes = [
+                    json.dumps(signal, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+                    for signal in valid
+                ]
+                fixture_bytes = (
+                    valid_bytes[0]
+                    + separators[0]
+                    + valid_bytes[1]
+                    + separators[1]
+                    + malformed_bytes
+                    + malformed_ending
+                )
+                live.write_bytes(fixture_bytes)
 
-            proposed = self.propose(project)
-            self.assertEqual(0, proposed.returncode, proposed.stdout + proposed.stderr)
-            candidate = json.loads(proposed.stdout)
-            self.assertEqual(sorted(signal["signal_id"] for signal in valid), candidate["signal_ids"])
-            self.assertEqual(1, candidate["parse_errors"])
+                # Anchor the assertion in bytes that were actually written and read back.
+                before_live_bytes = live.read_bytes()
+                before_bad_line = before_live_bytes.splitlines(keepends=True)[-1]
+                self.assertEqual(malformed_bytes + malformed_ending, before_bad_line)
 
-            archived = self.run_cli("archive", "--project", str(project), "--candidate", candidate["candidate"])
+                proposed = self.propose(project)
+                self.assertEqual(0, proposed.returncode, proposed.stdout + proposed.stderr)
+                candidate = json.loads(proposed.stdout)
+                self.assertEqual(sorted(signal["signal_id"] for signal in valid), candidate["signal_ids"])
+                self.assertEqual(1, candidate["parse_errors"])
 
-            self.assertEqual(0, archived.returncode, archived.stdout + archived.stderr)
-            self.assertEqual(before_bad_line, live.read_bytes())
-            archive_path = Path(json.loads(archived.stdout)["archive"])
-            archived_rows = [json.loads(line) for line in archive_path.read_text(encoding="utf-8").splitlines()]
-            self.assertEqual({signal["signal_id"] for signal in valid}, {signal["signal_id"] for signal in archived_rows})
+                archived = self.run_cli("archive", "--project", str(project), "--candidate", candidate["candidate"])
+
+                self.assertEqual(0, archived.returncode, archived.stdout + archived.stderr)
+                self.assertEqual(before_bad_line, live.read_bytes())
+                archive_path = Path(json.loads(archived.stdout)["archive"])
+                archived_rows = [json.loads(line) for line in archive_path.read_text(encoding="utf-8").splitlines()]
+                self.assertEqual({signal["signal_id"] for signal in valid}, {signal["signal_id"] for signal in archived_rows})
 
     def test_raw_fields_are_rejected(self) -> None:
         signal = {
