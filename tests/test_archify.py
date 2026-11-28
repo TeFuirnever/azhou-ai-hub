@@ -515,6 +515,45 @@ console.log(JSON.stringify({ wrapped: true, rejected, expected: hostile.length, 
         self.assertEqual(0, result.returncode, result.stdout + result.stderr)
         self.assertEqual({"wrapped": True, "rejected": 8, "expected": 8, "passed": True}, json.loads(result.stdout))
 
+    def test_drilldown_href_boundaries_match_across_entry_points(self) -> None:
+        program = r"""
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import {pathToFileURL} from 'node:url';
+const root = process.argv[1];
+const {isSiblingHtmlHref, wrapSingleChildAnchor} = await import(pathToFileURL(path.join(root, 'renderers/shared/cli.mjs')));
+const {workflow: validate} = await import(pathToFileURL(path.join(root, 'renderers/shared/generated-validators.mjs')));
+const example = JSON.parse(fs.readFileSync(path.join(root, 'examples/agent-tool-call.workflow.json'), 'utf8'));
+const template = fs.readFileSync(path.join(root, 'assets/template.html'), 'utf8');
+const start = template.indexOf('      function isSafeRelativeHtmlHref(value) {');
+const end = template.indexOf('      function relationshipsFor(id, byId) {', start);
+assert.ok(start >= 0 && end > start, 'viewer guard exists');
+const context = {};
+vm.runInNewContext(template.slice(start, end) + '\nthis.guard = isSafeRelativeHtmlHref;', context);
+const cases = [
+  ['child.html', true, true], ['child.html?x=1#top', true, true],
+  ['  child.html  ', false, true], ['a'.repeat(507) + '.html', true, true],
+  ['a'.repeat(508) + '.html', false, false], ['../child.html', false, false],
+  ['sub/child.html', false, false], ['https://example.org/a.html', false, false],
+  ['javascript:alert(1)', false, false], ['child.HTML', false, false],
+  ['child.html#x>', false, false], ['', false, false], [null, false, false],
+];
+for (const [href, schemaExpected, navigationExpected] of cases) {
+  const diagram = { ...example, nodes: example.nodes.map((node, i) => ({ ...node, href: undefined, drilldowns: i ? undefined : [{ href, label: 'Child' }] })) };
+  assert.equal(validate(diagram), schemaExpected, `validator: ${href}`);
+  assert.equal(isSiblingHtmlHref(href), navigationExpected, `renderer: ${href}`);
+  assert.equal(context.guard(href), navigationExpected, `viewer: ${href}`);
+  assert.equal(wrapSingleChildAnchor('<g/>', [{ href, label: 'Child' }]) !== '<g/>', navigationExpected, `anchor: ${href}`);
+}
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", program, str(SKILL_DIR)],
+            capture_output=True, text=True, encoding="utf-8", timeout=30,
+        )
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
     def test_analysis_client_renders_repository_payloads_as_text(self) -> None:
         program = r"""
 import assert from 'node:assert/strict';

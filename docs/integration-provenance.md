@@ -74,6 +74,8 @@ The [2026-10-25 acceptance record](../evidence/optional-integrations-2026-10-25.
 
 ## Azhou Agent Workbench
 
+The [2026-11-25 Codex Mac update receipt](../evidence/agent-inspector-codex-mac-2026-11-25.md) records the earlier 0.1.0 installation and its verification limits; it does not describe the current installation.
+
 The [package notice](../packages/azhou-agent-inspector/NOTICE.md) records the pinned ZCode import, retained MIT notice, artwork terms and upstream update procedure. The Codex adapter is maintained in the Hub. Release the Codex and ZCode Workbench adapters with the same plugin version. Update the Hub manifest, both native manifests and the ZCode marketplace entry together. ZCode packages byte-identical copies of the Codex portrait and wallpaper for its independent native install. Starting in 0.12.4, the native dashboard reads those two fixed assets through its view bridge. The standalone dashboard serves them over its loopback HTTP routes. The [artwork record](../packages/azhou-agent-inspector/plugins/zcode/dashboard/ARTWORK.md) links to the original sources, license and conversion instructions. On 2026-11-25 the maintainer Mac used ZCode's bundled CLI to update its existing user-scope registration. ZCode owns that registration, the versioned cache and the local rate data. The install and rollback evidence stays in the local receipt.
 
 On 2026-11-26, both native managers updated the existing user registrations from 0.12.7 to 0.12.9. The installed Workbench entry points were compared with the Hub source, and the prior cache payloads were retained in the local receipt. [Native desktop verification](support-matrix.md#azhou-agent-workbench).
