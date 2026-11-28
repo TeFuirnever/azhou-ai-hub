@@ -1,10 +1,14 @@
 # Installation
 
-Start with [an installation prompt for your agent](#install-with-an-agent) or [choose a manual path for your host](#choose-your-agent-host). Use the [maintenance steps](#upgrade-or-uninstall) after you have an installed skill.
+Use the [Ask Azhou install prompt](../README.md#let-your-agent-install) to let your agent install and check the skill in the project you have open.
+
+- [Install manually](#choose-your-agent-host).
+- [Find a skill your agent cannot see](#check-that-your-host-finds-the-skill).
+- [Update or uninstall a skill](#upgrade-or-uninstall).
 
 ## Choose your agent host
 
-These routes are for individual Hub Skills. Use the skill root your host is configured to scan, and verify discovery in that host after installation.
+These routes install individual Hub Skills. Claude Code, ZCode, and MiMo Code use a local clone of Azhou AI Hub for the routes shown here. Use the skill directory your agent host scans and check discovery after installation.
 
 | Host | Where to start |
 |---|---|
@@ -22,7 +26,7 @@ Use this procedure to install one named Hub Skill in the project the user has op
 
 1. Identify the active agent host and project directory. If either is unclear, ask before changing files. If you cannot inspect or write to the project, give the user the relevant steps from the host guide.
 2. Check whether the host already discovers the requested Skill. If it does, report the installation scope and path when available. Reuse that copy and leave it intact.
-3. If the Skill is missing, use the matching [host route](#choose-your-agent-host). Install only the requested Skill from [Azhou AI Hub](https://github.com/TeFuirnever/azhou-ai-hub) in this project. Keep existing installations, plugins, and host settings intact. The four `super-azhou-*` skills also require a local Hub checkout. For `super-imagegen`, verify the private `azhou-imagegen` prerequisite before installing. If the host has no confirmed project route, explain the limitation and ask before changing scope.
+3. If the Skill is missing, use the matching [host route](#choose-your-agent-host). Install only the requested Skill from [Azhou AI Hub](https://github.com/TeFuirnever/azhou-ai-hub) in this project. Keep existing installations, plugins, and host settings intact. For a Foundation Skill (`super-azhou-*`), locate a local Hub checkout before installing. Report the checkout path so the user can provide it when running the skill in their current project. If you cannot locate a checkout, ask for its path. For `super-imagegen`, verify the private `azhou-imagegen` prerequisite before installing. If the host has no confirmed project route, explain the limitation and ask before changing scope.
 4. Verify that the host discovers the installed Skill. Report the destination and verification result. If discovery needs a fresh session or cannot be checked, say so and give the next step.
 
 ## First install in Codex
@@ -47,7 +51,7 @@ Use Ask Azhou to choose a Hub Skill for a task. Before starting, sign in to Code
 
 Open a new agent session in the same project and use the host's skill list or picker. Look for the requested skill by its package name. Check the reported path and scope before calling it. A copied file is only installation evidence until the host discovers it.
 
-If you cannot find the skill, [check the host's configured project root](#choose-your-agent-host). For Codex, use the check below. For other hosts, use their own discovery tools and the [support matrix](support-matrix.md).
+If you cannot find the skill, [check the host's configured project root](#choose-your-agent-host). For Codex, use the check below. For other hosts, check that the installed skill directory contains `SKILL.md` under the [root your host uses](#choose-your-agent-host). Then look for it in a fresh session using the host’s discovery tools.
 
 ### If Codex cannot find Ask Azhou
 
@@ -95,13 +99,13 @@ Open a new Codex session in the same project and look for `$refactoring`. Use `n
 
 ## Package-manager install
 
-Choose the package name in the [skill catalog](../README.md#skills). The four `super-azhou-*` skills require a local copy of this repository to run. In a terminal opened in your agent's project folder, run this example with the chosen package name.
+Find the package name in the [skill catalog](https://tefuirnever.github.io/azhou-ai-hub/skills/). The four `super-azhou-*` skills require a local Hub checkout to run. `super-imagegen` requires the private `azhou-imagegen` skill. In a terminal opened in your agent's project folder, run this example with the chosen package name.
 
 ~~~bash
 npx skills add TeFuirnever/azhou-ai-hub --skill super-archify --agent codex
 ~~~
 
-This example installs Super Archify for Codex in the current project. For another host, check its installation route in the [support matrix](support-matrix.md). Use the original scope when updating. Skills CLI resolves the default branch. Check the installed files if you need to verify a revision.
+This example installs Super Archify for Codex in the current project. For another host, follow its [installation route](#choose-your-agent-host). Use the original scope when updating. Skills CLI resolves the default branch. Check the installed files if you need to verify a revision.
 
 ## Alternate installer
 
@@ -111,7 +115,7 @@ If Skills CLI times out cloning the repository, use Codex's bundled skill instal
 python "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo TeFuirnever/azhou-ai-hub --path skills/super-ask-azhou --method git --dest "$PWD/.agents/skills"
 ~~~
 
-Open a new chat in the project and [try Ask Azhou](#first-install-in-codex). The installer stops if the destination already exists. To install a different skill, use its path from the [skill catalog](../README.md#skills).
+Open a new chat in the project and [try Ask Azhou](#first-install-in-codex). The installer stops if the destination already exists. To install a different skill, find its package name in the [skill catalog](https://tefuirnever.github.io/azhou-ai-hub/skills/) and replace `skills/super-ask-azhou` with `skills/<package-name>`.
 
 ## Verify what you installed
 
@@ -154,14 +158,20 @@ The check reports whether the installed Codex CLI finds the Skill in that projec
 
 Examples invoke the unversioned `python` interpreter (Python ≥3.11 required). If your system only installs a versioned name — common on macOS — substitute it in the examples, or add the unversioned name via `brew install python`.
 
-For a local checkout, the foundation CLI can plan and reconcile a manual copy or contributor symlink. It requires the exact harness skill root and defaults to a read-only dry-run:
+Run these commands from your local Hub checkout. Set `SKILL` to the package name on your skill card or the name Ask Azhou recommended. Set `SKILLS_HOME` to [the directory your agent host scans](#choose-your-agent-host). Preview the install first.
 
 ~~~bash
+SKILL=super-repo-pedant
 SKILLS_HOME=/absolute/path/to/harness/skills
 
-python scripts/azhou_hub.py setup --skill super-repo-pedant --target "$SKILLS_HOME" --mode link --json
-python scripts/azhou_hub.py setup --skill super-repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
-python scripts/azhou_hub.py doctor --skill super-repo-pedant --target "$SKILLS_HOME" --json
+python scripts/azhou_hub.py setup --skill "$SKILL" --target "$SKILLS_HOME" --mode link --json
+~~~
+
+Check the preview for the skill name and destination. Replace `<reviewed-planId>` with the preview's `planId`, then apply the install and run Doctor.
+
+~~~bash
+python scripts/azhou_hub.py setup --skill "$SKILL" --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
+python scripts/azhou_hub.py doctor --skill "$SKILL" --target "$SKILLS_HOME" --json
 ~~~
 
 Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails closed on different or unowned destination content. It never replaces a package-manager installation or rewrites harness configuration.
@@ -169,15 +179,15 @@ Use `--mode copy` for a standalone snapshot. Setup is idempotent and fails close
 To let this checkout later repair, switch or remove exactly what it installed, opt into a single-skill managed receipt:
 
 ~~~bash
-RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/super-repo-pedant.json"
+RECEIPT="$SKILLS_HOME/.azhou/hub/receipts/$SKILL.json"
 
 python scripts/azhou_hub.py setup \
   --managed --receipt "$RECEIPT" \
-  --skill super-repo-pedant --target "$SKILLS_HOME" --mode link --json
+  --skill "$SKILL" --target "$SKILLS_HOME" --mode link --json
 
 python scripts/azhou_hub.py setup \
   --managed --receipt "$RECEIPT" \
-  --skill super-repo-pedant --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
+  --skill "$SKILL" --target "$SKILLS_HOME" --mode link --apply --plan-id '<reviewed-planId>' --json
 ~~~
 
 The first command is still read-only. Keep the receipt: `repair`, same-target `migrate` between `link` and `copy`, and `uninstall` require it plus the same explicit `--target`. They fail closed if the source, target or installed content has drifted. The receipt integrity digest detects accidental corruption, not malicious rewriting. See the [foundation CLI contract](foundations.md).

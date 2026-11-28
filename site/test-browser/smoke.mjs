@@ -71,6 +71,87 @@ try {
   for (const lang of ["en", "zh"]) {
     const path = site.routes[lang].library;
     const width = lang === "zh" ? 390 : 1200;
+    await check(`${lang}: docs leads to recovery and private reporting at ${width}px`, { width }, site.routes[lang].docs, async page => {
+      const support = site.pathPrefix + site.routes[lang].support.slice(1);
+      const getHelp = `main a[href="${support}#get-help"]`;
+      const discovery = `${site.blobBase}/docs/installation.md#check-that-your-host-finds-the-skill`;
+      assert.equal((await page.attributes(`main a[href="${discovery}"]`)).hreflang, "en");
+      await page.click(getHelp);
+      await until(() => page.evaluate(`document.readyState === "complete" &&
+        location.pathname === ${JSON.stringify(support)} && location.hash === "#get-help"`),
+        "Help opens at the right section");
+      const visibleLinks = await page.evaluate(`[...document.querySelectorAll("main a")]
+        .filter(link => link.getClientRects().length).map(link => link.href)`);
+      const expectedLinks = [discovery, ...["/discussions", "/issues/new?template=bug.yml", "/security/advisories/new"]
+        .map(target => site.githubUrl + target)];
+      for (const href of expectedLinks) {
+        assert.ok(visibleLinks.includes(href), `The ${href} action is visible`);
+      }
+      await page.click("#switch-language");
+      const other = lang === "en" ? "zh" : "en";
+      const translated = site.pathPrefix + site.routes[other].support.slice(1);
+      await until(() => page.evaluate(`document.readyState === "complete" &&
+        location.pathname === ${JSON.stringify(translated)} && location.hash === "#get-help"`),
+        "Changing language keeps the help section");
+    });
+    const skillsPath = site.routes[lang].skills;
+    await check(`${lang}: open Ask Azhou without clearing the skill search`, { width }, `${skillsPath}?q=super-archify`, async page => {
+      const row = "#super-ask-azhou";
+      assert.ok(Object.hasOwn(await page.attributes(row), "hidden"));
+      await page.click("#ask-azhou-install-link");
+      await until(() => isOpen(page, `${row} > details`), "Ask Azhou card opens");
+      assert.equal(await page.evaluate('new URLSearchParams(location.search).get("q")'), "super-archify");
+      assert.equal(await page.evaluate('document.querySelector("#skill-search").value'), "super-archify");
+      assert.equal((await page.attributes(row)).hidden, undefined);
+      await until(() => page.evaluate(`document.querySelector("${row} summary").getBoundingClientRect().bottom <= innerHeight`),
+        "Ask Azhou appears in the viewport");
+      await page.evaluate(`document.querySelector("${row} summary").focus()`);
+      await page.key("Enter");
+      await until(async () => Object.hasOwn(await page.attributes(row), "hidden"), "Closing the card restores the filtered list");
+      assert.equal(await page.evaluate('document.activeElement.id'), "ask-azhou-install-link");
+
+      await page.click("#clear-skill-search");
+      await page.click("#ask-azhou-install-link");
+      await until(() => isOpen(page, `${row} > details`), "Ask Azhou opens after clearing search");
+      assert.equal(await page.evaluate('document.querySelector("#skill-search").value'), "");
+      await page.click("#switch-language");
+      const other = lang === "en" ? "zh" : "en";
+      const translated = site.pathPrefix + site.routes[other].skills.slice(1);
+      const undo = other === "zh" ? "撤销清除" : "Undo clear";
+      await until(() => page.evaluate(`document.readyState === "complete" &&
+        location.pathname === ${JSON.stringify(translated)} && location.hash === "${row}" &&
+        document.querySelector("#clear-skill-search")?.textContent === ${JSON.stringify(undo)}`),
+        "Changing language keeps the open Ask Azhou card and the undo action");
+      await page.click("#clear-skill-search");
+      assert.equal(await page.evaluate('document.querySelector("#skill-search").value'), "super-archify");
+
+      await page.evaluate(`document.querySelector("${row} summary").focus()`);
+      await page.key("Enter");
+      await page.click("#switch-language");
+      const original = site.pathPrefix + skillsPath.slice(1);
+      await until(() => page.evaluate(`document.readyState === "complete" && location.pathname === ${JSON.stringify(original)}`),
+        "Returns to the original language");
+      assert.equal(await page.evaluate("location.hash"), "");
+      assert.equal(await page.evaluate(`document.querySelector("${row} > details").open`), false);
+      assert.equal(await page.evaluate('document.querySelector("#skill-search").value'), "super-archify");
+    });
+
+    const foundation = "#super-azhou-doctor";
+    await check(`${lang}: Foundation install shows the local checkout path`, { width }, `${skillsPath}?q=super-archify${foundation}`, async page => {
+      const guide = `${site.blobBase}/docs/installation.md#checkout-assisted-setup`;
+      const manual = `${foundation} [data-manual-install]`;
+      assert.ok(await isOpen(page, `${foundation} > details`));
+      assert.ok((await page.html("#agent-install-super-azhou-doctor")).includes(lang === "zh" ? "本地 Hub 仓库" : "local Hub checkout"));
+      if (!await isOpen(page, manual)) await page.click(`${manual} > summary`);
+      assert.equal((await page.attributes(`${manual} a`)).href, guide);
+      assert.equal(await page.evaluate(`document.querySelector("${manual} code") === null`), true,
+        "A checkout-only skill does not show the ordinary install command");
+      await page.evaluate(`document.querySelector("${foundation} > details > summary").focus()`);
+      await page.key("Enter");
+      await until(async () => Object.hasOwn(await page.attributes(foundation), "hidden"), "Closing the deep-linked card restores the filter");
+      assert.equal(await page.evaluate('document.activeElement.id'), "clear-skill-search");
+    });
+
     await check(`${lang}: homepage RSS opens at ${width}px`, { width }, site.routes[lang].home, async page => {
       await page.click(".rss-subscribe > summary");
       const id = (await page.attributes(".rss-subscribe")).id;

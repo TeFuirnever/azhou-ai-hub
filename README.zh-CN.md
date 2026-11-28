@@ -1,8 +1,8 @@
 # 🦊 Azhou AI Hub · 阿舟 AI 能力站
 
-让 Agent 帮你画图、讲清复杂问题、审查代码。每个技能都可以按需安装。
+给 Agent 装上需要的技能，让它帮你画图、讲清复杂问题或审查代码。阿舟来源库收录 AI 官方文章和更新。
 
-[English](README.md) · [找技能](https://tefuirnever.github.io/azhou-ai-hub/zh/skills/) · [安装 Ask Azhou](#安装-ask-azhou) · [阅读 AI 官方选文](https://tefuirnever.github.io/azhou-ai-hub/zh/library/)
+[English](README.md) · [找技能](https://tefuirnever.github.io/azhou-ai-hub/zh/skills/) · [安装 Ask Azhou](#安装-ask-azhou) · [打开来源库](https://tefuirnever.github.io/azhou-ai-hub/zh/library/)
 
 ## 安装 Ask Azhou
 
@@ -10,14 +10,14 @@
 
 ### 让 Agent 安装
 
-在当前项目打开 Agent 会话，粘贴下面这句话。安装指南会让 Agent 先检查现有安装，再按宿主选择路径。
+在当前项目打开 Agent 会话，粘贴这段安装提示词。Agent 会先检查能否找到 Ask Azhou，再决定是否要安装。
 
 > 请按 https://github.com/TeFuirnever/azhou-ai-hub/blob/main/docs/installation.md#install-with-an-agent 在当前项目只安装 super-ask-azhou，并确认当前 Agent 宿主能找到它。
 
 <details>
 <summary>手动安装</summary>
 
-[按 Agent 宿主选择安装方式](docs/installation.md#choose-your-agent-host)。
+[按 Agent 工具选择安装方式（英文）](docs/installation.md#choose-your-agent-host)。要用 Skills CLI 安装其他技能，见[包管理器安装指南（英文）](docs/installation.md#package-manager-install)。
 
 ### 在 Codex 里首次安装
 
@@ -29,13 +29,15 @@ npx skills add TeFuirnever/azhou-ai-hub --skill super-ask-azhou --agent codex
 
 </details>
 
-### 在 Codex 里试一次
+<a name="在-codex-里试一次"></a>
 
-在同一项目打开新会话，发下面的问题。Ask Azhou 应推荐 `super-archify`。如果宿主找不到 Ask Azhou，先[检查安装](docs/installation.md#check-that-your-host-finds-the-skill)。
+### 试用 Ask Azhou
 
-> `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub Skill？
+在同一项目打开新会话，让 Agent 用 `super-ask-azhou` 回答下面的问题。在 Codex 里可以直接粘贴整段示例。Ask Azhou 应推荐 `super-archify`。
 
-[安装推荐的技能](docs/installation.md#package-manager-install) · [更新或卸载](docs/installation.md#upgrade-or-uninstall)
+> `$super-ask-azhou` 我有一段 Mermaid，想把它做成可以交互查看的架构图。该用哪个 Hub 技能？
+
+[安装 Archify](https://tefuirnever.github.io/azhou-ai-hub/zh/skills/#super-archify) · [排查已安装的技能（英文）](docs/installation.md#check-that-your-host-finds-the-skill) · [更新或卸载（英文）](docs/installation.md#upgrade-or-uninstall)
 
 ## Skills
 
@@ -109,9 +111,9 @@ npx skills add TeFuirnever/azhou-ai-hub --skill refactoring --agent codex
 
 ## 项目入口
 
-- [安装与维护](docs/installation.md) · [支持矩阵](docs/support-matrix.md) · [技能验证依据（英文）](docs/skill-evidence.md)
-- [开发文档](docs/README.md) · [技能规范](docs/skill-standard.md) · [产品原则](docs/principles.md) · [路线图](docs/roadmap.md) · [更新记录](CHANGELOG.md)
-- [提交反馈与贡献](CONTRIBUTING.md) · [安全问题](SECURITY.md) · [已退役工具](docs/architecture.md#retired-surfaces)
+- [安装与维护（英文）](docs/installation.md) · [获取帮助或报告故障](https://tefuirnever.github.io/azhou-ai-hub/zh/support/#get-help) · [查看 Agent 支持哪些技能（英文）](docs/skill-platform-view.md)
+- [文档目录（英文）](docs/README.md) · [技能规范](docs/skill-standard.md) · [参与贡献](CONTRIBUTING.md) · [更新记录](CHANGELOG.md)
+- [技能验证依据（英文）](docs/skill-evidence.md) · [安全问题](SECURITY.md) · [已退役工具](docs/architecture.md#retired-surfaces)
 
 <details>
 <summary>开发者命令（Foundation CLI）</summary>

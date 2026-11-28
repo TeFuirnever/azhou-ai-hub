@@ -6,11 +6,21 @@ layout: base.njk
 {% set matrix = site.blobBase ~ '/docs/support-matrix.md' %}
 <article class="doc-card">
   <h1>{{ title }}</h1>
-  <p>{{ '安装之前，先查你的 Agent 工具是否支持所需的技能或功能。以下链接指向英文文档。' if zh else 'Check whether your agent host supports the skill or feature you need before installing.' }}</p>
-  <ul class="doclist" data-reveal>
+  <h2 id="get-help">{{ '获取帮助' if zh else 'Get help' }}</h2>
+  <ul class="doclist">
+    <li><a href="{{ site.blobBase }}/docs/installation.md#check-that-your-host-finds-the-skill" hreflang="en"><span class="doc-link-text">{{ 'Agent 找不到已安装的技能' if zh else 'Your agent cannot find an installed skill' }}</span>{% if zh %}<span class="doc-link-note">（英文）</span>{% endif %}<span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+    <li><a href="{{ site.githubUrl }}/discussions">{{ '提问或讨论' if zh else 'Ask a question or start a discussion' }} <span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+    <li><a href="{{ site.githubUrl }}/issues/new?template=bug.yml">{{ '报告故障' if zh else 'Report a bug' }} <span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+    <li><a href="{{ site.githubUrl }}/security/advisories/new">{{ '私下报告安全或隐私问题' if zh else 'Report a security or privacy issue privately' }} <span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+  </ul>
+
+  <h2 id="compatibility">{{ '查看兼容性' if zh else 'Check compatibility' }}</h2>
+  {% if zh %}<p>以下兼容性文档为英文。</p>{% endif %}
+  <ul class="doclist">
     <li><a href="{{ site.blobBase }}/docs/skill-platform-view.md" hreflang="en"><span class="doc-link-text">{{ '查某个技能支持哪些工具' if zh else 'Check a skill by agent host' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
     <li><a href="{{ matrix }}" hreflang="en"><span class="doc-link-text">{{ '查工具支持哪些功能' if zh else 'Compare host capabilities' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
-    <li><a href="{{ matrix }}#operating-system-support-deterministic-gate" hreflang="en"><span class="doc-link-text">{{ '查操作系统支持' if zh else 'Check operating system support' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+    <li><a href="{{ matrix }}#operating-system-support-deterministic-gate" hreflang="en"><span class="doc-link-text">{{ '查仓库检查支持哪些操作系统' if zh else 'Check OS support for repository checks' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
+    <li><a href="{{ site.blobBase }}/docs/installation.md#choose-your-agent-host" hreflang="en"><span class="doc-link-text">{{ '按 Agent 工具选择安装方式' if zh else 'Choose your agent host' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
     <li><a href="{{ matrix }}#optional-integrations" hreflang="en"><span class="doc-link-text">{{ '查可选集成' if zh else 'Check optional integrations' }}</span><span class="doc-ext-arrow" aria-hidden="true">↗</span></a></li>
   </ul>
 </article>
