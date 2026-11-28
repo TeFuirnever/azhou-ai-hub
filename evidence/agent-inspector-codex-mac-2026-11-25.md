@@ -1,6 +1,6 @@
 # Azhou Agent Inspector on Codex for Mac
 
-This is a historical record of version 0.1.0, not evidence of the current installation. Later releases and native acceptance are recorded in the [support matrix](../docs/support-matrix.md#azhou-agent-workbench).
+This historical record reproduces the 0.1.0 handoff, not the current installation. During the 2026-11-28 reconciliation, the five recorded file hashes matched the cited Git revision; the original raw host-install logs were not found in the retained worktree, so the historical installation observations were not independently repeated. Later releases and native acceptance are recorded in the [support matrix](../docs/support-matrix.md#azhou-agent-workbench).
 
 Observed on the maintainer's Apple silicon Mac on 2026-11-25 (Asia/Shanghai). ChatGPT Desktop reported `26.1120.50957` (build `30866`). Its bundled Codex CLI was `0.171.0-alpha.13.2` and used the default `~/.codex` home.
 
@@ -33,4 +33,4 @@ The rollback path was recorded for this 0.1.0 update. Later installations have t
 | Package tests | 43 Node tests and 4 Python tests passed. |
 | Real Codex sidebar | Pending. Desktop automation denied access to the ChatGPT window. The two artwork assets, completed and empty turns, refresh, session switching, width, theme, font size, and close/reopen need direct observation. |
 
-The raw install and verification outputs stay in ignored local evidence.
+The original handoff stated that raw install and verification outputs stayed in ignored local evidence; their location was not confirmed during reconciliation.
