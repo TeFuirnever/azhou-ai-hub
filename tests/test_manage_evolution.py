@@ -752,6 +752,35 @@ class ManageEvolutionTest(unittest.TestCase):
             self.assertEqual(0, result.returncode, result.stdout + result.stderr)
             self.assertEqual(2, json.loads(result.stdout)["projects"])
 
+    def test_proposal_refuses_unavailable_explicit_signal_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "project"
+            project.mkdir()
+            for session in ("one", "two"):
+                added = self.add_signal(project, session=session)
+                self.assertEqual(0, added.returncode, added.stderr)
+            state = project / ".azhou/super-repo-pedant/evolution"
+            live = state / "signals.jsonl"
+            before = live.read_bytes()
+            for missing in (Path(directory) / "missing.jsonl", Path(directory)):
+                with self.subTest(path=missing):
+                    result = self.propose(project, "--include-signal-file", str(missing))
+                    self.assertEqual(2, result.returncode, result.stdout + result.stderr)
+                    self.assertIn("explicit signal file unavailable", result.stderr)
+                    self.assertEqual(before, live.read_bytes())
+                    self.assertFalse((state / "candidates").exists())
+
+    def test_unreadable_signal_file_reports_explicit_input_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "signals.jsonl"
+            path.write_text("{}\n", encoding="utf-8")
+            with mock.patch.object(Path, "read_text", side_effect=PermissionError("denied")):
+                with self.assertRaisesRegex(MODULE.EvolutionError, "explicit signal file unavailable"):
+                    MODULE.read_jsonl([path], required=True)
+                rows, errors = MODULE.read_jsonl([path])
+            self.assertEqual([], rows)
+            self.assertEqual(1, errors)
+
     def test_global_candidate_requires_two_projects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

@@ -277,15 +277,19 @@ def parse_signal_line(line: str) -> dict[str, Any] | None:
         return None
 
 
-def read_jsonl(paths: Iterable[Path]) -> tuple[list[dict[str, Any]], int]:
+def read_jsonl(paths: Iterable[Path], *, required: bool = False) -> tuple[list[dict[str, Any]], int]:
     rows: list[dict[str, Any]] = []
     parse_errors = 0
     for path in paths:
         if not path.is_file():
+            if required:
+                raise EvolutionError("explicit signal file unavailable; check its path and access before retrying")
             continue
         try:
             lines = path.read_text(encoding="utf-8").split("\n")
-        except (OSError, UnicodeError):
+        except (OSError, UnicodeError) as exc:
+            if required:
+                raise EvolutionError("explicit signal file unavailable; check its path and access before retrying") from exc
             parse_errors += 1
             continue
         for line in lines:
@@ -389,8 +393,10 @@ def cmd_propose(args: argparse.Namespace) -> int:
     try:
         project = args.project.expanduser().resolve()
         state_root = safe_state_root(project, args.state_root)
-        source_paths = [state_root / "signals.jsonl", *[path.expanduser().resolve() for path in args.include_signal_file]]
-        batches = [(path, *read_jsonl([path])) for path in source_paths]
+        source_paths = [(state_root / "signals.jsonl", False)] + [
+            (path.expanduser().resolve(), True) for path in args.include_signal_file
+        ]
+        batches = [(path, *read_jsonl([path], required=required)) for path, required in source_paths]
         needs_local_identity = args.scope == "project" or any(
             rows and inside(path.resolve(), state_root.resolve()) for path, rows, _ in batches
         )
