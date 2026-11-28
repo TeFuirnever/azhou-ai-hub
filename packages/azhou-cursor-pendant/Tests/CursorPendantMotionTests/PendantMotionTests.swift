@@ -51,3 +51,18 @@ import Testing
     #expect(pose.pivot.y > pointer.y)
     #expect(screen.contains(pose.pivot))
 }
+
+@Test func reversingVisibilityStartsAtTheVisibleOpacity() {
+    var visibility = PendantVisibility()
+    visibility.setVisible(true, at: 0)
+    let halfOpen = visibility.opacity(at: 0.080)
+    #expect(halfOpen > 0.9 && halfOpen < 1)
+
+    visibility.setVisible(false, at: 0.080)
+    #expect(visibility.opacity(at: 0.080) == halfOpen)
+    let closing = visibility.opacity(at: 0.160)
+
+    visibility.setVisible(true, at: 0.160)
+    #expect(visibility.opacity(at: 0.160) == closing)
+    #expect(visibility.opacity(at: 0.321) == 1)
+}

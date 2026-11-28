@@ -68,28 +68,11 @@ public struct PendantMotion {
         let progress = min(1, max(0, (time - lastInput) / Self.followDuration))
         if progress == 1 { return target }
         if progress == 0 { return from }
-        let fraction = Self.easeOut(progress)
+        let fraction = MotionCurve.follow.sample(progress)
         return CGPoint(
             x: from.x + (target.x - from.x) * fraction,
             y: from.y + (target.y - from.y) * fraction
         )
-    }
-
-    // Solve the x component of CSS ease-out, cubic-bezier(0, 0, 0.58, 1), for its y value.
-    private static func easeOut(_ progress: Double) -> Double {
-        var lower = 0.0
-        var upper = 1.0
-        for _ in 0..<14 {
-            let t = (lower + upper) / 2
-            let x = 1.74 * (1 - t) * t * t + t * t * t
-            if x < progress {
-                lower = t
-            } else {
-                upper = t
-            }
-        }
-        let t = (lower + upper) / 2
-        return t * t * (3 - 2 * t)
     }
 
     private static func pivot(for pointer: CGPoint, on screen: CGRect) -> CGPoint {
@@ -108,5 +91,58 @@ public struct PendantMotion {
         let pivotX = min(screen.width - sideMargin, max(sideMargin, left + width / 2))
         let pivotY = min(screen.height - bottomMargin, max(2, top))
         return CGPoint(x: screen.minX + pivotX, y: screen.maxY - pivotY)
+    }
+}
+
+private struct MotionCurve {
+    static let follow = Self(x1: 0, y1: 0, x2: 0.58, y2: 1)
+    static let state = Self(x1: 0.23, y1: 1, x2: 0.32, y2: 1)
+
+    let x1: Double
+    let y1: Double
+    let x2: Double
+    let y2: Double
+
+    // Invert the horizontal Bézier component to sample its vertical component.
+    func sample(_ progress: Double) -> Double {
+        var lower = 0.0
+        var upper = 1.0
+        for _ in 0..<14 {
+            let t = (lower + upper) / 2
+            if component(t, x1, x2) < progress {
+                lower = t
+            } else {
+                upper = t
+            }
+        }
+        return component((lower + upper) / 2, y1, y2)
+    }
+
+    private func component(_ t: Double, _ c1: Double, _ c2: Double) -> Double {
+        let remaining = 1 - t
+        return 3 * remaining * remaining * t * c1 + 3 * remaining * t * t * c2 + t * t * t
+    }
+}
+
+public struct PendantVisibility {
+    private var from = 0.0
+    private var target = 0.0
+    private var start = 0.0
+
+    public init() {}
+
+    public mutating func setVisible(_ visible: Bool, at time: TimeInterval) {
+        let next = visible ? 1.0 : 0.0
+        guard next != target else { return }
+        from = opacity(at: time)
+        target = next
+        start = time
+    }
+
+    public func opacity(at time: TimeInterval) -> Double {
+        let progress = min(1, max(0, (time - start) / 0.160))
+        if progress == 1 { return target }
+        if progress == 0 { return from }
+        return from + (target - from) * MotionCurve.state.sample(progress)
     }
 }

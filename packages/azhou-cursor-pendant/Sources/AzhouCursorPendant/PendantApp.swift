@@ -23,6 +23,7 @@ final class PendantController: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var followingItem: NSMenuItem?
     private var motion: PendantMotion?
+    private var visibility = PendantVisibility()
     private var screenFrame: CGRect?
     private var timer: Timer?
     private var wantsFollowing = true
@@ -36,7 +37,7 @@ final class PendantController: NSObject, NSApplicationDelegate {
         }
 
         panel = PendantPanel(image: image)
-        addMenu()
+        addMenu(image: image)
         NSWorkspace.shared.notificationCenter.addObserver(
             self,
             selector: #selector(accessibilityOptionsChanged),
@@ -48,7 +49,7 @@ final class PendantController: NSObject, NSApplicationDelegate {
 
     func applicationDidChangeScreenParameters(_ notification: Notification) {
         resetMotion()
-        if timer != nil { tick() }
+        if timer != nil, wantsFollowing { tick() }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -61,12 +62,18 @@ final class PendantController: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func addMenu() {
+    private func addMenu(image: NSImage) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "cursorarrow", accessibilityDescription: "阿舟跟随挂件")
+        let mark = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { bounds in
+            image.draw(in: bounds)
+            return true
+        }
+        mark.isTemplate = true
+        item.button?.image = mark
+        item.button?.setAccessibilityLabel("阿舟跟随挂件")
         item.button?.toolTip = "阿舟跟随挂件"
         let menu = NSMenu()
-        let following = menu.addItem(withTitle: "跟随鼠标", action: #selector(toggleFollowing), keyEquivalent: "")
+        let following = menu.addItem(withTitle: "暂停跟随", action: #selector(toggleFollowing), keyEquivalent: "")
         following.target = self
         menu.addItem(.separator())
         let quit = menu.addItem(withTitle: "退出阿舟跟随挂件", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
@@ -87,25 +94,35 @@ final class PendantController: NSObject, NSApplicationDelegate {
 
     private func updateFollowing() {
         let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let following = wantsFollowing && !reduced
-        followingItem?.title = reduced ? "跟随已暂停（系统减少动态效果）" : "跟随鼠标"
-        followingItem?.state = following ? .on : .off
+        followingItem?.title = reduced ? "系统已开启「减少动态效果」" : (wantsFollowing ? "暂停跟随" : "恢复跟随")
         followingItem?.action = reduced ? nil : #selector(toggleFollowing)
-        if following {
-            guard timer == nil else { return }
-            tick()
-            let nextTimer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.tick()
-                }
-            }
-            RunLoop.main.add(nextTimer, forMode: .common)
-            timer = nextTimer
-        } else {
-            timer?.invalidate()
-            timer = nil
-            resetMotion()
+        if reduced {
+            visibility = PendantVisibility()
+            stopFollowing()
+            return
         }
+
+        visibility.setVisible(wantsFollowing, at: ProcessInfo.processInfo.systemUptime)
+        guard wantsFollowing else {
+            motion = nil
+            screenFrame = nil
+            return
+        }
+        guard timer == nil else { return }
+        tick()
+        let nextTimer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.tick()
+            }
+        }
+        RunLoop.main.add(nextTimer, forMode: .common)
+        timer = nextTimer
+    }
+
+    private func stopFollowing() {
+        timer?.invalidate()
+        timer = nil
+        resetMotion()
     }
 
     private func resetMotion() {
@@ -115,6 +132,14 @@ final class PendantController: NSObject, NSApplicationDelegate {
     }
 
     private func tick() {
+        let time = ProcessInfo.processInfo.systemUptime
+        let opacity = CGFloat(visibility.opacity(at: time))
+        if panel?.alphaValue != opacity { panel?.alphaValue = opacity }
+        if !wantsFollowing {
+            if opacity == 0 { stopFollowing() }
+            return
+        }
+
         let pointer = NSEvent.mouseLocation
         if screenFrame?.contains(pointer) != true {
             guard let frame = NSScreen.screens.first(where: { $0.frame.contains(pointer) })?.frame else {
@@ -122,10 +147,9 @@ final class PendantController: NSObject, NSApplicationDelegate {
                 return
             }
             screenFrame = frame
-            motion = PendantMotion(pointer: pointer, screen: frame, time: ProcessInfo.processInfo.systemUptime)
+            motion = PendantMotion(pointer: pointer, screen: frame, time: time)
         }
 
-        let time = ProcessInfo.processInfo.systemUptime
         if let pose = motion?.update(pointer: pointer, time: time) {
             panel?.show(pose)
         }
