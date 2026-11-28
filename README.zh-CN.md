@@ -72,6 +72,8 @@ npx skills add https://tefuirnever.github.io/azhou-ai-hub/downloads/super-ask-az
 
 </details>
 
+Repo Pedant 的[演进保护](skills/super-repo-pedant/references/evolution-contract.md)在 Git 配置改变项目身份时暂停依赖身份的操作；创建全局候选时拒绝本地状态中属于其他项目的记录，并在显式指定的信号文件不可用时停止创建候选。
+
 ### 上手试试
 
 - [画一张登录时序图](docs/demos/super-excalidraw-diagram.md)，交付可编辑源文件和 PNG。

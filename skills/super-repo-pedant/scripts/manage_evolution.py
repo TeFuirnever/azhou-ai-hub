@@ -79,24 +79,35 @@ def parse_time(value: object) -> datetime:
 
 def project_identity(project: Path) -> str:
     project = project.expanduser().resolve()
-    try:
-        process = subprocess.run(
-            ["git", "-C", str(project), "config", "--get", "remote.origin.url"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            timeout=5,
-            check=False,
-        )
+    def resolve_identity(env: dict[str, str] | None) -> str:
+        try:
+            process = subprocess.run(
+                ["git", "-C", str(project), "config", "--get", "remote.origin.url"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=5,
+                check=False,
+                env=env,
+            )
+        except (OSError, subprocess.TimeoutExpired, UnicodeError) as exc:
+            raise EvolutionError("project identity could not be verified") from exc
+        if process.returncode not in (0, 1):
+            raise EvolutionError("project identity could not be verified")
         remote = process.stdout.strip() if process.returncode == 0 else ""
-    except (OSError, subprocess.TimeoutExpired):
-        remote = ""
-    if remote:
-        remote = re.sub(r"(?i)(https?://)[^/@]+@", r"\1", remote)
-        basis = f"remote:{remote.removesuffix('.git')}"
-    else:
-        basis = f"path:{project}"
-    return digest(basis)[:24]
+        if remote:
+            remote = re.sub(r"(?i)(https?://)[^/@]+@", r"\1", remote)
+            basis = f"remote:{remote.removesuffix('.git')}"
+        else:
+            basis = f"path:{project}"
+        return digest(basis)[:24]
+
+    isolated_env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+    isolated_env.update({"GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull})
+    inherited = resolve_identity(None)
+    if inherited != resolve_identity(isolated_env):
+        raise EvolutionError("project identity depends on inherited Git configuration; inspect it before retry")
+    return inherited
 
 
 def inside(path: Path, root: Path) -> bool:
@@ -266,15 +277,19 @@ def parse_signal_line(line: str) -> dict[str, Any] | None:
         return None
 
 
-def read_jsonl(paths: Iterable[Path]) -> tuple[list[dict[str, Any]], int]:
+def read_jsonl(paths: Iterable[Path], *, required: bool = False) -> tuple[list[dict[str, Any]], int]:
     rows: list[dict[str, Any]] = []
     parse_errors = 0
     for path in paths:
         if not path.is_file():
+            if required:
+                raise EvolutionError("explicit signal file unavailable; check its path and access before retrying")
             continue
         try:
             lines = path.read_text(encoding="utf-8").split("\n")
-        except (OSError, UnicodeError):
+        except (OSError, UnicodeError) as exc:
+            if required:
+                raise EvolutionError("explicit signal file unavailable; check its path and access before retrying") from exc
             parse_errors += 1
             continue
         for line in lines:
@@ -378,9 +393,22 @@ def cmd_propose(args: argparse.Namespace) -> int:
     try:
         project = args.project.expanduser().resolve()
         state_root = safe_state_root(project, args.state_root)
-        source_paths = [state_root / "signals.jsonl", *[path.expanduser().resolve() for path in args.include_signal_file]]
-        signals, parse_errors = read_jsonl(source_paths)
-        project_id = project_identity(project)
+        source_paths = [(state_root / "signals.jsonl", False)] + [
+            (path.expanduser().resolve(), True) for path in args.include_signal_file
+        ]
+        batches = [(path, *read_jsonl([path], required=required)) for path, required in source_paths]
+        needs_local_identity = args.scope == "project" or any(
+            rows and inside(path.resolve(), state_root.resolve()) for path, rows, _ in batches
+        )
+        project_id = project_identity(project) if needs_local_identity else None
+        signals: list[dict[str, Any]] = []
+        parse_errors = 0
+        for path, rows, errors in batches:
+            if args.scope == "global" and inside(path.resolve(), state_root.resolve()):
+                if any(row["project_id"] != project_id for row in rows):
+                    raise EvolutionError("local signal identity differs from the current project; inspect records before retry")
+            signals.extend(rows)
+            parse_errors += errors
         matching = [
             signal
             for signal in signals
