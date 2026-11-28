@@ -4,7 +4,7 @@
   {% set target = installGuide ~ '#install-with-an-agent' %}
   <p>{{ '在当前项目打开 Agent 会话，粘贴这段安装提示词。' if zh else 'Open an agent session in your project and paste this install prompt.' }}</p>
   {{ copyControl(promptId, '复制安装提示词' if zh else 'Copy install prompt') }}
-  <pre class="wrap-text"><code id="{{ promptId }}">{% if zh %}请按 {{ target }} 在当前项目只安装 {{ skillName }}，并确认当前 Agent 宿主能找到它。{% if needsCheckout %}先找到本地 Hub 仓库，并告诉我运行这个技能时要打开哪个仓库。{% endif %}{% else %}Follow {{ target }} to install only {{ skillName }} in this project and check that this host discovers it.{% if needsCheckout %} First locate a local Hub checkout and tell me which checkout to open when I run the skill.{% endif %}{% endif %}</code></pre>
+  <pre class="wrap-text"><code id="{{ promptId }}">{% if zh %}请按 {{ target }} 在当前项目只安装 {{ skillName }}，并确认当前 Agent 宿主能找到它。{% if needsCheckout %}先找到本地 Hub 仓库，并告诉我在当前项目里运行这个技能时要提供哪个路径。{% endif %}{% else %}Follow {{ target }} to install only {{ skillName }} in this project and check that this host discovers it.{% if needsCheckout %} First locate a local Hub checkout and tell me which path to provide when I run the skill in this project.{% endif %}{% endif %}</code></pre>
   <details data-manual-install="{{ skillName }}">
     <summary>{{ '手动安装' if zh else 'Install manually' }}</summary>
     {% if needsCheckout %}

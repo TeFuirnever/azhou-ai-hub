@@ -60,10 +60,10 @@ body:
   - type: textarea
     id: reproduce
     attributes:
-      label: Reproduction commands
+      label: Reproduction commands (if applicable)
       render: shell
     validations:
-      required: true
+      required: false
   - type: checkboxes
     id: privacy
     attributes:

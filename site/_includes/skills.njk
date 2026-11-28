@@ -68,6 +68,7 @@ layout: base.njk
   const languageUndoKey = "hub-skill-language-undo";
   let cleared = null;
   let linkedSkill;
+  let restoredHash;
 
   catalogLanguageLink.addEventListener("click", (event) => {
     if (event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -125,6 +126,7 @@ layout: base.njk
     }
   }
   function restoreOpenSkill() {
+    restoredHash = location.hash;
     linkedSkill = skillAtHash();
     if (linkedSkill) linkedSkill.querySelector("details").open = true;
     else if (!location.hash) {
@@ -151,6 +153,7 @@ layout: base.njk
     if (current.href === location.href) return;
     try {
       history.replaceState(history.state, "", current);
+      restoredHash = current.hash;
     } catch (error) {
       if (error.name !== "SecurityError") throw error;
     }
@@ -252,6 +255,7 @@ layout: base.njk
   });
   window.addEventListener("popstate", restoreCatalog);
   window.addEventListener("hashchange", () => {
+    if (location.hash === restoredHash) return;
     restoreOpenSkill();
     updateSkills();
   });
