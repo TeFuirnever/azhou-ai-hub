@@ -22,6 +22,8 @@ Before external distribution, check package-local rights in the [provenance ledg
 
 For user-visible changes to website, Skill, or CLI functionality, copy, or interaction, confirm the final candidate has passed the [pre-release experience review](principles.md#上线前体验复核). GitHub Pages deploys from `main`, so complete this review before merging website changes.
 
+The [Pages build](../.github/workflows/pages.yml) packages Ask Azhou from the deployment commit. For a change to the archive or its install command, run the published command from the [Codex walkthrough](installation.md#first-install-in-codex) in a clean project after deployment. Check that a fresh Codex session finds the skill, then record the Pages run and the install result together.
+
 Both draft workflows compare an existing remote tag to the verified workflow commit, using the commit behind an annotated tag. If no tag exists, the draft records the verified commit as its target. The workflows check again after creating the draft, but draft creation and the tag check are separate operations. Immediately before publishing, confirm the current tag still resolves to the workflow commit, or, if it is absent, that the draft target is that exact commit. If the workflow failed its final tag check, leave any draft unpublished; investigate rather than moving the tag or publishing the draft.
 
 Do not rewrite a published tag or default-branch history. A faulty release gets a new patch release and an explicit changelog correction.
@@ -38,7 +40,7 @@ GitHub categories come from [.github/release.yml](../.github/release.yml). Every
 - known holds;
 - full changelog comparison.
 
-The signing mechanism is decided and rehearsed: keyless sigstore (Fulcio OIDC bound to the repository's own workflow identity, Rekor bundles), exercised end to end on 2026-10-17 via the "Signed release rehearsal" workflow — see [the rehearsal evidence](../evidence/signed-release-rehearsal-2026-10-17.md). Release artifacts are signed through this path once downloadable artifacts ship. The repository must not claim a tag or release is signed before GitHub shows verifiable signature evidence for that specific artifact; Git tags themselves remain unsigned until a tag-signing step is added and separately rehearsed.
+The [Signed release rehearsal](../.github/workflows/signed-release-rehearsal.yml) signs the skill hash manifest with keyless Sigstore. The workflow uses Fulcio OIDC bound to its own identity and records a Rekor bundle. See the [2026-10-17 rehearsal evidence](../evidence/signed-release-rehearsal-2026-10-17.md). Before describing a downloadable artifact or a tag as signed, check the signature evidence for that exact artifact or tag.
 
 The signing job runs on `main`, installs Sigstore with hash verification, and checks the bundle identity before handing the files to the draft job. The signing job can request an OIDC token. The draft job alone can write releases.
 
