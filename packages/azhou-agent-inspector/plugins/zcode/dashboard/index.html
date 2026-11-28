@@ -21,8 +21,8 @@
     --surface: #302628; --core: #382c2e; --core2: #463539;
     --scrim-start: rgb(27 21 23 / 92%); --scrim-end: rgb(27 21 23 / 69%);
     --motion-press: 100ms;
-    --motion-feedback: 140ms;
-    --motion-change: 180ms;
+    --motion-feedback: 120ms;
+    --motion-change: 160ms;
     --motion-ease: cubic-bezier(.23, 1, .32, 1);
     --mono: ui-monospace, "SF Mono", Menlo, monospace;
     --chart-grid: #564342;
@@ -166,18 +166,20 @@
   .dsub dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); gap: 0.25rem 0.75rem; margin: 8px 0; }
   .dsub :is(dt, dd) { overflow-wrap: anywhere; }
   .dsub dd { color: var(--ink); font-variant-numeric: tabular-nums; text-align: end; }
+  .theme-toggle {
+    transition: border-color var(--motion-feedback) var(--motion-ease),
+                background-color var(--motion-feedback) var(--motion-ease),
+                color var(--motion-feedback) var(--motion-ease),
+                transform var(--motion-feedback) var(--motion-ease);
+  }
+  .live .dot { transition: background-color var(--motion-feedback) var(--motion-ease); }
   @media (prefers-reduced-motion: no-preference) {
-    .theme-toggle {
-      transition: border-color var(--motion-feedback) ease, background-color var(--motion-feedback) ease,
-                  color var(--motion-feedback) ease, transform var(--motion-feedback) var(--motion-ease);
-    }
     .theme-toggle:active { transform: scale(.98); transition-duration: var(--motion-press); }
-    .live .dot { transition: background-color var(--motion-feedback) ease; }
     .sys .meter i { transition: transform var(--motion-change) var(--motion-ease); }
-    :is(.hero, .session-history) { transition: opacity var(--motion-change) var(--motion-ease); }
-    @starting-style { :is(.hero, .session-history):not([hidden]) { opacity: 0; } }
-    #performanceDetails::details-content { opacity: 0; transition: opacity var(--motion-change) var(--motion-ease); }
-    #performanceDetails[open]::details-content { opacity: 1; }
+    :is(body, .hero, .session-history, .sys) {
+      transition: background-color var(--motion-change) var(--motion-ease),
+                  border-color var(--motion-change) var(--motion-ease), color var(--motion-change) var(--motion-ease);
+    }
   }
   [hidden] { display: none !important; }
 </style>

@@ -319,10 +319,6 @@
     .term-bar .copy-status { color: var(--az-term-muted); }
     .term-bar .copy-status[data-state="success"] { color: #ff8a57; }
     .term-bar .copy-status[data-state="error"] { color: #ff7b72; }
-    .copy-check path {
-      stroke-dasharray: 24;
-      stroke-dashoffset: 0;
-    }
     @media (max-width: 599px) {
       .copy-actions:not(.term-bar .copy-actions) { grid-template-columns: minmax(0, 1fr); }
       .copy-status:not(.term-bar .copy-status) { min-block-size: 3rem; }
@@ -433,12 +429,6 @@
       }
       details.hub-motion > summary::before { transition: transform var(--motion-change) var(--motion-move); }
       details.hub-motion[open] > summary::before { transition-duration: var(--motion-expand); }
-      @supports selector(details::details-content) {
-        :where(details.hub-motion[open])::details-content { animation: state-arrive var(--motion-change) var(--motion-ease); }
-      }
-      @supports not selector(details::details-content) {
-        details.hub-motion[open] > :not(summary) { animation: state-arrive var(--motion-change) var(--motion-ease); }
-      }
       @supports (interpolate-size: allow-keywords) and (transition-behavior: allow-discrete) and selector(details::details-content) {
         :root { interpolate-size: allow-keywords; }
         details::details-content {

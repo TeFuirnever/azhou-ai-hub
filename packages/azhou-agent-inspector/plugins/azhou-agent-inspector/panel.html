@@ -8,8 +8,8 @@
     :root {
       color-scheme: light dark;
       --motion-press: 100ms;
-      --motion-feedback: 140ms;
-      --motion-change: 180ms;
+      --motion-feedback: 120ms;
+      --motion-change: 160ms;
       --motion-ease: cubic-bezier(.23, 1, .32, 1);
       font: 100%/1.5 system-ui, sans-serif;
       --background: light-dark(#f9f4ee, #211a1c);
@@ -109,19 +109,17 @@
     .performance { margin-block-start: 0.625rem; font-size: 0.875rem; }
     .performance summary { cursor: pointer; width: fit-content; padding: 0.25rem; }
     .performance summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button {
+      transition: border-color var(--motion-feedback) var(--motion-ease),
+                  color var(--motion-feedback) var(--motion-ease),
+                  transform var(--motion-feedback) var(--motion-ease);
+    }
+    .feedback { transition: opacity var(--motion-change) var(--motion-ease); }
+    .feedback:empty { opacity: 0; }
     @media (prefers-reduced-motion: no-preference) {
-      button {
-        transition: border-color var(--motion-feedback) ease, color var(--motion-feedback) ease,
-                    transform var(--motion-feedback) var(--motion-ease);
-      }
       button:not([aria-disabled="true"]):active {
         transform: scale(.98); transition-duration: var(--motion-press);
       }
-      :is(.feedback, #snapshot) { transition: opacity var(--motion-change) var(--motion-ease); }
-      .feedback:empty { opacity: 0; }
-      @starting-style { #snapshot:not([hidden]) { opacity: 0; } }
-      .performance::details-content { opacity: 0; transition: opacity var(--motion-change) var(--motion-ease); }
-      .performance[open]::details-content { opacity: 1; }
     }
     footer { margin-block-start: 1rem; overflow-wrap: anywhere; }
   </style>
