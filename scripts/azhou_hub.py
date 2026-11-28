@@ -1860,7 +1860,10 @@ def _setup_apply_command(root: Path, args: argparse.Namespace, plan_id: str) -> 
         command.extend(("--managed", "--receipt", str(args.receipt)))
     command.extend(("--apply", "--plan-id", plan_id))
     if os.name == "nt":
-        return "& " + " ".join("'" + part.replace("'", "''") + "'" for part in command)
+        # PowerShell accepts typographic apostrophes as quote delimiters too.
+        return "& " + " ".join(
+            "'" + re.sub(r"['‘’‚‛]", lambda quote: quote[0] * 2, part) + "'" for part in command
+        )
     return shlex.join(command)
 
 

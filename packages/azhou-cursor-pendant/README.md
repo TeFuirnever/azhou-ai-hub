@@ -9,16 +9,35 @@
 使用 macOS 和 Swift 6，打开仓库根目录。构建命令输出一个本地签名的 `.app` 路径。
 
 ```sh
-app="$HOME/Applications/Azhou Cursor Pendant.app"
-if [ -e "$app" ] || [ -L "$app" ]; then
-  printf '已有桌面挂件。升级请先退出挂件，再用新构建的应用替换旧版。\n'
-else
-  bundle=$(./packages/azhou-cursor-pendant/build-app.sh) &&
-    mkdir -p "$HOME/Applications" &&
-    mkdir "$app" &&
-    ditto "$bundle" "$app" &&
-    open "$app"
-fi
+(
+  set -e
+  app="$HOME/Applications/Azhou Cursor Pendant.app"
+  if [ -e "$app" ] || [ -L "$app" ]; then
+    if [ ! -L "$app" ] &&
+      [ "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$app/Contents/Info.plist" 2>/dev/null)" = 'lab.azhou.cursor-pendant' ] &&
+      codesign --verify --strict "$app" 2>/dev/null; then
+      printf '已有桌面挂件。升级请先退出挂件，再用新构建的应用替换旧版。\n'
+      exit 0
+    fi
+    printf '安装位置已有其他文件，或原挂件不完整。请在个人「应用程序」中移走该项目，再重试。\n' >&2
+    exit 1
+  fi
+
+  bundle=$(./packages/azhou-cursor-pendant/build-app.sh)
+  mkdir -p "$HOME/Applications"
+  staging=$(mktemp -d "$HOME/Applications/.azhou-pendant.XXXXXXXX")
+  trap 'rm -rf "$staging"' EXIT
+  trap 'exit 1' HUP INT TERM
+  staged_app="$staging/Azhou Cursor Pendant.app"
+  ditto "$bundle" "$staged_app"
+  codesign --verify --strict "$staged_app"
+  mv -n "$staged_app" "$HOME/Applications/"
+  if [ -e "$staged_app" ]; then
+    printf '安装位置刚被占用，请查看个人「应用程序」后重试。\n' >&2
+    exit 1
+  fi
+  open "$app"
+)
 ```
 
 已有旧版时，先从菜单栏退出，再在 Finder 中用新构建的应用替换旧版。需要移除时，先退出挂件，再把个人「应用程序」中的该应用移到废纸篓。首次体验范围见[支持矩阵](../../docs/support-matrix.md#azhou-cursor-pendant)。

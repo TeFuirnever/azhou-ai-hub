@@ -377,7 +377,7 @@ try {
     }
 
     if (query) {
-      await check(`${lang}: built Pagefind index answers a real query`, { width }, path, async page => {
+      await check(`${lang}: built Pagefind index answers a real query`, { width }, `${path}#results-title`, async page => {
         await until(async () => !Object.hasOwn(await page.attributes("#library-search"), "hidden"), "Search script is ready");
         await page.click("#library-query");
         await page.command("Input.insertText", { text: query.query });
@@ -391,6 +391,10 @@ try {
         assert.ok(loaded.some(path => path.startsWith(`${site.pathPrefix}pagefind/fragment/`)), "Pagefind must retrieve a real article fragment");
         const other = lang === "en" ? "zh" : "en";
         const translated = site.pathPrefix + site.routes[other].library.slice(1);
+        const draft = " unfinished draft";
+        await page.evaluate('document.querySelector("#library-query").focus()');
+        await page.command("Input.insertText", { text: draft });
+        assert.equal(await page.evaluate('document.querySelector("#library-query").value'), query.query + draft);
         await page.evaluate(`document.querySelector('#library-results [data-entry-id="${query.id}"] h3 a').focus()`);
         await page.key("Enter");
         await until(() => page.evaluate(`document.querySelector("#library-return")?.search.includes("q=")`), "Article remembers its query");
@@ -402,7 +406,8 @@ try {
         await page.key("Enter");
         await until(() => page.evaluate(`location.pathname === ${JSON.stringify(translated)} && document.querySelector("#library-status")?.dataset.state === "done"`),
           "The translated list restores the search results");
-        assert.equal(await page.evaluate('document.querySelector("#library-query").value'), query.query);
+        assert.equal(await page.evaluate('document.querySelector("#library-query").value'), query.query + draft);
+        assert.equal(await page.evaluate("location.hash"), "#results-title");
         assert.equal(await page.evaluate(`Boolean(document.querySelector('#library-results [data-entry-id="${query.id}"]'))`), true);
       });
     } else {

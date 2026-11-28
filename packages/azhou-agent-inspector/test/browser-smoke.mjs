@@ -83,6 +83,21 @@ const codexPage = `<!doctype html><body>${harness}<script>
   const text = (selector) => panel(selector)?.textContent;
   checkUi(async () => {
     await until(() => text(".rate") === "42.5 tok/s", "Codex did not render the initial tool result");
+    const legacy = document.createElement("iframe");
+    legacy.src = "/codex-panel";
+    document.body.append(legacy);
+    const legacyRefresh = () => legacy.contentDocument?.getElementById("refresh");
+    await until(() => legacyRefresh()?.hidden, "A panel awaiting a host should hide Refresh");
+    const legacyWindow = legacy.contentWindow;
+    legacyWindow.openai = { callTool: async () => ({ structuredContent: usage(18) }) };
+    legacyWindow.dispatchEvent(new legacyWindow.CustomEvent("openai:set_globals", {
+      detail: { globals: { toolOutput: usage(17) } },
+    }));
+    if (legacyRefresh().hidden) throw new Error("A late legacy host did not enable Refresh");
+    legacyRefresh().click();
+    await until(() => legacy.contentDocument.querySelector(".rate")?.textContent === "18 tok/s",
+      "The late legacy host did not refresh the snapshot");
+    legacy.remove();
     await until(() => text("[data-metric=cacheHitPercent]") === "75%", "Codex did not render cache hit rate");
     const performance = panel("#performance");
     for (const expected of ["首个 token 等待 0.2 秒", "缓存命中 75%", "Context 占用 40.5%"]) {

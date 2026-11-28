@@ -1316,7 +1316,7 @@ class AzhouHubCliTest(unittest.TestCase):
     def test_setup_text_only_prompts_to_apply_when_there_is_work(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root, _, target = self._fixture_repo(directory)
-            target = target.with_name("project's skills")
+            target = target.with_name("O’Brien's skills")
             command = ["setup", "--target", str(target), "--skill", "sample", "--mode", "copy"]
             preview = io.StringIO()
             with redirect_stdout(preview):
@@ -1327,8 +1327,15 @@ class AzhouHubCliTest(unittest.TestCase):
             printed = next(line.strip() for line in preview.getvalue().splitlines() if " --apply " in line or " '--apply' " in line)
             if os.name == "nt":
                 self.assertTrue(printed.startswith("& "))
-                self.assertIn(str(target).replace("'", "''"), printed)
+                self.assertIn(str(target).replace("'", "''").replace("’", "’’"), printed)
                 apply_args = [*command, "--apply", "--plan-id", plan_id]
+                powershell = shutil.which("pwsh") or shutil.which("powershell")
+                if powershell:
+                    script = root / "scripts/azhou_hub.py"
+                    script.parent.mkdir(exist_ok=True)
+                    script.write_text("import json, sys\nprint(json.dumps(sys.argv[1:]))\n", encoding="utf-8")
+                    argv = subprocess.check_output([powershell, "-NoProfile", "-Command", printed], text=True)
+                    self.assertEqual(apply_args, json.loads(argv))
             else:
                 python, script, *apply_args = shlex.split(printed)
                 self.assertEqual(sys.executable, python)
