@@ -29,8 +29,8 @@ export const messages = {
 
 // Render the real templates/macros and base layout, including the source page's
 // computed feed path. No generated _site directory or network is needed.
-export function renderPage(kind, lang, sourceId) {
-  const key = JSON.stringify([kind, lang, sourceId]);
+export function renderPage(kind, lang, sourceId, overrides = {}) {
+  const key = JSON.stringify([kind, lang, sourceId, overrides]);
   if (rendered.has(key)) return rendered.get(key);
   const empty = kind === "empty-home";
   const template = kind === "source" ? "library/source.njk" :
@@ -46,6 +46,7 @@ export function renderPage(kind, lang, sourceId) {
       ...sourceLibrary, entries: [], featured: undefined, searchRows: [],
       channels: sourceLibrary.channels.map(source => ({ ...source, entries: [] })),
     } : sourceLibrary,
+    ...overrides,
   };
   if (kind === "source") {
     assert.ok(channel, `Unknown source page: ${sourceId}/${lang}`);
