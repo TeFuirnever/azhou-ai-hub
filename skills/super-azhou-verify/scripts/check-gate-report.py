@@ -18,12 +18,17 @@ import sys
 
 FAILURE_PATTERN = re.compile(r"(?i)\bfailed\b|failures?=\d+")
 SKIP_PATTERN = re.compile(r"(?i)\bskipped\b|\bnot run\b|\bunavailable\b")
+ARGPARSE_USAGE = re.compile(r"(?i)^usage:\s+\S")
+ARGPARSE_ERROR = re.compile(r"(?i)^\S.*?: error:\s+\S")
 
 
 # Foundation emits schema_version as the first field of the setup result.
 SETUP_RECEIPT_START = re.compile(
-    r'(?m)^[ \t]*(\{)[ \t\r\n]*"schema_version"[ \t\r\n]*:[ \t\r\n]*'
+    r'(?m)^[ \t]*(\{)[ \t\r\n]*"schema(?:_|\\u005[fF])version"[ \t\r\n]*:[ \t\r\n]*'
     r'"azhou-ai-hub\.setup\.v1(?=["\r\n]|$)'
+)
+SCHEMA_FIRST_PREFIX = re.compile(
+    r'(?m)^[ \t]*(\{)[ \t\r\n]*"schema(?:_|\\u005[fF])?(?:version)?(?:"|\\|$)'
 )
 
 
@@ -40,20 +45,73 @@ def reject_constant(value: str) -> None:
     raise ValueError(f"invalid JSON constant {value!r}")
 
 
-def setup_conflicts(text: str) -> list[str]:
+def setup_conflicts(text: str, *, depth: int = 0) -> list[str]:
     conflicts = []
     decoder = json.JSONDecoder(object_pairs_hook=unique_object, parse_constant=reject_constant)
-    for match in SETUP_RECEIPT_START.finditer(text):
+    starts = {match.start(1) for match in SETUP_RECEIPT_START.finditer(text)}
+    starts.update(match.start(1) for match in SCHEMA_FIRST_PREFIX.finditer(text))
+    for start in sorted(starts):
         try:
-            receipt, end = decoder.raw_decode(text, match.start(1))
+            receipt, end = decoder.raw_decode(text, start)
         except (ValueError, RecursionError):
             conflicts.append("malformed or truncated Foundation setup receipt")
+            continue
+        if not isinstance(receipt, dict) or receipt.get("schema_version") != "azhou-ai-hub.setup.v1":
             continue
         line_end = text.find("\n", end)
         if text[end:line_end if line_end != -1 else len(text)].strip():
             conflicts.append("unexpected trailing content after Foundation setup receipt")
         if receipt.get("status") not in ("pass", "dry_run"):
             conflicts.append(f"non-passing Foundation setup receipt status: {receipt.get('status')!r}")
+
+    # Some hosts place captured command output inside a JSON string or object.
+    # Inspect only decoded string values that look like nested JSON, keeping
+    # ordinary prose and expected negative-test messages out of the scan.
+    if depth < 3:
+        wrapper_decoder = json.JSONDecoder()
+
+        def visit(value: object) -> None:
+            if isinstance(value, str):
+                nested = value.lstrip()
+                if nested.startswith(("{", "[", '"')) and "schema" in nested:
+                    conflicts.extend(setup_conflicts(value, depth=depth + 1))
+            elif isinstance(value, dict):
+                for nested_value in value.values():
+                    visit(nested_value)
+            elif isinstance(value, list):
+                for nested_value in value:
+                    visit(nested_value)
+
+        for match in re.finditer(r"(?m)^[ \t]*[\{\[\"]", text):
+            start = match.start() + len(match.group(0)) - 1
+            try:
+                value, _ = wrapper_decoder.raw_decode(text, start)
+            except (ValueError, RecursionError):
+                continue
+            visit(value)
+    return list(dict.fromkeys(conflicts))
+
+
+def argparse_conflicts(lines: list[str]) -> list[str]:
+    conflicts = []
+    inside_gate_output = False
+    for index, line in enumerate(lines):
+        if line.startswith("==> "):
+            inside_gate_output = True
+            continue
+        if not ARGPARSE_ERROR.match(line):
+            continue
+        # Sub-gates can intentionally exercise argparse rejection inside
+        # passing tests. Their process status and the aggregate verdict are
+        # authoritative for those marked sections; an outer CLI parse error
+        # occurs before the verifier emits its first gate marker.
+        if inside_gate_output:
+            continue
+        previous = index - 1
+        while previous >= 0 and lines[previous][:1].isspace() and lines[previous].strip():
+            previous -= 1
+        if previous >= 0 and ARGPARSE_USAGE.match(lines[previous]):
+            conflicts.append(f"argument parser error line: {line.strip()}")
     return conflicts
 
 
@@ -77,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
     for line in lines:
         if FAILURE_PATTERN.search(line):
             conflicts.append(f"failure verdict line: {line.strip()}")
+    conflicts.extend(argparse_conflicts(lines))
     conflicts.extend(setup_conflicts(text))
     skips = [line.strip() for line in lines if SKIP_PATTERN.search(line)]
     if conflicts:
